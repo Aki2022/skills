@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.env
+
+# R
+.Rhistory
+.Rdata
+.RData
+*.Rproj.user
+
+# Generated files
+*.png
+*.svg
+*.pdf
+!examples/*.pdf
+
+# Temporary PPTX outputs
+output*.pptx
+test_*.pptx
+demo*.pptx
+*_temp.pptx
+
+# Generated outputs in examples/ (for demos/testing)
+examples/*/powerpoint/
+examples/*/processing/
+examples/**/output.pptx
+
+# Archive (keep in repo but ignore additions)
+# archive/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Node modules (for mermaid-cli)
+node_modules/
+
+# others
+# archive/
+# examples/
+# .serena/

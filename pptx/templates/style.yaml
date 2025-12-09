@@ -1,0 +1,153 @@
+# Generated from Chart.crtx and template.pptx
+# DO NOT EDIT MANUALLY - regenerate with: python scripts/extract_style.py
+#
+# This file is the Single Source of Truth for styling.
+# Sources:
+#   - Chart.crtx: Chart styling (series, axes, legend, data labels)
+#   - template.pptx Slide 1: Table styling
+#   - template.pptx Slide 2: Flowchart/Diagram styling
+#
+# Used by: Python, R, Mermaid/JavaScript
+
+colors:
+  primary: '#4F4F70'
+  series:
+  - type: rgb
+    value: '#4F4F70'
+  - type: theme
+    value: bg1
+    brightness: -0.25
+  - type: theme
+    value: bg1
+    brightness: -0.15
+  - type: theme
+    value: bg1
+    brightness: -0.15
+  - type: theme
+    value: bg1
+    brightness: -0.15
+category_axis:
+  visible: true
+  tick_marks: none
+  line:
+    width_pt: 0.75
+    color_type: theme
+    color_value: tx1
+    brightness: 0.85
+  font:
+    size_pt: 11
+    color_type: theme
+    color_value: tx1
+    brightness: 0.35
+value_axis:
+  visible: false
+  tick_marks: none
+legend:
+  position: bottom
+  font:
+    size_pt: 11
+    color_type: theme
+    color_value: tx1
+    brightness: 0.35
+data_labels:
+- show_value: true
+  font_size_pt: 11
+- show_value: true
+  font_size_pt: 11
+  font_color_type: theme
+  font_color_value: bg1
+  brightness: -0.35
+- show_value: true
+  font_size_pt: 11
+  font_color_type: theme
+  font_color_value: bg1
+  brightness: -0.25
+- show_value: true
+  font_size_pt: 11
+  font_color_type: theme
+  font_color_value: bg1
+  brightness: -0.25
+- show_value: true
+  font_size_pt: 11
+  font_color_type: theme
+  font_color_value: bg1
+  brightness: -0.25
+- show_value: false
+gridlines:
+  enabled: false
+table:
+  border:
+    color: '#4F4F70'
+    width_outer_pt: 1.5
+    width_inner_pt: 1.0
+  header:
+    fill_theme: bg1
+    fill_brightness: -0.5
+    text_color_theme: bg1
+    font_bold: false
+    font_size_pt: 12
+    text_color_brightness: 0
+  body:
+    fill_theme: bg1
+    column_brightness:
+    - -0.15
+    - -0.05
+    - -0.05
+    - -0.05
+    text_color_theme: tx1
+    font_size_pt: 12
+    text_color_brightness: 0.35
+  alignment: right
+flowchart:
+  direction: LR
+  node:
+    shape: rounded_rectangle
+    fill: '#4F4F70'
+    fill_theme: null
+    border_width_pt: 0
+    shadow:
+      enabled: true
+      blur_pt: 4
+      distance_pt: 3
+      direction_deg: 45
+      opacity: 0.4
+    text:
+      color: '#FFFFFF'
+      font_size_pt: 11
+      bold: false
+      color_theme: bg1
+  connector:
+    type: elbow
+    color_theme: bg1
+    color_brightness: -0.25
+    width_pt: 1.0
+    dash_style: dash
+    arrow:
+      type: triangle
+      size: medium
+  label:
+    font_size_pt: 9
+    color_theme: bg1
+    color_brightness: -0.5
+mermaid:
+  direction: LR
+  format: svg
+  scale: 3
+  background: transparent
+  theme:
+    primary: '#4F4F70'
+    primary_text: '#FFFFFF'
+    secondary: '#BFBFBF'
+    secondary_text: '#000000'
+    line_color: '#4F4F70'
+    text_color: '#000000'
+    font_family: Arial, sans-serif
+    font_size: 14px
+diagram:
+  node:
+    fill: '#4F4F70'
+    text_color_theme: lt1
+    border_color: '#4F4F70'
+    border_width_pt: 1.0
+    font_size_pt: 12
+    font_bold: false

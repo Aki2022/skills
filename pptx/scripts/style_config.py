@@ -60,39 +60,26 @@ class StyleConfig:
     def load(cls, yaml_path: Optional[str] = None) -> 'StyleConfig':
         """Load style.yaml and return StyleConfig instance.
 
-        Search order:
-        1. Provided yaml_path (if specified)
-        2. ./powerpoint/processing/style.yaml (project-specific, recommended)
-        3. ./processing/style.yaml (legacy, for backward compatibility)
-        4. ~/.claude/skills/pptx/templates/style.yaml (master template)
+        Always loads from the master template at ~/.claude/skills/pptx/templates/style.yaml
+        unless a specific path is provided.
 
         Args:
-            yaml_path: Optional path to style.yaml. If None, auto-detects.
+            yaml_path: Optional path to style.yaml. If None, uses master template.
 
         Returns:
             StyleConfig instance
         """
         if yaml_path is None:
-            # Search order: powerpoint/processing -> processing (legacy) -> skill master
-            candidates = [
-                os.path.join(os.getcwd(), 'powerpoint', 'processing', 'style.yaml'),
-                os.path.join(os.getcwd(), 'processing', 'style.yaml'),
-                os.path.join(os.path.expanduser('~/.claude/skills/pptx/templates'), 'style.yaml'),
-            ]
+            # Always use master template
+            yaml_path = os.path.join(
+                os.path.expanduser('~/.claude/skills/pptx/templates'),
+                'style.yaml'
+            )
 
-            for candidate in candidates:
-                if os.path.exists(candidate):
-                    yaml_path = candidate
-                    break
-
-            if yaml_path is None:
+            if not os.path.exists(yaml_path):
                 raise FileNotFoundError(
-                    "style.yaml not found. Please run:\n"
-                    "  mkdir -p powerpoint/processing\n"
-                    "  cp ~/.claude/skills/pptx/templates/style.yaml powerpoint/processing/\n"
-                    "Or generate it with:\n"
-                    "  cd ~/.claude/skills/pptx && python scripts/extract_style.py\n"
-                    "  cp templates/style.yaml /path/to/your/project/powerpoint/processing/"
+                    "Master style.yaml not found. Please generate it with:\n"
+                    "  cd ~/.claude/skills/pptx && python scripts/extract_style.py"
                 )
 
         with open(yaml_path, 'r') as f:

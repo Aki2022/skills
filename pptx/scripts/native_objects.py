@@ -37,9 +37,15 @@ except ImportError:
     CRTX_AVAILABLE = False
     get_logger().error("crtx_utils not available - chart styling will fail")
 
+# Import snapshot utilities
+from scripts.snapshot_utils import create_generation_snapshot
+
 # Path to Chart.crtx template (absolute path from skill directory)
 SKILL_DIR = Path(__file__).parent.parent
 CHART_CRTX_PATH = SKILL_DIR / 'templates' / 'template.crtx'
+
+# Track whether snapshot has been created in this session
+_SNAPSHOT_CREATED = False
 
 
 def create_styled_table(slide, placeholder_shape, spec: Dict[str, Any]):
@@ -64,6 +70,9 @@ def create_styled_table(slide, placeholder_shape, spec: Dict[str, Any]):
     """
     logger = get_logger()
     logger.info("Creating styled table")
+
+    # Create generation snapshot (once per session)
+    _ensure_snapshot_created()
 
     # Load style configuration
     style = StyleConfig.load()
@@ -370,6 +379,9 @@ def create_styled_chart(slide, placeholder_shape, spec: Dict[str, Any]):
     logger = get_logger()
     logger.info(f"Creating styled chart (type: {spec.get('chart_kind', 'line')})")
 
+    # Create generation snapshot (once per session)
+    _ensure_snapshot_created()
+
     # Load style configuration
     style = StyleConfig.load()
 
@@ -585,3 +597,27 @@ def create_styled_diagram(slide, placeholder_shape, spec: Dict[str, Any]):
             logger.warning(f"Could not remove placeholder shape: {e}")
 
     return created_shapes
+
+
+def _ensure_snapshot_created():
+    """Ensure generation snapshot is created once per session.
+
+    Creates a snapshot of templates/styles from ~/.claude/skills/pptx/templates/
+    to powerpoint/processing/snapshot/ for audit purposes.
+
+    This function is called automatically by create_styled_table() and
+    create_styled_chart() on first use.
+    """
+    global _SNAPSHOT_CREATED
+
+    if _SNAPSHOT_CREATED:
+        return
+
+    logger = get_logger()
+    try:
+        create_generation_snapshot()
+        _SNAPSHOT_CREATED = True
+    except Exception as e:
+        logger.warning(f"Failed to create generation snapshot: {e}")
+        # Don't fail the entire generation if snapshot fails
+        _SNAPSHOT_CREATED = True  # Don't retry

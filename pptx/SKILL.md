@@ -22,11 +22,17 @@ To keep the skill directory clean, all working files should be placed in a separ
 
 ```
 {project}/
-├── outline.md           # Content definition (input)
-└── powerpoint/          # All PowerPoint outputs (auto-created)
+└── powerpoint/          # All PowerPoint-related files (auto-created)
+    ├── outline.md       # Content definition (input, human-edited)
+    ├── generate_*.py    # Generation script (AI-created, preserved for reference)
     ├── output.pptx      # Final output
-    └── processing/      # Intermediate files (auto-created)
-        ├── style.yaml   # Project-specific styles (auto-copied on first run)
+    └── processing/      # Temporary files and generation logs (safe to delete)
+        ├── snapshot/    # Generation-time snapshots (for audit/reproducibility)
+        │   ├── template.pptx    # Template used at generation time
+        │   ├── template.crtx    # Chart template used at generation time
+        │   ├── style.yaml       # Style config used at generation time
+        │   ├── TEMPLATE.md      # Layout documentation used at generation time
+        │   └── timestamp.txt    # Generation timestamp and skill version
         ├── pptx_generation.log  # Debug logs (auto-generated)
         ├── charts/      # R-generated SVG/PNG (optional)
         ├── diagrams/    # Mermaid-generated SVG (optional)
@@ -35,16 +41,19 @@ To keep the skill directory clean, all working files should be placed in a separ
 
 ### Directory Roles
 
-- **outline.md** - Markdown file defining slide content and structure (in project root)
-- **powerpoint/** - All PowerPoint-related outputs (auto-created)
-  - **output.pptx** - Final generated PowerPoint presentation
-  - **processing/** - All intermediate/temporary files (can be deleted after completion)
-    - **style.yaml** - Project-specific style configuration (auto-copied from skill templates on first run)
-    - **pptx_generation.log** - Detailed debug and error logs (auto-generated)
+- **powerpoint/outline.md** - Markdown file defining slide content and structure (human-edited input, high-level design)
+- **powerpoint/generate_*.py** - Python script that generates the presentation (AI-created from outline.md, preserved for reference)
+- **powerpoint/output.pptx** - Final generated PowerPoint presentation (output)
+- **powerpoint/processing/** - Temporary/intermediate files and logs (can be safely deleted, but useful for audit)
+  - **snapshot/** - Snapshots of templates/styles used at generation time (for reproducibility and audit)
+  - **pptx_generation.log** - Detailed debug and error logs (auto-generated)
 
 ### Setup
 
-No manual setup required! The `powerpoint/processing/` directory and `style.yaml` are automatically created on first run.
+No manual setup required! The generation script automatically:
+- Creates `powerpoint/processing/` directory structure
+- Copies templates to `processing/snapshot/` for audit logging
+- Initializes logging to `processing/pptx_generation.log`
 
 Optional: Create subdirectories for R charts or Mermaid diagrams if needed:
 ```bash
@@ -63,6 +72,173 @@ No manual setup required - logging initializes on first use of table/chart creat
 
 ---
 
+## 1.5. outline.md Format
+
+The `outline.md` file defines presentation content at a high level. AI reads this file and generates a corresponding Python script (`generate_*.py`) that creates the PowerPoint presentation.
+
+### Format Specification
+
+**IMPORTANT**: Every slide MUST specify its layout explicitly using the `**Layout**:` field.
+
+```markdown
+# Presentation Title
+
+---
+
+## Slide 1: [Slide Title]
+**Layout**: 0 (00_Title)
+
+- タイトル: [Main Title Text]
+- サブタイトル: [Subtitle Text]
+- 副題: [Additional Subtitle] (optional)
+
+---
+
+## Slide 2: [Section Title]
+**Layout**: 2 (02_Section)
+
+- タイトル: [Section Title]
+
+---
+
+## Slide 3: [Table Slide Title]
+**Layout**: 7 (Handout_Single_Table_Pos)
+
+- タイトル: [Slide Title]
+- KeyMessage: [Key message]
+
+### [Table Title]
+| Column 1 | Column 2 | Column 3 |
+|----------|----------|----------|
+| Data 1A  | Data 1B  | Data 1C  |
+| Data 2A  | Data 2B  | Data 2C  |
+
+---
+
+## Slide 4: [Chart Slide Title]
+**Layout**: 5 (Handout_Single_Chart_Pos)
+
+- タイトル: [Slide Title]
+- KeyMessage: [Key message]
+
+### [Chart Description]
+- グラフ: [Chart type and description]
+- データ: [Data description or actual values]
+
+---
+
+## Slide 5: [Text Content Slide]
+**Layout**: 11 (Handout_Single_Object_Pos)
+
+- タイトル: [Slide Title]
+- KeyMessage: [Key message]
+
+### [Content]
+- **[Point 1]**
+  - [Detail 1]
+  - [Detail 2]
+
+- **[Point 2]**
+  - [Detail 1]
+  - [Detail 2]
+```
+
+**Layout Selection Guidelines**:
+
+- **0 (00_Title)** - Opening slide with title and subtitle
+- **1 (01_Contents)** - Table of contents or text-focused slides
+- **2 (02_Section)** - Section dividers
+- **5 (Handout_Single_Chart_Pos)** - Full-width chart with key message
+- **7 (Handout_Single_Table_Pos)** - Full-width table with key message
+- **11 (Handout_Single_Object_Pos)** - Full-width content (text, diagrams, etc.)
+
+For complete layout reference, see `~/.claude/skills/pptx/templates/TEMPLATE.md`
+
+### AI Workflow
+
+When AI **creates** `outline.md`:
+
+1. **MUST specify Layout for every slide** - Reference TEMPLATE.md to choose appropriate layout
+2. **Use layout name format**: `**Layout**: [number] ([name])`
+   - Example: `**Layout**: 7 (Handout_Single_Table_Pos)`
+3. **Select layout based on content type**:
+   - Title slide → Layout 0
+   - Section divider → Layout 2
+   - Table → Layout 7
+   - Chart → Layout 5
+   - Text/Objects → Layout 11
+
+When AI **processes** `outline.md` to generate presentation:
+
+1. **Reads outline.md** - Extracts layout number and content
+2. **References TEMPLATE.md** - Looks up placeholder indices for specified layout
+3. **Generates generate_*.py** - Creates Python script with:
+   - Layout from outline.md (e.g., `prs.slide_layouts[7]`)
+   - Correct placeholder indices from TEMPLATE.md (e.g., `placeholders[16]` for TABLE)
+   - Structured data specifications (table_spec, chart_spec)
+   - Styling via `create_styled_table()` and `create_styled_chart()`
+4. **Executes script** - Runs `python generate_*.py` to create `output.pptx`
+
+### Information AI Supplements
+
+AI automatically determines technical details not explicitly in `outline.md`:
+
+- Placeholder indices (from TEMPLATE.md based on specified layout)
+- Content structure (converting bullet lists to table_spec)
+- Chart types (inferring from context)
+- Specific data values (if not provided)
+
+**Note**: Layout numbers are now **explicitly specified** in outline.md, not inferred by AI.
+
+### Example Mapping
+
+**outline.md** (AI creates with Layout specified):
+```markdown
+## Slide 2: 課題認識
+**Layout**: 7 (Handout_Single_Table_Pos)
+
+- タイトル: こんな課題はありませんか？
+- KeyMessage: 新規事業の成否は「人」に依存するが...
+
+### 3つの課題
+1. **異動・採用の判断**
+   - この候補者はイノベーションに向いているか？
+```
+
+**AI generates in generate_*.py** (based on specified Layout 7):
+```python
+# Uses Layout 7 as specified in outline.md
+slide = prs.slides.add_slide(prs.slide_layouts[7])
+slide.shapes.title.text = "こんな課題はありませんか？"
+
+# References TEMPLATE.md: Layout 7 has KeyMessage at idx=13
+slide.placeholders[13].text = "新規事業の成否は..."
+
+table_spec = {
+    'data': [
+        ['課題', '具体的な悩み'],  # AI structures bullet list as table
+        ['異動・採用の判断', '• この候補者は...'],
+        ...
+    ],
+    'header_row': True
+}
+
+# References TEMPLATE.md: Layout 7 has TABLE at idx=16
+create_styled_table(slide, slide.placeholders[16], table_spec)
+```
+
+### Human Editing Workflow
+
+When a human edits `outline.md`:
+
+1. **Change Layout**: Modify `**Layout**: [number] ([name])`
+   - Example: Change from Layout 7 (table) to Layout 5 (chart)
+2. **Adjust Content**: Update content to match new layout
+3. **Regenerate**: Ask AI to regenerate `generate_*.py` from modified outline.md
+4. **Execute**: Run `python generate_*.py` to create updated presentation
+
+---
+
 ## 2. Files and Roles
 
 ### Core Files
@@ -70,7 +246,8 @@ No manual setup required - logging initializes on first use of table/chart creat
 - **templates/template.pptx** - Slide layouts, theme colors/fonts (human-edited, shared across projects)
 - **templates/template.crtx** - Chart template with styling (human-edited, shared across projects)
 - **templates/style.yaml** - Master style definitions (auto-generated from templates, shared across projects)
-- **{project}/powerpoint/processing/style.yaml** - Project-specific style (auto-copied from templates/style.yaml)
+- **templates/TEMPLATE.md** - Layout documentation (auto-generated from template.pptx, used by AI for layout selection)
+- **{project}/powerpoint/processing/snapshot/*** - Snapshots of templates/styles/docs used at generation time (auto-copied for audit)
 
 ### Scripts
 
@@ -105,13 +282,18 @@ This extracts styling from:
 
 Output: `templates/style.yaml` (master template)
 
-### Project-Specific Style
+### Generation-Time Snapshots
 
-Each project gets its own copy of `style.yaml` in `powerpoint/processing/`:
+For audit and reproducibility, the system snapshots templates/styles at generation time:
 
-- **Auto-setup**: On first run, `generate_presentation.py` copies `templates/style.yaml` to `powerpoint/processing/style.yaml`
-- **Customization**: You can edit `powerpoint/processing/style.yaml` for project-specific styling
-- **Fallback**: If `powerpoint/processing/style.yaml` doesn't exist, the system uses `templates/style.yaml`
+- **Auto-snapshot**: On each generation, copies current templates to `powerpoint/processing/snapshot/`
+  - `template.pptx` - The template file used
+  - `template.crtx` - The chart template used
+  - `style.yaml` - The style configuration used
+  - `timestamp.txt` - Generation timestamp and skill version
+- **Purpose**: Audit trail showing exactly which templates produced the output
+- **Regeneration**: Always uses latest templates from `~/.claude/skills/pptx/templates/` (not the snapshot)
+- **Benefit**: You can diff snapshots to see how template changes affect output over time
 
 ### style.yaml Structure
 
@@ -225,19 +407,19 @@ For custom styling beyond native objects, use `StyleConfig`:
 ```python
 from scripts.style_config import StyleConfig
 
-# Auto-detects: powerpoint/processing/style.yaml -> processing/style.yaml (legacy) -> templates/style.yaml
+# Auto-detects: templates/style.yaml (master)
 style = StyleConfig.load()
 primary = style.colors['primary']  # '#4F4F70'
 table_config = style.table
 
 # Or specify path explicitly:
-style = StyleConfig.load('powerpoint/processing/style.yaml')
+style = StyleConfig.load('~/.claude/skills/pptx/templates/style.yaml')
 ```
 
-**StyleConfig.load() search order:**
-1. `powerpoint/processing/style.yaml` (project-specific, recommended)
-2. `processing/style.yaml` (legacy, for backward compatibility)
-3. `~/.claude/skills/pptx/templates/style.yaml` (master)
+**StyleConfig.load() behavior:**
+- Always loads from `~/.claude/skills/pptx/templates/style.yaml` (master template)
+- Generation snapshots are saved to `processing/snapshot/style.yaml` for audit only
+- No project-specific customization - all styling comes from the master template
 
 **WARNING**: Using `StyleConfig` directly requires manual application of all styles. Prefer `native_objects.py` instead.
 

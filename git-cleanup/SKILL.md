@@ -50,6 +50,13 @@ alone is always safe; deleting the wrong thing is not.
   instruction from the user.
 - **Follow repo conventions.** Use the `gh` CLI for all GitHub operations. Match
   the repository's existing commit-message style.
+- **Write context-rich commit messages.** A good commit message explains not just
+  _what_ changed but _why_ — the problem that prompted the work, the decision made,
+  and any non-obvious constraints. Future readers (including AI agents doing code
+  archaeology) should be able to reconstruct the reasoning without needing to ask.
+  A one-line summary is rarely enough. When proposing the commit message in
+  Stage 3, draft a multi-line body that captures: what was broken or missing, what
+  was investigated, what approach was chosen, and what was confirmed to work.
 
 ---
 
@@ -81,8 +88,12 @@ these in Stage 3.
 Read the actual diff (`git diff`, `git diff --staged`, and look at untracked
 files). Then decide:
 
-- **Part of the finished task** → propose committing them with a message in the
-  repo's style.
+- **Part of the finished task** → propose committing them. Draft a message that
+  includes the subject line (repo style) **and** a multi-line body explaining
+  the background: what was broken or missing, what was investigated, what approach
+  was chosen, and what was verified. This context helps future readers — human or
+  AI — reconstruct the reasoning without having to dig through Slack or PR
+  comments.
 - **Unrelated or half-done** → propose `git stash` (with a label) or simply
   leaving them in place. Do **not** fold unrelated edits into the task's commit.
 - **Generated junk / secrets / large artifacts** → flag it; don't commit.

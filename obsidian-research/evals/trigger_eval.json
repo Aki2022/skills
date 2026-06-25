@@ -1,0 +1,82 @@
+[
+  {
+    "query": "obsidianで大腸がんの診療課題を医療と公共に分けて調べて",
+    "should_trigger": true
+  },
+  {
+    "query": "vaultを検索して認知症の予防に関するノートをまとめて",
+    "should_trigger": true
+  },
+  {
+    "query": "vectorで研究倫理について手元の資料を調べてほしい",
+    "should_trigger": true
+  },
+  {
+    "query": "保存してある論文から、がん検診の受診率が低い理由を整理して",
+    "should_trigger": true
+  },
+  {
+    "query": "自分のノートに高齢者のフレイルについて何か蓄積あったっけ？まとめて",
+    "should_trigger": true
+  },
+  {
+    "query": "obsidianに溜めたクリップから、AI時代のヘルスケアの話を観点別に出して",
+    "should_trigger": true
+  },
+  {
+    "query": "手元のスキャン資料も含めて、緩和ケアに関する記述を探して根拠つきで教えて",
+    "should_trigger": true
+  },
+  {
+    "query": "ベクター検索でレビー小体型認知症の治療ニーズの話、出典リンク付きで欲しい",
+    "should_trigger": true
+  },
+  {
+    "query": "vaultの中で服薬アドヒアランスに触れてるノートある？あれば論点整理して",
+    "should_trigger": true
+  },
+  {
+    "query": "大腸がんの最新治療について調べてまとめて",
+    "should_trigger": false
+  },
+  {
+    "query": "認知症の予防に効果的な運動って何か教えて",
+    "should_trigger": false
+  },
+  {
+    "query": "2025年のがん統計の最新データをネットで確認して",
+    "should_trigger": false
+  },
+  {
+    "query": "このリポジトリでvector検索を実装してるコードどこにある？",
+    "should_trigger": false
+  },
+  {
+    "query": "background_vector.pyのsearch関数の挙動を調べて説明して",
+    "should_trigger": false
+  },
+  {
+    "query": "vault/paper/20260313_大腸がん検診精密検査未受診者の実態.md を読んで要約して",
+    "should_trigger": false
+  },
+  {
+    "query": "研究倫理の指針について一般的なポイントをまとめて",
+    "should_trigger": false
+  },
+  {
+    "query": "緩和ケアの定義をWHOの説明ベースで教えて",
+    "should_trigger": false
+  },
+  {
+    "query": "在宅医療の制度改正について最近のニュースを調べて",
+    "should_trigger": false
+  },
+  {
+    "query": "プレゼン用に認知症の疫学データをグラフにしてまとめて",
+    "should_trigger": false
+  },
+  {
+    "query": "obsidianの同期がうまくいかないんだけど設定どう直す？",
+    "should_trigger": false
+  }
+]

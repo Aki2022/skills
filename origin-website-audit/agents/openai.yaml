@@ -1,0 +1,6 @@
+interface:
+  display_name: "Website Audit"
+  short_description: "Audit websites for compliance, SEO, UX, accessibility, and tracking."
+  default_prompt: "Use $origin-website-audit to review this website before launch."
+policy:
+  allow_implicit_invocation: true

@@ -1,5 +1,5 @@
 ---
-name: skill-commonize
+name: origin-skill-commonize
 description: >-
   複数のコーディングエージェント（Claude Code / Codex CLI / Antigravity・Gemini CLI 等）の
   設定ファイルとスキルを symlink で単一ソースに統一する規約と手順。正典は `.agents/`
@@ -64,7 +64,23 @@ for f in AGENTS.md CLAUDE.md GEMINI.md; do
   elif [ -e "$f" ]; then echo "$f: 実体 ($(wc -l < "$f") 行)";
   else echo "$f: 不在"; fi
 done
+
+# スキルディレクトリの symlink 状態を確認
+for d in .agents/skills .claude/skills .codex/skills; do
+  if [ -L "$d" ]; then echo "$d: symlink → $(readlink "$d")";
+  elif [ -d "$d" ]; then echo "$d: 実体ディレクトリ ($(ls "$d" 2>/dev/null | wc -l | tr -d ' ') 個)";
+  else echo "$d: 不在"; fi
+done
 ```
+
+**棚卸し時の判定ルール（スキル）:**
+
+- `.agents/skills/` に中身があり、`.claude/skills` が **不在または実体ディレクトリ** → symlink 化が必要
+- `.claude/skills → .agents/skills` の symlink が存在する → 正常、対応不要
+- `.claude/skills` が不在でも `.agents/skills/` が空なら → 対応不要
+
+`.claude/skills` の不在は「問題なし」ではなく、`.agents/skills/` の中身と合わせて判断すること。
+中身があるのに symlink がなければ、Claude Code がプロジェクトスキルを読めない可能性がある。
 
 ### 2. 正典を決める
 
@@ -124,6 +140,29 @@ head -1 CLAUDE.md && head -1 AGENTS.md  # 同一内容が見えること
 フレッシュ性テスト: 正典を 1 行だけ一時編集し、別名側から同じ変更が見えることを確認して元に戻す。
 
 ## リポジトリ単位での注意（グローバルとの違い）
+
+### AGENTS.md の2種類の役割を区別する
+
+リポジトリに `AGENTS.md` がある場合、その内容が何かを確認すること。
+
+- **プロジェクト固有ルール**（ファイル管理方針・ディレクトリ構造・ワークフロー等）→ この
+  リポジトリ専用の内容。残す価値がある。
+- **全般的な AI 行動設定**（口調・ツール選択・並列実行方針等）→ グローバルの
+  `~/.agents/AGENTS.md` で管理すべき内容が誤ってリポジトリに置かれている可能性がある。
+
+### リポジトリ CLAUDE.md は必須ではない
+
+`~/.claude/CLAUDE.md → ~/.agents/AGENTS.md` のグローバル symlink が既に設定済みなら、
+リポジトリに `CLAUDE.md` を作らなくても Claude Code はグローバル設定を読む。
+
+リポジトリに `CLAUDE.md` を作る（`AGENTS.md` への symlink）価値があるのは:
+
+- そのリポジトリ専用の `AGENTS.md` があり、Claude Code に自動ロードさせたい場合
+- Codex CLI と Claude Code 両方でプロジェクト固有ルールを共有したい場合
+
+不要な場合: グローバル設定で十分で、リポジトリに余計なファイルを増やしたくない場合。
+
+### symlink が git にコミットされる点
 
 リポジトリの symlink は git にコミットされるため、追加の注意がある。
 

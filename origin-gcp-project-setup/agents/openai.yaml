@@ -1,0 +1,4 @@
+interface:
+  display_name: "GCP Project Setup"
+  short_description: "GCP鍵レス認証とADC再認証復旧を整える"
+  default_prompt: "Use $origin-gcp-project-setup to set up or recover impersonation-based GCP auth for this repository."

@@ -1,8 +1,9 @@
 ---
-name: gcp-project-setup
+name: origin-gcp-project-setup
 description: |
   新しいリポジトリをGCP複数プロジェクト環境にimpersonation方式（鍵レス）で追加するセットアップスキル。
-  サービスアカウント作成・最小権限付与・mise.toml生成・end-to-end検証まで一括実行する。
+  サービスアカウント作成・最小権限付与・mise.toml生成・per-repo ADC分離・
+  RAPT/ADC失効時の再認証復旧まで扱う。
 
   以下のようなリクエストで必ず使うこと:
   - 「新しいリポジトリをGCPに繋げたい」
@@ -11,6 +12,8 @@ description: |
   - 「impersonation でセットアップ」「鍵レスで設定」
   - 「別プロジェクトのリポジトリに認証を追加」
   - GCPプロジェクトIDとリポジトリ名が両方出てくるセットアップ文脈
+  - 「invalid_rapt を直したい」「ADC の再認証を復旧したい」
+  - 「mise run reauth が失敗する」「複数 repo の ADC が混線した」
 ---
 
 # GCP Project Setup（impersonation方式・鍵レス）
@@ -171,17 +174,31 @@ EOF
 Google SDK には効かない。SDK は ADC を見るが、グローバル ADC は単一ファイルのため複数
 リポジトリで衝突する。横断ヘルパーで per-repo ADC（`~/.config/gcloud/<repo>_adc.json`）を
 生成する。ブラウザ再ログインは不要（グローバル ADC の refresh_token を共有して生成する）。
+通常は repo-local の入口として `mise run reauth` を使い、その裏側でこの横断ヘルパーを呼ぶ。
 
 ```bash
-bash ~/.claude/skills/gcp-project-setup/refresh_adc.sh
+# 通常の入口
+mise run reauth
+
+# 横断ヘルパーを直接呼ぶのは、共通フローを明示的に使いたいときだけ
+bash ~/.agents/skills/origin-gcp-project-setup/refresh_adc.sh
 ```
 
 このヘルパーは `~/code/*/.mise.toml` を走査し、`CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT`
 を持つ全リポジトリの per-repo ADC を生成・更新し、`GOOGLE_APPLICATION_CREDENTIALS` 行が
 無ければ `.mise.toml` に追記する。最後にグローバル ADC を素のユーザー認証へ戻す
 （未設定リポジトリが誤った SA で動くのを防ぐ）。
+利用者向けの通常導線は各 repo の `mise run reauth` で、repo-local に起動しても
+裏側では全 repo の per-repo ADC 整合性をまとめて更新しうる。
 
-> 前提：グローバル ADC が必要。無ければ先に `gcloud auth application-default login` を実行。
+> 前提：authorized_user の source ADC が必要。active gcloud config に
+> `auth/impersonate_service_account` が永続設定されている環境では、
+> ふつうに `gcloud auth application-default login` を打つと
+> `impersonated_service_account` ADC ができてしまうことがある。
+> その場合は `bash ~/.agents/skills/origin-gcp-project-setup/re-auth.sh` を使い、
+> 一時 `CLOUDSDK_CONFIG` で user ADC を取り直す。
+> `gcloud` が PATH に無い constrained shell でも、`re-auth.sh` / `refresh_adc.sh` は
+> `/opt/homebrew/share/google-cloud-sdk/bin/gcloud` などの代表的な設置先を自動検出する。
 
 ### Step 7: mise trust
 
@@ -232,14 +249,20 @@ CLI は SA だが SDK だけユーザーになる場合は Step 6.5 の per-repo
 2. **付与した権限**: 付与したロール一覧
 3. **作成ファイル**: `${REPO_PATH}/.mise.toml`、`~/.config/gcloud/${REPO_NAME}_adc.json`（SDK用ADC）
 4. **毎日の使い方**: `cd ~/code/${REPO_NAME}` するだけで CLI も SDK も自動切替
-5. **再認証が必要な場合**（refresh_token 失効時のみ・数週間〜数ヶ月に1回程度）:
+5. **再認証が必要な場合**（RAPT/refresh_token 失効時のみ・24h ポリシーまたは数週間〜数ヶ月に1回）:
    ```bash
-   gcloud auth login                          # gcloud/bq CLI 用
-   gcloud auth application-default login       # ADC（SDK）用の素ログイン
-   bash ~/.claude/skills/gcp-project-setup/refresh_adc.sh   # per-repo ADC を一括再生成
+   bash ~/.agents/skills/origin-gcp-project-setup/re-auth.sh
+   ```
+   これ1コマンドで `gcloud auth login --update-adc`・全リポジトリの per-repo ADC 再生成をまとめて実行する。
+   Google Ads OAuth も更新が必要な場合は `--ads` オプションを追加:
+   ```bash
+   bash ~/.agents/skills/origin-gcp-project-setup/re-auth.sh --ads
    ```
    > per-repo ADC は生成時の refresh_token を焼き込むため、再認証では自動更新されない。
-   > 必ず `refresh_adc.sh` を再実行して全リポジトリ分を作り直すこと。
+   > `re-auth.sh` が内部で `refresh_adc.sh` を呼び出し、全リポジトリ分を一括再生成する。
+   > active gcloud config に SA impersonation が永続設定されていても、
+   > `re-auth.sh` は一時 `CLOUDSDK_CONFIG` を使うためその影響を受けない。
+   > 通常の入口は `bash ... re-auth.sh` ではなく各 repo の `mise run reauth`。
 
 ## トラブルシューティング
 
@@ -248,6 +271,8 @@ CLI は SA だが SDK だけユーザーになる場合は Step 6.5 の per-repo
 | `NOT_FOUND: Service account ... does not exist`                                            | --project 省略で active config のプロジェクトを参照          | Step 4 の `CLOUDSDK_CORE_PROJECT` 指定を確認                                                         |
 | `PERMISSION_DENIED: Failed to impersonate`                                                 | IAM 未反映 or TokenCreator 未付与                            | Step 5 のリトライを待つ。それでも失敗なら Step 4 を再実行                                            |
 | `SESSION_USER()` がユーザーアカウントを返す                                                | impersonation が効いていない                                 | `CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT` 環境変数を確認                                           |
-| `bq: Reauthentication failed`                                                              | 土台のユーザー認証が期限切れ                                 | `gcloud auth login` を実行                                                                           |
+| `bq: Reauthentication failed`                                                              | 土台のユーザー認証が期限切れ（RAPT など）                    | `bash ~/.agents/skills/origin-gcp-project-setup/re-auth.sh` を実行                                          |
 | SDK だけ `Caller does not have required permission to use project` / `serviceusage` エラー | per-repo ADC 未生成。SDK がグローバル ADC（別 SA）を見ている | Step 6.5 の `refresh_adc.sh` を実行し、`.mise.toml` に `GOOGLE_APPLICATION_CREDENTIALS` があるか確認 |
 | CLI は SA だが SDK だけユーザー/別 SA で動く                                               | `GOOGLE_APPLICATION_CREDENTIALS` 未設定 or 指す ADC が古い   | `.mise.toml` を確認し `refresh_adc.sh` を再実行                                                      |
+| `application_default_credentials.json must be authorized_user ... got 'impersonated_service_account'` | active gcloud config の `auth/impersonate_service_account` が ADC 作成に混入 | `re-auth.sh` を使って一時 `CLOUDSDK_CONFIG` で user ADC を作る                                       |
+| `gcloud: No such file or directory`                                                        | constrained shell の PATH に Google Cloud SDK が無い         | `re-auth.sh` / `refresh_adc.sh` の自動検出を使う。手動なら SDK の bin を PATH に追加                |

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# doc-update :: SessionStart hook (Claude Code / Codex shared shim)
+# origin-doc-update :: SessionStart hook (Claude Code / Codex shared shim)
 #
 # Injects docs/00_index.md into the agent context when the current repository
 # uses the doc-governance system. Graceful no-op for every other repository.

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# doc-update :: Stop hook (Claude Code / Codex shared shim)
+# origin-doc-update :: Stop hook (Claude Code / Codex shared shim)
 #
 # Best-effort, NON-BLOCKING reminder: if files changed this session but nothing
-# under docs/ was touched, nudge the agent to update work context / guides.
+# under docs/ was touched, nudge the agent to classify guide impact.
 # Read-only `git status` only — this is NOT a git hook and never blocks a commit.
 # Contract: must never block (no continue:false), must never error, silent when
 # there is nothing to say.
@@ -34,6 +34,6 @@ docschanged="$(printf '%s\n' "${paths}" | grep '^docs/' || true)"
 if [ -n "${nondocs}" ] && [ -z "${docschanged}" ]; then
   # Emit JSON systemMessage: surfaced as a non-blocking UI warning (Codex).
   # No "continue":false, so the turn still ends normally — never blocks.
-  printf '%s\n' '{"systemMessage":"doc-update reminder: files changed but docs/ was not updated this session. If implementation behavior, work context, or direction changed, update docs/issues/ (and docs/guides/ if behavior changed)."}'
+  printf '%s\n' '{"systemMessage":"origin-doc-update nudge: non-doc files changed. Update the active workstream/issue, classify guide impact as required or none, and update docs/guides/ in the same slice when behavior changed."}'
 fi
 exit 0

@@ -1,5 +1,5 @@
 ---
-name: obsidian-research
+name: origin-obsidian-research
 description: >-
   Obsidian vault（手元の論文・記事クリップ・スキャン資料のノート群）を vector 検索し、
   指定テーマの調査結果を出典リンク付きで整理して返す。発火するのは情報源が「手元の vault」だと

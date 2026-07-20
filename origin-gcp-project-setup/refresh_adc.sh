@@ -15,27 +15,58 @@
 #   共有し、各リポジトリの SA を impersonate する per-repo ADC を生成する。
 #
 # 使い方:
-#   bash ~/.claude/skills/gcp-project-setup/refresh_adc.sh
+#   通常は各 repo から `mise run reauth`
+#   共通フローを直接呼ぶ場合のみ:
+#   bash ~/.agents/skills/origin-gcp-project-setup/refresh_adc.sh
 #
 # 再認証が必要になったとき (refresh_token が失効した場合のみ):
-#   gcloud auth application-default login   # 素ログイン (impersonate指定なし)
-#   bash ~/.claude/skills/gcp-project-setup/refresh_adc.sh
+#   各 repo から `mise run reauth`
+#   もしくは `bash ~/.agents/skills/origin-gcp-project-setup/re-auth.sh`
+#
+# active gcloud config に auth/impersonate_service_account が永続設定されている場合、
+# 上の素ログインでも impersonated_service_account ADC が作られることがある。
+# その場合は re-auth.sh を使うか、一時 CLOUDSDK_CONFIG を分離して authorized_user ADC を作る。
 #
 set -euo pipefail
 
+resolve_gcloud() {
+  if command -v gcloud >/dev/null 2>&1; then
+    command -v gcloud
+    return 0
+  fi
+  for candidate in \
+    /opt/homebrew/share/google-cloud-sdk/bin/gcloud \
+    /usr/local/share/google-cloud-sdk/bin/gcloud \
+    "$HOME/google-cloud-sdk/bin/gcloud"; do
+    if [ -x "$candidate" ]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
 GCLOUD_DIR="${CLOUDSDK_CONFIG:-$HOME/.config/gcloud}"
 GLOBAL_ADC="${GCLOUD_DIR}/application_default_credentials.json"
+SOURCE_ADC="${SOURCE_ADC_PATH:-$GLOBAL_ADC}"
 CODE_DIR="${CODE_DIR:-$HOME/code}"
+GCLOUD_BIN="$(resolve_gcloud || true)"
 
 PYTHON="$(command -v python3 || true)"
 [ -z "$PYTHON" ] && { echo "❌ python3 が見つからない"; exit 1; }
-[ -f "$GLOBAL_ADC" ] || { echo "❌ グローバル ADC が無い: $GLOBAL_ADC"; echo "   先に: gcloud auth application-default login"; exit 1; }
+[ -n "$GCLOUD_BIN" ] || {
+  echo "❌ gcloud が見つかりません"
+  echo "   PATH を確認するか、Google Cloud SDK の bin ディレクトリを追加してください。"
+  exit 1
+}
+export PATH="$(dirname "$GCLOUD_BIN"):$PATH"
+[ -f "$SOURCE_ADC" ] || { echo "❌ source ADC が無い: $SOURCE_ADC"; echo "   先に: gcloud auth application-default login"; exit 1; }
 
 echo "=== source_credentials を抽出中 ==="
 # グローバル ADC から authorized_user の source を取り出す。
 # 既に impersonated_service_account なら .source_credentials を、
 # 素の authorized_user ならトップレベルを source として使う。
-SOURCE_JSON="$("$PYTHON" - "$GLOBAL_ADC" <<'PY'
+SOURCE_JSON="$("$PYTHON" - "$SOURCE_ADC" <<'PY'
 import json, sys
 with open(sys.argv[1]) as f:
     d = json.load(f)
@@ -135,7 +166,7 @@ echo "=== 疎通確認 (各 per-repo ADC で access token 取得) ==="
 printf '%s' "$GENERATED" | while IFS='|' read -r REPO_NAME SA_EMAIL ADC_PATH; do
   [ -z "$REPO_NAME" ] && continue
   if GOOGLE_APPLICATION_CREDENTIALS="$ADC_PATH" \
-     gcloud auth application-default print-access-token >/dev/null 2>&1; then
+     "$GCLOUD_BIN" auth application-default print-access-token >/dev/null 2>&1; then
     echo "  ✅ ${REPO_NAME}: OK"
   else
     echo "  ⚠️  ${REPO_NAME}: トークン取得失敗 (IAM 反映待ち or TokenCreator 未付与)"

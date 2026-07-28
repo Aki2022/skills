@@ -7,6 +7,7 @@
 # 例:
 #   unify_config.sh AGENTS.md CLAUDE.md
 #   unify_config.sh ~/.agents/skills ~/.claude/skills ~/.codex/skills/foo
+#   unify_config.sh ~/.agents/claude/commands ~/.claude/commands ~/.claude-seat2/commands
 #
 # 動作:
 #   - canonical が存在しなければエラー終了（先に正典を用意すること）。

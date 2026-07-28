@@ -9,6 +9,7 @@ import sys
 from datetime import date
 from pathlib import Path
 
+from index_entries import remove_index_entry
 from validate_repo_docs import parse_workstream_issue_blocks, validate_repo
 
 
@@ -80,16 +81,18 @@ def main() -> None:
     if index.is_file():
         index_content = index.read_text()
         workstream_id = source.stem
-        index_content = re.sub(
-            rf"^[ \t]*-[ \t]+docs/workstreams/{re.escape(workstream_id)}\.md[^\n]*\n?",
-            "",
-            index_content,
-            flags=re.MULTILINE,
+        index_content, removed = remove_index_entry(
+            index_content, "docs/workstreams", workstream_id
         )
         index_content = re.sub(
             r"(updated_at:[ \t]*)[\d-]+", rf"\g<1>{today}", index_content, count=1
         )
         index.write_text(index_content)
+        if not removed:
+            print(
+                f"Note: {workstream_id} not found in docs/00_index.md "
+                "active references (check manually if needed)"
+            )
 
     print(f"Archived: {source.name} -> docs/workstreams/archive/{source.name}")
 

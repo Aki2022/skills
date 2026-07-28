@@ -2,10 +2,11 @@
 name: origin-skill-commonize
 description: >-
   複数のコーディングエージェント（Claude Code / Codex CLI / Antigravity・Gemini CLI 等）の
-  設定ファイルとスキルを symlink で単一ソースに統一する規約と手順。正典は `.agents/`
+  設定ファイル、スキル、commands、非秘密のMCP設定を symlink で単一ソースに統一する規約と手順。正典は `.agents/`
   （グローバルは `~/.agents/`、リポジトリ単位はリポジトリルートの `.agents/`）。
   必ずこのスキルを使うこと: CLAUDE.md / AGENTS.md / GEMINI.md / skills.md などのエージェント
-  設定ファイルや `.claude/skills` `.agents/skills` `.codex/skills` を**新規作成・編集・移動・削除**
+  設定ファイルや `.claude/skills` `.agents/skills` `.codex/skills`、複数account間で共有する
+  commands / MCP設定を**新規作成・編集・移動・削除**
   しようとする時、「設定を共通化／統一」「symlink で揃える」「新しいリポジトリにエージェント設定を入れる」
   と言われた時、あるいは既存の symlink 構成を壊しかねない操作（symlink を実体ファイルに置換、別の場所へ
   コピー作成、正典ディレクトリの削除）をしようとする時。グローバルでもリポジトリ単位でも適用される。
@@ -15,7 +16,8 @@ description: >-
 
 Claude Code・Codex CLI・Antigravity/Gemini CLI など複数のエージェントは、それぞれ別名の
 設定ファイル（`CLAUDE.md` / `AGENTS.md` / `GEMINI.md`）と別ディレクトリのスキル
-（`.claude/skills` / `.agents/skills` / `.codex/skills`）を読む。放置すると同じ内容が
+（`.claude/skills` / `.agents/skills` / `.codex/skills`）を読む。さらに同じ製品の複数accountは、
+commandsやMCP設定を別々のconfiguration directoryに持ち得る。放置すると同じ内容が
 複数箇所に分岐し、「どれが最新か分からない」状態になる。
 
 これを防ぐため、**正典を 1 つ決め、他は正典への symlink にする**。これにより
@@ -23,13 +25,35 @@ Claude Code・Codex CLI・Antigravity/Gemini CLI など複数のエージェン�
 
 ## 正典（single source of truth）の場所
 
-| スコープ                | 正典                                         | symlink で向けるもの                                                 |
-| ----------------------- | -------------------------------------------- | -------------------------------------------------------------------- |
-| グローバル（home 直下） | `~/.agents/AGENTS.md`、`~/.agents/skills/`   | `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, `~/.claude/skills` ほか |
-| リポジトリ単位          | `<repo>/AGENTS.md`、`<repo>/.agents/skills/` | `<repo>/CLAUDE.md`, `<repo>/.claude/skills` ほか                     |
+| スコープ | 正典 | symlink で向けるもの |
+| --- | --- | --- |
+| グローバル・ツール横断 | `~/.agents/AGENTS.md`、`~/.agents/skills/` | `~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md`、`~/.claude/skills`ほか |
+| グローバル・ツール固有共有 | `~/.agents/<tool>/`配下。Claude例: `commands/`、非秘密の`mcp.json` | primary/secondaryを含む各tool configuration directoryの対応path |
+| リポジトリ単位 | `<repo>/AGENTS.md`、`<repo>/.agents/skills/`、必要なら`<repo>/.agents/<tool>/` | `<repo>/CLAUDE.md`、`<repo>/.claude/skills`、tool固有aliasほか |
 
 `.agents/` を正典にする理由: Codex CLI がユーザースキルとして `~/.agents/skills` を公式に読み、
 かつ `.agents` はツール非依存の中立な名前のため。
+
+## 共有設定とaccount stateの境界
+
+このSkillは**共有する静的設定とsymlink topology**を所有する。shell、Home Manager、各製品の
+account切替functionはsymlinkを作成・更新せず、選択したconfiguration directoryから利用する。
+
+| Classification | Examples | Policy |
+| --- | --- | --- |
+| Cross-agent shared | instructions、skills | `.agents/`直下を正典にして各agentからsymlinkする |
+| Tool-specific shared | Claude commands、非秘密のMCP定義 | `.agents/<tool>/`を正典にして、そのtoolの全accountから直接symlinkする |
+| Account-specific mutable | 認証、session、history、project state、log、cache、telemetry | accountごとのconfiguration directoryに分離し、symlinkしない |
+| Secret | token、Cookie、private endpoint、MCP credential | Gitと共有正典へ置かず、Bitwardenまたは実行時環境から注入する |
+
+primary account directoryをsecondary accountの正典にしない。例えば
+`~/.claude-seat2/commands → ~/.claude/commands`ではなく、両方を
+`~/.agents/claude/commands`へ直接向ける。これによりprimary directoryの移動・削除が
+secondaryへ連鎖しない。
+
+MCP設定は値を確認せず機械的に正典化しない。secretを含まないことを確認できる構造だけを
+`.agents/<tool>/`へ置き、credentialは参照名または環境変数だけにする。判定できない場合は移動を止め、
+既存fileを維持したままhuman reviewを求める。
 
 ## 不変条件（これを破ると分岐が復活する）
 
@@ -44,6 +68,9 @@ Claude Code・Codex CLI・Antigravity/Gemini CLI など複数のエージェン�
 3. **正典の外に新しいコピーを作らない。** 「念のため別名でも置いておく」はやらない。
 4. **正典ディレクトリ（`.agents/`）を安易に削除しない。** 全エージェントに波及する。
 5. **判断に迷う・正典が見つからない場合は破壊操作の前に確認する。**
+6. **account固有の可変stateを共有しない。** 認証、session、history、cache等をsymlink対象にしない。
+7. **symlinkをbackupとみなさない。** 正典自体を秘密を含まないprivate Git repositoryまたは
+   同等のversioned backupで復元可能にする。
 
 迷ったら、まず対象パスが symlink かどうかを確認する:
 `ls -l <path>` / `readlink <path>`。symlink なら不変条件 1〜2 に従う。
@@ -71,6 +98,18 @@ for d in .agents/skills .claude/skills .codex/skills; do
   elif [ -d "$d" ]; then echo "$d: 実体ディレクトリ ($(ls "$d" 2>/dev/null | wc -l | tr -d ' ') 個)";
   else echo "$d: 不在"; fi
 done
+
+# Claude複数accountの共有静的設定を確認（内容は読まない）
+for p in \
+  ~/.agents/claude/commands ~/.agents/claude/mcp.json \
+  ~/.claude/commands ~/.claude/mcp.json \
+  ~/.claude-seat2/commands ~/.claude-seat2/mcp.json
+do
+  if [ -L "$p" ]; then echo "$p: symlink → $(readlink "$p")";
+  elif [ -d "$p" ]; then echo "$p: 実体ディレクトリ";
+  elif [ -f "$p" ]; then echo "$p: 実体ファイル";
+  else echo "$p: 不在"; fi
+done
 ```
 
 **棚卸し時の判定ルール（スキル）:**
@@ -82,10 +121,17 @@ done
 `.claude/skills` の不在は「問題なし」ではなく、`.agents/skills/` の中身と合わせて判断すること。
 中身があるのに symlink がなければ、Claude Code がプロジェクトスキルを読めない可能性がある。
 
+commandsやMCP設定も同様に、複数accountのうち一つが実体で他がそこへのsymlinkなら未統一と判定する。
+`~/.agents/<tool>/`正典へ直接向いて初めて統一済みとする。ただしMCPはsecret-safe確認前に移動しない。
+
 ### 2. 正典を決める
 
 上表の正典（`.agents/` 側）を採用する。正典がまだ無ければ、最も内容が充実した実体を
-正典の場所へ移して正典にする。
+正典の場所へ移して正典にする。tool固有の共有設定は`.agents/<tool>/`配下へ置き、
+別toolへ誤って公開しない。
+
+MCP候補は内容のsecret-safe判定とcredential分離が終わるまで正典へ移さない。commandsが空でも、
+複数accountで将来分岐させない必要がある場合は空の正典directoryを作ってよい。
 
 ### 3. 内容を統合する（分岐がある場合）
 
@@ -118,7 +164,15 @@ bash scripts/unify_config.sh AGENTS.md CLAUDE.md
 
 # ディレクトリ: .claude/skills を .agents/skills（正典）へ向ける
 bash scripts/unify_config.sh .agents/skills .claude/skills
+
+# Claude固有共有: primary/secondaryを同じ中立な正典へ直接向ける
+bash scripts/unify_config.sh ~/.agents/claude/commands \
+  ~/.claude/commands ~/.claude-seat2/commands
+bash scripts/unify_config.sh ~/.agents/claude/mcp.json \
+  ~/.claude/mcp.json ~/.claude-seat2/mcp.json
 ```
+
+MCPの例は、正典fileがsecret-safeであることを人が確認した後だけ実行する。
 
 手で行う場合（中身を理解した上で）:
 
@@ -138,6 +192,9 @@ head -1 CLAUDE.md && head -1 AGENTS.md  # 同一内容が見えること
 ```
 
 フレッシュ性テスト: 正典を 1 行だけ一時編集し、別名側から同じ変更が見えることを確認して元に戻す。
+
+複数accountでは、各aliasがprimary account経由ではなく`.agents/<tool>/`正典へ直接解決されることを
+`readlink`で確認する。認証・session・history・cacheがsymlinkでないことも確認する。
 
 ## リポジトリ単位での注意（グローバルとの違い）
 
@@ -179,8 +236,11 @@ head -1 CLAUDE.md && head -1 AGENTS.md  # 同一内容が見えること
 
 ```
 正典:   .agents/AGENTS.md          .agents/skills/
+        .agents/claude/commands/    .agents/claude/mcp.json（非秘密のみ）
 別名:   CLAUDE.md  → AGENTS.md      .claude/skills → .agents/skills
         .codex/AGENTS.md → ...      .codex/skills/<name> → .agents/skills/<name>
+        各Claude accountのcommands/mcp.json → .agents/claude/...
+分離:   auth / session / history / project state / log / cache
 編集:   どの別名を編集しても正典が更新される（symlink を壊さない限り）
-禁止:   symlink の実体化 / 別コピー作成 / 正典削除
+禁止:   symlink の実体化 / 別コピー作成 / 正典削除 / secretやaccount stateの共有
 ```

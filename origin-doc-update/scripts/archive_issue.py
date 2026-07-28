@@ -7,6 +7,7 @@ import shutil
 import sys
 from datetime import date
 
+from index_entries import remove_index_entry
 from validate_repo_docs import validate_repo
 
 
@@ -33,10 +34,9 @@ def remove_issue_from_index(index_path: str, issue_id: str) -> bool:
     with open(index_path) as f:
         content = f.read()
 
-    pattern = rf"^[ \t]*-[ \t]+docs/issues/{re.escape(issue_id)}\.md[^\n]*\n?"
-    new_content = re.sub(pattern, "", content, flags=re.MULTILINE)
+    new_content, removed = remove_index_entry(content, "docs/issues", issue_id)
 
-    if new_content == content:
+    if not removed:
         return False
 
     today = date.today().isoformat()

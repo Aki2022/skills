@@ -8,8 +8,8 @@ branch: ISSUE-YYYYMMDD-short-slug
 pr: ""
 related_specs: []
 related_guides: []
-guide_impact: required # required | none
-guide_impact_reason: "" # required when guide_impact is none
+guide_impact: required
+guide_impact_reason: ""
 ---
 
 # Title

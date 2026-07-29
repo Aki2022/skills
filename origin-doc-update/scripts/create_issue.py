@@ -15,6 +15,15 @@ def main():
     parser.add_argument("--date", default=None, help="Date override YYYYMMDD (default: today)")
     parser.add_argument("--repo", default=".", help="Repository root (default: cwd)")
     parser.add_argument("--title", default="", help="Issue title (default: derived from slug)")
+    # Mirrors create_workstream.py: classify guide impact at creation. Without
+    # this the generated file always carries guide_impact: required against an
+    # empty related_guides, which validate_repo_docs.py rejects, so a fresh
+    # issue could never validate.
+    impact = parser.add_mutually_exclusive_group(required=True)
+    impact.add_argument("--guide", help="Guide ID this issue must update, e.g. GUIDE-data-map")
+    impact.add_argument(
+        "--no-guide-reason", help="Why this issue changes no implemented behavior"
+    )
     args = parser.parse_args()
 
     slug = args.slug.lower().replace(" ", "-")
@@ -42,6 +51,9 @@ def main():
 
     today_iso = date.today().isoformat()
     title = args.title or slug.replace("-", " ").title()
+    guide_impact = "required" if args.guide else "none"
+    related_guides = f"[{args.guide}]" if args.guide else "[]"
+    guide_reason = "" if args.guide else args.no_guide_reason.replace('"', "'")
 
     try:
         tmpl_path = os.path.join(TEMPLATE_DIR, "issue.template.md")
@@ -50,12 +62,22 @@ def main():
         content = content.replace("ISSUE-YYYYMMDD-short-slug", issue_id)
         content = content.replace("YYYY-MM-DD", today_iso)
         content = content.replace("# Title", f"# {title}", 1)
+        content = content.replace("related_guides: []", f"related_guides: {related_guides}", 1)
+        content = content.replace("guide_impact: required", f"guide_impact: {guide_impact}", 1)
+        content = content.replace(
+            'guide_impact_reason: ""', f'guide_impact_reason: "{guide_reason}"', 1
+        )
+        content = content.replace(
+            "- Decision: required | none", f"- Decision: {guide_impact}", 1
+        )
     except FileNotFoundError:
         content = (
             f"---\nid: {issue_id}\nstatus: active\n"
             f"created_at: {today_iso}\nupdated_at: {today_iso}\n"
             f"branch: {issue_id}\npr: \"\"\n"
-            "related_specs: []\nrelated_guides: []\n---\n\n"
+            f"related_specs: []\nrelated_guides: {related_guides}\n"
+            f"guide_impact: {guide_impact}\n"
+            f'guide_impact_reason: "{guide_reason}"\n---\n\n'
             f"# {title}\n\n## Goal\n\n## Current Status\n\n## Next Actions\n\n## Notes\n\n"
             "## Completion\n\n"
             "- [ ] Implementation completed or intentionally not needed\n"

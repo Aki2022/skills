@@ -127,7 +127,11 @@ Scripts in `scripts/`:
 
 - `init_repo_docs.py [repo]`
 - `create_workstream.py <slug> --issue <slug> --scope <text> --confirmed-at YYYY-MM-DD --next-human-gate <name> (--guide <GUIDE-id> | --no-guide-reason <text>) [--repo <repo>]`
-- `create_issue.py <slug> [--title <title>] [--repo <repo>]`
+- `create_issue.py <slug> (--guide <GUIDE-id> | --no-guide-reason <text>) [--title <title>] [--repo <repo>]`
+  Pass a slug, not a full issue id — the `ISSUE-<date>-` prefix is added for you.
+  The guide decision is required, as it is for `create_workstream.py`: name the guide
+  this issue must update, or state why it changes no implemented behavior. Without it
+  the generated file cannot pass `validate_repo_docs.py`.
 - `archive_workstream.py <workstream> [--repo <repo>]`
 - `archive_issue.py <issue> [--repo <repo>]`
 - `validate_repo_docs.py [repo]`

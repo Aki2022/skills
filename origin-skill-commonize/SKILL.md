@@ -10,6 +10,9 @@ description: >-
   しようとする時、「設定を共通化／統一」「symlink で揃える」「新しいリポジトリにエージェント設定を入れる」
   と言われた時、あるいは既存の symlink 構成を壊しかねない操作（symlink を実体ファイルに置換、別の場所へ
   コピー作成、正典ディレクトリの削除）をしようとする時。グローバルでもリポジトリ単位でも適用される。
+  スキル品質の保守もこのスキルが所有する: スキルの静的チェック（lint）、スキル使用時の摩擦・
+  不発・手戻りの記録（摩擦ログ FRICTION.md への追記）、「スキルを改善したい」「スキルの品質を
+  チェックして」と言われた時もこのスキルを使う。
 ---
 
 # Agent Config Symlink 統一
@@ -25,11 +28,11 @@ commandsやMCP設定を別々のconfiguration directoryに持ち得る。放置�
 
 ## 正典（single source of truth）の場所
 
-| スコープ | 正典 | symlink で向けるもの |
-| --- | --- | --- |
-| グローバル・ツール横断 | `~/.agents/AGENTS.md`、`~/.agents/skills/` | `~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md`、`~/.claude/skills`ほか |
-| グローバル・ツール固有共有 | `~/.agents/<tool>/`配下。Claude例: `commands/`、非秘密の`mcp.json` | primary/secondaryを含む各tool configuration directoryの対応path |
-| リポジトリ単位 | `<repo>/AGENTS.md`、`<repo>/.agents/skills/`、必要なら`<repo>/.agents/<tool>/` | `<repo>/CLAUDE.md`、`<repo>/.claude/skills`、tool固有aliasほか |
+| スコープ                   | 正典                                                                           | symlink で向けるもの                                                |
+| -------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------- |
+| グローバル・ツール横断     | `~/.agents/AGENTS.md`、`~/.agents/skills/`                                     | `~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md`、`~/.claude/skills`ほか |
+| グローバル・ツール固有共有 | `~/.agents/<tool>/`配下。Claude例: `commands/`、非秘密の`mcp.json`             | primary/secondaryを含む各tool configuration directoryの対応path     |
+| リポジトリ単位             | `<repo>/AGENTS.md`、`<repo>/.agents/skills/`、必要なら`<repo>/.agents/<tool>/` | `<repo>/CLAUDE.md`、`<repo>/.claude/skills`、tool固有aliasほか      |
 
 `.agents/` を正典にする理由: Codex CLI がユーザースキルとして `~/.agents/skills` を公式に読み、
 かつ `.agents` はツール非依存の中立な名前のため。
@@ -39,12 +42,12 @@ commandsやMCP設定を別々のconfiguration directoryに持ち得る。放置�
 このSkillは**共有する静的設定とsymlink topology**を所有する。shell、Home Manager、各製品の
 account切替functionはsymlinkを作成・更新せず、選択したconfiguration directoryから利用する。
 
-| Classification | Examples | Policy |
-| --- | --- | --- |
-| Cross-agent shared | instructions、skills | `.agents/`直下を正典にして各agentからsymlinkする |
-| Tool-specific shared | Claude commands、非秘密のMCP定義 | `.agents/<tool>/`を正典にして、そのtoolの全accountから直接symlinkする |
-| Account-specific mutable | 認証、session、history、project state、log、cache、telemetry | accountごとのconfiguration directoryに分離し、symlinkしない |
-| Secret | token、Cookie、private endpoint、MCP credential | Gitと共有正典へ置かず、Bitwardenまたは実行時環境から注入する |
+| Classification           | Examples                                                     | Policy                                                                |
+| ------------------------ | ------------------------------------------------------------ | --------------------------------------------------------------------- |
+| Cross-agent shared       | instructions、skills                                         | `.agents/`直下を正典にして各agentからsymlinkする                      |
+| Tool-specific shared     | Claude commands、非秘密のMCP定義                             | `.agents/<tool>/`を正典にして、そのtoolの全accountから直接symlinkする |
+| Account-specific mutable | 認証、session、history、project state、log、cache、telemetry | accountごとのconfiguration directoryに分離し、symlinkしない           |
+| Secret                   | token、Cookie、private endpoint、MCP credential              | Gitと共有正典へ置かず、Bitwardenまたは実行時環境から注入する          |
 
 primary account directoryをsecondary accountの正典にしない。例えば
 `~/.claude-seat2/commands → ~/.claude/commands`ではなく、両方を
@@ -231,6 +234,43 @@ head -1 CLAUDE.md && head -1 AGENTS.md  # 同一内容が見えること
   記載して取り込む方式）を検討する。
 - **CI / 一部ツール**は symlink を追従しないことがある。重要な経路では追従を確認する。
 - リポジトリの `.gitignore` / バックアップファイル（`*.bak_*` `*.old_*`）はコミットしない。
+
+## スキル品質の保守
+
+symlink 統一と同じくこの Skill が所有する。原則は「**決定論的チェックは機械が、改善判断は
+需要駆動で人間が**」。測定データなしの定期自動改善はやらない — 改悪とチャーンの温床になり、
+使っていないスキルの改善にトークンを浪費するため。
+
+### 静的チェック（決定論的・LLM 不使用）
+
+`scripts/skill_lint.sh` を実行する。SKILL.md の存在、frontmatter の name/description、
+name とディレクトリ名の一致、同梱リソース参照（scripts/ references/ assets/）の実在、
+壊れた symlink を exit code で判定する。
+
+```bash
+bash ~/.agents/skills/origin-skill-commonize/scripts/skill_lint.sh
+```
+
+実行タイミング: スキルの新規作成・編集・移動・削除の直後（この Skill の作業の一部として）。
+サードパーティ由来スキルの FAIL は情報として報告し、勝手に修正しない — 上流更新で上書き
+され得るため、直すのは origin-* など自前スキルのみ。
+
+### 摩擦ログ（skill friction log）
+
+スキルの実使用で気づいた摩擦 — 発火しなかった・指示が曖昧で手戻りした・記述が現実と
+ズレていた — を `~/.agents/skills/FRICTION.md` に 1 件 1 行で追記する。どのセッションの
+どのエージェントでも、摩擦に気づいたらその場で追記してよい（追記は非破壊・承認不要）。
+
+```
+- 2026-07-31 | origin-pptx | 画像生成の保存先指示が曖昧で2回手戻り
+```
+
+- **記録と改善を分離する。** ログへの追記は自由、スキル本文の改変はこのログを根拠に
+  人間が判断してから（このSkillの手順で）行う。
+- **改善は需要駆動。** 同一スキルに摩擦が複数件溜まったら、skill-creator の eval 付き
+  改善ループを回す。溜まった摩擦行がそのままテストプロンプトの種になる。
+- **定期実行するならトリアージまで。** 定期タスク化してよいのは「ログの溜まり具合を
+  提示する」ことまでで、改善の自動実行はしない。
 
 ## クイックリファレンス
 

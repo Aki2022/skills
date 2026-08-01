@@ -1,0 +1,4 @@
+interface:
+  display_name: "Origin Goal"
+  short_description: "Run long workstreams within human-approved limits"
+  default_prompt: "Use $origin-goal to define the human boundary, establish the control unit using the repository's own convention, and run it to the next human gate."

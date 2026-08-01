@@ -1,6 +1,6 @@
 ---
 name: origin-goal
-description: Run a long-lived, workstream-driven objective inside explicit human boundaries. Use when the user asks to keep working until a goal or checkpoint is reached, resume or execute a docs workstream, orchestrate subagents over multiple slices, control retries or metered cost, or prepare a durable autonomous run with human approval gates. Require a workstream and complete the preflight interview before starting or resuming execution.
+description: Run a long-lived, workstream-driven objective inside explicit human boundaries. Use when the user asks to keep working until a goal or checkpoint is reached, resume or execute a docs workstream, orchestrate subagents over multiple slices, control retries or metered cost, or prepare a durable autonomous run with human approval gates. Establish the control unit using the repository's own convention, and complete the preflight interview before starting or resuming execution.
 ---
 
 # Origin Goal
@@ -13,19 +13,32 @@ responsible for authorization, integration, budgets, and completion.
 
 1. Read `docs/00_index.md` when present, then read only the relevant active
    workstream, linked specs, guides, and necessary code.
-2. Make workstream selection the first human interaction. If exactly one active
-   workstream matches, name it and ask whether to resume it. If several are
-   plausible, ask which one to run and recommend the best match.
-3. Do not use a standalone issue as the control unit for long-running work. Ask
-   whether to create a workstream or attach the issue as a bounded slice; do not
-   migrate history without approval.
-4. If no matching workstream exists, say so and ask first whether to create one
+2. Discover the repository's own workstream convention before asking anything.
+   Layouts differ in practice: `docs/workstreams/`, `docs/specs/workstreams/active/`,
+   an issue-based repository with no workstream directory, or `ISSUE-*` files used as
+   the control unit. Find the actual convention from `docs/00_index.md` and the
+   directory tree, then use it. Never assume `docs/workstreams/` exists, and never
+   propose a parallel structure beside a working one.
+3. Make control-unit selection the first human interaction, but bring a decision
+   rather than an open question. If exactly one active unit matches, name it and ask
+   whether to resume it. If several are plausible, recommend the best match.
+4. Choose the _kind_ of control unit yourself from observable facts; ask only when
+   they conflict. Use a workstream when the work spans multiple slices, touches
+   metered services, or needs a human gate. Use a standalone issue — or the
+   repository's existing issue unit — for one bounded, reversible, non-metered
+   change. Use docs-only when nothing is implemented. State the chosen unit and the
+   reason in one line instead of asking the user to pick it. Do not migrate history
+   without approval.
+5. If no matching workstream exists, say so and ask first whether to create one
    through `origin-doc-update`, proposing a workstream name and one-sentence scope.
    After approval, invoke `origin-doc-update`, follow its human-boundary interview, and
    create the workstream only after the complete boundary is confirmed. Do not
    ask downstream implementation questions before this create-or-select choice.
-5. Reuse the workstream's recorded branch or worktree. Do not create a parallel
-   branch for resumed work.
+6. Reuse the recorded branch or worktree, but verify it exists first
+   (`git branch -a`, `git worktree list`). **A recorded branch that is merged and
+   deleted is stale bookkeeping, not missing work**: continue on the default branch
+   or cut the next branch from it, and correct the record in the same slice. Do not
+   create a parallel branch for resumed work, and do not resurrect a stale branch.
 
 ## 2. Complete preflight before execution
 

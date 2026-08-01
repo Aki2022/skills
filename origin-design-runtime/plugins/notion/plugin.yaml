@@ -1,0 +1,39 @@
+id: notion
+name: Notion-inspired (abstracted) Plugin
+version: 0.1.0
+status: experimental
+license: "参照抽象化。参照元 DESIGN.md の権利は提供元に帰属。references.md 参照"
+design_md_version: draft
+language:
+  primary: ja
+  supported: [ja, en]
+extends: []
+
+supported_media: [html, dashboard]
+
+priority:
+  default: 40
+  contexts:
+    modern-saas: 90
+    dark-ui: 90
+    corporate-presentation: 30
+    public-sector: 20
+
+entrypoints:
+  design_md: DESIGN.md
+  references: references.md
+
+assets:
+  tokens:
+    - tokens/color.json
+    - tokens/typography.json
+    - tokens/spacing.json
+
+validators: []
+
+usage_policy:
+  allow_reference: true
+  allow_asset_copy: false
+  require_attribution: true
+  prohibit_font_redistribution: true
+  license_gate_approved: false

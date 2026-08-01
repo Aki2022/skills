@@ -1,0 +1,29 @@
+{
+  "_source": "awesome-design-md-jp の notion/DESIGN.md を参照した抽象スペーシング。出典: https://github.com/kzhrknt/awesome-design-md-jp/blob/main/design-md/notion/DESIGN.md",
+  "_note": "4px ベース。余白はスケールの倍数で統一。カードは中庸の角丸とやわらかい影。",
+  "base": 4,
+  "scale": {
+    "0": "0px",
+    "1": "4px",
+    "2": "8px",
+    "3": "12px",
+    "4": "16px",
+    "5": "24px",
+    "6": "32px",
+    "7": "48px",
+    "8": "64px"
+  },
+  "radius": {
+    "button": "8px",
+    "card": "12px"
+  },
+  "shadow": {
+    "card": "0 2px 8px rgba(0,0,0,0.20)"
+  },
+  "grid": {
+    "maxWidth": "1200px",
+    "columns": 12,
+    "gutter": "24px",
+    "horizontalPadding": "32px"
+  }
+}

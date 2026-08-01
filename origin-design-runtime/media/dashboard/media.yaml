@@ -1,0 +1,29 @@
+id: dashboard
+name: Dashboard Media
+version: 0.1.0
+description: ダッシュボード設計仕様（データ可視化）の媒体ルール
+rules:
+  - id: dash-meta
+    type: constraint
+    summary: 各指標・チャートに単位・期間・出典を明示する
+    validator: dashboard-meta
+  - id: dash-color-meaning
+    type: constraint
+    summary: 色は意味を持って一貫使用する（色のみに依存しない）
+    validator: null
+  - id: dash-axis
+    type: constraint
+    summary: 軸の起点・スケールが誤読を招かない（棒は原則0起点）
+    validator: null
+  - id: dash-chart-choice
+    type: recommendation
+    summary: データに応じたチャート種別を選ぶ（時系列=線, 比較=棒, 分布=地図等）
+    validator: null
+  - id: dash-kpi-hierarchy
+    type: recommendation
+    summary: KPIカードを上位に置き、詳細チャートとの関係を明確にする
+    validator: null
+  - id: dash-filter
+    type: recommendation
+    summary: フィルター・凡例・データ粒度をわかりやすく配置する
+    validator: null

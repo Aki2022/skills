@@ -1,0 +1,29 @@
+id: pptx
+name: PowerPoint / PPTX Media
+version: 0.1.0
+description: スライド（PPTX）生成支援の媒体ルール
+rules:
+  - id: pptx-aspect-ratio
+    type: constraint
+    summary: スライド比率を明示する（既定 16:9。指定あれば 4:3）
+    validator: null
+  - id: pptx-min-font
+    type: constraint
+    summary: 本文の最小フォントサイズを下回らない（本文18pt・注釈12pt相当を目安）
+    validator: pptx-font-size
+  - id: pptx-one-message
+    type: constraint
+    summary: 1スライド1メッセージ。タイトルは結論を示す
+    validator: null
+  - id: pptx-master
+    type: constraint
+    summary: スライドマスター/レイアウトを使い、直接配置の乱れを避ける
+    validator: null
+  - id: pptx-margin-grid
+    type: recommendation
+    summary: 余白とグリッドで整列する。要素の左揃え/端揃えを統一
+    validator: null
+  - id: pptx-editable
+    type: recommendation
+    summary: 画像化ではなく編集可能なPPTX構造（テキスト/表/ネイティブ図形）に寄せる
+    validator: null

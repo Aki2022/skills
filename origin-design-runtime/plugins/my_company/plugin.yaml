@@ -1,0 +1,39 @@
+id: my_company
+name: My Company Brand Plugin
+version: 0.1.0
+status: experimental
+license: "自社ブランド。社内利用。"
+design_md_version: draft
+language:
+  primary: ja
+  supported: [ja, en]
+# 1階層継承: digital-agency のアクセシビリティ・公共性・ダッシュボード原則を引き継ぐ。
+extends: [digital-agency]
+
+supported_media: [pptx, html, dashboard]
+
+priority:
+  default: 60
+  contexts:
+    corporate-presentation: 95
+    proposal: 95
+    public-sector: 70
+    dashboard: 60
+
+entrypoints:
+  design_md: DESIGN.md
+  references: references.md
+
+assets:
+  tokens:
+    - tokens/color.json
+    - tokens/typography.json
+
+validators: []
+
+usage_policy:
+  allow_reference: true
+  allow_asset_copy: true
+  require_attribution: false
+  prohibit_font_redistribution: true
+  license_gate_approved: true

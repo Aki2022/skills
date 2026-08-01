@@ -1,0 +1,23 @@
+{
+  "_source": "awesome-design-md-jp の notion/DESIGN.md を参照した抽象タイポグラフィ。出典: https://github.com/kzhrknt/awesome-design-md-jp/blob/main/design-md/notion/DESIGN.md",
+  "_note": "Inter 系 sans-serif を主体に日本語へフォールバック。フォントファイルは同梱・再配布しない。数値は整列（lnum 相当）。",
+  "fontFamily": {
+    "sans": "\"Inter\", -apple-system, system-ui, \"Segoe UI\", \"Noto Sans JP\", sans-serif",
+    "mono": "\"SFMono-Regular\", \"Menlo\", \"Consolas\", monospace"
+  },
+  "scale": {
+    "display": { "size": "64px", "lineHeight": 1.1, "weight": 700 },
+    "h1": { "size": "40px", "lineHeight": 1.2, "weight": 700 },
+    "h2": { "size": "22px", "lineHeight": 1.27, "weight": 700 },
+    "h3": { "size": "18px", "lineHeight": 1.4, "weight": 600 },
+    "body": { "size": "16px", "lineHeight": 1.5, "weight": 400 },
+    "small": { "size": "14px", "lineHeight": 1.5, "weight": 400 },
+    "caption": { "size": "12px", "lineHeight": 1.5, "weight": 400 }
+  },
+  "policy": {
+    "bodyMinPx": 14,
+    "maxFamiliesPerScreen": 2,
+    "cjkLineHeightMin": 1.5,
+    "fontFeatureSettings": "\"lnum\", \"locl\""
+  }
+}

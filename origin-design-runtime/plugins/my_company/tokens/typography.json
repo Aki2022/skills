@@ -1,0 +1,22 @@
+{
+  "_source": "My Company 自社ブランド。digital-agency のタイポ原則（Noto Sans JP 前提・フォント同梱なし）を継承。",
+  "_note": "見出しは抑制の効いたウェイト、本文は行間広め。余白を活かした高級感。",
+  "fontFamily": {
+    "sans": "\"Noto Sans JP\", sans-serif",
+    "mono": "\"Noto Sans Mono\", monospace"
+  },
+  "scale": {
+    "display": { "size": "40px", "lineHeight": 1.35, "weight": 600 },
+    "h1": { "size": "30px", "lineHeight": 1.4, "weight": 600 },
+    "h2": { "size": "24px", "lineHeight": 1.5, "weight": 600 },
+    "h3": { "size": "20px", "lineHeight": 1.6, "weight": 600 },
+    "body": { "size": "16px", "lineHeight": 1.8, "weight": 400 },
+    "small": { "size": "14px", "lineHeight": 1.75, "weight": 400 },
+    "caption": { "size": "12px", "lineHeight": 1.6, "weight": 400 }
+  },
+  "policy": {
+    "bodyMinPx": 14,
+    "maxFamiliesPerScreen": 2,
+    "cjkLineHeightMin": 1.7
+  }
+}

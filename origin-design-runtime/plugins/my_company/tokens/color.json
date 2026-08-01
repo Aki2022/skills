@@ -1,0 +1,39 @@
+{
+  "_source": "My Company 自社ブランド。digital-agency のコントラスト・非色依存原則を継承。",
+  "_note": "落ち着いた濃色 + オフホワイト基調。アクセントは最小限。色のみ依存禁止は親から継承。",
+  "roles": {
+    "primary": {
+      "default": "#1F3A5F",
+      "hover": "#16293F",
+      "onPrimary": "#FFFFFF"
+    },
+    "accent": { "default": "#A67C2E", "onAccent": "#FFFFFF" },
+    "text": { "body": "#1A1A1C", "secondary": "#55555A", "onDark": "#FFFFFF" },
+    "background": {
+      "default": "#FFFFFF",
+      "muted": "#F7F6F3",
+      "border": "#E2E0DB"
+    },
+    "semantic": {
+      "success": "#197A4B",
+      "warning": "#B25000",
+      "error": "#C8202F",
+      "info": "#1F3A5F"
+    }
+  },
+  "dataViz": {
+    "categorical": [
+      "#1F3A5F",
+      "#A67C2E",
+      "#4A7C7C",
+      "#7A5C8A",
+      "#8A8D3A",
+      "#B25000"
+    ]
+  },
+  "contrastPolicy": {
+    "bodyMin": 4.5,
+    "largeTextMin": 3.0,
+    "uiComponentMin": 3.0
+  }
+}

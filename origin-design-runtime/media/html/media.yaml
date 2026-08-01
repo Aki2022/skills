@@ -1,0 +1,49 @@
+id: html
+name: HTML / Web Media
+version: 0.1.0
+description: レスポンシブなHTML/Web画面・コンポーネントの媒体ルール
+rules:
+  - id: html-contrast
+    type: constraint
+    summary: 本文テキストのコントラスト比は 4.5:1 以上（大文字は 3:1 以上）
+    validator: contrast
+  - id: html-lang
+    type: constraint
+    summary: <html lang="ja"> 等、文書に lang 属性を必ず付ける
+    validator: accessibility
+  - id: html-viewport
+    type: constraint
+    summary: <meta name="viewport" content="width=device-width, initial-scale=1"> を必ず入れる
+    validator: accessibility
+  - id: html-semantic
+    type: constraint
+    summary: セマンティックHTML（見出し階層・main/header/nav/footer ランドマーク）を用いる
+    validator: accessibility
+  - id: html-svg-label
+    type: constraint
+    summary: 意味を持つ svg/図には role="img" と aria-label（装飾は aria-hidden="true"）
+    validator: accessibility
+  - id: html-aria
+    type: constraint
+    summary: 必要な箇所に適切な ARIA 属性を付与する
+    validator: accessibility
+  - id: html-alt
+    type: constraint
+    summary: 画像・意味を持つアイコンに代替テキストを付ける
+    validator: accessibility
+  - id: html-keyboard
+    type: constraint
+    summary: キーボードのみで全操作に到達・実行できる。フォーカス表示を視認可能にする
+    validator: accessibility
+  - id: html-responsive
+    type: constraint
+    summary: モバイル/タブレット/デスクトップで破綻しないレスポンシブ設計
+    validator: null
+  - id: html-grid-cols
+    type: recommendation
+    summary: 標準グリッドは 12 カラムを目安にする
+    validator: null
+  - id: html-color-scheme
+    type: recommendation
+    summary: ライト/ダークのカラーモードに配慮する
+    validator: null

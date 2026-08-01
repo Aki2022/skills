@@ -1,0 +1,43 @@
+{
+  "_meta": {
+    "name": "origin-pptx-skill-config",
+    "version": "1.0.0",
+    "usage": "実行設定の正典。⓪スタイルガイド読込時に読む。モデル割当・検証ループ・並列度を変えたいときはこのファイルを編集する（SKILL.md/pipeline.md 本文のハードコードは背景説明であり、実行時はここが優先）。"
+  },
+  "models": {
+    "_note": "orchestrator はメインループ＝セッションのモデルをそのまま使う（指定不可）。サブエージェントのみ割当。effort はサブエージェント起動時の reasoning effort 指定（対応環境のみ）。",
+    "builder": {
+      "model": "sonnet",
+      "effort": "medium",
+      "role": "③スライドビルダー（mockupを仕様として読みsNN.jsを書く）"
+    },
+    "vlmCompare": {
+      "model": "sonnet",
+      "effort": "high",
+      "role": "④preview↔mockupペアの敵対的構図比較"
+    },
+    "inspection": {
+      "model": "haiku",
+      "effort": "low",
+      "role": "④検収チェックリスト照合（要素個数・tone色等の機械的照合）"
+    },
+    "outlineDraft": {
+      "model": "sonnet",
+      "effort": "medium",
+      "role": "①outline下書き"
+    }
+  },
+  "verifyLoop": {
+    "maxRounds": 5,
+    "earlyExitOnPass": true,
+    "reverifyOnlyChangedSlides": true,
+    "escalateIfNotConverging": true,
+    "_note": "上限5回でも早期終了＋変更分のみ再検証により収束済みデッキのコストは増えない。前巡より未解消差分が減らなければ上限前でも人間へエスカレーション（発散ガード）。"
+  },
+  "parallelism": {
+    "vlmCompareParallel": true,
+    "slidesPerVerifyAgent": 6,
+    "buildersParallel": true,
+    "_note": "ペア比較・ビルダーは互いに独立なので並列バッチが既定。1体1ペア（比較）/1体1スライド（ビルド）の画像コンテキスト規律を守る。"
+  }
+}

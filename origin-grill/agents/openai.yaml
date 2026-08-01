@@ -1,0 +1,4 @@
+interface:
+  display_name: "Origin Grill"
+  short_description: "対話で仕様を深掘りし、docs/specsへ定着させる"
+  default_prompt: "Use $origin-grill to interview me one question at a time and create or revise the appropriate docs/specs file."

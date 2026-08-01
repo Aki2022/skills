@@ -1,0 +1,34 @@
+id: awesome-design-md-jp-import
+name: awesome-design-md-jp Import Plugin
+version: 0.1.0
+status: experimental
+license: "参照利用のみ。各サイトDESIGN.mdの権利は各提供元に帰属。"
+design_md_version: draft
+language:
+  primary: ja
+  supported: [ja]
+extends: []
+
+# 参照専用プラグイン。単体で成果物のブランドにはならず、他プラグインと合成して使う。
+supported_media: [html, pptx, dashboard]
+
+priority:
+  default: 10
+  contexts:
+    japanese-ui: 30
+
+entrypoints:
+  design_md: import-policy.md
+  references: references.md
+
+assets: {}
+
+validators: []
+
+usage_policy:
+  allow_reference: true
+  allow_asset_copy: false
+  require_attribution: true
+  prohibit_font_redistribution: true
+  # 参照利用のみ（抽象化した方針の取り込み）。具体ビジュアルのコピーはしないため資産埋め込みは行わない。
+  license_gate_approved: false

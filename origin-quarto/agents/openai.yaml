@@ -1,0 +1,4 @@
+interface:
+  display_name: "Origin Quarto"
+  short_description: "組織テンプレート準拠で Quarto・QMD 成果物を作成"
+  default_prompt: "$origin-quarto を使って、同梱テンプレートから Quarto 資料を作成して。"

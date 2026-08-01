@@ -1,0 +1,47 @@
+{
+  "_source": "awesome-design-md-jp の notion/DESIGN.md を参照した抽象トークン（雰囲気の再現。1:1コピーではない）。出典: https://github.com/kzhrknt/awesome-design-md-jp/blob/main/design-md/notion/DESIGN.md",
+  "_note": "ダーク基調。色は意味 + 記号/テキストの併用で伝えること（色のみ依存禁止）。ロゴ・商標は不使用。",
+  "mode": "dark",
+  "roles": {
+    "primary": {
+      "default": "#2383E2",
+      "hover": "#1B6FC4",
+      "onPrimary": "#FFFFFF"
+    },
+    "text": {
+      "body": "rgba(255,255,255,0.95)",
+      "secondary": "rgba(255,255,255,0.60)",
+      "disabled": "rgba(255,255,255,0.30)",
+      "onAccent": "#FFFFFF"
+    },
+    "background": {
+      "default": "#191918",
+      "surface": "#2F2F2F",
+      "border": "rgba(255,255,255,0.13)",
+      "borderStrong": "rgba(255,255,255,0.20)"
+    },
+    "semantic": {
+      "success": "#6FCF97",
+      "warning": "#F2C94C",
+      "error": "#EB5757",
+      "info": "#2383E2"
+    }
+  },
+  "dataViz": {
+    "_note": "ダーク背景で視認できる系列色。意味を持って一貫使用。",
+    "sequential": ["#204A73", "#2A66A6", "#2383E2", "#5AA6EE", "#9CC9F5"],
+    "categorical": [
+      "#2383E2",
+      "#6FCF97",
+      "#F2C94C",
+      "#BB6BD9",
+      "#56CCF2",
+      "#EB5757"
+    ]
+  },
+  "contrastPolicy": {
+    "bodyMin": 4.5,
+    "largeTextMin": 3.0,
+    "uiComponentMin": 3.0
+  }
+}

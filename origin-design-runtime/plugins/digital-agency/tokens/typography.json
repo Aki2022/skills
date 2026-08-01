@@ -1,0 +1,22 @@
+{
+  "_source": "デジタル庁デザインシステムのタイポグラフィ方針を参考。出典: https://design.digital.go.jp/dads/foundations/typography/",
+  "_note": "フォントは Noto Sans JP / Noto Sans Mono（SIL OFL 1.1）を前提。フォントファイルは同梱・再配布しない。Webフォント参照または利用者環境に委ねる。",
+  "fontFamily": {
+    "sans": "\"Noto Sans JP\", sans-serif",
+    "mono": "\"Noto Sans Mono\", monospace"
+  },
+  "scale": {
+    "display": { "size": "36px", "lineHeight": 1.4, "weight": 700 },
+    "h1": { "size": "28px", "lineHeight": 1.5, "weight": 700 },
+    "h2": { "size": "22px", "lineHeight": 1.5, "weight": 700 },
+    "h3": { "size": "18px", "lineHeight": 1.6, "weight": 700 },
+    "body": { "size": "16px", "lineHeight": 1.7, "weight": 400 },
+    "small": { "size": "14px", "lineHeight": 1.7, "weight": 400 },
+    "caption": { "size": "12px", "lineHeight": 1.6, "weight": 400 }
+  },
+  "policy": {
+    "bodyMinPx": 14,
+    "maxFamiliesPerScreen": 2,
+    "cjkLineHeightMin": 1.6
+  }
+}

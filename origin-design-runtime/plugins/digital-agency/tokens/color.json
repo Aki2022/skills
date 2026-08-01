@@ -1,0 +1,47 @@
+{
+  "_source": "デジタル庁デザインシステム（CC BY 4.0）を参考にした役割ベースのカラートークン。出典: https://design.digital.go.jp/dads/",
+  "_note": "行政・公共向けの参考実装。公式性は主張しない。色は意味 + 記号/テキストの併用で伝えること（色のみ依存禁止）。",
+  "roles": {
+    "primary": {
+      "default": "#0017C1",
+      "hover": "#000EA3",
+      "onPrimary": "#FFFFFF"
+    },
+    "text": { "body": "#1A1A1C", "secondary": "#5A5A5F", "onDark": "#FFFFFF" },
+    "link": {
+      "_note": "リンクは白背景で 4.5:1 以上を満たす濃色を使う。#0017C1 on #FFFFFF ≈ 11.1:1。薄い青（例 #5C7FFF ≈ 2.9:1）は本文リンクに使わない。下線など色以外の手掛かりも併用する。",
+      "default": "#0017C1",
+      "hover": "#000EA3",
+      "visited": "#7A2EE6"
+    },
+    "background": {
+      "default": "#FFFFFF",
+      "muted": "#F0F0F5",
+      "border": "#D8D8DB"
+    },
+    "semantic": {
+      "success": "#197A4B",
+      "warning": "#B25000",
+      "error": "#C8202F",
+      "info": "#0017C1"
+    }
+  },
+  "dataViz": {
+    "_note": "系列色は意味を持って一貫使用。色覚多様性に配慮したパレット。",
+    "sequential": ["#D8E2FF", "#9CB4FF", "#5C7FFF", "#2E52E6", "#0017C1"],
+    "categorical": [
+      "#0017C1",
+      "#197A4B",
+      "#B25000",
+      "#7A2EE6",
+      "#0E7C86",
+      "#8A8D00"
+    ]
+  },
+  "contrastPolicy": {
+    "bodyMin": 4.5,
+    "linkMin": 4.5,
+    "largeTextMin": 3.0,
+    "uiComponentMin": 3.0
+  }
+}

@@ -1,0 +1,45 @@
+id: digital-agency
+name: Digital Agency Design System Plugin (参考実装)
+version: 0.1.0
+status: experimental
+license: "See references.md"
+design_md_version: draft
+language:
+  primary: ja
+  supported: [ja, en]
+extends: []
+
+supported_media: [html, dashboard, pptx]
+
+priority:
+  default: 50
+  contexts:
+    public-sector: 90
+    dashboard: 95
+    corporate-presentation: 40
+
+entrypoints:
+  design_md: DESIGN.md
+  references: references.md
+
+# ライセンスゲート承認済み（references.md 参照）。フォントファイル・ロゴ・境界データは同梱しない。
+assets:
+  tokens:
+    - tokens/color.json
+    - tokens/typography.json
+    - tokens/spacing.json
+  examples:
+    - examples/html/
+    - examples/dashboard/
+
+validators:
+  - validators/accessibility.md
+  - validators/dashboard.md
+
+usage_policy:
+  allow_reference: true
+  allow_asset_copy: depends_on_license
+  require_attribution: true
+  prohibit_font_redistribution: true
+  # 【ゲート】references.md の承認記録が入るまで false。true になるまで資産値を出力に使わない。
+  license_gate_approved: true

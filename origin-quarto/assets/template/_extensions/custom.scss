@@ -1,0 +1,68 @@
+/*-- scss:defaults --*/
+/*（必要に応じて default 変数などをここに追加）*/
+
+/*-- scss:rules --*/
+
+/* ロゴの設定 */
+.reveal .slide-logo {
+    top: 0;
+    left: 12px;
+    max-height: 3rem;
+    height: 100%;
+    width: auto;
+}
+
+/* フッターの設定 */
+.reveal .footer {
+    text-align: left !important;
+    padding-left: 2rem;
+}
+
+/* スライドタイトル（セクション） */
+.slide h1 {
+    color: #656161;
+    font-size: 3rem;
+    margin-top: 10rem;
+}
+
+/* 小タイトル（サブセクション） */
+.slide h2 {
+    font-size: 1.5rem;
+    color: #a19f9f;
+    margin-top: 0.5em;
+    margin-bottom: 1.25rem;
+}
+
+/* キーメッセージ（h3） */
+.reveal h3 {
+    font-size: 3.5rem;
+    color: #1a4c8b;
+    margin-bottom: 1.25rem;
+}
+
+/* 本文とリストの色（共通化） */
+.reveal h4,
+.reveal p,
+.reveal ul,
+.reveal ol,
+.reveal li {
+    color: #656161;
+}
+
+/* タイトルスライド */
+.title-slide {
+    text-align: left !important;
+}
+
+/* タイトルスライド要素のスタイル */
+.title-slide .title {
+    color: #656161 !important;
+}
+
+// 筆者と日付のスタイル
+.title-slide .quarto-title-author-name,
+.title-slide .date {
+    font-size: 1.4rem;
+    color: darkgray !important;
+}
+

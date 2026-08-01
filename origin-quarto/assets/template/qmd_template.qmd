@@ -1,0 +1,187 @@
+---
+title: "Statistical Analysis Report"
+author: 著者名
+date: "2025/07/22"
+
+format:
+  revealjs:
+    footer: "著者名"
+    theme: [default, ./_extensions/custom.scss]
+    transition: none
+    incremental: false
+    code-line-numbers: false
+    toc: true
+    toc-depth: 1
+    toc-title: table of contents
+    number-sections: false
+    slide-number: true
+    width: 1600
+    height: 900
+    mermaid:
+      theme: neutral
+    revealjs-plugins:
+      - pointer
+      - spotlight
+      - quarto-revealjs-budoux # 箇条書きがネストされないので注意
+    spotlight:
+      size: 180
+    title-slide-attributes: # スタイル適用のために必須
+      class: title-slide
+      
+  pptx:
+    reference-doc: "_extensions/template.pptx"
+    toc: true
+    toc-title: "目次"
+    lang: ja
+    mermaid:
+      theme: neutral
+
+  typst:
+    papersize: a4
+    # columns: 2 #2列表示
+    number-sections: true
+    section-numbering: "1.1.1"
+    toc: true
+    toc-depth: 2
+    toc-title: 目次
+    fig-format: svg
+    # bibliography: refs.bib
+    bibliographystyle: "_extensions/yakuzai-ekigaku.csl"
+    citeproc: true
+    keep-typ: true
+    mainfont: "Hiragino Mincho ProN"
+    mermaid:
+      theme: neutral
+
+  # pdf:
+  #   papersize: a4
+  #   documentclass: article
+  #   number-sections: true
+  #   toc: true
+  #   toc-depth: 2
+  #   toc-title: "目次"
+  #   lang: ja
+  #   mainfont: "Hiragino Mincho ProN"
+  #   geometry:
+  #     - margin=2cm
+
+  # html:
+  #   df-print: paged
+  #   toc: true
+  #   toc-depth: 3
+  #   number-sections: true
+  #   embed-resources: true
+  #   code-fold: true
+  #   code-line-numbers: true
+  #   lang: ja
+  #   mermaid:
+  #     theme: neutral
+    
+execute:
+  cache: false
+  eval: true
+  echo: false
+  warning: false
+
+abstract: "最後に作成"
+---
+
+```{r}
+#| label: library
+#| include: true
+#| fold: true
+#| tidy: true
+pacman::p_load(tidyverse)
+# pacman::p_load(furrr)
+# plan(multicore) # Windows向け、LinuxやMacOSではmulticore
+pacman::p_load(conflicted)
+conflicts_prefer(dplyr::filter)
+conflicts_prefer(dplyr::lag)
+```
+
+# section header
+
+## 箇条書き
+
+### key message
+
+-   test
+-   test
+    -   tets
+        -   trest
+
+## graph
+
+### key message
+
+ここにメッセージを記述します。
+
+```{r}
+#| label: etl
+#| include: true
+#| fold: true
+#| tidy: true
+
+plot(x = c(1, 2, 3), y = c(5, 6, 7))
+
+```
+
+## two content
+
+### key message
+
+::::: columns
+::: column
+contents1...
+:::
+
+::: column
+contents2...
+:::
+:::::
+
+## comparison
+
+::::: columns
+::: column
+contents1...
+
+```{r}
+#| label:  comparison
+#| include: true
+#| fold: true
+#| tidy: true
+
+plot(x = c(1, 2, 3), y = c(5, 6, 7))
+```
+:::
+
+::: column
+contents2...
+:::
+:::::
+
+## mermaid
+
+### key message
+
+```{mermaid}
+graph LR
+    A[ディレクトリ\n作成] --> B[テンプレート配置]
+    classDef noBorder stroke:none;
+    class A,B noBorder;
+    B --> C[Quarto処理]
+    C -.-> D[Marp処理]
+    D --> E[出力検証]
+    E --> F[品質確認]
+    
+    C --> C1[RevealJS]
+    C --> C2[PPTX]
+    C --> C3[PDF]
+    
+    D --> D1[HTML]
+    D --> D2[PDF]
+```
+
+## blank
+

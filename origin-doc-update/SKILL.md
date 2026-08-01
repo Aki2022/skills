@@ -44,11 +44,17 @@ Do not create the file immediately when the user asks for a workstream. First es
    - actions requiring confirmation, especially external writes, sends, submissions, deploys, destructive changes, data migrations, auth/secrets, dependencies, network access, and metered services;
    - cost or usage ceiling when metered work is possible;
    - test and quality gates;
+   - merge policy: continuous delivery is the default — a PR whose recorded quality gates pass (CI when present, otherwise the recorded local gates) is merged autonomously. Record a human merge gate only as a named exception with its reason (e.g. live/production impact, spend, new dependencies); an unexplained merge gate silently kills autonomous runs downstream. Note the choice as one line in the Authorization Envelope or Human Gates section;
    - the next human checkpoint and early stop conditions.
-5. State that `origin-doc-update` is pausing creation until these boundaries are confirmed.
-6. After confirmation, create from `references/workstream.template.md` or run `create_workstream.py` with the confirmed boundary fields.
+5. Classify runnability for every planned issue: `ready` (completable with only current permissions and currently available information) or `gated` (a human decision, missing input, or new permission is foreseeable). Surface every gated point as a question now, during creation — a question asked here costs one interview turn, while the same question discovered mid-execution stops an entire autonomous run. As part of the same pass, judge whether each issue's acceptance is machine-verifiable (counts, thresholds, passing tests) or needs human review: push subjective acceptance toward a quantifiable restatement, and where human judgment is genuinely required, record that the issue ends at a review gate — an agent cannot self-verify a subjective goal and will either stall or overclaim. Record the outcome as one line in the workstream's Human Gates section, e.g. `- Runnability: all issues ready (YYYY-MM-DD)` or `- Runnability: ISSUE-02 gated on <decision>`.
+6. State that `origin-doc-update` is pausing creation until these boundaries are confirmed.
+7. After confirmation, create from `references/workstream.template.md` or run `create_workstream.py` with the confirmed boundary fields.
 
 Record only decisions that are hard to reverse or surprising without context. Do not add a separate glossary or ADR unless the repository already uses one and the decision belongs there.
+
+## Improvement issues
+
+An improvement issue is a standalone issue in `docs/issues/` that records a friction observation from development work — a stuck point, a repeated manual step, an inefficiency worth fixing later — rather than a requested change. Name it `ISSUE-YYYYMMDD-improve-<slug>` when the improvement targets the repository itself, and `ISSUE-YYYYMMDD-improve-loop-<slug>` when it targets the development-loop machinery (skills canonical under `~/.agents/skills/`). The two scopes have different owners and approval paths, so the name must reveal the scope at a glance. Autonomous runs (e.g. `origin-ws-loop`) file observations here instead of interrupting their work; humans triage them later. Create with `create_issue.py` as usual.
 
 ## Implement a workstream or issue
 

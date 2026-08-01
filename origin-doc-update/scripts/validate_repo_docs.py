@@ -26,6 +26,44 @@ def parse_inline_list(value: str) -> list[str]:
     ]
 
 
+KEY_LINE = re.compile(r"^[A-Za-z0-9_]+:")
+
+# Reserved result key holding the names of keys written in flow style. Reading it
+# through flow_style_keys() keeps callers from having to know the spelling.
+FLOW_STYLE_KEYS = "__flow_style_keys__"
+
+
+def flow_style_keys(front_matter: Optional[FrontMatter]) -> list[str]:
+    """Keys whose value was a bracket list opened on the line after the key."""
+    if not front_matter:
+        return []
+    keys = front_matter.get(FLOW_STYLE_KEYS, [])
+    return list(keys) if isinstance(keys, list) else []
+
+
+def read_flow_continuation(lines: list[str], start: int) -> tuple[int, list[str]]:
+    """Read a bracket list that opens on `lines[start]`, i.e. below its key.
+
+    Returns the number of lines consumed (0 when there is no such list) and the
+    parsed entries. This form is not valid input for the line-based block-list
+    reader below, so without this it would silently parse as an empty list.
+    """
+    if start >= len(lines) or not lines[start].strip().startswith("["):
+        return 0, []
+
+    buffer: list[str] = []
+    depth = 0
+    for offset in range(start, len(lines)):
+        line = lines[offset]
+        if offset > start and KEY_LINE.match(line):
+            return 0, []  # unterminated — not a flow list after all
+        buffer.append(line.strip())
+        depth += line.count("[") - line.count("]")
+        if depth <= 0:
+            return offset - start + 1, parse_inline_list(" ".join(buffer))
+    return 0, []
+
+
 def parse_front_matter(path: str | Path) -> Optional[FrontMatter]:
     """Parse the small YAML subset used by origin-doc-update templates."""
     try:
@@ -41,9 +79,14 @@ def parse_front_matter(path: str | Path) -> Optional[FrontMatter]:
         return None
 
     result: FrontMatter = {}
+    flow_keys: list[str] = []
     current_list: Optional[str] = None
-    for line in content[3:end].strip().splitlines():
-        if re.match(r"^[A-Za-z0-9_]+:", line):
+    lines = content[3:end].strip().splitlines()
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        index += 1
+        if KEY_LINE.match(line):
             key, _, raw = line.partition(":")
             raw = raw.strip()
             current_list = None
@@ -52,6 +95,12 @@ def parse_front_matter(path: str | Path) -> Optional[FrontMatter]:
             elif not raw:
                 result[key] = []
                 current_list = key
+                consumed, items = read_flow_continuation(lines, index)
+                if consumed:
+                    result[key] = items
+                    flow_keys.append(key)
+                    current_list = None
+                    index += consumed
             else:
                 result[key] = raw.strip('"').strip("'")
         elif current_list and re.match(r"^[ \t]+-[ \t]+", line):
@@ -59,6 +108,8 @@ def parse_front_matter(path: str | Path) -> Optional[FrontMatter]:
             cast = result[current_list]
             if isinstance(cast, list):
                 cast.append(item.strip('"').strip("'"))
+    if flow_keys:
+        result[FLOW_STYLE_KEYS] = flow_keys
     return result
 
 
@@ -151,12 +202,18 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
             warnings.append("docs/00_index.md: missing updated_at in front matter")
 
     id_locations: dict[str, Path] = {}
-    for path in (root / "docs").glob("**/*.md"):
+    for path in sorted((root / "docs").glob("**/*.md")):
         fm = parse_front_matter(path)
         if fm:
             doc_id = as_text(fm.get("id", ""))
             if doc_id:
                 id_locations[doc_id] = path
+            for key in flow_style_keys(fm):
+                errors.append(
+                    f"{path.relative_to(root)}: front matter '{key}' opens a bracket "
+                    "list on the line below the key; rewrite it in block style "
+                    "(one '- item' per line)"
+                )
 
     archive_dirs = (
         root / "docs/issues/archive",
@@ -186,7 +243,9 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
             branch = as_text(fm.get("branch", "")).strip()
             if not branch:
                 warnings.append(f"{rel}: missing branch (no branch recorded to resume/clean up)")
-            else:
+            elif branch not in ("main", "master"):
+                # Shared trunk branches are never deleted by cleanup, so multiple
+                # direct-to-main issues sharing them is not an ownership conflict.
                 branch_owners.setdefault(branch, []).append(path.name)
             if as_text(fm.get("schema_version", "")) == "2":
                 guide_refs = as_list(fm.get("related_guides", []))

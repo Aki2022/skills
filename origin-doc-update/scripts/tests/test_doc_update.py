@@ -135,6 +135,171 @@ related_guides: [GUIDE-example]
         self.assertTrue(any("must list source_issues" in error for error in errors))
 
 
+class FlowStyleFrontMatterTest(unittest.TestCase):
+    """A bracket list opened on the line *after* the key used to parse as []."""
+
+    def write(self, body: str) -> Path:
+        root = Path(tempfile.mkdtemp())
+        path = root / "doc.md"
+        path.write_text(body)
+        return path
+
+    def test_multiline_flow_list_is_parsed_not_silently_dropped(self):
+        path = self.write(
+            """---
+id: GUIDE-example
+source_issues:
+  [
+    ISSUE-a,
+    ISSUE-b,
+  ]
+---
+
+# Example
+"""
+        )
+
+        fm = MODULE.parse_front_matter(path)
+
+        self.assertEqual(fm["source_issues"], ["ISSUE-a", "ISSUE-b"])
+
+    def test_single_line_flow_list_under_key_is_parsed(self):
+        path = self.write(
+            """---
+id: GUIDE-example
+source_issues:
+  [ISSUE-a, ISSUE-b]
+---
+
+# Example
+"""
+        )
+
+        fm = MODULE.parse_front_matter(path)
+
+        self.assertEqual(fm["source_issues"], ["ISSUE-a", "ISSUE-b"])
+
+    def test_flow_style_key_is_recorded_for_reporting(self):
+        path = self.write(
+            """---
+id: GUIDE-example
+source_issues:
+  [ISSUE-a]
+---
+
+# Example
+"""
+        )
+
+        fm = MODULE.parse_front_matter(path)
+
+        self.assertEqual(MODULE.flow_style_keys(fm), ["source_issues"])
+
+    def test_block_style_records_no_flow_style_key(self):
+        path = self.write(
+            """---
+id: GUIDE-example
+source_issues:
+  - ISSUE-a
+  - ISSUE-b
+---
+
+# Example
+"""
+        )
+
+        fm = MODULE.parse_front_matter(path)
+
+        self.assertEqual(fm["source_issues"], ["ISSUE-a", "ISSUE-b"])
+        self.assertEqual(MODULE.flow_style_keys(fm), [])
+
+    def test_same_line_flow_list_is_not_flagged(self):
+        path = self.write(
+            """---
+id: GUIDE-example
+source_issues: [ISSUE-a, ISSUE-b]
+---
+
+# Example
+"""
+        )
+
+        fm = MODULE.parse_front_matter(path)
+
+        self.assertEqual(fm["source_issues"], ["ISSUE-a", "ISSUE-b"])
+        self.assertEqual(MODULE.flow_style_keys(fm), [])
+
+    def test_empty_block_list_stays_empty(self):
+        path = self.write(
+            """---
+id: GUIDE-example
+source_issues:
+source_workstreams: []
+---
+
+# Example
+"""
+        )
+
+        fm = MODULE.parse_front_matter(path)
+
+        self.assertEqual(fm["source_issues"], [])
+        self.assertEqual(fm["source_workstreams"], [])
+        self.assertEqual(MODULE.flow_style_keys(fm), [])
+
+
+class FlowStyleValidationTest(ValidateRepoDocsV2Test):
+    def test_validate_repo_errors_on_flow_style_front_matter(self):
+        root = self.make_repo()
+        (root / "docs/guides/example.md").write_text(
+            """---
+id: GUIDE-example
+updated_at: 2026-07-19
+source_issues:
+  [
+    ISSUE-20260719-example,
+  ]
+---
+
+# Example
+"""
+        )
+
+        errors, _warnings = MODULE.validate_repo(root)
+
+        self.assertTrue(
+            any(
+                "docs/guides/example.md" in error and "block style" in error
+                for error in errors
+            ),
+            errors,
+        )
+
+    def test_flow_style_refs_still_reach_reference_validation(self):
+        """The whole point: entries must actually be checked, not skipped."""
+        root = self.make_repo()
+        (root / "docs/guides/example.md").write_text(
+            """---
+id: GUIDE-example
+updated_at: 2026-07-19
+source_issues:
+  [
+    ISSUE-20260719-does-not-exist,
+  ]
+---
+
+# Example
+"""
+        )
+
+        _errors, warnings = MODULE.validate_repo(root)
+
+        self.assertTrue(
+            any("ISSUE-20260719-does-not-exist" in warning for warning in warnings),
+            warnings,
+        )
+
+
 class GeneratedFilesValidateTest(ValidateRepoDocsV2Test):
     """The generators and the validator must agree.
 

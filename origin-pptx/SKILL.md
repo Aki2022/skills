@@ -26,7 +26,9 @@ description: >
 
 ブランド（v3・2026-07-13確定、test3.pptx実測）: **グレーグラデーション原則**。
 本文 #7F7F7F・見出し/強調 #404040・オブジェクト背景 #F2F2F2（**背景を塗ったら枠線なし**）。
-キーメッセージ tone: neutral=#404040 / positive=#44546A / negative=#C00000。フォントは **Noto Sans CJK JP** 統一。
+キーメッセージ tone: neutral=#404040 / positive=#44546A / negative=#C00000。
+フォントは**全デッキ一律 BIZ UDPGothic**（2026-07-28決定。2プロファイル制は
+Hiragino Sans W4 がPowerPoint実機で解決されず廃止。Windows 10+標準搭載・LO検証も同一フォントで通る）。
 キャンバスは **PowerPoint標準ワイド画面 33.87×19.05cm（960×540pt）**。
 全トークンは `style-guide/tokens.json` が正典。
 
@@ -91,7 +93,7 @@ PowerPoint上で直接編集したpptx（スクショ手貼り・文言修正等
 
 ## style-guide/ の使い方
 
-- `style-guide/tokens.json` — 色（グレー階調・message.neutral/positive/negative）・タイポグラフィ（Noto Sans CJK JP・整数ptスケール）・クローム座標（chrome.\*）・表・チャート・図形のデザイントークン。**新規の色相を勝手に追加しない**。
+- `style-guide/tokens.json` — 色（グレー階調・message.neutral/positive/negative）・タイポグラフィ（BIZ UDPGothic一律・整数ptスケール）・クローム座標（chrome.\*）・表・チャート・図形のデザイントークン。**新規の色相を勝手に追加しない**。
 - `style-guide/layout-grammar.md` — **基本型（表紙/目次/セクション/単一/2列/3列/比較/ハイブリッド/自由形）× 修飾子（mode: handout/preso、tone: neutral/positive/negative、content）** の体系。タイトル=tracker/キーメッセージの意味論と禁止事項（takeaway box等）もここ。imagegen用の定性バンド記述とネイティブ用pt座標表の両方を持つ。
 - `style-guide/skill-config.json` — 実行設定（サブエージェントのモデル割当・検証ループ上限・並列度）。⓪で読む。
 - `style-guide/template_v3.pptx` — **注入用テンプレ**（会社テンプレ124レイアウトから11枚に間引き・v3化した正典。生成元は `scripts/build_template_v3.py`）。④合格後に `inject_template.py` で最終成果物の土台にする。
@@ -140,7 +142,9 @@ addChartの限界・アイコン正規化）。
 - `slide.addImage()` で文字なしアセットPNG（image_gen製）や実データチャート図を埋め込み
 - **事前指定画像（スクショ・書影等の実物）はデッキの `input/` に置き、②ではedit-mode入力として構図に組み込み、③では原本を `addImage`**（prompt-convention §5.5）。歪み防止にアスペクト比保持でフィット（gotchas §4）
 - キャンバス: `pptx.defineLayout({ name: "WIDE", width: 13.333, height: 7.5 })`（960×540pt = 33.87×19.05cm）
-- フォント: `fontFace: "Noto Sans CJK JP"`（v3統一・2026-07-13ユーザー決定。soffice検証でも正しく描画される）
+- フォント: `mk({ font: "BIZ UDPGothic" })`（全デッキ一律・未指定はエラー）。ビルド直後と
+  inject後の最終ファイルに `scripts/set_fonts.py <pptx>` を必ず実行し、テーマ・テンプレ由来の
+  レイアウト/マスター含む全XMLを BIZ UDPGothic に統一する（冪等）
 - 色・サイズ・クローム座標は必ず `tokens.json`（v3）から引く（ハードコード禁止）
 - 品質基準（v3・test3実測）: tracker14pt / キーメッセージ28pt(1行) / カード見出し25pt bold /
   本文14pt / 数字20pt+単位10pt。本文・脚注の最下端 y≤500、フッター帯 y=512.8 は master 任せ。
@@ -151,8 +155,10 @@ addChartの限界・アイコン正規化）。
 npm install pptxgenjs
 node build_slide.js                                  # → output.pptx
 python3 <skill>/scripts/sanitize_pptx.py output.pptx # 必須: PowerPoint修復エラー要因の矯正（gotchas §16-17）
+python3 <skill>/scripts/set_fonts.py output.pptx        # 必須: BIZ UDPGothic に統一
 # ④合格後・⑤前の最終成果物化（テンプレ注入 Phase 1）:
 python3 <skill>/scripts/inject_template.py output.pptx <skill>/style-guide/template_v3.pptx 最終成果物.pptx
+python3 <skill>/scripts/set_fonts.py 最終成果物.pptx     # 必須: テンプレ由来部品もBIZ UDPGothicに統一
 ```
 
 **`sanitize_pptx.py` はビルドの必須最終工程**（冪等）。pptxgenjs 4.0.1 は折れ線/散布図/レーダーの
@@ -171,7 +177,7 @@ python3 <skill>/scripts/inject_template.py output.pptx <skill>/style-guide/templ
 
 ```bash
 codex features list | grep image_generation   # → stable true を確認
-codex exec --dangerously-bypass-approvals-and-sandbox --cd "$PWD" "<プロンプト>"
+codex exec --sandbox workspace-write -c sandbox_workspace_write.network_access=true --cd "$PWD" "<プロンプト>"
 ```
 
 - gpt-image-2、ChatGPTサブスクOAuth。**OPENAI_API_KEY 不要・従量課金なし**
@@ -191,16 +197,16 @@ find "${CODEX_HOME:-$HOME/.codex}/generated_images" -type f -name '*.png' -print
 
 ### ⚠️ AUTHORIZATION（実行前に必読）
 
-`--dangerously-bypass-approvals-and-sandbox` はセキュリティ上センシティブなフラグ。
-**Claude Code の自動モード分類器はこのフラグをブロックし、AIが自動で恒常許可ルールを追加することもブロックする。**
-
-- **AI（このスキルを実行するClaude自身）は絶対にこのバイパスフラグを自己承認しようとしない。**
-- ②③では、**人間がこの `codex exec` コマンドを自分の手で実行する**（デザイン承認チェックポイントと兼用できる）。
-- 無人実行が必要な場合は、**人間が自分の判断で**狭い許可ルールを追加する。AIが提案・自動追加することはしない。
-- 実測済みの運用パス（2026-07-14）: 人間が `.claude/settings.local.json` の `permissions.allow` に
-  `"Bash(codex exec --dangerously-bypass-approvals-and-sandbox *)"` を追加すると、以降は AI が
-  codex exec を直接実行できる（分類器は AI 自身によるこのルール追加を**ハードブロックする**——
-  必ず人間がファイルを編集する。チャットでの口頭承認だけでは分類器は通らない）。
+- 上記の**安全モード**（`--sandbox workspace-write -c sandbox_workspace_write.network_access=true`）は
+  Claude Code の通常権限フローで **AI が直接実行できる**（2026-07-26 hachinohe_sea_2026 で実証。
+  実運用例: 同リポジトリ `presentation/20260726_八戸魚市場提案/process/run_mockups.sh`）。
+- 残存リスク: `network_access=true` により codex が外部ネットワークへ出られる＝プロンプトへの
+  インジェクション経由でワークスペース情報を持ち出す余地が理論上残る。**codex へ渡すプロンプトは
+  AI 自身が組み立てた画像生成指示のみ**とし、外部由来テキストを埋め込まない。秘密情報を含む
+  ディレクトリを `--cd` 対象にしない。
+- `--dangerously-bypass-approvals-and-sandbox` は**使わない**。Claude Code の分類器がハードブロック
+  するため、許可ルールがあっても AI からは実行できない（2026-07-26 実証）。安全モードで不足がある
+  場合の**最終手段**としてのみ、**人間が自分の手で実行する**。AIは自己承認や権限回避を試みない。
 - バックグラウンド起動時は **`< /dev/null` を必ず付ける**（stdin待ちハング。image_gen.md参照）。
   生成物の回収は `scripts/collect_codex_images.py`（並列競合の防止）。
 
@@ -241,7 +247,7 @@ imagegen-prompt-convention.md §10（型スライド=厳格 / 自由形=ブラ�
 ## 前提環境
 
 - `pptxgenjs`（npm）
-- Noto Sans CJK JP フォント（`brew install --cask font-noto-sans-cjk`）
+- フォント: BIZ UDPGothic（Windows 10+標準。macはGoogle Fontsから導入・`fc-list | grep -i "biz ud"`で確認）
 - `soffice`（LibreOffice）・`pdftoppm`（poppler）
 - Codex CLI ログイン済み（`codex features list` で `image_generation stable true`）
 
@@ -257,6 +263,7 @@ imagegen-prompt-convention.md §10（型スライド=厳格 / 自由形=ブラ�
 - `scripts/deck_helpers.js` — 複数枚デッキ用の共通ヘルパ v3（③の土台に使う。masterクローム/numUnit含む）
 - `scripts/split_deck.py` — build_deck.js を slides/sNN.js に分割（ビルダー並列化用）
 - `scripts/normalize_icons.py` — image_gen産アイコンの正規化（白背景透過＋#404040単色化。埋め込み前に必須）
+- `scripts/set_fonts.py` — **ビルド後必須**のフォント統一（全XMLの a:latin/a:ea/a:cs を BIZ UDPGothic に書き換え。ビルド直後と inject後の最終ファイルの2回実行・冪等）
 - `scripts/sanitize_pptx.py` — **ビルド後必須**のPowerPoint修復エラー矯正（チャートXMLスキーマ違反・負extentの修正。gotchas §15-17）
 - `scripts/inject_template.py` — **④合格後の最終成果物化**: template_v3.pptx を土台に生成スライドを移植（人間がマスター準拠スライドを追加できる形にする）
 - `scripts/cleanup_deck.py` — **⑤承認後の必須クリーンアップ**（dry-run既定）。役割を終えたmockup/preview/ログ等を削除し、再構築ソース（outline/slides/assets/output.pptx）は残す。承認前に実行しない

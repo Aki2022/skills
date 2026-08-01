@@ -110,7 +110,7 @@ slide.addChart(pptx.ChartType.bar, data, {
   dataLabelColor: "404040",
   dataLabelFontSize: 11,
   showTitle: false,
-  fontFace: "Noto Sans CJK JP",
+  fontFace: F, // mk({font}) の値（ハードコードしない。set_fonts.pyが欧文/和文を最終調整）
 });
 ```
 

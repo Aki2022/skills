@@ -67,7 +67,9 @@ Invoke the **origin-git-cleanup** skill and follow its SKILL.md. Its Stage 1 sur
 includes the doc edits from Step 1 as uncommitted changes, so its Stage 3 plan
 should propose committing code **and** docs together. Execute that integration
 plan autonomously, and finish on main, clean, and synced. If cleanup would
-delete a branch, worktree, or ref, obtain confirmation for those deletion steps.
+delete a branch, worktree, or ref **that this session did not create**, obtain
+confirmation for those deletion steps. Deleting the branch this session made and
+just merged is part of the merge (see origin-git-cleanup's deletion authority).
 
 The current branch you are standing on is the usual cleanup target — origin-git-cleanup
 now handles switching to main before deleting it (local and remote). Don't

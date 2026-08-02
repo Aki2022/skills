@@ -45,6 +45,12 @@ This skill consumes workstreams; it does not prepare them.
   human decisions this skill must not absorb.
 - Governance present but zero active workstreams: report "queue empty" as a
   normal, successful exit. Do not invent work.
+- **Evaluate exactly the directory you were pointed at.** A subdirectory of a
+  governed repository that has no governance of its own is an ungoverned
+  target, and the first rule applies. Do not walk up to the git root to find a
+  queue: the caller named a scope, and a queue reached by widening it is a
+  queue nobody asked to drain. Say which directory was evaluated, so a caller
+  who meant the repository can re-point the skill in one step.
 
 ## Preflight — once per session, interactive
 
@@ -59,6 +65,15 @@ itself never has to wait.
    workstream directory disagree (e.g. completed workstreams still sitting in
    the active area), do not fix it inline — file one improvement issue for the
    drift; stale inventory poisons every later selection.
+
+   **The index's frontmatter is in scope for this check, not just its body
+   lists.** An index that carries mutable state — a `current_focus` naming how
+   many workstreams are active, or which one is next — can contradict the
+   directory exactly as a stale body list can, and it is read first, so it
+   misleads first. Only check what is checkable without interpretation:
+   counts, ids, and statuses stated outright. Free prose about direction is
+   not drift and is not this check's business. One issue covers all drift
+   found, frontmatter and body together.
 
    **Then reconstruct the review shelf from open PRs**, before selecting
    anything: list the repository's open PRs and match them to workstreams by
@@ -83,8 +98,9 @@ itself never has to wait.
    later run that trusts only the default branch will select it again and redo
    work that is already sitting in a PR. The open PR is the durable fact (the
    same reasoning that keeps run logs out of the repository: durable facts live
-   in workstreams, PRs, and issues), so the shelf must be *read* from it rather
+   in workstreams, PRs, and issues), so the shelf must be _read_ from it rather
    than kept in a journal that dies with the session.
+
 2. **Merge policy.** Confirm how PRs land. The default is continuous delivery:
    a PR whose recorded quality gates are green (CI when present, otherwise the
    workstream's recorded local gates) is merged autonomously by
@@ -102,6 +118,18 @@ itself never has to wait.
      prompt, so fill gaps now: propose the additions, get the user's approval,
      and record them in settings before starting. Never loosen permissions
      autonomously.
+
+     Writing to settings is the human's act, and no other agent's
+     authorization substitutes for it. When this preflight runs without a
+     human to ask — invoked by another agent, or in a non-interactive
+     runtime — do not write settings and do not treat the check as skipped.
+     Take the missing command's measure instead: run it once, harmlessly, and
+     see whether it is actually blocked. If it runs, the gap was theoretical;
+     record in the journal that it was verified by execution rather than by
+     settings, and proceed. If it is genuinely blocked, that is a question
+     gate — persist it and stop before the first iteration, where the cost is
+     one message rather than a dead unattended run.
+
    - **Deny collisions.** A command matched by a `deny` rule cannot be
      unblocked by adding an allow entry — deny is a deliberate guardrail, and
      relaxing it is a different, heavier human decision. Do not propose
@@ -151,22 +179,25 @@ itself never has to wait.
       ends that workstream at a review gate and moves the loop one step closer
       to the shelf cap.
    3. **Last, workstreams with a known `gated` issue downstream**, because
-      reaching it stops the *entire* loop. Everything startable should have had
+      reaching it stops the _entire_ loop. Everything startable should have had
       its turn first.
    4. **Tie-break by the order of the index's active list**, which is stable
       and human-visible, so the same queue always produces the same run.
 
-   The principle is *defer whatever ends the run*: within one iteration budget,
+   The principle is _defer whatever ends the run_: within one iteration budget,
    the most work is drained when the run-enders go last. Order is not a detail —
    the same queue and the same cap produce completely different outcomes
    depending on what is picked first, so leaving it to the runner's judgement
    makes a run unrepeatable and its coverage accidental. A human may override
    the order at preflight; nothing here needs per-iteration approval.
+
 2. **Execute** via `origin-goal`, through the workstream's consecutive ready
    issues. The workstream's Authorization Envelope and Human Gates are already
    recorded, so its preflight must reuse them without re-interviewing. Its
    3-strike failure rule and stop discipline apply unchanged. Stop the
-   workstream's run when its next issue is gated.
+   workstream's run when its next issue is gated. Reaching a gated issue ends
+   the **work**, not the iteration: continue through steps 3–5 to land what is
+   already green, and stop the loop after step 5.
 3. **Close** via `origin-close-session`. Under the CD merge policy (the
    default), obtain an independent review before the autonomous merge: a
    fresh-context reviewer (the `/code-review` skill or a reviewer subagent)
@@ -185,7 +216,7 @@ itself never has to wait.
    The capability and its bound belong together. if the runtime offers no such reviewer,
    run the gates yourself and hand it the real output. A reviewer without a
    shell will not refuse — it will read what it can reach, reason about what
-   the tests *would* do, and return a pass by inference. That verdict is then
+   the tests _would_ do, and return a pass by inference. That verdict is then
    the sole evidence for merging without a human, and it was never evidence at
    all. Record in the journal whether the reviewer executed the gates or
    inferred them; an inferred pass does not satisfy CD, so either re-review
@@ -197,6 +228,7 @@ itself never has to wait.
    workstream lands on a clean, merged main before the next begins. Under a
    human-gated merge policy, stop after the PR exists — that workstream has
    reached a review gate and goes to the shelf.
+
 4. **Observe.** File improvement observations (below), bounded per iteration.
    Also close the lesson loop on failures: when a failure was diagnosed and
    fixed during this iteration, ask whether the lesson generalizes. If it
@@ -217,9 +249,12 @@ survives:
 - **Question gate** — a decision, missing input, or new permission is needed
   before work can proceed (an escalation, a 3-strike failure, a `gated` issue
   reached, an unforeseen permission prompt). Persist the exact question in the
-  workstream first (`origin-goal` already does this), then stop the **entire
-  loop**. Parking an unanswered decision and continuing would accumulate
-  choices the human never sequenced.
+  workstream first (`origin-goal` already does this), close out the current
+  iteration (steps 3–5), then stop the **entire loop**. Parking an unanswered
+  decision and starting more work would accumulate choices the human never
+  sequenced; abandoning green, reviewed work unmerged would discard finished
+  output for no gain. What the gate forbids is new work, not the landing of
+  work already done.
 - **Review gate** — the workstream's work is finished and pushed as a PR;
   only human review/merge blocks further progress in _that_ workstream (a
   human-gated merge policy, a recorded slice-review gate). Move the
@@ -322,8 +357,11 @@ improvement: <filed issue ids, triage-pending marked>
   workstream boundary (except citing the preflight approval for an in-bounds
   auto-promotion);
 - execute a `gated` issue or answer a gate question by guessing;
-- continue any iteration after a question gate has arisen (a review gate
-  shelves the workstream; it never excuses continuing _inside_ it);
+- start new work after a question gate has arisen — no further issue in the
+  current workstream, no next workstream. Closing the current iteration
+  (review, merge what is already green, observe, journal) is not continuing;
+  it is how the iteration ends. A review gate shelves the workstream; it never
+  excuses executing another issue _inside_ it;
 - put anything with an unanswered decision on the review shelf — the shelf is
   for finished work awaiting review only;
 - leave an improvement observation unfiled (digest text is not a record);

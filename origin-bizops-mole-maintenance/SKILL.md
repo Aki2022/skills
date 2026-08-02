@@ -6,13 +6,13 @@ description: >-
   「node_modules を削除」「ストレージ空き」「mac maintenance」「clean up mac」「mole weekly」
   などのキーワードが含まれる場合に必ずこのスキルを使う。
   破壊的・no-return な操作（mo uninstall, mo uninstall --permanent, mo remove）は実行しない。
-  常に dry-run でプレビューを提示してからユーザー確認を取り、承認後に実行する。
+  常に dry-run または読み取り専用プレビューを提示してからユーザー確認を取り、承認後に実行する。
 ---
 
 # Mole Weekly Maintenance
 
 Mole CLI (`mo`) を使って Mac を週次メンテナンスするワークフロー。
-破壊的・no-return な操作は除外し、すべて Trash 経由（復元可能）または可逆操作のみ使用する。
+破壊的・no-return な操作は原則除外する。必要な整理でも対象を限定し、明示確認後に実行する。ファイルは可能な限りTrash経由とする。
 
 ## 前提
 
@@ -35,7 +35,22 @@ mo status --json
 - ディスク空き容量
 - アップタイム
 
-### Step 2: キャッシュ肥大の確認（読み取り専用）
+### Step 2: 全体容量と見落としやすい領域の確認（読み取り専用）
+
+キャッシュだけでなく、仮想ディスク・同期データ・ゴミ箱・ローカルスナップショットを確認する。
+
+```bash
+df -h /
+du -x -d 1 -k ~/Library/Containers 2>/dev/null | sort -nr | head -20
+find ~/Library/Containers -xdev -type f -size +1G -exec ls -lh {} \; 2>/dev/null | head -30
+tmutil listlocalsnapshots /
+```
+
+`du` はAPFSのスパースファイルの論理サイズと実使用量が異なる場合があるため、必ず `df` と併記する。
+
+特に `~/Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw` は直接削除しない。Dockerの整理は後述のDocker手順を使う。
+
+### Step 3: キャッシュ肥大の確認（読み取り専用）
 
 ```bash
 mo analyze ~/Library/Caches --json | python3 -c "
@@ -48,7 +63,7 @@ print(f\"Total: {data.get('total_size', 0)//1024//1024}MB\")
 "
 ```
 
-### Step 3: キャッシュ掃除（dry-run → 確認 → 実行）
+### Step 4: キャッシュ掃除（dry-run → 確認 → 実行）
 
 **まず dry-run でプレビュー:**
 
@@ -79,7 +94,13 @@ mo clean
 - ブラウザキャッシュが消えるため、初回ページ読み込みが若干遅い
 - `com.openai.codex` (1.3GB) は Sparkle 更新キャッシュ（AIモデルではない）→ 次回起動時に再構築
 
-### Step 4: インストーラーファイル掃除（dry-run → 確認 → 実行）
+**MoleがTTY・権限・ログ書き込みで失敗した場合:**
+
+- エラーを明示し、成功したものとして扱わない
+- `df`、`du`、`find` で読み取り専用の代替集計を行う
+- `mo clean --dry-run` の代わりに手動で対象を列挙し、確認後にゴミ箱へ移動する
+
+### Step 5: インストーラーファイル掃除（dry-run → 確認 → 実行）
 
 Downloads・Desktop・Homebrew cache 等の `.dmg` / `.pkg` / `.zip` を検出する。
 
@@ -93,7 +114,29 @@ mo installer --dry-run
 mo installer
 ```
 
-### Step 5: プロジェクトビルド成果物の掃除（端末で手動実行）
+### Step 6: Dockerの整理（dry-run相当の確認 → 確認 → 実行）
+
+Docker Desktopの使用量はMoleだけでは把握しにくいため、Docker CLIで確認する。
+
+```bash
+docker system df -v
+docker ps -a --size
+docker volume ls
+docker image ls --format '{{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.CreatedSince}}\t{{.Size}}'
+```
+
+安全な既定順序:
+
+1. `docker system df -v` でビルドキャッシュ・イメージ・コンテナ・ボリュームを分けて提示する
+2. 実行中コンテナとボリュームを保護する
+3. ビルドキャッシュは再生成可能だが、`docker builder prune -a` は完全削除なので別途確認を取る
+4. 古いイメージは作成日時とコンテナ参照を確認し、対象IDを明示して `docker image rm <id>` を実行する
+
+`docker system prune -a --volumes` は一括で広範囲を削除するため、自動実行しない。`Docker.raw` を直接削除・移動しない。Docker CLIが使えない場合はDocker Desktopの起動を案内し、仮想ディスク内部を手動操作しない。
+
+Dockerのpruneとimage rmはゴミ箱を経由しないため、実行前に対象・再取得の影響・見込み容量を明示して確認を取る。実行後は `docker system df` と `df -h /` を再確認する。
+
+### Step 7: プロジェクトビルド成果物の掃除（端末で手動実行）
 
 `mo purge` は対話的TUIのため、Claude からは直接実行できない。端末で実行してもらう。
 
@@ -126,7 +169,7 @@ cargo clean --manifest-path ~/code/<project>/Cargo.toml --profile dev
 rm -rf ~/code/<project>/target/debug
 ```
 
-### Step 6: システム最適化（dry-run → 確認 → 実行）
+### Step 8: システム最適化（dry-run → 確認 → 実行）
 
 キャッシュ再構築・Finder/Dock更新・ネットワークサービスリセット等。
 
@@ -140,9 +183,9 @@ mo optimize --dry-run
 mo optimize
 ```
 
-### Step 7: 完了サマリー
+### Step 9: 完了サマリー
 
-実行したアクション・解放した容量をまとめて報告する。
+実行したアクション・ゴミ箱へ移動した容量・実際に `df` で増えた空き容量を区別して報告する。APFSやゴミ箱の影響で `du` の合計と `df` の変化が一致しない場合は、その旨を明記する。
 
 ---
 

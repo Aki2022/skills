@@ -43,6 +43,18 @@ This skill consumes workstreams; it does not prepare them.
   (specs) and `origin-doc-update` (workstreams), then stop. Do not initialize
   the scaffold or create workstreams on the user's behalf — those steps carry
   human decisions this skill must not absorb.
+
+  **Produce a digest on this refusal too**, short but real: what was
+  evaluated, what was missing, and anything worth knowing that surfaced on the
+  way in. Observations gathered here are the one place they are reported in
+  chat instead of filed — a refused target has no `docs/issues/` to file
+  into, and filing them in the calling repository would misattribute another
+  repository's problems. This is a deliberate, bounded exception to "an
+  observation that exists only in digest text is lost": a refusal always ends
+  in front of the human who asked, so the digest reaches someone who can act
+  on it. The exception covers refusal only. Once a run is under way, every
+  observation is filed.
+
 - Governance present but zero active workstreams: report "queue empty" as a
   normal, successful exit. Do not invent work.
 - **Evaluate exactly the directory you were pointed at.** A subdirectory of a
@@ -364,7 +376,9 @@ improvement: <filed issue ids, triage-pending marked>
   excuses executing another issue _inside_ it;
 - put anything with an unanswered decision on the review shelf — the shelf is
   for finished work awaiting review only;
-- leave an improvement observation unfiled (digest text is not a record);
+- leave an improvement observation unfiled (digest text is not a record) —
+  except on a Prerequisites refusal, where reporting in the digest is the
+  defined destination;
 - edit skills or anything under `~/.agents` (loop-process improvements are
   recorded, not applied);
 - loosen permissions, bypass hooks, or take any action the composed skills'

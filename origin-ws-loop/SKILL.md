@@ -59,6 +59,21 @@ itself never has to wait.
    workstream directory disagree (e.g. completed workstreams still sitting in
    the active area), do not fix it inline — file one improvement issue for the
    drift; stale inventory poisons every later selection.
+
+   **Then reconstruct the review shelf from open PRs**, before selecting
+   anything: list the repository's open PRs and match them to workstreams (by
+   branch name, or by the `pr:` field where a workstream records one). Every
+   match starts this run already shelved, counts against the shelf cap, and is
+   never selected.
+
+   This step exists because the shelf has no other durable home. A workstream
+   parked at a review gate records that fact **on its own unmerged branch**, so
+   the default branch still shows it as active with its issues pending — a
+   later run that trusts only the default branch will select it again and redo
+   work that is already sitting in a PR. The open PR is the durable fact (the
+   same reasoning that keeps run logs out of the repository: durable facts live
+   in workstreams, PRs, and issues), so the shelf must be *read* from it rather
+   than kept in a journal that dies with the session.
 2. **Merge policy.** Confirm how PRs land. The default is continuous delivery:
    a PR whose recorded quality gates are green (CI when present, otherwise the
    workstream's recorded local gates) is merged autonomously by
@@ -109,9 +124,31 @@ itself never has to wait.
 1. **Select.** Runnability is judged at issue granularity: a workstream is
    startable when its **next pending issue** is `ready`; never execute a
    `gated` issue. A workstream that depends on a shelved workstream is not
-   independent — skip it. If nothing startable remains outside the shelf,
-   surface the nearest gate as the stopping question. Record a one-line
-   selection reason in the journal. No human ordering approval is needed.
+   independent — skip it. A workstream with an open PR is already on the shelf
+   — skip it too (see Preflight inventory). If nothing startable remains
+   outside the shelf, surface the nearest gate as the stopping question.
+
+   When several workstreams are startable, order them by these rules, in
+   order, and record the deciding rule as the one-line selection reason:
+
+   1. **Workstreams that cannot end the run come first.** A workstream whose
+      remaining issues are all `ready` and whose merge policy is CD can only
+      finish and merge. Take those before anything else.
+   2. **Then workstreams that consume a shelf slot** — a `gated` merge policy
+      ends that workstream at a review gate and moves the loop one step closer
+      to the shelf cap.
+   3. **Last, workstreams with a known `gated` issue downstream**, because
+      reaching it stops the *entire* loop. Everything startable should have had
+      its turn first.
+   4. **Tie-break by the order of the index's active list**, which is stable
+      and human-visible, so the same queue always produces the same run.
+
+   The principle is *defer whatever ends the run*: within one iteration budget,
+   the most work is drained when the run-enders go last. Order is not a detail —
+   the same queue and the same cap produce completely different outcomes
+   depending on what is picked first, so leaving it to the runner's judgement
+   makes a run unrepeatable and its coverage accidental. A human may override
+   the order at preflight; nothing here needs per-iteration approval.
 2. **Execute** via `origin-goal`, through the workstream's consecutive ready
    issues. The workstream's Authorization Envelope and Human Gates are already
    recorded, so its preflight must reuse them without re-interviewing. Its
@@ -122,7 +159,20 @@ itself never has to wait.
    fresh-context reviewer (the `/code-review` skill or a reviewer subagent)
    that has not seen this iteration's reasoning — a reviewer inside the same
    context inherits the same blind spots, and this review is what justifies
-   merging without a human. Fix confirmed findings within the iteration; a
+   merging without a human.
+
+   **The reviewer must be able to run the workstream's recorded quality gates,
+   not merely read the diff.** Give it a subagent type that has shell access
+   and tell it to execute the gates; if the runtime offers no such reviewer,
+   run the gates yourself and hand it the real output. A reviewer without a
+   shell will not refuse — it will read what it can reach, reason about what
+   the tests *would* do, and return a pass by inference. That verdict is then
+   the sole evidence for merging without a human, and it was never evidence at
+   all. Record in the journal whether the reviewer executed the gates or
+   inferred them; an inferred pass does not satisfy CD, so either re-review
+   with a capable reviewer or treat the merge as human-gated.
+
+   Fix confirmed findings within the iteration; a
    finding that needs a human decision is a question gate. With gates green
    and the review passed, the PR merges autonomously, so every finished
    workstream lands on a clean, merged main before the next begins. Under a

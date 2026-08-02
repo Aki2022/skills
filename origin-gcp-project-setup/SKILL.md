@@ -237,7 +237,7 @@ node -e "const {BigQuery}=require('@google-cloud/bigquery'); new BigQuery({proje
 SDK running_as: <sa-name>@<project-id>.iam.gserviceaccount.com
 ```
 
-ユーザーアカウント（`会社ドメインのメールアドレス`）が表示されたら impersonation が効いていない。
+ユーザーアカウント（会社ドメインのメールアドレス）が表示されたら impersonation が効いていない。
 CLI は SA だが SDK だけユーザーになる場合は Step 6.5 の per-repo ADC 未生成
 （`refresh_adc.sh` を実行）。
 
@@ -266,13 +266,13 @@ CLI は SA だが SDK だけユーザーになる場合は Step 6.5 の per-repo
 
 ## トラブルシューティング
 
-| エラー                                                                                     | 原因                                                         | 対処                                                                                                 |
-| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| `NOT_FOUND: Service account ... does not exist`                                            | --project 省略で active config のプロジェクトを参照          | Step 4 の `CLOUDSDK_CORE_PROJECT` 指定を確認                                                         |
-| `PERMISSION_DENIED: Failed to impersonate`                                                 | IAM 未反映 or TokenCreator 未付与                            | Step 5 のリトライを待つ。それでも失敗なら Step 4 を再実行                                            |
-| `SESSION_USER()` がユーザーアカウントを返す                                                | impersonation が効いていない                                 | `CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT` 環境変数を確認                                           |
-| `bq: Reauthentication failed`                                                              | 土台のユーザー認証が期限切れ（RAPT など）                    | `bash ~/.agents/skills/origin-gcp-project-setup/re-auth.sh` を実行                                          |
-| SDK だけ `Caller does not have required permission to use project` / `serviceusage` エラー | per-repo ADC 未生成。SDK がグローバル ADC（別 SA）を見ている | Step 6.5 の `refresh_adc.sh` を実行し、`.mise.toml` に `GOOGLE_APPLICATION_CREDENTIALS` があるか確認 |
-| CLI は SA だが SDK だけユーザー/別 SA で動く                                               | `GOOGLE_APPLICATION_CREDENTIALS` 未設定 or 指す ADC が古い   | `.mise.toml` を確認し `refresh_adc.sh` を再実行                                                      |
+| エラー                                                                                                | 原因                                                                         | 対処                                                                                                 |
+| ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `NOT_FOUND: Service account ... does not exist`                                                       | --project 省略で active config のプロジェクトを参照                          | Step 4 の `CLOUDSDK_CORE_PROJECT` 指定を確認                                                         |
+| `PERMISSION_DENIED: Failed to impersonate`                                                            | IAM 未反映 or TokenCreator 未付与                                            | Step 5 のリトライを待つ。それでも失敗なら Step 4 を再実行                                            |
+| `SESSION_USER()` がユーザーアカウントを返す                                                           | impersonation が効いていない                                                 | `CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT` 環境変数を確認                                           |
+| `bq: Reauthentication failed`                                                                         | 土台のユーザー認証が期限切れ（RAPT など）                                    | `bash ~/.agents/skills/origin-gcp-project-setup/re-auth.sh` を実行                                   |
+| SDK だけ `Caller does not have required permission to use project` / `serviceusage` エラー            | per-repo ADC 未生成。SDK がグローバル ADC（別 SA）を見ている                 | Step 6.5 の `refresh_adc.sh` を実行し、`.mise.toml` に `GOOGLE_APPLICATION_CREDENTIALS` があるか確認 |
+| CLI は SA だが SDK だけユーザー/別 SA で動く                                                          | `GOOGLE_APPLICATION_CREDENTIALS` 未設定 or 指す ADC が古い                   | `.mise.toml` を確認し `refresh_adc.sh` を再実行                                                      |
 | `application_default_credentials.json must be authorized_user ... got 'impersonated_service_account'` | active gcloud config の `auth/impersonate_service_account` が ADC 作成に混入 | `re-auth.sh` を使って一時 `CLOUDSDK_CONFIG` で user ADC を作る                                       |
-| `gcloud: No such file or directory`                                                        | constrained shell の PATH に Google Cloud SDK が無い         | `re-auth.sh` / `refresh_adc.sh` の自動検出を使う。手動なら SDK の bin を PATH に追加                |
+| `gcloud: No such file or directory`                                                                   | constrained shell の PATH に Google Cloud SDK が無い                         | `re-auth.sh` / `refresh_adc.sh` の自動検出を使う。手動なら SDK の bin を PATH に追加                 |

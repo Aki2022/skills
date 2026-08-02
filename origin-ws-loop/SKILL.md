@@ -61,10 +61,15 @@ itself never has to wait.
    drift; stale inventory poisons every later selection.
 
    **Then reconstruct the review shelf from open PRs**, before selecting
-   anything: list the repository's open PRs and match them to workstreams **by
-   branch name** (`gh pr list` reports `headRefName`; a shelved workstream always
-   still has its branch, because its PR is open). Every match starts this run
-   already shelved, counts against the shelf cap, and is never selected.
+   anything: list the repository's open PRs and match them to workstreams by
+   branch name (`gh pr list` reports `headRefName`; a shelved workstream always
+   still has its branch, because its PR is open). **Match on the workstream id as
+   a prefix, not on string equality** — a run that had to cut a differently named
+   branch (a suffix, a retry) still owns that PR, and an exact match would miss
+   it, re-select the workstream, and redo work already sitting in the PR. When a
+   PR's head branch cannot be attributed to any workstream, say so in the digest
+   rather than assuming the shelf is empty. Every match starts this run already
+   shelved, counts against the shelf cap, and is never selected.
 
    Match on the branch, not on a `pr:` field in the workstream: the PR number
    only exists after the push that creates it, so recording it would need a
@@ -119,9 +124,10 @@ itself never has to wait.
 5. **Stop conditions.** Defaults, adjustable here: a maximum of 10 iterations,
    and a review shelf cap of 3 workstreams (see Stop discipline). On the
    **first run in a repository**, recommend a pilot cap of 2 iterations
-   instead — a *recommendation*: a cap the human states explicitly wins, and
-   the run records that the pilot suggestion was overridden — it proves workstream quality, permissions, and CD wiring cheaply
-   before committing tokens to a full unattended run. Do not add loop-level
+   instead: it proves workstream quality, permissions, and CD wiring cheaply
+   before committing tokens to a full unattended run. This is a recommendation —
+   a cap the human states explicitly wins, and the run records that the pilot
+   suggestion was overridden. Do not add loop-level
    time/token/cost ceilings — each workstream's Authorization Envelope
    already owns its resource limits, and a second guardian invites
    conflicting accounting.
@@ -175,8 +181,8 @@ itself never has to wait.
    temporary directory, or an equivalent isolated copy. A shell-capable
    reviewer left to its own devices will `git checkout` the PR head in the
    shared tree, which moves the branch the loop itself is standing on and can
-   leave behind a branch that squash-merge makes undeletable by `git branch
-   -d`. Grant the capability and bound it in the same breath; if the runtime offers no such reviewer,
+   leave behind a branch that squash-merge makes undeletable by `git branch -d`.
+   The capability and its bound belong together. if the runtime offers no such reviewer,
    run the gates yourself and hand it the real output. A reviewer without a
    shell will not refuse — it will read what it can reach, reason about what
    the tests *would* do, and return a pass by inference. That verdict is then

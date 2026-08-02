@@ -53,7 +53,17 @@ alone is always safe; deleting the wrong thing is not.
 - **Read before you write.** Never mutate state before you've surveyed it.
 - **Propose before you destroy.** Present the full plan before execution.
   Commit, push, and a green PR's merge are autonomous; get approval before any
-  deletion, forced operation, or other destructive cleanup.
+  forced operation or other destructive cleanup.
+- **Deletion authority follows provenance.** Removing a branch **this run itself
+  created and has just merged** is part of that merge, not a separate
+  destruction — `gh pr merge --squash --delete-branch` stays the ordinary merge
+  command and needs no extra approval. Deleting anything this run did not create
+  — a pre-existing branch, someone else's worktree, a remote ref you did not
+  push — still requires approval. What the rule protects against is losing work
+  you never saw; you cannot lose work you just wrote, merged, and verified. The
+  old blanket wording made the prescribed merge command self-contradictory, and
+  in an unattended run asking for that approval stops the entire loop on its
+  first iteration.
 - **Don't guess about parallel work.** If a branch or worktree might belong to
   other active work, leave it and say so.
 - **Prefer the reversible.** Use `git branch -d` (never `-D`); never

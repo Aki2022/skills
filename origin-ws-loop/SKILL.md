@@ -61,10 +61,16 @@ itself never has to wait.
    drift; stale inventory poisons every later selection.
 
    **Then reconstruct the review shelf from open PRs**, before selecting
-   anything: list the repository's open PRs and match them to workstreams (by
-   branch name, or by the `pr:` field where a workstream records one). Every
-   match starts this run already shelved, counts against the shelf cap, and is
-   never selected.
+   anything: list the repository's open PRs and match them to workstreams **by
+   branch name** (`gh pr list` reports `headRefName`; a shelved workstream always
+   still has its branch, because its PR is open). Every match starts this run
+   already shelved, counts against the shelf cap, and is never selected.
+
+   Match on the branch, not on a `pr:` field in the workstream: the PR number
+   only exists after the push that creates it, so recording it would need a
+   second commit and break `origin-close-session`'s one-self-consistent-commit
+   ordering. The branch name is known before any of that and is just as
+   decisive. The digest still carries the PR link for the human.
 
    This step exists because the shelf has no other durable home. A workstream
    parked at a review gate records that fact **on its own unmerged branch**, so

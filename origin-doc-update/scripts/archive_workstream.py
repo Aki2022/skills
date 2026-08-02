@@ -40,8 +40,27 @@ def main() -> None:
 
     content = source.read_text()
     completion = content.split("## Completion", 1)
-    if len(completion) != 2 or re.search(r"^- \[ \]", completion[1], re.MULTILINE):
-        print("Error: complete every workstream checklist item before archiving", file=sys.stderr)
+    # Two different problems, two different messages. Conflating them sent a
+    # reader hunting for unchecked boxes in a file that had no checklist at all
+    # — and validate_repo_docs.py passes without the section, so a hand-authored
+    # workstream only discovers the requirement here, at archive time.
+    if len(completion) != 2:
+        print(
+            "Error: this workstream has no '## Completion' section, so there is "
+            "nothing to verify before archiving. Add the section from "
+            "references/workstream.template.md and tick its items.",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+    unchecked = re.findall(r"^- \[ \] .*$", completion[1], re.MULTILINE)
+    if unchecked:
+        print(
+            "Error: complete every workstream checklist item before archiving. "
+            f"{len(unchecked)} still unchecked:",
+            file=sys.stderr,
+        )
+        for item in unchecked:
+            print(f"  {item}", file=sys.stderr)
         raise SystemExit(1)
 
     incomplete = [

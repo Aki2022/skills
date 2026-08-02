@@ -66,7 +66,10 @@ For each issue, complete one vertical slice:
 2. Define acceptance criteria and dependencies.
 3. Implement and test, preferring red-green-refactor where practical.
 4. Update the target guide in the same slice, before marking the issue complete.
-5. Update current status and next actions.
+5. Update current status and next actions. An issue's `status` must be exactly
+   one of `pending`, `in_progress`, `blocked`, `complete` — `validate_repo_docs.py`
+   rejects anything else, and plausible words like `done` are the usual way to
+   find that out the hard way.
 6. Continue automatically while inside the authorization envelope.
 7. Stop at the next human gate or any recorded stop condition.
 

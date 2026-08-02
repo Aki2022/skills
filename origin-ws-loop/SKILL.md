@@ -113,7 +113,8 @@ itself never has to wait.
 5. **Stop conditions.** Defaults, adjustable here: a maximum of 10 iterations,
    and a review shelf cap of 3 workstreams (see Stop discipline). On the
    **first run in a repository**, recommend a pilot cap of 2 iterations
-   instead — it proves workstream quality, permissions, and CD wiring cheaply
+   instead — a *recommendation*: a cap the human states explicitly wins, and
+   the run records that the pilot suggestion was overridden — it proves workstream quality, permissions, and CD wiring cheaply
    before committing tokens to a full unattended run. Do not add loop-level
    time/token/cost ceilings — each workstream's Authorization Envelope
    already owns its resource limits, and a second guardian invites
@@ -162,8 +163,14 @@ itself never has to wait.
    merging without a human.
 
    **The reviewer must be able to run the workstream's recorded quality gates,
-   not merely read the diff.** Give it a subagent type that has shell access
-   and tell it to execute the gates; if the runtime offers no such reviewer,
+   not merely read the diff, and must not disturb the working tree to do it.**
+   Give it a subagent type that has shell access, tell it to execute the gates,
+   and tell it to do so in its own checkout — `git worktree add` into a
+   temporary directory, or an equivalent isolated copy. A shell-capable
+   reviewer left to its own devices will `git checkout` the PR head in the
+   shared tree, which moves the branch the loop itself is standing on and can
+   leave behind a branch that squash-merge makes undeletable by `git branch
+   -d`. Grant the capability and bound it in the same breath; if the runtime offers no such reviewer,
    run the gates yourself and hand it the real output. A reviewer without a
    shell will not refuse — it will read what it can reach, reason about what
    the tests *would* do, and return a pass by inference. That verdict is then
@@ -212,6 +219,18 @@ survives:
 The shelf is bounded: at most 3 shelved workstreams (preflight-adjustable).
 Reaching the cap stops the loop — the human's review budget, not the queue,
 is the scarce resource, and one batched review beats ten interruptions.
+
+**Every shelved PR was verified alone.** Each one's gates ran against the
+default branch plus that one change, because that is the only state that
+existed when it was built. Three independently green PRs therefore say nothing
+about the state after all three land — and where a repository has no CI, the
+fallback to local gates means nothing re-checks them at merge time either. Say
+so in the digest's shelf table rather than presenting green PRs as ready: for
+each shelved PR record that its gate result is isolated, and make the next
+action a **combined** verification (merge them into one integration branch, or
+merge sequentially re-running the gates after each) rather than a bulk merge.
+Do not merge shelved PRs on the loop's own authority — they are shelved
+precisely because a human owns that decision.
 
 Also stop the entire loop when the queue is exhausted (no startable
 workstream outside the shelf) or the iteration limit is reached. On every
@@ -269,7 +288,8 @@ outcomes, never content copies:
 ```
 TLDR: <n> ws done, <s> on review shelf, <stopped why>, <k> improvements filed (<m> auto-promoted)
 | ws | outcome | PR |
-レビュー待ち: | ws | PR | 何を承認すると何が進むか |   ← shelf; omit when empty
+レビュー待ち: | ws | PR | 何を承認すると何が進むか | gate: isolated |   ← shelf; omit when empty
+                (2 本以上あるときは「統合後は未検証」と次のアクションに統合検証を明記)
 停止理由: <question + where it is persisted, or "queue empty" / "shelf cap" / "iteration limit">
 improvement: <filed issue ids, triage-pending marked>
 次のアクション: <single next step, e.g. "review the shelf PRs, then rerun /origin-ws-loop">

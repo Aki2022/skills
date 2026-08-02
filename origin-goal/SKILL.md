@@ -40,6 +40,19 @@ responsible for authorization, integration, budgets, and completion.
    or cut the next branch from it, and correct the record in the same slice. Do not
    create a parallel branch for resumed work, and do not resurrect a stale branch.
 
+   **A recorded branch that still exists but is stale — unmerged, behind the
+   default branch, its PR closed or absent — is also bookkeeping, not work in
+   progress.** Do not build on it, and do not invent a suffixed sibling
+   (`-2`), which is exactly the parallel branch this rule forbids. Instead:
+   salvage anything it holds that is not already on the default branch, cut
+   the next branch from the default branch under the workstream's own name,
+   and rewrite the `branch:` record to it in the same slice. Deleting the
+   stale branch is a separate, optional act that still needs the usual human
+   approval — leaving it in place is always legal, because the record no
+   longer points at it. If the salvage is not mechanical, because judging the
+   value or correctness of what the branch holds is part of it, that is a
+   question gate rather than a cleanup.
+
 ## 2. Complete preflight before execution
 
 Ask one question at a time, in dependency order. Inspect the repository first

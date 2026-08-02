@@ -66,7 +66,18 @@ absent). Say so, then go straight to Step 2.
 Invoke the **origin-git-cleanup** skill and follow its SKILL.md. Its Stage 1 survey now
 includes the doc edits from Step 1 as uncommitted changes, so its Stage 3 plan
 should propose committing code **and** docs together. Execute that integration
-plan autonomously, and finish on main, clean, and synced. If cleanup would
+plan autonomously, and finish on main, clean, and synced.
+
+**Under a gated merge policy, the finish line is different and must not be
+chased past.** When the workstream's envelope marks merge as human-gated, or
+the caller says the PR is not to be merged, closeout is complete once the work
+is committed, pushed, and the PR exists — with the PR still open and the
+branch still present. That is the finished state, not a partial one: do not
+merge to reach "clean on main", and do not delete the branch the open PR needs.
+Report the PR and stop. The tree being clean matters; the branch it is standing
+on does not have to be main.
+
+If cleanup would
 delete a branch, worktree, or ref **that this session did not create**, obtain
 confirmation for those deletion steps. Deleting the branch this session made and
 just merged is part of the merge (see origin-git-cleanup's deletion authority).

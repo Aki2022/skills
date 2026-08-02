@@ -60,10 +60,8 @@ alone is always safe; deleting the wrong thing is not.
   command and needs no extra approval. Deleting anything this run did not create
   — a pre-existing branch, someone else's worktree, a remote ref you did not
   push — still requires approval. What the rule protects against is losing work
-  you never saw; you cannot lose work you just wrote, merged, and verified. The
-  old blanket wording made the prescribed merge command self-contradictory, and
-  in an unattended run asking for that approval stops the entire loop on its
-  first iteration.
+  you never saw, which cannot describe work you just wrote, merged, and
+  verified.
 - **Don't guess about parallel work.** If a branch or worktree might belong to
   other active work, leave it and say so.
 - **Prefer the reversible.** Use `git branch -d` (never `-D`); never

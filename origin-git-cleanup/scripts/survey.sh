@@ -108,7 +108,19 @@ else
   behind="$(git rev-list --count "HEAD..$main_branch" 2>/dev/null || echo '?')"
   echo "commits ahead of $main_branch: $ahead"
   echo "commits behind $main_branch: $behind"
-  if git merge-base --is-ancestor HEAD "$main_branch" 2>/dev/null; then
+  # A branch with no commits of its own is an ancestor of main by definition,
+  # which made this report "MERGED — delete it" for a freshly cut branch whose
+  # work was still uncommitted in the working tree. That is the most dangerous
+  # thing this survey can say, and it is the NORMAL state for any workflow that
+  # edits files before surveying (origin-close-session prescribes exactly that
+  # order). Check for it before the ancestry test.
+  # Narrow: ONLY the dirty case is special. A clean branch with no commits of
+  # its own is genuinely indistinguishable from a fast-forward-merged one, and
+  # reporting it as unmerged would break the survey's most useful signal — so it
+  # falls through to the ancestry test below, exactly as before.
+  if [[ "$ahead" == "0" && -n "$(git status --porcelain 2>/dev/null)" ]]; then
+    echo "merge_state: NO COMMITS YET, working tree dirty — this branch holds uncommitted work. Do NOT delete it; commit first."
+  elif git merge-base --is-ancestor HEAD "$main_branch" 2>/dev/null; then
     echo "merge_state: MERGED into $main_branch (ancestry) — delete after switching to $main_branch"
   elif [[ -z "$(git diff "$main_branch"..HEAD 2>/dev/null)" ]]; then
     echo "merge_state: PATCH-EQUIVALENT to $main_branch (likely squash/cherry-pick merged) — verify via PR, then delete after switching to $main_branch"

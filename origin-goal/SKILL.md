@@ -65,6 +65,22 @@ responsible for authorization, integration, budgets, and completion.
    Record the generated name in `branch:` in the same slice, so the collision
    is resolved once rather than on every resume.
 
+   **Salvage means what the branch itself added, and nothing else.** A stale
+   branch is behind the default branch by definition, so `main..branch` presents
+   the _reversal_ of everything the default branch gained since the fork as
+   though the branch held it — measured once at 21 files and 474 deletions,
+   including files merged minutes earlier in the same run. Read the branch's own
+   commits instead (`git log main..branch`, `git show` each, or `git diff
+main...branch` with three dots), and take only those changes.
+
+   This one is worth a check rather than care, because the failure is silent:
+   the reverted work is _removed_, not conflicted, so nothing fails, tests that
+   never covered the deleted files still pass, and the digest reports success.
+   After salvaging and before committing, run `git diff --stat <default
+branch> -- .` over the salvaged tree and confirm every deletion is one you
+   meant. A deletion you cannot account for means the salvage took the whole
+   range: drop it and redo it from the branch's own commits.
+
 ## 2. Complete preflight before execution
 
 Ask one question at a time, in dependency order. Inspect the repository first

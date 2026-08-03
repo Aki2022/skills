@@ -95,11 +95,20 @@ alone is always safe; deleting the wrong thing is not.
 
 ## Stage 1 — Survey (read-only)
 
-Run the bundled snapshot script from the repo root. It only reads, never writes:
+Run the bundled snapshot script **naming the repository you are cleaning up**. It
+only reads, never writes:
 
 ```bash
-bash ~/.agents/skills/origin-git-cleanup/scripts/survey.sh
+bash ~/.agents/skills/origin-git-cleanup/scripts/survey.sh --repo <repo path>
 ```
+
+`--repo` is not optional bookkeeping. Without it the script surveys the current
+directory, and when this skill is reached through an orchestrator invoked
+_against_ a repository — `origin-ws-loop`, `origin-close-session` — the current
+directory is a **different** repository. That survey succeeds, reports the wrong
+repository's branches and worktrees, and those become the input to Stage 3's
+deletion plan. Check the `toplevel:` line in the output against the repository
+you meant before reading anything else.
 
 It reports: current branch, remote, root cleanliness, every worktree's branch /
 HEAD / dirty status, upstream ahead/behind, stashes, local and remote branches,
@@ -115,7 +124,7 @@ cross-checks origin-doc-update's issue `branch` fields against real git state so
 Stage 2 doesn't have to guess by name alone:
 
 ```bash
-python3 ~/.agents/skills/origin-git-cleanup/scripts/check_active_issue_branches.py
+python3 ~/.agents/skills/origin-git-cleanup/scripts/check_active_issue_branches.py <repo path>
 ```
 
 It reports which active issues' recorded branch is missing (a signal that

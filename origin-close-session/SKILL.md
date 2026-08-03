@@ -1,21 +1,13 @@
 ---
 name: origin-close-session
 description: >-
-  End-of-work closeout for a repository: bring BOTH documentation and version
-  control to a clean, next-task-ready state in one pass. Runs origin-doc-update first
-  (update the active workstream/issue, classify guide impact, land any docs/
-  changes in the working tree) and then origin-git-cleanup (commit — including those
-  doc edits — merge the finished branch into main, sync, and remove stale
-  branches/worktrees). Use this whenever the user signals a chunk of work is
-  finished and wants to tidy up, e.g. "店じまい", "後片付け", "片付けて",
-  "クリーンに", "整理して", "実装完了したので整理", "wrap up", "close out",
-  "get back to a clean main", or right after a PR is merged. Key signals:
-  "店じまい", "片付けて", "後片付け", "クリーンに", "掃除", "整理", "wrap up",
-  "closeout", "ブランチを消して", "全部コミットした？", "docsも更新した？",
-  "きれいになった？". Prefer this over invoking origin-git-cleanup alone at end of task,
-  because origin-git-cleanup by itself skips the documentation layer and the doc edits
-  miss the commit. Do NOT use for mid-task git operations (rebase, cherry-pick,
-  status-only checks) or for docs edits with no intent to clean up git.
+  Close out a finished repository task by optionally running origin-permission-audit,
+  then origin-doc-update, then origin-git-cleanup. Commit/merge/sync the finished
+  work and remove only approved stale branches and worktrees. Use for "店じまい",
+  "後片付け", "片付けて", "クリーンに", "整理", "wrap up", "close out",
+  "get back to a clean main", or after a PR is merged. Prefer this over
+  origin-git-cleanup alone when docs/ governance exists. Do not use for mid-task
+  rebase, cherry-pick, status-only checks, or docs edits without cleanup intent.
 ---
 
 # origin-close-session
@@ -26,19 +18,26 @@ together, in that order.** Doing only origin-git-cleanup (the common habit) leav
 docs stale, and doing docs after the commit means the doc edits miss the commit
 that origin-git-cleanup makes. origin-close-session guarantees the order so neither happens.
 
-This skill owns no new destructive behavior of its own. It orchestrates two
-existing skills, each of which keeps its own safety contract — most importantly
-origin-git-cleanup's **survey → propose plan → execute integration → verify** flow.
+This skill owns no new destructive behavior of its own. It orchestrates an optional
+permission-audit preflight and two closeout phases, each of which keeps its own
+safety contract — most importantly origin-git-cleanup's
+**survey → propose plan → execute integration → verify** flow.
 Commits, pushes, and green PR merges are autonomous; only destructive cleanup
 (branch/worktree/ref deletion or a forced operation) requires confirmation.
 
 ## The order, and why it matters
 
-1. **origin-doc-update first — edit, don't commit.** Update the active
+0. **origin-permission-audit first, when applicable — decide, act, verify, _then_
+   let Step 1 document it.** If this session granted elevated access, invoke
+   `origin-permission-audit` before writing docs about it. That skill owns the
+   discovery, classification, revocation, and verification contract.
+1. **origin-doc-update next — edit, don't commit.** Update the active
    workstream/issue, classify guide impact (required vs none), and make any
-   `docs/` edits in the working tree. Leave them uncommitted. origin-git-cleanup will
-   pick them up as part of the same commit in the next phase.
-2. **origin-git-cleanup second — commit everything, then clean.** It surveys the repo
+   `docs/` edits in the working tree — including the outcome of Step 0, if it
+   ran. `origin-doc-update` owns ADR recording. Leave the edits uncommitted;
+   origin-git-cleanup will pick them up as part of
+   the same commit in the next phase.
+2. **origin-git-cleanup last — commit everything, then clean.** It surveys the repo
    (now seeing the doc edits as uncommitted changes), proposes a single combined
    plan (commit incl. docs → merge → sync main → delete merged branches/
    worktrees), executes the integration steps, and verifies the tree ends clean
@@ -46,27 +45,42 @@ Commits, pushes, and green PR merges are autonomous; only destructive cleanup
 
 If these ran in the opposite order, origin-git-cleanup would commit and merge the code,
 and the doc edits would land in a separate afterthought commit — or get
-forgotten. First-docs-then-git keeps one reviewable, self-consistent commit.
+forgotten. First-permissions-then-docs-then-git keeps one reviewable,
+self-consistent commit whose docs match what actually happened to any access
+this session was granted.
 
 ## How to run it
+
+### Step 0 — origin-permission-audit (only if this session granted elevated access)
+
+Skip this step, and say so, when nothing in this session (or a resumed session
+whose history you can see) required elevated access beyond the repository's
+committed baseline. When a grant exists, invoke `origin-permission-audit` and
+follow its discovery → classify → revoke → verify → report workflow. Pass its
+per-grant report to Step 1; do not duplicate its permission logic in this skill.
 
 ### Step 1 — origin-doc-update
 
 Invoke the **origin-doc-update** skill and follow its SKILL.md against the current work.
-Concretely: read `docs/00_index.md` if present, update the active
-workstream/issue with what changed, and update `docs/guides/` in the same slice
-when implemented behavior changed. **Stop before committing** — origin-close-session commits
-via origin-git-cleanup in Step 2.
+Concretely: read `docs/00_index.md` if present, pass the Step 0 report through,
+and invoke `origin-doc-update` for the active workstream/issue. It owns ADR
+recording, guide impact, and current-document updates. **Stop before committing**
+— origin-close-session commits via origin-git-cleanup in Step 2.
 
 Skip this step only when the repo has no `docs/` governance (`docs/00_index.md`
 absent). Say so, then go straight to Step 2.
 
 ### Step 2 — origin-git-cleanup
 
-Invoke the **origin-git-cleanup** skill and follow its SKILL.md. Its Stage 1 survey now
-includes the doc edits from Step 1 as uncommitted changes, so its Stage 3 plan
-should propose committing code **and** docs together. Execute that integration
-plan autonomously, and finish on main, clean, and synced.
+Invoke the **origin-git-cleanup** skill and follow its SKILL.md, **passing it the
+repository being closed out**. When this closeout was reached through an
+orchestrator, the current directory is that orchestrator's own repository, not
+the target, and a survey that defaults to the current directory reports the wrong
+repository into a deletion plan.
+
+Its Stage 1 survey now includes the doc edits from Step 1 as uncommitted changes,
+so its Stage 3 plan should propose committing code **and** docs together. Execute
+that integration plan autonomously, and finish on main, clean, and synced.
 
 **Under a gated merge policy, the finish line is different and must not be
 chased past.** When the workstream's envelope marks merge as human-gated, or
@@ -84,7 +98,10 @@ just merged is part of the merge (see origin-git-cleanup's deletion authority).
 
 The current branch you are standing on is the usual cleanup target — origin-git-cleanup
 now handles switching to main before deleting it (local and remote). Don't
-short-circuit that; let origin-git-cleanup's stages run.
+short-circuit that; let origin-git-cleanup's stages run. If the current session
+worktree itself is an approved clean deletion target, origin-git-cleanup must
+run `cd <safe-worktree> && git worktree remove <target-worktree>` in one shell
+invocation so the removal process is no longer inside the directory it removes.
 
 ## Destructive-cleanup approval principle
 
@@ -108,6 +125,6 @@ present only those deletion targets and obtain one confirmation before acting.
 Same end state origin-git-cleanup verifies, plus docs current:
 
 - active workstream/issue reflects the finished work; guides updated where
-  behavior changed,
+  behavior changed; qualifying decisions are recorded and linked in `docs/adrs/`,
 - working tree clean, root on `main`, `main == origin/main`,
 - only intentional branches/worktrees remain, each with a stated disposition.

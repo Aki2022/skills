@@ -29,6 +29,7 @@ def main():
     print(f"Initializing docs scaffold in: {repo}")
 
     for subdir in [
+        "docs/adrs",
         "docs/specs",
         "docs/issues/archive",
         "docs/workstreams/archive",
@@ -55,7 +56,7 @@ def main():
             content = content.replace("YYYY-MM-DD", today, 1)
             # Remove routing examples so the generated index starts clean.
             content = re.sub(
-                r"^.*(?:WS-YYYYMMDD-short-slug|ISSUE-YYYYMMDD-short-slug).*$\n?",
+                r"^.*(?:WS-YYYYMMDD-short-slug|ISSUE-YYYYMMDD-short-slug|ADR-YYYYMMDD-short-slug).*$\n?",
                 "",
                 content,
                 flags=re.MULTILINE,

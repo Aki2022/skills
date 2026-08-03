@@ -180,6 +180,7 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
     warnings: list[str] = []
 
     required_dirs = (
+        "docs/adrs",
         "docs/specs",
         "docs/issues",
         "docs/issues/archive",
@@ -229,6 +230,34 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
             elif fm and as_text(fm.get("status", "")) not in ("archived", "archive", ""):
                 warnings.append(
                     f"{path.relative_to(root)}: status is '{fm.get('status')}', expected 'archived'"
+                )
+
+    adrs_dir = root / "docs/adrs"
+    if adrs_dir.is_dir():
+        valid_statuses = {"proposed", "accepted", "rejected", "superseded"}
+        for path in sorted(adrs_dir.glob("*.md")):
+            rel = str(path.relative_to(root))
+            fm = parse_front_matter(path)
+            if fm is None:
+                errors.append(f"{rel}: broken front matter")
+                continue
+            adr_id = as_text(fm.get("id", ""))
+            if not adr_id.startswith("ADR-"):
+                errors.append(f"{rel}: id must start with ADR-")
+            scope = as_text(fm.get("scope", ""))
+            if scope not in ("spec", "development"):
+                errors.append(f"{rel}: scope must be 'spec' or 'development'")
+            status = as_text(fm.get("status", ""))
+            if status not in valid_statuses:
+                errors.append(
+                    f"{rel}: status must be proposed, accepted, rejected, or superseded"
+                )
+            if status == "superseded" and not as_text(fm.get("superseded_by", "")):
+                errors.append(f"{rel}: superseded_by is required when status is superseded")
+            for key in flow_style_keys(fm):
+                errors.append(
+                    f"{rel}: front matter '{key}' opens a bracket list on the line below the key; "
+                    "rewrite it in block style (one '- item' per line)"
                 )
 
     branch_owners: dict[str, list[str]] = {}

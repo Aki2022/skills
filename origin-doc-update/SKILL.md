@@ -1,28 +1,29 @@
 ---
 name: origin-doc-update
-description: Keep repository documentation aligned with implementation during development. Use when starting or resuming features, bugs, refactors, API/schema/config/command changes, docs work, workstream or issue creation, unfinished work, or docs reorganization. Trigger especially when the user asks to create a workstream, when implemented behavior may require docs/guides updates, or when docs/00_index.md exists. Do not use for pure operational checks, log inspection, status reporting, or read-only explanations with no behavior or documentation change.
+description: Keep repository documentation aligned with implementation during development, including recording architectural and implementation decisions as ADRs. Use when starting or resuming features, bugs, refactors, API/schema/config/command changes, docs work, workstream or issue creation, unfinished work, docs reorganization, or a hard-to-reverse or surprising design/development decision. Trigger especially when the user asks to create a workstream, when implemented behavior may require docs/guides updates, when an ADR should be created or superseded, or when docs/00_index.md exists. Do not use for pure operational checks, log inspection, status reporting, or read-only explanations with no behavior or documentation change.
 ---
 
 # origin-doc-update
 
 Treat `docs/` as persistent AI context. Keep each fact in one layer only.
 
-| Path                | Owns                                            |
-| ------------------- | ----------------------------------------------- |
-| `docs/00_index.md`  | Small routing index; read first                 |
-| `docs/specs/`       | Intent, requirements, and design policy         |
-| `docs/workstreams/` | Multi-issue autonomous work between human gates |
-| `docs/issues/`      | Standalone one-off work only                    |
-| `docs/guides/`      | Current implemented behavior; source of truth   |
-| `*/archive/`        | Historical work context, not current truth      |
+| Path                | Owns                                                                           |
+| ------------------- | ------------------------------------------------------------------------------ |
+| `docs/00_index.md`  | Small routing index; read first                                                |
+| `docs/specs/`       | Intent, requirements, and design policy                                        |
+| `docs/workstreams/` | Multi-issue autonomous work between human gates                                |
+| `docs/issues/`      | Standalone one-off work only                                                   |
+| `docs/guides/`      | Current implemented behavior; source of truth                                  |
+| `docs/adrs/`        | Decision rationale, alternatives, and consequences; historical decision record |
+| `*/archive/`        | Historical work context, not current truth                                     |
 
-Do not copy implementation history into guides or current behavior into workstreams. Link instead.
+Do not copy implementation history into guides or current behavior into workstreams. Keep decision rationale in an ADR and link to it from the relevant spec, workstream/issue, or guide.
 
 ## Start every task
 
 1. Read `docs/00_index.md` if present.
 2. Read the active workstream or issue.
-3. Read only its related specs and guides.
+3. Read only its related specs, guides, and ADRs when present.
 4. Choose one work unit:
    - Use a **workstream** when multiple vertical-slice issues can run under the same authorization envelope until the same next human gate.
    - Use a **standalone issue** for one bounded change, an unrelated blocker, or work with an independent lifecycle.
@@ -50,7 +51,20 @@ Do not create the file immediately when the user asks for a workstream. First es
 6. State that `origin-doc-update` is pausing creation until these boundaries are confirmed.
 7. After confirmation, create from `references/workstream.template.md` or run `create_workstream.py` with the confirmed boundary fields.
 
-Record only decisions that are hard to reverse or surprising without context. Do not add a separate glossary or ADR unless the repository already uses one and the decision belongs there.
+Record only decisions that are hard to reverse or surprising without context. Do not create ADRs for routine implementation choices, temporary investigation notes, or ordinary history already captured by the workstream/issue.
+
+Do not audit or revoke IAM roles, API scopes, bucket bindings, or other session-granted access here. `origin-permission-audit` owns that lifecycle; `origin-close-session` invokes it before this skill when applicable and passes the verified outcome into the documentation slice.
+
+## Record an ADR
+
+Use the repository-level `docs/adrs/` directory for both kinds of decision:
+
+- `scope: spec` — intent, requirements, architecture, design policy, security posture, or other decisions that change what the system is meant to be. Update the related `docs/specs/` document with the current policy and link back to the ADR.
+- `scope: development` — implementation, integration, migration, operational, dependency, or tooling tradeoffs made while delivering a workstream or issue. Link the ADR from that work unit and update a guide when the resulting behavior is user-, operator-, integrator-, or agent-visible.
+
+Create the record when the decision is made, not only at session close. Use `references/adr.template.md` or `scripts/create_adr.py <slug> --scope <spec|development> --status <proposed|accepted|rejected>`. The generated filename is `ADR-YYYYMMDD-<slug>.md`. Keep accepted and rejected records in `docs/adrs/`; when a decision changes, create a new ADR and mark the old one `superseded` with a link instead of rewriting its decision history.
+
+An ADR must state the context/problem, the decision, alternatives considered, consequences, and links to its source workstream/issue and affected specs/guides. Use `status: proposed` while a human gate is pending and `status: accepted` or `rejected` after the decision is settled. Record only the rationale here; current policy belongs in specs and current behavior belongs in guides.
 
 ## Improvement issues
 
@@ -64,14 +78,16 @@ For each issue, complete one vertical slice:
    - `required`: name every guide that must describe the resulting behavior.
    - `none`: write a concrete reason, such as internal refactor with unchanged behavior.
 2. Define acceptance criteria and dependencies.
-3. Implement and test, preferring red-green-refactor where practical.
-4. Update the target guide in the same slice, before marking the issue complete.
-5. Update current status and next actions. An issue's `status` must be exactly
+3. Capture each qualifying decision in `docs/adrs/` during the slice and link it from the issue/workstream. Mark a human-gated decision as `proposed` until the gate is resolved.
+4. Implement and test, preferring red-green-refactor where practical.
+5. Update the target guide in the same slice, before marking the issue complete.
+6. Update current status and next actions. An issue's `status` must be exactly
    one of `pending`, `in_progress`, `blocked`, `complete` — `validate_repo_docs.py`
    rejects anything else, and plausible words like `done` are the usual way to
    find that out the hard way.
-6. Continue automatically while inside the authorization envelope.
-7. Stop at the next human gate or any recorded stop condition.
+
+7. Continue automatically while inside the authorization envelope.
+8. Stop at the next human gate or any recorded stop condition.
 
 Never defer all guide work to workstream close. A guide is part of the definition of done for the issue that changed behavior.
 
@@ -90,6 +106,7 @@ Write guides as current truth, not as a changelog. Include what the system does,
 ## Update specs and history
 
 - Update a spec only when intent, requirements, architecture, or design policy changes.
+- When that change follows a qualifying decision, update the related spec with the current policy and link the ADR; do not duplicate the full rationale in the spec.
 - Keep chronological investigation and abandoned approaches in the active work unit, then archive it.
 - Keep `docs/00_index.md` as links plus one-line routing descriptions. Do not add a second progress dashboard unless ordering across many workstreams cannot fit in the index.
 
@@ -100,11 +117,12 @@ Before archive:
 1. Verify every issue acceptance criterion.
 2. Verify every issue has `guide_impact: required` or `none`.
 3. Verify required guides describe the implemented behavior and reference the source work.
-4. Update specs if direction changed.
-5. Reach the recorded human gate or record why the workstream stopped.
-6. Run `validate_repo_docs.py`.
-7. Archive the work unit and update `docs/00_index.md`.
-8. Hand merged branch cleanup to `origin-git-cleanup`.
+4. Verify qualifying decisions have an ADR in `docs/adrs/`, with a settled status or an explicit proposed human gate, and that related specs/guides/work units link to it.
+5. Update specs if direction changed.
+6. Reach the recorded human gate or record why the workstream stopped.
+7. Run `validate_repo_docs.py`.
+8. Archive the work unit and update `docs/00_index.md`.
+9. Hand merged branch cleanup to `origin-git-cleanup`.
 
 ## Resume and onboard
 
@@ -130,6 +148,7 @@ Templates in `references/`:
 - `workstream.template.md`
 - `issue.template.md`
 - `guide.template.md`
+- `adr.template.md`
 - `spec.template.md`
 
 Scripts in `scripts/`:
@@ -141,6 +160,7 @@ Scripts in `scripts/`:
   The guide decision is required, as it is for `create_workstream.py`: name the guide
   this issue must update, or state why it changes no implemented behavior. Without it
   the generated file cannot pass `validate_repo_docs.py`.
+- `create_adr.py <slug> --scope <spec|development> [--status <proposed|accepted|rejected>] [--title <title>] [--repo <repo>]`
 - `archive_workstream.py <workstream> [--repo <repo>]`
 - `archive_issue.py <issue> [--repo <repo>]`
 - `validate_repo_docs.py [repo]`

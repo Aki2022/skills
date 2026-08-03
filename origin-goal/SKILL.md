@@ -53,6 +53,18 @@ responsible for authorization, integration, budgets, and completion.
    value or correctness of what the branch holds is part of it, that is a
    question gate rather than a cleanup.
 
+   **The stale branch usually already holds the workstream's own name**, so
+   cutting the next branch under that name fails outright
+   (`fatal: a branch named ... already exists`). A name collision that actually
+   exists is the single case where a suffixed branch is allowed, and the suffix
+   must be deterministic — `<ws-id>-<YYYYMMDD>`, never a counter like `-2`,
+   because a name that changes between runs breaks shelf matching. Shelf
+   matching is by prefix, so a dated sibling still matches. Nothing else is
+   relaxed: still do not build on the stale branch, still treat its deletion as
+   a human-approved act, and still leave it in place as the legal default.
+   Record the generated name in `branch:` in the same slice, so the collision
+   is resolved once rather than on every resume.
+
 ## 2. Complete preflight before execution
 
 Ask one question at a time, in dependency order. Inspect the repository first

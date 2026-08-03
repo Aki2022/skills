@@ -134,6 +134,13 @@ It reports: current branch, remote, root cleanliness, every worktree's branch /
 HEAD / dirty status, upstream ahead/behind, stashes, local and remote branches,
 branches merged vs not merged into main, recent history, and open PRs.
 
+**Run it every time you reach this stage, and say so when you did not.** Reached
+once per iteration of a longer run, this survey is cheap next to what depends on
+it: Stage 2's classification and Stage 3's deletion plan have no other source of
+truth. Substituting a few ad-hoc `git` commands leaves those decisions resting on
+a partial picture, and nothing in the resulting report distinguishes that from a
+full survey unless the report says which iterations skipped it.
+
 If the script isn't available, gather the same picture manually with
 `git status`, `git branch -vv`, `git branch -a`, `git worktree list --porcelain`,
 `git stash list`, `git log --graph --oneline -15`,

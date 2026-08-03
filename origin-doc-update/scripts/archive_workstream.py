@@ -13,10 +13,27 @@ from index_entries import remove_index_entry
 from validate_repo_docs import parse_workstream_issue_blocks, validate_repo
 
 
+# `- [ ] x` was the only spelling this matched, so `- [] x`, an indented
+# sub-item, `* [ ] x` and a bare `- [ ]` all counted as done. The gate's own
+# message claims every item is complete, which it could not measure.
+UNCHECKED_BOX = re.compile(r"^[ \t]*[-*+][ \t]+\[[ \t]*\].*$", re.MULTILINE)
+
+
 def update_scalar(content: str, field: str, value: str) -> str:
+    """Set a front-matter scalar, raising when the field is not there to set.
+
+    Substituting nothing used to be silent, so a file with no `status:` line
+    moved into archive/ having never been marked archived — and the validator
+    accepts an empty status under archive/, so nothing downstream disagreed.
+    """
     pattern = rf"(^---\n.*?)(^{re.escape(field)}:[ \t]*).*?([ \t]*\n)(.*?^---)"
     replacement = rf"\g<1>\g<2>{value}\g<3>\g<4>"
-    return re.sub(pattern, replacement, content, count=1, flags=re.DOTALL | re.MULTILINE)
+    updated, count = re.subn(
+        pattern, replacement, content, count=1, flags=re.DOTALL | re.MULTILINE
+    )
+    if not count:
+        raise KeyError(field)
+    return updated
 
 
 def main() -> None:
@@ -52,7 +69,7 @@ def main() -> None:
             file=sys.stderr,
         )
         raise SystemExit(1)
-    unchecked = re.findall(r"^- \[ \] .*$", completion[1], re.MULTILINE)
+    unchecked = UNCHECKED_BOX.findall(completion[1])
     if unchecked:
         print(
             "Error: complete every workstream checklist item before archiving. "
@@ -91,8 +108,16 @@ def main() -> None:
         raise SystemExit(1)
 
     today = date.today().isoformat()
-    content = update_scalar(content, "status", "archived")
-    content = update_scalar(content, "updated_at", today)
+    try:
+        content = update_scalar(content, "status", "archived")
+        content = update_scalar(content, "updated_at", today)
+    except KeyError as missing:
+        print(
+            f"Error: front matter has no '{missing.args[0]}:' field to update, so archiving "
+            "would move the file without recording that it was archived. Add the field first.",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
     source.write_text(content)
     shutil.move(str(source), str(destination))
 

@@ -447,5 +447,280 @@ updated_at: 2026-07-29
         self.assertEqual(offenders, [], "front matter values must not carry inline comments")
 
 
+
+class SilentPassTest(ValidateRepoDocsV2Test):
+    """A check that cannot fail is worse than no check: it reports success."""
+
+    WS_HEADER = '---\nschema_version: 2\nid: WS-20260803-example\nstatus: active\ncreated_at: 2026-08-03\nupdated_at: 2026-08-03\nbranch: ""\npr: ""\nhuman_boundary_confirmed_at: 2026-08-03\nnext_human_gate: none\nrelated_specs: []\nrelated_guides: []\n---\n\n# Example\n\n## Authorization Envelope\n\nx\n\n## Human Gates\n\nx\n\n## Issue Queue\n'
+
+    def write_ws(self, root, body, name="WS-20260803-example.md"):
+        (root / "docs/workstreams" / name).write_text(self.WS_HEADER + body)
+
+    def test_a_workstream_without_schema_version_is_not_silently_exempt(self):
+        root = self.make_repo()
+        (root / "docs/workstreams/WS-20260803-noschema.md").write_text(
+            "---\nid: WS-20260803-noschema\nstatus: active\n---\n\n# No envelope, no gates\n"
+        )
+
+        errors, _warnings = MODULE.validate_repo(root)
+
+        self.assertTrue(
+            any("schema_version" in error for error in errors),
+            "an unversioned workstream skipped the entire contract and passed",
+        )
+
+    def test_an_issue_without_schema_version_is_not_silently_exempt(self):
+        root = self.make_repo()
+        (root / "docs/issues/ISSUE-20260803-noschema.md").write_text(
+            "---\nid: ISSUE-20260803-noschema\nstatus: active\n---\n\n# No guide impact\n"
+        )
+
+        errors, _warnings = MODULE.validate_repo(root)
+
+        self.assertTrue(any("schema_version" in error for error in errors))
+
+    def test_an_issue_in_the_queue_table_needs_a_block(self):
+        root = self.make_repo()
+        self.write_ws(
+            root,
+            """
+| Issue | Status |
+| --- | --- |
+| ISSUE-01-done | complete |
+| ISSUE-02-still-open | pending |
+
+### ISSUE-01-done
+
+- status: complete
+- depends_on: []
+- guide_impact: none
+- related_guides: []
+- guide_impact_reason: x
+""",
+        )
+
+        errors, _warnings = MODULE.validate_repo(root)
+
+        self.assertTrue(
+            any("ISSUE-02-still-open" in error for error in errors),
+            "an issue listed in the queue table with no block was invisible to every gate",
+        )
+
+    def test_a_block_missing_from_the_queue_table_is_reported(self):
+        root = self.make_repo()
+        self.write_ws(
+            root,
+            """
+| Issue | Status |
+| --- | --- |
+| ISSUE-01-done | complete |
+
+### ISSUE-01-done
+
+- status: complete
+- depends_on: []
+- guide_impact: none
+- related_guides: []
+- guide_impact_reason: x
+
+### ISSUE-02-orphan
+
+- status: pending
+- depends_on: []
+- guide_impact: none
+- related_guides: []
+- guide_impact_reason: x
+""",
+        )
+
+        errors, _warnings = MODULE.validate_repo(root)
+
+        self.assertTrue(any("ISSUE-02-orphan" in error for error in errors))
+
+    def test_a_duplicate_id_is_reported_rather_than_silently_shadowed(self):
+        root = self.make_repo()
+        for directory in ("docs/guides", "docs/guides/archive"):
+            (root / directory).mkdir(parents=True, exist_ok=True)
+            (root / directory / "GUIDE-dup.md").write_text(
+                "---\nid: GUIDE-dup\nstatus: active\ncreated_at: 2026-08-03\n"
+                "updated_at: 2026-08-03\nsource_workstreams: []\nsource_issues: []\n---\n\n# Dup\n"
+            )
+
+        errors, _warnings = MODULE.validate_repo(root)
+
+        self.assertTrue(
+            any("GUIDE-dup" in error and "duplicate" in error.lower() for error in errors)
+        )
+
+
+class ArchiveGateTest(ValidateRepoDocsV2Test):
+    """An archive gate that cannot see unfinished work reports success on it.
+
+    Every fixture here must be valid apart from the one thing under test —
+    otherwise the script exits non-zero for an unrelated reason and the test
+    passes without exercising the gate at all.
+    """
+
+    ARCHIVE_WS = Path(__file__).resolve().parents[1] / "archive_workstream.py"
+    ARCHIVE_ISSUE = Path(__file__).resolve().parents[1] / "archive_issue.py"
+
+    WS_BODY = """
+# Example
+
+## Authorization Envelope
+
+x
+
+## Human Gates
+
+x
+
+## Issue Queue
+
+| Issue | Status |
+| --- | --- |
+| ISSUE-01-a | complete |
+
+### ISSUE-01-a
+
+- status: complete
+- depends_on: []
+- guide_impact: none
+- related_guides: []
+- guide_impact_reason: x
+
+## Completion
+
+"""
+
+    def run_script(self, script, *args):
+        return subprocess.run(
+            [sys.executable, str(script), *args], capture_output=True, text=True
+        )
+
+    def write_ws(self, root, completion, ws_id="WS-20260803-boxes", status_line="status: active\n"):
+        (root / "docs/workstreams" / f"{ws_id}.md").write_text(
+            "---\nschema_version: 2\n"
+            f"id: {ws_id}\n" + status_line +
+            "created_at: 2026-08-03\nupdated_at: 2026-08-03\n"
+            'branch: ""\npr: ""\n'
+            "human_boundary_confirmed_at: 2026-08-03\nnext_human_gate: none\n"
+            "related_specs: []\nrelated_guides: []\n---\n"
+            + self.WS_BODY
+            + completion
+        )
+        (root / "docs/00_index.md").write_text(
+            "---\nupdated_at: 2026-08-03\ncurrent_focus: x\n---\n\n# 00 Index\n\n"
+            f"- [{ws_id}](workstreams/{ws_id}.md)\n"
+        )
+
+    def assert_fixture_is_otherwise_valid(self, root):
+        errors, _warnings = MODULE.validate_repo(root)
+        self.assertEqual(
+            errors, [], "fixture is invalid for an unrelated reason; the test would pass vacuously"
+        )
+
+    def test_unchecked_boxes_in_other_spellings_still_block_archiving(self):
+        for label, box in (
+            ("canonical", "- [ ] item"),
+            ("no inner space", "- [] item"),
+            ("indented", "  - [ ] item"),
+            ("asterisk bullet", "* [ ] item"),
+            ("no trailing text", "- [ ]"),
+        ):
+            with self.subTest(label):
+                root = self.make_repo()
+                self.write_ws(root, "- [x] done\n" + box + "\n")
+                self.assert_fixture_is_otherwise_valid(root)
+
+                result = self.run_script(
+                    self.ARCHIVE_WS, "WS-20260803-boxes", "--repo", str(root)
+                )
+
+                self.assertNotEqual(
+                    result.returncode, 0, f"{label} archived with work unchecked"
+                )
+                self.assertIn(
+                    "checklist",
+                    (result.stdout + result.stderr).lower(),
+                    f"{label} was blocked, but not by the checklist gate",
+                )
+
+    def test_a_fully_checked_workstream_still_archives(self):
+        root = self.make_repo()
+        self.write_ws(root, "- [x] done\n- [X] also done\n")
+        self.assert_fixture_is_otherwise_valid(root)
+
+        result = self.run_script(
+            self.ARCHIVE_WS, "WS-20260803-boxes", "--repo", str(root)
+        )
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_an_unstarted_issue_does_not_archive(self):
+        root = self.make_repo()
+        (root / "docs/issues/ISSUE-20260803-unstarted.md").write_text(
+            "---\nschema_version: 2\nid: ISSUE-20260803-unstarted\nstatus: active\n"
+            "created_at: 2026-08-03\nupdated_at: 2026-08-03\nbranch: main\n"
+            "guide_impact: none\nguide_impact_reason: x\nrelated_guides: []\n---\n\n"
+            "# Unstarted\n\n## Completion\n\n- [ ] not done yet\n"
+        )
+        (root / "docs/00_index.md").write_text(
+            "---\nupdated_at: 2026-08-03\ncurrent_focus: x\n---\n\n# 00 Index\n\n"
+            "- [ISSUE-20260803-unstarted](issues/ISSUE-20260803-unstarted.md)\n"
+        )
+        self.assert_fixture_is_otherwise_valid(root)
+
+        result = self.run_script(
+            self.ARCHIVE_ISSUE, "ISSUE-20260803-unstarted.md", "--repo", str(root)
+        )
+
+        self.assertNotEqual(result.returncode, 0, "an unstarted issue archived cleanly")
+        self.assertIn("checklist", (result.stdout + result.stderr).lower())
+
+    def test_archiving_reports_a_status_it_could_not_set(self):
+        root = self.make_repo()
+        self.write_ws(root, "- [x] done\n", status_line="")
+        # No `status:` line at all: update_scalar substitutes nothing, so the file
+        # would move into archive/ having never been marked archived.
+        result = self.run_script(
+            self.ARCHIVE_WS, "WS-20260803-boxes", "--repo", str(root)
+        )
+
+        self.assertNotEqual(
+            result.returncode, 0, "archived without ever marking the file archived"
+        )
+        self.assertIn("status", (result.stdout + result.stderr).lower())
+
+
+class ValidatorReportsItsTargetTest(unittest.TestCase):
+    SCRIPT = Path(__file__).resolve().parents[1] / "validate_repo_docs.py"
+
+    def test_the_resolved_repository_is_printed(self):
+        root = Path(tempfile.mkdtemp())
+        for path in (
+            "docs/adrs",
+            "docs/specs",
+            "docs/issues/archive",
+            "docs/workstreams/archive",
+            "docs/guides",
+        ):
+            (root / path).mkdir(parents=True, exist_ok=True)
+        (root / "docs/00_index.md").write_text(
+            "---\nupdated_at: 2026-08-03\ncurrent_focus: x\n---\n\n# 00 Index\n"
+        )
+
+        result = subprocess.run(
+            [sys.executable, str(self.SCRIPT), str(root)],
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertIn(
+            str(root.resolve()),
+            result.stdout,
+            "the validator never said which repository it read",
+        )
+
 if __name__ == "__main__":
     unittest.main()

@@ -120,7 +120,10 @@ Before archive:
 4. Verify qualifying decisions have an ADR in `docs/adrs/`, with a settled status or an explicit proposed human gate, and that related specs/guides/work units link to it.
 5. Update specs if direction changed.
 6. Reach the recorded human gate or record why the workstream stopped.
-7. Run `validate_repo_docs.py`.
+7. Run `validate_repo_docs.py <repo path>`. Name the repository rather than
+   relying on the current directory: reached through an orchestrator, the current
+   directory is a different repository, whose docs would validate clean and be
+   reported as this one's result. Check the `validated:` line it prints.
 8. Archive the work unit and update `docs/00_index.md`.
 9. Hand merged branch cleanup to `origin-git-cleanup`.
 
@@ -163,6 +166,6 @@ Scripts in `scripts/`:
 - `create_adr.py <slug> --scope <spec|development> [--status <proposed|accepted|rejected>] [--title <title>] [--repo <repo>]`
 - `archive_workstream.py <workstream> [--repo <repo>]`
 - `archive_issue.py <issue> [--repo <repo>]`
-- `validate_repo_docs.py [repo]`
+- `validate_repo_docs.py <repo>` (prints the repository it validated)
 
 Read the matching template before creating a file manually. Keep legacy archives in place; promote useful current knowledge into a guide or spec instead of renaming history.

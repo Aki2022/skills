@@ -174,6 +174,26 @@ def parse_workstream_issue_blocks(content: str) -> list[tuple[str, dict[str, str
     return blocks
 
 
+def parse_issue_queue_table_ids(content: str) -> set[str]:
+    """Read ISSUE-* ids out of the Issue Queue markdown table."""
+    section = re.search(
+        r"^## Issue Queue\s*$(.*?)(?=^## |\Z)", content, re.MULTILINE | re.DOTALL
+    )
+    if not section:
+        return set()
+    ids: set[str] = set()
+    for line in section.group(1).splitlines():
+        if not line.lstrip().startswith("|"):
+            continue
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if not cells:
+            continue
+        match = re.search(r"\b(ISSUE-[A-Za-z0-9-]+)", cells[0])
+        if match:
+            ids.add(match.group(1))
+    return ids
+
+
 def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
     root = Path(repo).resolve()
     errors: list[str] = []
@@ -208,6 +228,18 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
         if fm:
             doc_id = as_text(fm.get("id", ""))
             if doc_id:
+                # Overwriting on collision let an archived namesake win, because
+                # sorted() puts `archive/` after the live file — so a later
+                # lookup checked the archived copy and reported on the wrong
+                # document. Prefer the live one and say the id is duplicated.
+                previous = id_locations.get(doc_id)
+                if previous is not None:
+                    errors.append(
+                        f"{path.relative_to(root)}: duplicate id '{doc_id}', also in "
+                        f"{previous.relative_to(root)}"
+                    )
+                    if "archive" in path.parts:
+                        continue
                 id_locations[doc_id] = path
             for key in flow_style_keys(fm):
                 errors.append(
@@ -235,7 +267,8 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
     adrs_dir = root / "docs/adrs"
     if adrs_dir.is_dir():
         valid_statuses = {"proposed", "accepted", "rejected", "superseded"}
-        for path in sorted(adrs_dir.glob("*.md")):
+        # Only ADR files, so a README explaining the directory is not an error.
+        for path in sorted(adrs_dir.glob("ADR-*.md")):
             rel = str(path.relative_to(root))
             fm = parse_front_matter(path)
             if fm is None:
@@ -276,7 +309,11 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
                 # Shared trunk branches are never deleted by cleanup, so multiple
                 # direct-to-main issues sharing them is not an ownership conflict.
                 branch_owners.setdefault(branch, []).append(path.name)
-            if as_text(fm.get("schema_version", "")) == "2":
+            if as_text(fm.get("schema_version", "")) != "2":
+                # Same silent exemption as workstreams: without the version, every
+                # guide-impact check below is skipped and the file passes clean.
+                errors.append(f"{rel}: schema_version must be 2")
+            else:
                 guide_refs = as_list(fm.get("related_guides", []))
                 guide_impact = as_text(fm.get("guide_impact", ""))
                 validate_guide_impact(
@@ -312,6 +349,12 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
                 errors.append(f"{rel}: broken front matter")
                 continue
             if as_text(fm.get("schema_version", "")) != "2":
+                # Skipping quietly made the whole contract below opt-in by the
+                # document under test: a workstream with no envelope, no gates
+                # and no issue blocks passed clean, so origin-goal's rule that
+                # the envelope must be recorded before starting had no
+                # mechanical check left.
+                errors.append(f"{rel}: schema_version must be 2")
                 continue
             if not as_text(fm.get("human_boundary_confirmed_at", "")):
                 errors.append(f"{rel}: human_boundary_confirmed_at is required")
@@ -324,6 +367,22 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
             issue_blocks = parse_workstream_issue_blocks(content)
             if not issue_blocks:
                 errors.append(f"{rel}: no embedded ISSUE-* blocks found")
+            # The Issue Queue table is what a human reads and what the loop reads
+            # to find the next pending issue, but no gate looked at it. A table
+            # row whose block was never written — or whose block a table reformat
+            # ate — was invisible, so committed scope could archive as complete.
+            tabled = parse_issue_queue_table_ids(content)
+            blocked = {issue_id for issue_id, _metadata in issue_blocks}
+            for issue_id in sorted(tabled - blocked):
+                errors.append(
+                    f"{rel}: {issue_id} is listed in the Issue Queue table but has no "
+                    "'### ' block, so its status is never validated"
+                )
+            for issue_id in sorted(blocked - tabled):
+                errors.append(
+                    f"{rel}: {issue_id} has a '### ' block but is missing from the "
+                    "Issue Queue table"
+                )
             for issue_id, metadata in issue_blocks:
                 issue_status = metadata.get("status", "")
                 if issue_status not in ("pending", "in_progress", "blocked", "complete"):
@@ -373,6 +432,11 @@ def main() -> None:
     parser.add_argument("repo", nargs="?", default=".", help="Repository root (default: cwd)")
     args = parser.parse_args()
 
+    # Say which repository was read. The default is the current directory, and a
+    # closeout reached through an orchestrator stands in a *different* repository —
+    # so the orchestrator's own docs could validate clean and be reported as the
+    # target's result, with nothing to tell the two apart.
+    print(f"validated: {Path(args.repo).resolve()}")
     errors, warnings = validate_repo(args.repo)
     if errors:
         print("ERRORS:")

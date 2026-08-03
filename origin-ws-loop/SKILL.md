@@ -97,6 +97,16 @@ settings, lifting a recorded gate, or widening an envelope requires.
    the active area), do not fix it inline — file one improvement issue for the
    drift; stale inventory poisons every later selection.
 
+   **Drift means the record contradicts reality, not that a workstream is
+   further along than its status.** A workstream whose every issue is done, whose
+   PRs are merged, and whose `next_human_gate` has **not** been reached is
+   correctly `active`: the gate is the thing still outstanding, and archiving it
+   would be the error. Read the gate before calling it drift. It is drift when the
+   gate has been reached and recorded and the workstream is still sitting in the
+   active area, or when the index and the directory disagree about which
+   workstreams exist at all. Getting this wrong costs an issue filed against
+   correct behaviour, which teaches the next reader to distrust the check.
+
    **Land that issue on its own branch with its own PR, and merge it
    autonomously** — it is docs-only, so nothing gates it. Preflight runs before
    any workstream branch exists, so the alternatives are both wrong: committing
@@ -304,6 +314,14 @@ settings, lifting a recorded gate, or widening an envelope requires.
    open, leave the branch alone, persist the refused command and the PR number,
    and stop. An open PR with green gates is already a legal end state under the
    gated path, so a refusal costs one human message rather than the run.
+
+   **Re-read a workstream file before any edit that follows an edit to one of its
+   markdown tables.** A formatter re-pads a table's columns to its widest cell, so
+   changing one cell rewrites the whitespace of every other row, and the next edit
+   — its target copied from before the reformat — fails to match. When several
+   cells in one table need changing, rewrite them in a single pass instead of one
+   edit per row. This costs an iteration nothing when expected and several failed
+   edits when not; every workstream close touches the Issue Queue table.
 
 4. **Observe.** File improvement observations (below), bounded per iteration.
    Also close the lesson loop on failures: when a failure was diagnosed and

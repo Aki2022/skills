@@ -127,10 +127,16 @@ settings, lifting a recorded gate, or widening an envelope requires.
    **Then reconstruct the review shelf from open PRs**, before selecting
    anything: list the repository's open PRs and match them to workstreams by
    branch name (`gh pr list` reports `headRefName`; a shelved workstream always
-   still has its branch, because its PR is open). **Match on the workstream id as
-   a prefix, not on string equality** — a run that had to cut a differently named
-   branch (a suffix, a retry) still owns that PR, and an exact match would miss
-   it, re-select the workstream, and redo work already sitting in the PR. When a
+   still has its branch, because its PR is open). **Match `<ws-id>` or
+   `<ws-id>-<YYYYMMDD>`, and nothing else.** String equality alone would miss the
+   dated sibling a name collision forces (§1.6 of `origin-goal`), re-select the
+   workstream, and redo work already sitting in the PR — that is the one case the
+   match has to accommodate, and the dated form is the only shape it takes. A
+   looser prefix match counts a workstream twice the moment it has any other
+   branch of its own: the shelf, the shelf cap, the stop reason and the digest's
+   shelf table all come out wrong, and the shelf is _defined_ as what this
+   reconstruction produces, so nothing contradicts the number. Filing branches
+   therefore live outside this namespace (see Improvement observations). When a
    PR's head branch cannot be attributed to any workstream, say so in the digest
    rather than assuming the shelf is empty. Every match starts this run already
    shelved, counts against the shelf cap, and is never selected.
@@ -420,13 +426,17 @@ filing itself.
   counts observations, so an issue another clause **ordered** you to file — the
   preflight drift issue, for instance — does not consume it. Preflight is not an
   iteration and has no allowance of its own.
-- **Named for attribution.** A filing branch must start with the id of the
-  workstream whose iteration produced the observation, so shelf reconstruction
-  can attribute its PR (matching is by prefix). Preflight filings, which belong
-  to no workstream, use a `ws-loop-preflight-` prefix and are reported as
-  leftovers rather than shelved if their PR ever stays open. A branch named only
-  for the observation is unattributable, and a later run reports it as a PR
-  belonging to nothing.
+- **Named for attribution, outside the shelf's namespace.** Name a filing branch
+  `obs/<ws-id>-<slug>`, and a preflight filing `obs/preflight-<slug>`. The
+  workstream id makes the PR attributable to the iteration that produced it; the
+  `obs/` prefix keeps it out of the range shelf reconstruction matches, which is
+  `<ws-id>` or `<ws-id>-<YYYYMMDD>` exactly. Both properties are needed: a branch
+  named only for the observation is unattributable, and a later run reports it as
+  a PR belonging to nothing — while a branch named so that the shelf claims it
+  makes the workstream look shelved when it is not, which is worse, because the
+  shelf count is what the human reads and nothing contradicts it. If such a PR is
+  still open at the next preflight, report it as a leftover rather than shelving
+  it.
 - **Auto-promotion.** A repo improvement meeting all preflight bounds may be
   promoted to a workstream via `origin-doc-update` without a question — cite
   the preflight approval as its confirmed boundary — and joins the tail of

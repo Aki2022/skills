@@ -7,10 +7,50 @@
 # yourself wanting to add a command that mutates state (commit, push, branch
 # delete, worktree remove, fetch, pull, prune), it does NOT belong here.
 #
-# Usage: survey.sh [main_branch]
+# Usage: survey.sh [--repo <path>] [main_branch]
+#   --repo      the repository to survey. Defaults to the current directory,
+#               which is only right when the caller is standing in the target.
+#               An orchestrator invoked *against* a repository (origin-ws-loop,
+#               origin-close-session) is not, so it must pass this.
 #   main_branch defaults to "main", falling back to "master" if main is absent.
 
 set -uo pipefail
+
+repo=""
+args=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+  --repo)
+    [[ $# -ge 2 ]] || {
+      echo "--repo needs a path" >&2
+      exit 2
+    }
+    repo="$2"
+    shift 2
+    ;;
+  --repo=*)
+    repo="${1#--repo=}"
+    shift
+    ;;
+  *)
+    args+=("$1")
+    shift
+    ;;
+  esac
+done
+set -- ${args[@]+"${args[@]}"}
+
+if [[ -n "$repo" ]]; then
+  [[ -d "$repo" ]] || {
+    echo "--repo path does not exist: $repo" >&2
+    exit 2
+  }
+  cd "$repo" || exit 2
+  git rev-parse --is-inside-work-tree >/dev/null 2>&1 || {
+    echo "--repo path is not a git work tree: $repo" >&2
+    exit 2
+  }
+fi
 
 section() { printf '\n=== %s ===\n' "$1"; }
 subsection() { printf '\n--- %s ---\n' "$1"; }
@@ -55,6 +95,15 @@ if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
 fi
 
 section "REPO"
+if [[ -z "$repo" ]]; then
+  # Surveying the wrong repository is not a harmless mistake: this output is the
+  # input to the deletion plan. Say plainly which repository was read and how it
+  # was chosen, so a caller that meant a different one notices here.
+  echo "target_source: current directory (no --repo given)"
+  echo "WARNING: verify this is the repository you meant to survey. An orchestrator invoked against a repository must pass --repo <path>; its own cwd is a different repository."
+else
+  echo "target_source: --repo $repo"
+fi
 echo "toplevel: $(git rev-parse --show-toplevel)"
 echo "current branch: $(git rev-parse --abbrev-ref HEAD)"
 echo "integration branch (assumed): $main_branch"

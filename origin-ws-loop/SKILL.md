@@ -403,6 +403,22 @@ workstream outside the shelf) or the iteration limit is reached. On every
 stop, produce the final digest — including the shelf, so pending reviews are
 presented in one batch.
 
+## Report what you did not do
+
+**A prescribed step you skipped, simplified, or replaced with something lighter
+goes in the journal entry and the digest, named, with the reason.** So does a step
+that ran and did nothing. This is not a confession requirement; it is the only way
+the run's report can be read as evidence. A report that lists what happened and
+omits what did not is true in every line and still wrong overall, and the reader
+has no way to tell — one run executed the Stage 1 survey once across three
+iterations and its own report did not mention it, which surfaced only because
+someone asked.
+
+The rule applies hardest to anything downstream authorization rests on: the
+quality gates, the independent review, the survey that feeds a deletion plan, and
+the validator. If one of those was skipped, inferred, or run against a different
+target, the conclusions built on it are unsupported, and only this line says so.
+
 ## Improvement observations
 
 While executing, notice friction: stuck points, repeated manual steps, the

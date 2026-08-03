@@ -23,6 +23,10 @@ Read this file first. Do not scan all docs unless needed. Read the active workst
 - docs/specs/product.md — product direction and requirements
 - docs/specs/architecture.md — architecture and design policy
 
+## ADRs
+
+- docs/adrs/ADR-YYYYMMDD-short-slug.md — decision rationale, alternatives, and consequences
+
 ## Active Issues
 
 - docs/issues/ISSUE-YYYYMMDD-short-slug.md — standalone one-off work only

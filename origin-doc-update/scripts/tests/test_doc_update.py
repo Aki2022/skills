@@ -18,6 +18,7 @@ class ValidateRepoDocsV2Test(unittest.TestCase):
     def make_repo(self) -> Path:
         root = Path(tempfile.mkdtemp())
         for path in (
+            "docs/adrs",
             "docs/specs",
             "docs/issues/archive",
             "docs/workstreams/archive",
@@ -338,6 +339,44 @@ class GeneratedFilesValidateTest(ValidateRepoDocsV2Test):
         target = "docs/issues/ISSUE-20260729-example-generated-issue.md"
         self.assertTrue((root / target).is_file())
         self.assertEqual(self.errors_for(root, target), [])
+
+    def test_generated_adr_passes_validation(self):
+        root = self.make_repo()
+        self.run_script(
+            "create_adr.py",
+            "choose-storage-boundary",
+            "--scope",
+            "development",
+            "--status",
+            "accepted",
+            "--title",
+            "Choose Storage Boundary",
+            "--repo",
+            str(root),
+            "--date",
+            "20260729",
+        )
+        target = "docs/adrs/ADR-20260729-choose-storage-boundary.md"
+        self.assertTrue((root / target).is_file())
+        self.assertEqual(self.errors_for(root, target), [])
+
+    def test_superseded_adr_requires_successor(self):
+        root = self.make_repo()
+        target = root / "docs/adrs/ADR-20260729-old.md"
+        target.write_text(
+            """---
+id: ADR-20260729-old
+status: superseded
+scope: spec
+created_at: 2026-07-29
+updated_at: 2026-07-29
+---
+
+# Old decision
+"""
+        )
+        errors, _warnings = MODULE.validate_repo(root)
+        self.assertTrue(any("superseded_by is required" in error for error in errors))
 
     def test_create_issue_requires_a_guide_decision(self):
         """Classification is forced at creation, as it is for workstreams.

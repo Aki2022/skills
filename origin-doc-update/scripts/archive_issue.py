@@ -7,15 +7,21 @@ import shutil
 import sys
 from datetime import date
 
+from archive_workstream import UNCHECKED_BOX
 from index_entries import remove_index_entry
 from validate_repo_docs import validate_repo
 
 
 def update_front_matter_field(content: str, field: str, value: str) -> str:
-    """Update a scalar field within the first YAML front matter block."""
+    """Set a front-matter scalar, raising when the field is not there to set."""
     pattern = rf"(^---\n.*?)(^{re.escape(field)}:[ \t]*).*?([ \t]*\n)(.*?^---)"
     replacement = rf"\g<1>\g<2>{value}\g<3>\g<4>"
-    return re.sub(pattern, replacement, content, count=1, flags=re.DOTALL | re.MULTILINE)
+    updated, count = re.subn(
+        pattern, replacement, content, count=1, flags=re.DOTALL | re.MULTILINE
+    )
+    if not count:
+        raise KeyError(field)
+    return updated
 
 
 def read_front_matter_field(content: str, field: str) -> str:
@@ -82,6 +88,22 @@ def main():
     with open(src) as f:
         content = f.read()
 
+    # An issue had no completion gate at all, while a workstream had one — so an
+    # improvement issue filed precisely so an observation would not be lost could
+    # be archived unstarted, dropped from the index, and reported as archived.
+    completion = content.split("## Completion", 1)
+    if len(completion) == 2:
+        unchecked = UNCHECKED_BOX.findall(completion[1])
+        if unchecked:
+            print(
+                "Error: complete every issue checklist item before archiving. "
+                f"{len(unchecked)} still unchecked:",
+                file=sys.stderr,
+            )
+            for item in unchecked:
+                print(f"  {item}", file=sys.stderr)
+            sys.exit(1)
+
     errors, _warnings = validate_repo(repo)
     target = os.path.relpath(src, repo)
     target_errors = [error for error in errors if error.startswith(target)]
@@ -93,8 +115,16 @@ def main():
 
     today = date.today().isoformat()
     branch = read_front_matter_field(content, "branch")
-    content = update_front_matter_field(content, "status", "archived")
-    content = update_front_matter_field(content, "updated_at", today)
+    try:
+        content = update_front_matter_field(content, "status", "archived")
+        content = update_front_matter_field(content, "updated_at", today)
+    except KeyError as missing:
+        print(
+            f"Error: front matter has no '{missing.args[0]}:' field to update, so archiving "
+            "would move the file without recording that it was archived. Add the field first.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     with open(src, "w") as f:
         f.write(content)

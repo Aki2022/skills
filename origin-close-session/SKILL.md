@@ -72,11 +72,19 @@ absent). Say so, then go straight to Step 2.
 
 ### Step 2 — origin-git-cleanup
 
-Invoke the **origin-git-cleanup** skill and follow its SKILL.md, **passing it the
-repository being closed out**. When this closeout was reached through an
-orchestrator, the current directory is that orchestrator's own repository, not
-the target, and a survey that defaults to the current directory reports the wrong
-repository into a deletion plan.
+Invoke the **origin-git-cleanup** skill and follow its SKILL.md, **passing it both
+of its inputs**: the repository being closed out, and the merge policy.
+
+The repository, because when this closeout was reached through an orchestrator the
+current directory is that orchestrator's own repository, not the target, and a
+survey that defaults to the current directory reports the wrong repository into a
+deletion plan.
+
+The merge policy, because `origin-git-cleanup` cannot infer it and its defaults all
+point at merging. State `human-gated` whenever the workstream's envelope reserves
+the merge or the caller said not to merge — a reservation carried only in this
+skill's prose gets merged by the skill that performs the merge, and the report
+reads as an ordinary landing.
 
 Its Stage 1 survey now includes the doc edits from Step 1 as uncommitted changes,
 so its Stage 3 plan should propose committing code **and** docs together. Execute

@@ -292,9 +292,17 @@ settings, lifting a recorded gate, or widening an envelope requires.
    shell will not refuse — it will read what it can reach, reason about what
    the tests _would_ do, and return a pass by inference. That verdict is then
    the sole evidence for merging without a human, and it was never evidence at
-   all. Record in the journal whether the reviewer executed the gates or
-   inferred them; an inferred pass does not satisfy CD, so either re-review
-   with a capable reviewer or treat the merge as human-gated.
+   all.
+
+   **Make the reviewer return evidence, not a verdict.** Require the literal gate
+   command lines, their exit codes, and the sha it checked out, and compare that
+   sha to `gh pr view <n> --json headRefOid` before accepting the pass. Asking the
+   reviewer to _declare_ whether it executed or inferred leaves the one thing that
+   authorizes an unattended merge resting on a self-report — and the journal it
+   goes into dies with the session, so nothing that outlives the run can tell an
+   executed pass from an inferred one. Carry `review: executed|inferred` plus the
+   PR link into the digest's workstream row, where the human can see it, and treat
+   an inferred pass as human-gated rather than merging on it.
 
    Fix confirmed findings within the iteration; a
    finding that needs a human decision is a question gate. With gates green
@@ -314,6 +322,17 @@ settings, lifting a recorded gate, or widening an envelope requires.
    open, leave the branch alone, persist the refused command and the PR number,
    and stop. An open PR with green gates is already a legal end state under the
    gated path, so a refusal costs one human message rather than the run.
+
+   **After the run's last merge, re-run the recorded gates once on the default
+   branch and report the result in the digest.** Every iteration's gates ran
+   against the `main` it branched from, and `main` moves several times during a
+   run — the preflight drift issue, each iteration's filing PRs, any promoted
+   workstream. Nothing re-checks the combined state: the merge does not, and
+   verification happens before it. This skill already reasons the point through
+   for the shelf ("three independently green PRs say nothing about the state
+   after all three land") and the CD path has the same staleness with no CI to
+   catch it. One run of the gates at the end is the difference between reporting
+   "3 workstreams done" and knowing it.
 
    **Re-read a workstream file before any edit that follows an edit to one of its
    markdown tables.** A formatter re-pads a table's columns to its widest cell, so

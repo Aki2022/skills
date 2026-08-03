@@ -52,8 +52,9 @@ alone is always safe; deleting the wrong thing is not.
 
 - **Read before you write.** Never mutate state before you've surveyed it.
 - **Propose before you destroy.** Present the full plan before execution.
-  Commit, push, and a green PR's merge are autonomous; get approval before any
-  forced operation or other destructive cleanup.
+  Commit, push, and a green PR's merge are autonomous **under the `cd` merge
+  policy**; under `human-gated` the merge itself needs approval (see Inputs). Get
+  approval before any forced operation or other destructive cleanup.
 - **Deletion authority follows provenance.** Removing a branch **this run itself
   created and has just merged** is part of that merge, not a separate
   destruction, and needs no extra approval. Carry it out as its own step after
@@ -92,6 +93,25 @@ alone is always safe; deleting the wrong thing is not.
   was investigated, what approach was chosen, and what was confirmed to work.
 
 ---
+
+## Inputs
+
+- **repository** — the path being cleaned up. Every script takes it; do not infer
+  it from the current directory (see Stage 1).
+- **merge policy** — `cd` (default) or `human-gated`. **A caller that reserved the
+  merge for a human must say so here, and this skill must ask when it was not
+  told.** Nothing else in these instructions can tell the difference: the cardinal
+  rules call a green PR's merge autonomous, Stage 4 merges unconditionally, and
+  both `survey.sh` and Stage 5 treat an unmerged PR as an unfinished job and push
+  toward the merge. So a reservation carried only in the caller's prose gets
+  merged under this skill's own authority, and the report reads as a normal
+  landing — there is no artifact anywhere saying a gate was passed over.
+
+  Under `human-gated`, the finished state is different and must not be chased
+  past: **committed, pushed, PR open, branch present, tree clean.** Render the
+  merge step under _Requires confirmation_ in Stage 3, do not merge, do not delete
+  the branch the open PR needs, and read `root_ready: no` as expected rather than
+  as something to fix.
 
 ## Stage 1 — Survey (read-only)
 
@@ -390,8 +410,14 @@ Confirm and report the end state:
 - `git branch -vv` contains only intentional branches,
 - every remaining branch/worktree is listed with its disposition and reason.
 
-You should finish **on main, clean, and synced** — ready to branch off for the
-next task.
+Under the `cd` merge policy you should finish **on main, clean, and synced** —
+ready to branch off for the next task.
+
+**Under `human-gated` the success shape is different, and it is a success:**
+committed, pushed, PR open, branch present, tree clean. Report it as finished.
+Do not merge to reach "on main", and do not delete the branch the open PR needs —
+those are the two ways this verification step turns a reserved decision into a
+completed one, and the report would not say that anything was overridden.
 
 ---
 

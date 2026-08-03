@@ -129,9 +129,21 @@ else
 fi
 
 section "ROOT WORKTREE COMPLETION CHECK"
-root_path="$(git rev-parse --show-toplevel)"
+# `git rev-parse --show-toplevel` is the CURRENT worktree, which is the main one
+# only when nobody is working in a linked worktree. Run from a linked worktree it
+# named the wrong tree "root", so this check passed against a tree that was not
+# the one the cardinal rule is about — and the false negative was just as bad,
+# sending cleanup to "fix" a root that was already clean. The first entry of
+# `git worktree list --porcelain` is always the main worktree.
+root_path="$(git worktree list --porcelain | sed -n '1s/^worktree //p')"
+[[ -n "$root_path" ]] || root_path="$(git rev-parse --show-toplevel)"
+current_worktree="$(git rev-parse --show-toplevel)"
 root_branch="$(git -C "$root_path" rev-parse --abbrev-ref HEAD)"
 echo "root_path: $root_path"
+echo "current_worktree: $current_worktree"
+if [[ "$root_path" != "$current_worktree" ]]; then
+  echo "note: you are in a LINKED worktree; root_ready below describes the main worktree, not this one"
+fi
 echo "root_branch: $root_branch"
 if [[ "$root_branch" == "$main_branch" ]] && ! git -C "$root_path" status --porcelain | grep -q .; then
   echo "root_ready: yes"
@@ -255,12 +267,18 @@ section "RECENT HISTORY (merge-style hint: squash vs merge commits)"
 git log --graph --oneline -15
 
 section "OPEN PULL REQUESTS (gh)"
+# `gh pr status` shows only PRs *relevant to you* — your branch, yours, ones
+# awaiting your review. A branch protected by someone else's open PR, or another
+# agent lane's, was absent from that view, so the "leave it alone, it has an open
+# PR" protection silently did not apply to exactly the branches it exists for.
+# List every open PR with its head branch instead, and when gh cannot answer, say
+# so loudly enough that Stage 2 cannot treat silence as "no PRs".
 if ! git remote -v | grep -qiE 'github\.com'; then
-  echo "(skipped: no GitHub remote)"
-elif command -v gh >/dev/null 2>&1; then
-  gh pr status 2>/dev/null || echo "(gh available but pr status failed — check auth)"
-else
-  echo "(skipped: gh not available on PATH)"
+  echo "PR_DATA: not applicable (no GitHub remote)"
+elif ! command -v gh >/dev/null 2>&1; then
+  echo "PR_DATA: unavailable — gh not on PATH. Branch-vs-PR protection cannot be applied; classify affected branches 'investigate'."
+elif ! gh pr list --state open --json number,headRefName,author,isDraft,title 2>/dev/null; then
+  echo "PR_DATA: unavailable — gh pr list failed (check auth). Branch-vs-PR protection cannot be applied; classify affected branches 'investigate'."
 fi
 
 section "CLASSIFICATION REMINDER"

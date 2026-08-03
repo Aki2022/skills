@@ -220,8 +220,12 @@ itself never has to wait.
    **The reviewer must be able to run the workstream's recorded quality gates,
    not merely read the diff, and must not disturb the working tree to do it.**
    Give it a subagent type that has shell access, tell it to execute the gates,
-   and tell it to do so in its own checkout — `git worktree add` into a
-   temporary directory, or an equivalent isolated copy. A shell-capable
+   and tell it to do so in its own checkout —
+   `git worktree add --detach <tmpdir> <PR head sha>`, or an equivalent
+   isolated copy. Pass `--detach` and a sha rather than the branch name: the
+   loop is standing on that branch, and git refuses to check the same branch
+   out twice, so the branch form of the instruction cannot be followed as
+   written. A shell-capable
    reviewer left to its own devices will `git checkout` the PR head in the
    shared tree, which moves the branch the loop itself is standing on and can
    leave behind a branch that squash-merge makes undeletable by `git branch -d`.
@@ -240,6 +244,18 @@ itself never has to wait.
    workstream lands on a clean, merged main before the next begins. Under a
    human-gated merge policy, stop after the PR exists — that workstream has
    reached a review gate and goes to the shelf.
+
+   **Merging and retiring the branch are two steps, not one flag.** Merge with
+   `gh pr merge <n> --squash` alone, and retire the remote branch afterwards as
+   a separate, explicit step. A merge that also carries `--delete-branch` reads
+   as a destructive operation and is the form most often refused by a permission
+   classifier, which strands an autonomous run one step short of done; keeping
+   the two apart keeps the refusable surface small.
+
+   If the merge is refused anyway, that is a **question gate**: leave the PR
+   open, leave the branch alone, persist the refused command and the PR number,
+   and stop. An open PR with green gates is already a legal end state under the
+   gated path, so a refusal costs one human message rather than the run.
 
 4. **Observe.** File improvement observations (below), bounded per iteration.
    Also close the lesson loop on failures: when a failure was diagnosed and

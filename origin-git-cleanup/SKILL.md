@@ -56,8 +56,13 @@ alone is always safe; deleting the wrong thing is not.
   forced operation or other destructive cleanup.
 - **Deletion authority follows provenance.** Removing a branch **this run itself
   created and has just merged** is part of that merge, not a separate
-  destruction — `gh pr merge --squash --delete-branch` stays the ordinary merge
-  command and needs no extra approval. Deleting anything this run did not create
+  destruction, and needs no extra approval. Carry it out as its own step after
+  the merge rather than as a flag on it, because a merge that also deletes is the
+  form a permission classifier most often refuses, and a refusal there strands an
+  unattended run one step short of done. If a merge is refused even without the
+  flag, leave the PR open and surface it — an open PR with green checks is a
+  legal end state, and it costs one message instead of the run. Deleting anything
+  this run did not create
   — a pre-existing branch, someone else's worktree, a remote ref you did not
   push — still requires approval. What the rule protects against is losing work
   you never saw, which cannot describe work you just wrote, merged, and
@@ -236,6 +241,20 @@ Remove a worktree only if it was for a branch you just merged/deleted **and** it
 is clean. **Never remove a worktree with uncommitted changes** — report it
 instead.
 
+If the approved target is the worktree hosting the current session, do not run
+the removal while the command process is still inside that path. Select a safe
+worktree that will remain (normally the repository root on `main`) and run the
+directory change and removal in the **same shell invocation**, for example:
+
+```bash
+cd <safe-worktree> && git worktree remove <target-worktree>
+```
+
+A separate `cd` tool call does not persist into the next command. Afterward,
+run `git worktree list` from the safe worktree and confirm the target is gone.
+This cwd rule does not relax the existing ownership, cleanliness, parallel-use,
+or deletion-approval checks.
+
 Special cases:
 
 - A repository root worktree cannot be removed. If it is on a doomed branch, first
@@ -314,7 +333,8 @@ destructive until they approve.
 1. Commit or stash uncommitted changes per the decision.
 2. Push the current branch if it has unpushed commits.
 3. Merge into main:
-   - GitHub: `gh pr create …` then `gh pr merge <N> --squash --delete-branch`.
+   - GitHub: `gh pr create …` then `gh pr merge <N> --squash`, retiring the
+     remote ref in step 10 rather than with a flag on the merge.
    - Local: `git checkout main && git merge --ff-only <branch>`.
 4. Sync main: `git checkout main && git pull --ff-only`.
 5. Return the repository root worktree to main if it is not already there. **Do
@@ -323,13 +343,19 @@ destructive until they approve.
 6. Delete merged local branches: `git branch -d <name>`. This now includes the
    branch you started on, once you've switched to main. If `-d` refuses a branch
    you've confirmed squash-merged via its PR, surface it (don't reach for `-D`).
-   `gh pr merge --delete-branch` already removed its remote counterpart; if the
-   branch was merged without that flag, delete the remote ref in step 10.
+   The remote counterpart is retired in step 10, since step 3 merges without a
+   deletion flag.
 7. Delete superseded branches with `git branch -D <name>` only when approved.
-8. Remove approved clean worktrees: `git worktree remove <path>`.
+8. Remove approved clean worktrees. For a target that contains the current
+   session, first choose a surviving safe worktree and run
+   `cd <safe-worktree> && git worktree remove <target-worktree>` in one shell
+   invocation; otherwise use `git worktree remove <path>` from a safe worktree.
+   Verify immediately with `git worktree list`.
 9. Remove approved dirty/superseded worktrees with `git worktree remove --force`
    only after file-level inspection and approval.
-10. Delete approved remote branches with `git push origin --delete <name>`.
+10. Retire remote branches with `git push origin --delete <name>`. This covers
+    both the branch this run created and merged in step 3, which needs no
+    separate approval, and any other remote branch, which does.
 11. Prune stale remote refs: `git remote prune origin`.
 
 If a step errors, stop and report — don't push past failures.

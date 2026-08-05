@@ -48,7 +48,7 @@ Hiragino Sans W4 がPowerPoint実機で解決されず廃止。Windows 10+標準
 | -------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------- |
 | ⓪ スタイルガイド           | `style-guide/` のトークン・レイアウト文法・プロンプト規約・チャート規則を読む                             | 下記参照                  |
 | ① outline.md 共同作成      | テキスト・数値の Single Source of Truth を人間と確定                                                      | `references/pipeline.md`  |
-| ② デザインモックアップ生成 | image_gen フルスライドで構図決定。**1枚目=スタイルアンカーとして人間承認**、以降はedit-modeでアンカー参照 | `references/image_gen.md` |
+| ② デザインモックアップ生成 | image_gen フルスライドで構図決定。**1枚目=スタイルアンカーとして人間承認**、以降はedit-modeでアンカー参照。**全枚の構図承認（feedback.json 全ok）が③の前提**——アンカー承認は②の完了条件ではない | `references/image_gen.md` |
 | ③ ネイティブビルド         | PptxGenJS でレイアウト＋テキスト＋チャート/表を構築、文字なしアセットを埋め込み                           | 下記「ネイティブビルド」  |
 | ④ 検証ループ（≤5回）       | render→決定的チェック→VLM比較（並列・変更分のみ再検証）                                                   | `references/pipeline.md`  |
 | ⑤ 人間最終レビュー         | 最終成果物を人間が確認 → **承認後に `cleanup_deck.py` で中間生成物を掃除**（承認前は消さない）            | `references/pipeline.md`  |
@@ -103,6 +103,11 @@ PowerPoint上で直接編集したpptx（スクショ手貼り・文言修正等
 
 ## ネイティブビルド（③）
 
+**★③を開始する前に `python3 <skill>/scripts/check_feedback.py <デッキdir>` を実行し、
+対象スライドの verdict が全て ok であることを確認する**（exit 0 でなければビルダーを起動しない）。
+様式アンカーの承認と、スライドごとの構図の承認は別物——2026-08-05 に取り違えて未承認13枚を
+ビルドし、後から構図レベルの差し戻しで実装を捨てた。
+
 **承認済みモックアップが構図の仕様書。スライドの実装は、そのスライドの `mockup_NN.png` を
 実際に読んだ者だけが書ける。** メインループは画像を読まない規律（pipeline.md）があるため、
 実務は「**スライドごとにビルダーサブエージェント（Sonnet）へ mockup 1枚＋outline該当節を渡して
@@ -139,6 +144,11 @@ addChartの限界・アイコン正規化）。
   空のグレー帯は人間に未完成と映り差し戻される（2026-07-11実証）。棒・凡例・カテゴリラベルは
   ネイティブ図形で描き、数値・%・目盛りは一切描かず「イメージ」と明記する
 - 表: **必ず** `slide.addTable`（tokens.json `table.*`）。テーブルの枠線・セルを図形や画像で模造しない
+- **箇条書きは1つの `addText()` に breakLine ランを並べて自動フローさせる**（項目ごとに y を
+  手計算して積み上げない）。**1項目=1ラン・ラン内に `\n` を入れない・bullet 指定は全ランで揃える**
+  ——複数ランに割ると■が消える/増える/インデントがズレる（gotchas §20-21）
+- 出所を**URLリンク付き**で出す場合は `sourceLinks(s, [{label, url}, ...])`（`source()` の
+  リンク版・同一座標）
 - `slide.addImage()` で文字なしアセットPNG（image_gen製）や実データチャート図を埋め込み
 - **事前指定画像（スクショ・書影等の実物）はデッキの `input/` に置き、②ではedit-mode入力として構図に組み込み、③では原本を `addImage`**（prompt-convention §5.5）。歪み防止にアスペクト比保持でフィット（gotchas §4）
 - キャンバス: `pptx.defineLayout({ name: "WIDE", width: 13.333, height: 7.5 })`（960×540pt = 33.87×19.05cm）
@@ -266,6 +276,8 @@ imagegen-prompt-convention.md §10（型スライド=厳格 / 自由形=ブラ�
 - `scripts/set_fonts.py` — **ビルド後必須**のフォント統一（全XMLの a:latin/a:ea/a:cs を BIZ UDPGothic に書き換え。ビルド直後と inject後の最終ファイルの2回実行・冪等）
 - `scripts/sanitize_pptx.py` — **ビルド後必須**のPowerPoint修復エラー矯正（チャートXMLスキーマ違反・負extentの修正。gotchas §15-17）
 - `scripts/inject_template.py` — **④合格後の最終成果物化**: template_v3.pptx を土台に生成スライドを移植（人間がマスター準拠スライドを追加できる形にする）
+- `scripts/check_feedback.py` — **③開始前の必須プリフライト**: `feedback.json` の verdict が
+  全て ok か確認する（②の人間承認を飛ばして③へ進むのを機械的に防ぐ）
 - `scripts/cleanup_deck.py` — **⑤承認後の必須クリーンアップ**（dry-run既定）。役割を終えたmockup/preview/ログ等を削除し、再構築ソース（outline/slides/assets/output.pptx）は残す。承認前に実行しない
 - `scripts/build_template_v3.py` — template_v3.pptx の生成スクリプト（旧会社テンプレ→間引き・v3化。テンプレ更新時に再実行）
 - `scripts/build_chart_svg.py` — 実データチャートのネイティブ描画（SVG→soffice PNG）雛形

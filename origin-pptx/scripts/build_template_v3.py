@@ -12,7 +12,7 @@ build_template_v3.py — 旧会社テンプレ（124レイアウト・navy様式
   4. フォント: Meiryo / Arial / System Font Regular → Noto Sans CJK JP（buFontは除く）
   5. キーメッセージph(BODY idx=13): 28pt に統一（04_TitleOnly の36ptも）
   6. フッター(dt/sldNum/ftr ph): y=18.09cm・h=0.9cm・下揃え・12pt に正規化（色は既存 bg1-85%=D9D9D9）
-  7. コピーライト: 「Copyright© 2026 オフィスオハナ合同会社 All Rights Reserved」へ（マスター＋全レイアウト）
+  7. コピーライト: 全レイアウトの文言を統一し、**マスター側は削除**（両方あると二重描画になる）
   ※ 幾何（タイトル0.42/0.65・キーメッセージ0.42/1.40等）は元テンプレが既に v3 実測値と一致
     しているため変更しない。本編スライドは残す（レイアウト参照が KEEP 内なのでそのまま有効）。
 
@@ -105,6 +105,24 @@ def fix_colors(root):
                 break
         clr.set("val", TEXT_NEUTRAL if is_text else FILL_ACCENT)
         n += 1
+    return n
+
+
+def drop_copyright(shapes):
+    """マスター側のコピーライト図形を削除する。
+
+    会社テンプレはマスターと全レイアウトの**両方**に同一座標のコピーライト図形を持つ。
+    PowerPoint はレイアウトの図形に加えマスターの図形も描画する（showMasterSp 未指定＝表示）
+    ため、同じ位置に二重描画されて文字が不自然に太くなる（2026-08-05 実測: インク量1.8倍）。
+    全レイアウトが自前で持っているので、マスター側だけ落とせば必ず1つだけ描画される。
+    """
+    n = 0
+    for sh in list(shapes):
+        if not sh.has_text_frame:
+            continue
+        if sh.text_frame.text.startswith("Copyright©"):
+            sh._element.getparent().remove(sh._element)
+            n += 1
     return n
 
 
@@ -212,10 +230,11 @@ def main():
     print(f"layouts removed: {removed}, kept: {len(list(master.slide_layouts))}")
 
     # 2. マスターの修正
-    stats = dict(fonts=0, colors=0, cr=0, footer=0, keymsg=0)
+    stats = dict(fonts=0, colors=0, cr=0, cr_dropped=0, footer=0, keymsg=0)
     stats["fonts"] += fix_fonts(master.element)
     stats["colors"] += fix_colors(master.element)
-    stats["cr"] += fix_copyright(master.shapes)
+    # マスター側は文言修正ではなく**削除**（レイアウト側と二重描画になるため）
+    stats["cr_dropped"] = drop_copyright(master.shapes)
     stats["footer"] += fix_footer_phs(master.shapes)
 
     # 3. 残レイアウトの修正＋改名

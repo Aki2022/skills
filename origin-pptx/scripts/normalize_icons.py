@@ -56,18 +56,31 @@ def normalize(path, is_illustration, color):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("assets_dir")
+    ap.add_argument("assets_dir", help="assets ディレクトリ、または単一のPNGファイル")
     ap.add_argument("--color", default=DEFAULT_COLOR, help="recolor hex for line icons (default 404040)")
     ap.add_argument("--illustrations", default="", help="comma-separated filenames to treat as colored illustrations")
     args = ap.parse_args()
     hexstr = args.color.lstrip("#")
     color = tuple(int(hexstr[i : i + 2], 16) for i in (0, 2, 4))
     illos = {s.strip() for s in args.illustrations.split(",") if s.strip()}
-    backup = os.path.join(args.assets_dir, "_opaque_backup")
+    # 単一ファイルを渡された場合も受け付ける（ディレクトリ決め打ちだと
+    # NotADirectoryError: <file>.png/_opaque_backup で落ちる。2026-08-05に2回踏んだ）
+    target = args.assets_dir.rstrip("/")
+    if os.path.isfile(target):
+        if not target.lower().endswith(".png"):
+            print("PNG以外は対象外:", target); return
+        assets_dir = os.path.dirname(target) or "."
+        files = [target]
+    elif os.path.isdir(target):
+        assets_dir = target
+        files = sorted(glob.glob(os.path.join(assets_dir, "icon_*.png")))
+        if not files:
+            print("no icon_*.png found in", assets_dir); return
+    else:
+        print("存在しないパス:", target); return
+
+    backup = os.path.join(assets_dir, "_opaque_backup")
     os.makedirs(backup, exist_ok=True)
-    files = sorted(glob.glob(os.path.join(args.assets_dir, "icon_*.png")))
-    if not files:
-        print("no icon_*.png found in", args.assets_dir); return
     for f in files:
         name = os.path.basename(f)
         bk = os.path.join(backup, name)

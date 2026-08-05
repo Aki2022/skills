@@ -12,6 +12,10 @@ cleanup_deck.py — ⑤人間最終承認後のデッキクリーンアップ（
 
 削除（役割終了・再生成可能）:
   - process/mockup_*.png    … ②承認〜⑤承認までの検証用仕様書。⑤以降の正はスクリプト側
+  - process/mockup_task*.md / icons_task*.md 等 … codexへ渡したタスクファイル（再生成可能）
+  - process/icon_NN_*.png / image_N_*.png / persona_*.png
+        … codex が --cd 配下へ直接落とす残骸。正本は assets/ の正規化済みPNG
+  - process/anchors/ / mockups_v1/ / *_tmp/ … 複製・退避・作業ディレクトリ
   - process/preview-*.png / *.pdf … ④レンダリングの一時物
   - process/*.log / _gen_dirs_before.txt … 実行残骸
   - process/node_modules/   … npm install で再生成可能
@@ -43,18 +47,37 @@ def targets(deck: str):
         f"{p}/mockup_*.png",
         f"{p}/anchor_*.png",  # ②でcodexに渡すためのアンカーコピー（正典はスキル側）
         f"{p}/preview-*.png",
+        f"{p}/fin-*.png",  # ⑤最終レンダリング
+        f"{p}/contact_sheet.png",  # ⑤人間レビュー用コンタクトシート
+        f"{p}/v[0-9]*-*.png",  # ビルダーが自己検証で作る verifyNN-NN.png 等
+        f"{p}/verify*.png",
+        f"{p}/*check-*.png",
         f"{p}/*.pdf",
         f"{p}/*.log",
         f"{p}/_gen_dirs_before.txt",
         f"{p}/*backup*.pptx",
         f"{deck}/~$*.pptx",
+        # codex が --cd 配下へ直接落とす説明的ファイル名のPNG。
+        # SAVE-PATH GOTCHA は「指定パスに保存されない」だが、逆に
+        # ワークスペースへ勝手に保存されることもある（2026-08-05 実測: 25枚残った）。
+        # 正規化済みの正本は assets/ にあるので process/ 直下のものは残骸。
+        f"{p}/icon_[0-9]*.png",
+        f"{p}/image_[0-9]*.png",
+        f"{p}/persona_*.png",
+        f"{p}/mockup_task*.md",
+        f"{p}/icons_task*.md",
+        f"{p}/assets_task*.md",
+        f"{p}/persona_task*.md",
     ]:
         out.extend(sorted(glob.glob(pat)))
     for d in [
         f"{p}/node_modules",
         f"{p}/assets/_opaque_backup",
+        f"{p}/anchors",  # スキルから複製したスタイル見本（正典はスキル側）
+        f"{p}/mockups_v1",  # 差し替え前モックアップの退避先
         f"{deck}/generated",
         *sorted(glob.glob(f"{p}/icons_task_*/")),
+        *sorted(glob.glob(f"{p}/*_tmp/")),  # normalize等の作業ディレクトリ
     ]:
         if os.path.isdir(d):
             out.append(d.rstrip("/"))

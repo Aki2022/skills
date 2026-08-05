@@ -14,7 +14,7 @@
  *
  * 使い方: build_deck.js の冒頭で `const { mk } = require("./deck_helpers");` のように読み込み、
  *   const { pptx, ST, T, box, rct, arrow, homePlate, line, imgFit, chrome, numUnit,
- *           badge, newSlide, C, IN } = mk({ date: "July 13, 2026", font: "BIZ UDPGothic" });
+ *           badge, source, sourceLinks, newSlide, C, IN } = mk({ date: "July 13, 2026", font: "BIZ UDPGothic" });
  *   （font必須。ビルド直後と inject後の最終ファイルに set_fonts.py を実行して全XMLを統一する）
  * を得て各スライドを組む。座標はすべて pt（960x540pt キャンバス、IN() で inch 変換）。
  */
@@ -247,6 +247,30 @@ function mk({ date = "", year = new Date().getFullYear(), font } = {}) {
   // 出所表記: 本文最下端(y≤500)より下・フッター帯より上。色はフッターと同じ D9D9D9（2026-07-13確定）
   const source = (s, txt) =>
     T(s, txt, 42, 496, 850, 14, { size: 9, color: C.footer });
+  // 出所（リンク付き）: sourceLinks(s, [{label, url}, ...])
+  // 「出所：」＋各ラベルをPowerPoint上でクリック可能なハイパーリンクにする。
+  // source() と同一座標・同一体裁。元資料のURLを出所として残す用途（2026-08-05追加）。
+  function sourceLinks(s, items) {
+    const runs = [{ text: "出所：", options: {} }];
+    (items || []).forEach((it, i) => {
+      if (i > 0) runs.push({ text: "／", options: {} });
+      runs.push({
+        text: it.label,
+        options: { hyperlink: { url: it.url, tooltip: it.url } },
+      });
+    });
+    s.addText(runs, {
+      x: IN(42),
+      y: IN(496),
+      w: IN(850),
+      h: IN(14),
+      fontFace: F,
+      fontSize: 9,
+      color: C.footer,
+      align: "left",
+      valign: "top",
+    });
+  }
   // 吹き出し(尻尾つき)。描画順が肝: 本体→尻尾三角(枠線つき)→付け根を白矩形で開口。
   // 三角を先に描くと本体の枠線が付け根を横切り「分離した浮遊三角」に見える
   // (2026-07-11に2回失敗した実証。tailCenterYは尻尾中心のy、尻尾は左向き)。
@@ -348,6 +372,7 @@ function mk({ date = "", year = new Date().getFullYear(), font } = {}) {
     imgFit,
     chrome,
     source,
+    sourceLinks,
     speechBubble,
     badge,
     newSlide,

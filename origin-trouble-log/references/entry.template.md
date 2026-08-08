@@ -6,7 +6,7 @@ repo: ""
 ---
 
 <!--
-配置: $ORIGIN_TROUBLE_LOG_ROOT/entries/YYYY-MM/YYYY-MM-DD-<slug>.md
+配置: <保管ルート>/entries/YYYY-MM/YYYY-MM-DD-<slug>.md
 新規 Write のみで完結させる。既存ファイルを読まない（並行セッションで競合しないため）。
 
 frontmatter:

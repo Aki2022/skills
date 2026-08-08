@@ -24,15 +24,24 @@ skill を使っていない場面のトラブルを記録できなかった。20
 
 ## 保管ルート
 
-環境変数 `ORIGIN_TROUBLE_LOG_ROOT` からルートを解決する。**パスをこの skill に
-書かない**（端末ごとに異なり、クラウド同期ディレクトリ名は記録に残せないため）。
+パスをこの skill に書かない（端末ごとに異なり、クラウド同期ディレクトリ名は
+記録に残せないため）。次の順で解決する。
+
+1. 環境変数 `ORIGIN_TROUBLE_LOG_ROOT`
+2. 無ければ `~/.config/origin-trouble-log/root`（ルートのパスを 1 行書いたファイル）
 
 ```bash
-: "${ORIGIN_TROUBLE_LOG_ROOT:?未設定。保管ルートを設定してから記録する}"
+ROOT="${ORIGIN_TROUBLE_LOG_ROOT:-$(cat ~/.config/origin-trouble-log/root 2>/dev/null)}"
+[ -n "$ROOT" ] && [ -d "$ROOT" ] || { echo "保管ルート未設定"; exit 1; }
 ```
 
-未設定なら**記録を諦めず、ユーザーに設定を求めて停止する**。黙って別の場所へ
-書かない — 記録が散ると集積の目的が消える。
+**2 を主経路とみなす。** 環境変数はシェル設定に書く必要があり、この環境ではシェル設定が
+nix（home-manager）管理でリビルドを要する。加えてエージェントのシェルはプロファイルを
+読み込めないことがある（実際にこのセッションで PATH が欠けた）。ポインタファイルなら
+どちらの制約も受けない。
+
+どちらからも解決できないときは**記録を諦めず、ユーザーに設定を求めて停止する**。
+黙って別の場所へ書かない — 記録が散ると集積の目的が消える。
 
 制約:
 
@@ -40,10 +49,11 @@ skill を使っていない場面のトラブルを記録できなかった。20
   （そこは remote を持たないローカル git repo で、グローバル hook が検査を掛ける）。
 - git を使わない。commit / push / 同期 cron を持たない。バックアップは
   クラウド同期クライアントに委ねる。
+- ルートには `README.md` を置き、後から開いた人間が何のディレクトリか分かるようにする。
 
 ## 1 件を記録する
 
-配置は `$ORIGIN_TROUBLE_LOG_ROOT/entries/YYYY-MM/YYYY-MM-DD-<slug>.md`。
+配置は解決した `$ROOT` 配下の `entries/YYYY-MM/YYYY-MM-DD-<slug>.md`。
 **新規 Write のみで完結する**（既存ファイルを読まないため、並行セッションでも競合しない）。
 
 テンプレートは `references/entry.template.md`。frontmatter は絞り込みに使える
@@ -103,7 +113,7 @@ Stop hook による全セッション強制は**採らない**。毎セッショ
 
 手順:
 
-1. `$ORIGIN_TROUBLE_LOG_ROOT/triage/last-triage.txt`（最終トリアージ日）を読む。
+1. `$ROOT/triage/last-triage.txt`（最終トリアージ日）を読む。
    無ければ全件を対象にする。
 2. それ以降の `entries/` を読み、`summary` と 7 節から**形の一致**を探す。
    件数閾値で判定しない — 「気づけない失敗」はリポジトリを跨いで分散するため、

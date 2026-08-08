@@ -2,7 +2,7 @@
 name: origin-close-session
 description: >-
   Close out a finished repository task by optionally running origin-permission-audit,
-  then origin-doc-update, then origin-git-cleanup. Commit/merge/sync the finished
+  then origin-trouble-log, then origin-doc-update, then origin-git-cleanup. Commit/merge/sync the finished
   work and remove only approved stale branches and worktrees. Use for "店じまい",
   "後片付け", "片付けて", "クリーンに", "整理", "wrap up", "close out",
   "get back to a clean main", or after a PR is merged. Prefer this over
@@ -28,16 +28,22 @@ Commits, pushes, and green PR merges are autonomous; only destructive cleanup
 ## The order, and why it matters
 
 0. **origin-permission-audit first, when applicable — decide, act, verify, _then_
-   let Step 1 document it.** If this session granted elevated access, invoke
+   let Step 2 document it.** If this session granted elevated access, invoke
    `origin-permission-audit` before writing docs about it. That skill owns the
    discovery, classification, revocation, and verification contract.
-1. **origin-doc-update next — edit, don't commit.** Update the active
+1. **origin-trouble-log next — capture while the context is still here.** Sweep the
+   session for troubles that were not already recorded at the moment they were
+   pointed out, and write one entry per trouble. It writes outside git, so it does
+   not interact with the commit ordering below. It runs before the git phase on
+   purpose: that phase can stop for a confirmation, and anything placed after it
+   would silently never run.
+2. **origin-doc-update next — edit, don't commit.** Update the active
    workstream/issue, classify guide impact (required vs none), and make any
    `docs/` edits in the working tree — including the outcome of Step 0, if it
    ran. `origin-doc-update` owns ADR recording. Leave the edits uncommitted;
    origin-git-cleanup will pick them up as part of
    the same commit in the next phase.
-2. **origin-git-cleanup last — commit everything, then clean.** It surveys the repo
+3. **origin-git-cleanup last — commit everything, then clean.** It surveys the repo
    (now seeing the doc edits as uncommitted changes), proposes a single combined
    plan (commit incl. docs → merge → sync main → delete merged branches/
    worktrees), executes the integration steps, and verifies the tree ends clean
@@ -57,20 +63,33 @@ Skip this step, and say so, when nothing in this session (or a resumed session
 whose history you can see) required elevated access beyond the repository's
 committed baseline. When a grant exists, invoke `origin-permission-audit` and
 follow its discovery → classify → revoke → verify → report workflow. Pass its
-per-grant report to Step 1; do not duplicate its permission logic in this skill.
+per-grant report to Step 2; do not duplicate its permission logic in this skill.
 
-### Step 1 — origin-doc-update
+### Step 1 — origin-trouble-log
+
+Invoke the **origin-trouble-log** skill and sweep this session for troubles that
+were not already recorded when they happened: silent no-ops, completion reports
+that turned out to be wrong, questions asked about something already automated or
+already approved, checks that passed without checking anything.
+
+Record one entry per trouble. If there were none, say so — do not invent one. This
+step writes outside git and never blocks the git phase.
+
+Its main trigger is a user pointing out how the work was done, which fires during
+the session; this sweep is the backstop for the ones nobody pointed out.
+
+### Step 2 — origin-doc-update
 
 Invoke the **origin-doc-update** skill and follow its SKILL.md against the current work.
 Concretely: read `docs/00_index.md` if present, pass the Step 0 report through,
 and invoke `origin-doc-update` for the active workstream/issue. It owns ADR
 recording, guide impact, and current-document updates. **Stop before committing**
-— origin-close-session commits via origin-git-cleanup in Step 2.
+— origin-close-session commits via origin-git-cleanup in Step 3.
 
 Skip this step only when the repo has no `docs/` governance (`docs/00_index.md`
-absent). Say so, then go straight to Step 2.
+absent). Say so, then go straight to Step 3.
 
-### Step 2 — origin-git-cleanup
+### Step 3 — origin-git-cleanup
 
 Invoke the **origin-git-cleanup** skill and follow its SKILL.md, **passing it both
 of its inputs**: the repository being closed out, and the merge policy.
@@ -86,7 +105,7 @@ the merge or the caller said not to merge — a reservation carried only in this
 skill's prose gets merged by the skill that performs the merge, and the report
 reads as an ordinary landing.
 
-Its Stage 1 survey now includes the doc edits from Step 1 as uncommitted changes,
+Its Stage 1 survey now includes the doc edits from Step 2 as uncommitted changes,
 so its Stage 3 plan should propose committing code **and** docs together. Execute
 that integration plan autonomously, and finish on main, clean, and synced.
 
@@ -120,10 +139,10 @@ present only those deletion targets and obtain one confirmation before acting.
 
 ## When part of the flow doesn't apply
 
-- **No `docs/` governance** → skip Step 1, run Step 2 only.
+- **No `docs/` governance** → skip Step 2, run Step 1 and Step 3 only.
 - **Nothing to document** (pure refactor with no behavior/API change, and
   origin-doc-update concludes "guide impact: none") → record that conclusion, then
-  Step 2.
+  Step 3.
 - **Already on a clean main with nothing to merge** → origin-doc-update may still have
   index/workstream updates; otherwise origin-close-session is a no-op beyond confirming the
   clean state. Say so rather than inventing work.
@@ -135,4 +154,5 @@ Same end state origin-git-cleanup verifies, plus docs current:
 - active workstream/issue reflects the finished work; guides updated where
   behavior changed; qualifying decisions are recorded and linked in `docs/adrs/`,
 - working tree clean, root on `main`, `main == origin/main`,
-- only intentional branches/worktrees remain, each with a stated disposition.
+- only intentional branches/worktrees remain, each with a stated disposition,
+- the session's troubles are recorded, or their absence is stated.

@@ -18,3 +18,6 @@ updated_at: 2026-07-04
 ## 取得履歴
 
 - 2026-07-04 notion https://github.com/kzhrknt/awesome-design-md-jp/blob/main/design-md/notion/DESIGN.md （抽象参照。`plugins/notion/` として雰囲気・密度・トーンのみ反映。ロゴ・商標・具体資産は取り込まない）
+- 2026-08-09 ubie / hobonichi / kurashi-no-techo / hokuohkurashi / smarthr
+  https://github.com/kzhrknt/awesome-design-md-jp/tree/main/design-md/
+  （yorisoi_kaigo LP 再設計の参照。抽象特性＝余白スケール・レイアウト密度・役割構成・タイポ運用のみ取り込み。カラーコード・フォント固有指定・固有ビジュアルは取り込まない）

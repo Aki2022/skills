@@ -1,0 +1,4 @@
+interface:
+  display_name: "Permission Audit"
+  short_description: "Audit session-granted access safely"
+  default_prompt: "Use $origin-permission-audit to audit and safely revoke elevated access granted during this session."

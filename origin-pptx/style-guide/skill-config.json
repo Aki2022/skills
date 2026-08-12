@@ -1,7 +1,7 @@
 {
   "_meta": {
     "name": "origin-pptx-skill-config",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "usage": "実行設定の正典。⓪スタイルガイド読込時に読む。モデル割当・検証ループ・並列度を変えたいときはこのファイルを編集する（SKILL.md/pipeline.md 本文のハードコードは背景説明であり、実行時はここが優先）。"
   },
   "models": {
@@ -26,6 +26,13 @@
       "effort": "medium",
       "role": "①outline下書き"
     }
+  },
+  "evalLoop": {
+    "maxRounds": 3,
+    "reEvalOnlyChangedSlides": true,
+    "personaModel": "opus",
+    "personaEffort": "medium",
+    "_note": "②.5 ペルソナレビューの設定（references/persona-eval.md）。既定はスキップで、人間が指示した場合のみ実行する。scoreThreshold は毎回人間が承認して決める（デッキごとに満点構成が違うため固定値を持たない）。"
   },
   "verifyLoop": {
     "maxRounds": 5,

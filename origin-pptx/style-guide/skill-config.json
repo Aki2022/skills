@@ -1,7 +1,7 @@
 {
   "_meta": {
     "name": "origin-pptx-skill-config",
-    "version": "1.1.0",
+    "version": "1.3.0",
     "usage": "実行設定の正典。⓪スタイルガイド読込時に読む。モデル割当・検証ループ・並列度を変えたいときはこのファイルを編集する（SKILL.md/pipeline.md 本文のハードコードは背景説明であり、実行時はここが優先）。"
   },
   "models": {
@@ -20,6 +20,11 @@
       "model": "haiku",
       "effort": "low",
       "role": "④検収チェックリスト照合（要素個数・tone色等の機械的照合）"
+    },
+    "previewInspection": {
+      "model": "haiku",
+      "effort": "low",
+      "role": "④.5送付前・⑤注入後の目視検分（文字切れ・重なり・はみ出し・クローム崩れ）。メインループは画像をReadせず報告だけ受ける"
     },
     "outlineDraft": {
       "model": "sonnet",
@@ -45,6 +50,7 @@
     "vlmCompareParallel": true,
     "slidesPerVerifyAgent": 6,
     "buildersParallel": true,
-    "_note": "ペア比較・ビルダーは互いに独立なので並列バッチが既定。1体1ペア（比較）/1体1スライド（ビルド）の画像コンテキスト規律を守る。"
+    "maxImagesPerInspectionAgent": 4,
+    "_note": "ペア比較・ビルダーは互いに独立なので並列バッチが既定。1体1ペア（比較）/1体1スライド（ビルド）の画像コンテキスト規律を守る。目視検分は1体あたり最大4枚（それ以上は分割並列。1体に全部読ませると文脈累積で総入力が約N²/2に膨らむ。2〜3枚なら起動オーバーヘッドが勝つため1体でよい）。"
   }
 }

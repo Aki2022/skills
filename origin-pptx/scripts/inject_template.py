@@ -11,7 +11,8 @@ inject_template.py — 生成pptx（PptxGenJS産）を template_v3.pptx へ移�
   1. template_v3.pptx を読み、そのサンプルスライドを全削除
   2. 生成pptxの各スライドを順に移植（画像・チャート・埋込xlsxも再帰的にコピー）
   3. 各スライドのレイアウト参照をテンプレの受け皿レイアウト（既定 16_Blank）へ張り替え
-     （notesSlide参照は落とす）
+     （notesSlide はスピーカーノートとして移植し、notesMaster 参照はテンプレ側へ張り替える。
+      テンプレに notesMaster が無い場合はエラーで停止する — 黙って落とさない）
   4. [Content_Types] / presentation.xml / rels を整合
      （PowerPoint純正部品を壊さないため、presentation.xml と [Content_Types] は
       文字列手術でバイト温存し、再シリアライズは rels のみに限定する）
@@ -59,9 +60,11 @@ ET.register_namespace("", REL_NS)
 SLIDE_CT = "application/vnd.openxmlformats-officedocument.presentationml.slide+xml"
 CHART_CT = "application/vnd.openxmlformats-officedocument.drawingml.chart+xml"
 XLSX_CT = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+NOTES_CT = "application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml"
 RT_SLIDE = f"{R_NS}/slide"
 RT_LAYOUT = f"{R_NS}/slideLayout"
 RT_NOTES = f"{R_NS}/notesSlide"
+RT_NOTES_MASTER = f"{R_NS}/notesMaster"
 
 
 def read_zip(path):
@@ -157,6 +160,16 @@ def main():
                 f'<Override PartName="/{partname}" ContentType="{ctype}"/></Types>',
             )
 
+    # ノート移植先のテンプレ notesMaster（テンプレは PowerPoint 純正の notesMaster を持つ前提）
+    tpl_notes_master = next(
+        (
+            n
+            for n in sorted(base)
+            if n.startswith("ppt/notesMasters/notesMaster") and n.endswith(".xml")
+        ),
+        None,
+    )
+
     copied = {}  # gen partname -> base partname
 
     def copy_part(part):
@@ -201,7 +214,30 @@ def main():
             if t == RT_LAYOUT:
                 rel.set("Target", posixpath.relpath(blank_layout, "ppt/slides"))
             elif t == RT_NOTES:
-                rroot.remove(rel)
+                # スピーカーノートを移植（notesMaster はテンプレ側を参照させる）
+                if not tpl_notes_master:
+                    raise SystemExit(
+                        "gen has speaker notes but template has no notesMaster; "
+                        "add one to the template instead of silently dropping notes"
+                    )
+                gnotes = resolve(gpart, rel.get("Target"))
+                notes_part = f"ppt/notesSlides/notesSlide{k}.xml"
+                base[notes_part] = gen[gnotes]
+                add_override(notes_part, NOTES_CT)
+                nroot = parse_rels(gen[rels_path(gnotes)], rels_path(gnotes))
+                for nrel in nroot:
+                    nt = nrel.get("Type")
+                    if nt == RT_NOTES_MASTER:
+                        nrel.set(
+                            "Target",
+                            posixpath.relpath(tpl_notes_master, "ppt/notesSlides"),
+                        )
+                    elif nt == RT_SLIDE:
+                        nrel.set(
+                            "Target", posixpath.relpath(new_part, "ppt/notesSlides")
+                        )
+                base[rels_path(notes_part)] = tostr(nroot)
+                rel.set("Target", posixpath.relpath(notes_part, "ppt/slides"))
             elif rel.get("TargetMode") != "External":
                 tgt = resolve(gpart, rel.get("Target"))
                 new_tgt = copy_part(tgt)

@@ -23,6 +23,7 @@ related_guides: []
 - Approved scope:
 - Autonomous actions allowed:
 - Confirm first:
+- Merge policy: CD (default) — a PR whose recorded quality gates are green merges autonomously
 - Cost or usage ceiling:
 - Out of scope:
 
@@ -30,18 +31,21 @@ related_guides: []
 
 - Start gate: confirmed on YYYY-MM-DD
 - Next gate: short-gate-name
+  <!-- a named human checkpoint, or `none-workstream-complete` when nothing gates completion -->
 - Stop conditions:
 
 ## Issue Queue
 
-| Issue | Status | Depends on | Outcome |
-| ----- | ------ | ---------- | ------- |
-| ISSUE-01-short-slug | pending | none | One vertical slice |
+| Issue               | Status  | Depends on | Outcome            |
+| ------------------- | ------- | ---------- | ------------------ |
+| ISSUE-01-short-slug | pending | none       | One vertical slice |
 
 ### ISSUE-01-short-slug
 
 - status: pending
 - depends_on: []
+- runnability:
+  <!-- `ready`, or `gated on <the human decision / missing input>` — executors treat a missing value as gated and stop -->
 - guide_impact: required
 - related_guides: [GUIDE-short-slug]
 - guide_impact_reason: ""
@@ -49,6 +53,9 @@ related_guides: []
 #### Goal
 
 #### Acceptance
+
+- verify:
+  <!-- `machine — <command and expected result>`, or `human-review — <who reviews what>` -->
 
 #### Current Status
 

@@ -16,6 +16,11 @@ guide_impact_reason: ""
 
 ## Goal
 
+## Acceptance
+
+- verify:
+  <!-- `machine — <command and expected result>`, or `human-review — <who reviews what>` -->
+
 ## Current Status
 
 ## Next Actions

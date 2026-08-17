@@ -24,6 +24,18 @@ def main():
     impact.add_argument(
         "--no-guide-reason", help="Why this issue changes no implemented behavior"
     )
+    # Acceptance is classified at creation for the same reason as guide impact:
+    # an unstated acceptance cannot be self-verified, so an agent either stalls
+    # at a gate nobody set or overclaims completion.
+    verify = parser.add_mutually_exclusive_group(required=True)
+    verify.add_argument(
+        "--verify-machine",
+        help="Machine-verifiable acceptance: command and expected result",
+    )
+    verify.add_argument(
+        "--verify-human",
+        help="Human-review acceptance: who reviews what",
+    )
     args = parser.parse_args()
 
     slug = args.slug.lower().replace(" ", "-")
@@ -54,6 +66,10 @@ def main():
     guide_impact = "required" if args.guide else "none"
     related_guides = f"[{args.guide}]" if args.guide else "[]"
     guide_reason = "" if args.guide else args.no_guide_reason.replace('"', "'")
+    if args.verify_machine:
+        verify_line = f"machine — {args.verify_machine}"
+    else:
+        verify_line = f"human-review — {args.verify_human}"
 
     try:
         tmpl_path = os.path.join(TEMPLATE_DIR, "issue.template.md")
@@ -70,6 +86,7 @@ def main():
         content = content.replace(
             "- Decision: required | none", f"- Decision: {guide_impact}", 1
         )
+        content = content.replace("- verify:", f"- verify: {verify_line}", 1)
     except FileNotFoundError:
         content = (
             f"---\nid: {issue_id}\nstatus: active\n"
@@ -78,7 +95,9 @@ def main():
             f"related_specs: []\nrelated_guides: {related_guides}\n"
             f"guide_impact: {guide_impact}\n"
             f'guide_impact_reason: "{guide_reason}"\n---\n\n'
-            f"# {title}\n\n## Goal\n\n## Current Status\n\n## Next Actions\n\n## Notes\n\n"
+            f"# {title}\n\n## Goal\n\n"
+            f"## Acceptance\n\n- verify: {verify_line}\n\n"
+            f"## Current Status\n\n## Next Actions\n\n## Notes\n\n"
             "## Completion\n\n"
             "- [ ] Implementation completed or intentionally not needed\n"
             "- [ ] Specs updated if direction or requirements changed\n"

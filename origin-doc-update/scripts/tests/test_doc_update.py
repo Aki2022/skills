@@ -331,6 +331,8 @@ class GeneratedFilesValidateTest(ValidateRepoDocsV2Test):
             "example-generated-issue",
             "--no-guide-reason",
             "internal refactor with unchanged behavior",
+            "--verify-machine",
+            "pytest tests/ exits 0",
             "--repo",
             str(root),
             "--date",
@@ -402,6 +404,8 @@ updated_at: 2026-07-29
             "example-guide-bound-issue",
             "--guide",
             "GUIDE-example",
+            "--verify-human",
+            "the guide owner reviews the updated section",
             "--repo",
             str(root),
             "--date",
@@ -424,6 +428,12 @@ updated_at: 2026-07-29
             "2026-07-29",
             "--next-human-gate",
             "review the first slice",
+            "--autonomous",
+            "edit docs and run tests",
+            "--confirm-first",
+            "external sends",
+            "--verify-machine",
+            "pytest tests/ exits 0",
             "--no-guide-reason",
             "internal refactor with unchanged behavior",
             "--repo",
@@ -446,6 +456,185 @@ updated_at: 2026-07-29
         ]
         self.assertEqual(offenders, [], "front matter values must not carry inline comments")
 
+
+
+class RecordCompletenessTest(ValidateRepoDocsV2Test):
+    """The executors treat a missing record as a gate and stop.
+
+    origin-ws-loop reads runnability per issue and treats a missing record as
+    `gated`; origin-goal refuses to start on an unrecorded envelope and cannot
+    verify empty acceptance. None of that used to be validated, so a workstream
+    could pass clean and still stop every autonomous run at a gate nobody set.
+    """
+
+    WS_HEADER = (
+        "---\nschema_version: 2\nid: WS-20260817-example\nstatus: active\n"
+        "created_at: 2026-08-17\nupdated_at: 2026-08-17\nbranch: \"\"\npr: \"\"\n"
+        "human_boundary_confirmed_at: 2026-08-17\nnext_human_gate: none-workstream-complete\n"
+        "related_specs: []\nrelated_guides: []\n---\n\n# Example\n"
+    )
+    ENVELOPE = (
+        "\n## Authorization Envelope\n\n"
+        "- Approved scope: the example scope\n"
+        "- Autonomous actions allowed: edit docs and run tests\n"
+        "- Confirm first: external sends\n"
+        "- Merge policy: CD (default)\n"
+        "- Cost or usage ceiling: none\n"
+        "- Out of scope: everything else\n"
+        "\n## Human Gates\n\n"
+        "- Start gate: confirmed on 2026-08-17\n"
+        "- Next gate: none-workstream-complete\n"
+        "- Stop conditions: three same-root-cause failures\n"
+    )
+    QUEUE = (
+        "\n## Issue Queue\n\n"
+        "| Issue | Status |\n| --- | --- |\n| ISSUE-01-example | pending |\n"
+        "\n### ISSUE-01-example\n\n"
+        "- status: pending\n"
+        "- depends_on: []\n"
+        "- runnability: ready\n"
+        "- guide_impact: none\n"
+        "- related_guides: []\n"
+        "- guide_impact_reason: x\n"
+        "\n#### Acceptance\n\n"
+        "- verify: machine — pytest tests/ exits 0\n"
+    )
+
+    def write_ws(self, root, envelope=None, queue=None):
+        text = self.WS_HEADER + (envelope or self.ENVELOPE) + (queue or self.QUEUE)
+        (root / "docs/workstreams/WS-20260817-example.md").write_text(text)
+
+    def test_a_complete_record_validates_clean(self):
+        root = self.make_repo()
+        self.write_ws(root)
+
+        errors, _warnings = MODULE.validate_repo(root)
+
+        self.assertEqual(
+            [e for e in errors if "WS-20260817-example" in e], [], errors
+        )
+
+    def test_an_issue_block_without_runnability_is_an_error(self):
+        root = self.make_repo()
+        self.write_ws(root, queue=self.QUEUE.replace("- runnability: ready\n", ""))
+
+        errors, _warnings = MODULE.validate_repo(root)
+
+        self.assertTrue(
+            any("runnability" in e for e in errors),
+            "a missing runnability record is what stops every autonomous run",
+        )
+
+    def test_gated_runnability_needs_a_reason(self):
+        root = self.make_repo()
+        self.write_ws(
+            root,
+            queue=self.QUEUE.replace("- runnability: ready", "- runnability: gated"),
+        )
+
+        errors, _warnings = MODULE.validate_repo(root)
+
+        self.assertTrue(any("runnability" in e for e in errors))
+
+    def test_an_issue_block_without_acceptance_verify_is_an_error(self):
+        root = self.make_repo()
+        self.write_ws(
+            root,
+            queue=self.QUEUE.replace(
+                "- verify: machine — pytest tests/ exits 0\n", ""
+            ),
+        )
+
+        errors, _warnings = MODULE.validate_repo(root)
+
+        self.assertTrue(
+            any("verify" in e for e in errors),
+            "empty acceptance makes an agent stall or overclaim",
+        )
+
+    def test_an_empty_envelope_bullet_is_an_error(self):
+        root = self.make_repo()
+        self.write_ws(
+            root,
+            envelope=self.ENVELOPE.replace(
+                "- Autonomous actions allowed: edit docs and run tests",
+                "- Autonomous actions allowed:",
+            ),
+        )
+
+        errors, _warnings = MODULE.validate_repo(root)
+
+        self.assertTrue(any("Autonomous actions allowed" in e for e in errors))
+
+    def test_an_indented_continuation_satisfies_an_envelope_bullet(self):
+        root = self.make_repo()
+        self.write_ws(
+            root,
+            envelope=self.ENVELOPE.replace(
+                "- Confirm first: external sends",
+                "- Confirm first:\n  - external sends\n  - deploys",
+            ),
+        )
+
+        errors, _warnings = MODULE.validate_repo(root)
+
+        self.assertEqual([e for e in errors if "Confirm first" in e], [], errors)
+
+    def test_a_standalone_issue_without_acceptance_verify_is_an_error(self):
+        root = self.make_repo()
+        (root / "docs/issues/ISSUE-20260817-example.md").write_text(
+            """---
+schema_version: 2
+id: ISSUE-20260817-example
+status: active
+created_at: 2026-08-17
+updated_at: 2026-08-17
+branch: ISSUE-20260817-example
+guide_impact: none
+guide_impact_reason: docs only
+related_guides: []
+---
+
+# Example
+
+## Goal
+
+## Notes
+"""
+        )
+
+        errors, _warnings = MODULE.validate_repo(root)
+
+        self.assertTrue(any("verify" in e for e in errors))
+
+    def test_a_standalone_issue_with_acceptance_verify_is_clean(self):
+        root = self.make_repo()
+        (root / "docs/issues/ISSUE-20260817-example.md").write_text(
+            """---
+schema_version: 2
+id: ISSUE-20260817-example
+status: active
+created_at: 2026-08-17
+updated_at: 2026-08-17
+branch: ISSUE-20260817-example
+guide_impact: none
+guide_impact_reason: docs only
+related_guides: []
+---
+
+# Example
+
+## Acceptance
+
+- verify: human-review — the owner reads the filed report
+"""
+        )
+
+        errors, _warnings = MODULE.validate_repo(root)
+
+        self.assertEqual(
+            [e for e in errors if "ISSUE-20260817-example" in e], [], errors
+        )
 
 
 class SilentPassTest(ValidateRepoDocsV2Test):
@@ -569,7 +758,8 @@ class ArchiveGateTest(ValidateRepoDocsV2Test):
 
 ## Authorization Envelope
 
-x
+- Autonomous actions allowed: edit docs
+- Confirm first: external sends
 
 ## Human Gates
 
@@ -585,9 +775,14 @@ x
 
 - status: complete
 - depends_on: []
+- runnability: ready
 - guide_impact: none
 - related_guides: []
 - guide_impact_reason: x
+
+#### Acceptance
+
+- verify: machine — the check exits 0
 
 ## Completion
 
@@ -663,7 +858,8 @@ x
             "---\nschema_version: 2\nid: ISSUE-20260803-unstarted\nstatus: active\n"
             "created_at: 2026-08-03\nupdated_at: 2026-08-03\nbranch: main\n"
             "guide_impact: none\nguide_impact_reason: x\nrelated_guides: []\n---\n\n"
-            "# Unstarted\n\n## Completion\n\n- [ ] not done yet\n"
+            "# Unstarted\n\n## Acceptance\n\n- verify: machine — the check exits 0\n\n"
+            "## Completion\n\n- [ ] not done yet\n"
         )
         (root / "docs/00_index.md").write_text(
             "---\nupdated_at: 2026-08-03\ncurrent_focus: x\n---\n\n# 00 Index\n\n"

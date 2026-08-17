@@ -45,9 +45,9 @@ Do not create the file immediately when the user asks for a workstream. First es
    - actions requiring confirmation, especially external writes, sends, submissions, deploys, destructive changes, data migrations, auth/secrets, dependencies, network access, and metered services;
    - cost or usage ceiling when metered work is possible;
    - test and quality gates;
-   - merge policy: continuous delivery is the default — a PR whose recorded quality gates pass (CI when present, otherwise the recorded local gates) is merged autonomously. Record a human merge gate only as a named exception with its reason (e.g. live/production impact, spend, new dependencies); an unexplained merge gate silently kills autonomous runs downstream. Note the choice as one line in the Authorization Envelope or Human Gates section;
+   - merge policy: continuous delivery is the default — a PR whose recorded quality gates pass (CI when present, otherwise the recorded local gates) is merged autonomously. Record a human merge gate only as a named exception with its reason (e.g. live/production impact, spend, new dependencies); an unexplained merge gate silently kills autonomous runs downstream. The template's `- Merge policy:` line in the Authorization Envelope carries the choice;
    - the next human checkpoint and early stop conditions.
-5. Classify runnability for every planned issue: `ready` (completable with only current permissions and currently available information) or `gated` (a human decision, missing input, or new permission is foreseeable). Surface every gated point as a question now, during creation — a question asked here costs one interview turn, while the same question discovered mid-execution stops an entire autonomous run. As part of the same pass, judge whether each issue's acceptance is machine-verifiable (counts, thresholds, passing tests) or needs human review: push subjective acceptance toward a quantifiable restatement, and where human judgment is genuinely required, record that the issue ends at a review gate — an agent cannot self-verify a subjective goal and will either stall or overclaim. Record the outcome as one line in the workstream's Human Gates section, e.g. `- Runnability: all issues ready (YYYY-MM-DD)` or `- Runnability: ISSUE-02 gated on <decision>`.
+5. Classify runnability for every planned issue and fill its block's `runnability:` field: `ready` (completable with only current permissions and currently available information) or `gated on <the human decision, missing input, or new permission>`. Surface every gated point as a question now, during creation — a question asked here costs one interview turn, while the same question discovered mid-execution stops an entire autonomous run. As part of the same pass, judge whether each issue's acceptance is machine-verifiable (counts, thresholds, passing tests) or needs human review, and fill the `- verify:` line under its `#### Acceptance`: `machine — <command and expected result>` or `human-review — <who reviews what>`. Push subjective acceptance toward a quantifiable restatement; where human judgment is genuinely required, `human-review` records that the issue ends at a review gate — an agent cannot self-verify a subjective goal and will either stall or overclaim. These fields are not optional prose: `validate_repo_docs.py` rejects a missing or malformed value, because executors (`origin-goal`, `origin-ws-loop`) treat an unrecorded runnability as `gated` and stop the whole run at a gate nobody set.
 6. State that `origin-doc-update` is pausing creation until these boundaries are confirmed.
 7. After confirmation, create from `references/workstream.template.md` or run `create_workstream.py` with the confirmed boundary fields.
 
@@ -70,6 +70,8 @@ An ADR must state the context/problem, the decision, alternatives considered, co
 
 An improvement issue is a standalone issue in `docs/issues/` that records a friction observation from development work — a stuck point, a repeated manual step, an inefficiency worth fixing later — rather than a requested change. Name it `ISSUE-YYYYMMDD-improve-<slug>` when the improvement targets the repository itself, and `ISSUE-YYYYMMDD-improve-loop-<slug>` when it targets the development-loop machinery (skills canonical under `~/.agents/skills/`). The two scopes have different owners and approval paths, so the name must reveal the scope at a glance. Autonomous runs (e.g. `origin-ws-loop`) file observations here instead of interrupting their work; humans triage them later. Create with `create_issue.py` as usual.
 
+Boundary with `origin-trouble-log`: an improvement issue is an actionable change request against this repository or the loop machinery. An observation about how the agent itself worked wrong — a silent no-op, a false completion report, a vacuous check, guidance friction — must ALSO be recorded as one `origin-trouble-log` entry, and when it is only an observation (no concrete change to implement yet) it goes ONLY there; a repo issue filed instead of a trouble entry is invisible to the cross-repo triage and was measured to get lost (2026-08-10 observation-filed-to-wrong-corpus).
+
 ## Implement a workstream or issue
 
 For each issue, complete one vertical slice:
@@ -77,7 +79,7 @@ For each issue, complete one vertical slice:
 1. Set `guide_impact` before implementation:
    - `required`: name every guide that must describe the resulting behavior.
    - `none`: write a concrete reason, such as internal refactor with unchanged behavior.
-2. Define acceptance criteria and dependencies.
+2. Define acceptance criteria and dependencies. The `- verify:` line under Acceptance is the executable form: run the recorded machine check, or route to the recorded reviewer.
 3. Capture each qualifying decision in `docs/adrs/` during the slice and link it from the issue/workstream. Mark a human-gated decision as `proposed` until the gate is resolved.
 4. Implement and test, preferring red-green-refactor where practical.
 5. Update the target guide in the same slice, before marking the issue complete.
@@ -157,12 +159,17 @@ Templates in `references/`:
 Scripts in `scripts/`:
 
 - `init_repo_docs.py [repo]`
-- `create_workstream.py <slug> --issue <slug> --scope <text> --confirmed-at YYYY-MM-DD --next-human-gate <name> (--guide <GUIDE-id> | --no-guide-reason <text>) [--repo <repo>]`
-- `create_issue.py <slug> (--guide <GUIDE-id> | --no-guide-reason <text>) [--title <title>] [--repo <repo>]`
+- `create_workstream.py <slug> --issue <slug> --scope <text> --confirmed-at YYYY-MM-DD --next-human-gate <name> --autonomous <text> --confirm-first <text> (--verify-machine <text> | --verify-human <text>) (--guide <GUIDE-id> | --no-guide-reason <text>) [--merge-policy <text>] [--gated-on <text>] [--repo <repo>]`
+  The interview's confirmed boundaries are required arguments: envelope
+  (`--autonomous`, `--confirm-first`), acceptance (`--verify-*`), and — when the
+  initial issue is not immediately runnable — `--gated-on <reason>`. A file created
+  without them validates red, and executors treat the missing record as a gate.
+- `create_issue.py <slug> (--verify-machine <text> | --verify-human <text>) (--guide <GUIDE-id> | --no-guide-reason <text>) [--title <title>] [--repo <repo>]`
   Pass a slug, not a full issue id — the `ISSUE-<date>-` prefix is added for you.
-  The guide decision is required, as it is for `create_workstream.py`: name the guide
-  this issue must update, or state why it changes no implemented behavior. Without it
-  the generated file cannot pass `validate_repo_docs.py`.
+  The guide decision and the acceptance decision are required, as they are for
+  `create_workstream.py`: name the guide this issue must update (or why not), and
+  state how acceptance is verified. Without them the generated file cannot pass
+  `validate_repo_docs.py`.
 - `create_adr.py <slug> --scope <spec|development> [--status <proposed|accepted|rejected>] [--title <title>] [--repo <repo>]`
 - `archive_workstream.py <workstream> [--repo <repo>]`
 - `archive_issue.py <issue> [--repo <repo>]`

@@ -56,6 +56,18 @@ def main() -> None:
         raise SystemExit(1)
 
     content = source.read_text()
+
+    # The template's "Workstream archived when complete" box is the very action
+    # this script performs, so requiring it pre-checked made every straight run
+    # fail (self-reference). archive_issue.py already ticks its equivalent box on
+    # the script's behalf; do the same here before gating.
+    content = re.sub(
+        r"^([ \t]*[-*+][ \t]+\[)[ \t]*(\][ \t]*Workstream archived)",
+        r"\g<1>x\g<2>",
+        content,
+        flags=re.MULTILINE,
+    )
+
     completion = content.split("## Completion", 1)
     # Two different problems, two different messages. Conflating them sent a
     # reader hunting for unchecked boxes in a file that had no checklist at all

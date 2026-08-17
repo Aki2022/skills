@@ -97,3 +97,51 @@ class RemoveIndexEntryTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WrappedEntryTest(unittest.TestCase):
+    """A wrapped entry's continuation lines must go with its bullet.
+
+    Removing only the bullet line left the indented continuation behind as an
+    orphan paragraph directly under the section heading — observed twice in one
+    session, in Active Issues and again in Active Workstreams. The index still
+    validates, so nothing downstream disagrees; a human just reads a fragment.
+    """
+
+    def test_indented_continuation_lines_are_removed_with_the_bullet(self):
+        content = (
+            "## Active Issues\n"
+            "\n"
+            "- docs/issues/ISSUE-a.md — first line of the entry\n"
+            "  second line of the same entry\n"
+            "  third line of the same entry\n"
+            "- docs/issues/ISSUE-b.md — a different entry\n"
+        )
+
+        new_content, removed = MODULE.remove_index_entry(content, "docs/issues", "ISSUE-a")
+
+        self.assertEqual(removed, 1)
+        self.assertNotIn("second line of the same entry", new_content)
+        self.assertNotIn("third line of the same entry", new_content)
+        self.assertIn("ISSUE-b.md", new_content)
+
+    def test_a_following_bullet_is_not_swallowed(self):
+        content = (
+            "- docs/issues/ISSUE-a.md — entry a\n"
+            "- docs/issues/ISSUE-b.md — entry b\n"
+        )
+
+        new_content, _removed = MODULE.remove_index_entry(content, "docs/issues", "ISSUE-a")
+
+        self.assertIn("entry b", new_content)
+
+    def test_a_following_unindented_paragraph_is_not_swallowed(self):
+        content = (
+            "- docs/issues/ISSUE-a.md — entry a\n"
+            "\n"
+            "Unrelated prose that must survive.\n"
+        )
+
+        new_content, _removed = MODULE.remove_index_entry(content, "docs/issues", "ISSUE-a")
+
+        self.assertIn("Unrelated prose that must survive.", new_content)

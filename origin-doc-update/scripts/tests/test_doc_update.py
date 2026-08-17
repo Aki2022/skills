@@ -874,6 +874,31 @@ x
         self.assertNotEqual(result.returncode, 0, "an unstarted issue archived cleanly")
         self.assertIn("checklist", (result.stdout + result.stderr).lower())
 
+    def test_the_self_referential_archive_box_does_not_block_archiving(self):
+        """The "Workspace archived" box is the action this script performs.
+
+        archive_issue.py already ticks its equivalent box on the script's behalf;
+        archive_workstream.py did not, so every straight run failed on a box the
+        caller could only satisfy by lying before the fact.
+        """
+        root = self.make_repo()
+        self.write_ws(
+            root,
+            "- [x] Every issue meets its acceptance criteria\n"
+            "- [ ] Workstream archived when complete\n",
+        )
+        self.assert_fixture_is_otherwise_valid(root)
+
+        result = self.run_script(
+            self.ARCHIVE_WS, "WS-20260803-boxes", "--repo", str(root)
+        )
+
+        self.assertEqual(
+            result.returncode,
+            0,
+            f"self-referential box blocked archiving: {result.stdout}{result.stderr}",
+        )
+
     def test_archiving_reports_a_status_it_could_not_set(self):
         root = self.make_repo()
         self.write_ws(root, "- [x] done\n", status_line="")

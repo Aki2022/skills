@@ -35,4 +35,14 @@ def remove_index_entry(content: str, rel_dir: str, entry_id: str):
     """
     pattern = _entry_line_pattern(rel_dir, entry_id)
     new_content, removed = pattern.subn("", content)
-    return new_content, removed
+
+    # Indexes also grow markdown *table* rows (`| [X](issues/X.md) | ... |`).
+    # The list-line pattern missed those twice, printed "not found in
+    # docs/00_index.md", and left the archived entry listed as active.
+    ident = re.escape(entry_id)
+    leaf = re.escape(rel_dir.split("/")[-1])
+    target = rf"(?:{re.escape(rel_dir)}|{leaf})/{ident}\.md"
+    table_pattern = re.compile(rf"^[ \t]*\|[^\n]*{target}[^\n]*\n?", re.MULTILINE)
+    new_content, removed_rows = table_pattern.subn("", new_content)
+
+    return new_content, removed + removed_rows

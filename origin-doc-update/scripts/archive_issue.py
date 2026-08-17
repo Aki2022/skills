@@ -88,6 +88,16 @@ def main():
     with open(src) as f:
         content = f.read()
 
+    # The template's "Moved to docs/issues/archive/" box is the very action this
+    # script performs, so requiring it pre-checked made every straight run fail
+    # (self-reference). Check it here on the script's behalf before gating.
+    content = re.sub(
+        r"^([ \t]*[-*+][ \t]+\[)[ \t]*(\][ \t]*Moved to docs/issues/archive)",
+        r"\g<1>x\g<2>",
+        content,
+        flags=re.MULTILINE,
+    )
+
     # An issue had no completion gate at all, while a workstream had one — so an
     # improvement issue filed precisely so an observation would not be lost could
     # be archived unstarted, dropped from the index, and reported as archived.

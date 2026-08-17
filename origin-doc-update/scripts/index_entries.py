@@ -21,8 +21,14 @@ def _entry_line_pattern(rel_dir: str, entry_id: str) -> re.Pattern:
     # docs/issues -> issues, so both "docs/issues/X.md" and "](issues/X.md)" match.
     leaf = re.escape(rel_dir.split("/")[-1])
     target = rf"(?:{re.escape(rel_dir)}|{leaf})/{ident}\.md"
+    # A wrapped entry continues on indented lines that carry no bullet of their
+    # own. Matching only the bullet line left those behind as an orphan paragraph
+    # under the section heading — the index still validates, so nothing
+    # downstream disagrees and only a human notices the fragment. The
+    # continuation clause stops at the next bullet or any unindented line.
     return re.compile(
-        rf"^[ \t]*-[ \t]+[^\n]*(?:\]\([^)\n]*{target}\)|(?<![\w./]){target}(?![\w.]))[^\n]*\n?",
+        rf"^[ \t]*-[ \t]+[^\n]*(?:\]\([^)\n]*{target}\)|(?<![\w./]){target}(?![\w.]))[^\n]*\n?"
+        rf"(?:[ \t]+(?![-*+][ \t])[^\n]*\n?)*",
         re.MULTILINE,
     )
 

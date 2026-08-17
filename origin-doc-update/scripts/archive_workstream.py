@@ -82,7 +82,7 @@ def main() -> None:
 
     incomplete = [
         issue_id
-        for issue_id, metadata in parse_workstream_issue_blocks(content)
+        for issue_id, metadata, _body in parse_workstream_issue_blocks(content)
         if metadata.get("status") != "complete"
     ]
     if incomplete:

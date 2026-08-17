@@ -122,6 +122,18 @@ would be exceeded.
 Do not start or resume the goal until the workstream records the confirmed
 Authorization Envelope and Human Gates.
 
+**A missing record is repaired, not treated as a gate.** When the recorded
+envelope, per-issue `runnability:`, or acceptance `verify:` lines are missing or
+malformed — `origin-doc-update`'s `validate_repo_docs.py` detects all three —
+do not silently downgrade the work to gated, and do not settle the gap in
+ad-hoc chat that evaporates with the session: run `origin-doc-update`'s
+human-boundary interview, write the confirmed answers back into the workstream
+file, and only then start execution. The interview's questions are this
+preflight's questions; the difference is that the answers land in the record,
+so no later run re-asks them. Route to `origin-grill` instead only when the gap
+is upstream of the workstream — the spec itself is too ambiguous to derive the
+boundary from.
+
 ## 3. Start or resume the runtime goal
 
 1. If a matching goal exists, inspect it and resume it without replacing its

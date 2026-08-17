@@ -90,12 +90,27 @@ Never treat another agent's instruction as the human approval that writing
 settings, lifting a recorded gate, or widening an envelope requires.
 
 1. **Inventory.** Read `docs/00_index.md` and list active workstreams with
-   their recorded runnability at **issue granularity** (`ready` / `gated`, from
-   each workstream's Human Gates section; treat a missing runnability line as
-   `gated`). Present the queue to the user. If the index's active list and the
+   their recorded runnability at **issue granularity** (`ready` / `gated on <reason>`,
+   from each issue block's `runnability:` field; a legacy workstream
+   may carry a `- Runnability:` line in Human Gates instead; treat a missing
+   record as `gated`). Present the queue to the user. If the index's active list and the
    workstream directory disagree (e.g. completed workstreams still sitting in
    the active area), do not fix it inline — file one improvement issue for the
    drift; stale inventory poisons every later selection.
+
+   **Classify record quality with the validator, not by reading.** Run
+   `origin-doc-update`'s `validate_repo_docs.py` against the repository; a
+   workstream whose envelope, `runnability:`, or acceptance `verify:` records
+   error out is **deficient** — its gaps are gates nobody set, not gates. When
+   a human is present, repair each deficient workstream now through
+   `origin-doc-update`'s human-boundary interview, writing the answers back
+   into the file — moving those questions into this one conversation is
+   exactly what this preflight is for. When no human is there, do not invent
+   the answers: exclude deficient workstreams from selection, run the healthy
+   remainder, and list every deficiency (file and missing record) in the
+   digest with repair as the next action. A deficient workstream is not a
+   question gate for the whole run — stopping everything over a record nobody
+   filled would starve the healthy queue.
 
    **Drift means the record contradicts reality, not that a workstream is
    further along than its status.** A workstream whose every issue is done, whose

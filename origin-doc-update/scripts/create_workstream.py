@@ -32,6 +32,38 @@ def main() -> None:
     parser.add_argument("--next-human-gate", required=True, help="Named next human checkpoint")
     parser.add_argument("--date", default=None, help="ID date override, YYYYMMDD")
     parser.add_argument("--repo", default=".")
+    # The interview's answers become required arguments: an envelope or
+    # acceptance left blank validates red, and executors treat a missing
+    # record as a gate — which stops autonomous runs where no human set one.
+    parser.add_argument(
+        "--autonomous",
+        required=True,
+        help="Actions the agent may take without asking (Authorization Envelope)",
+    )
+    parser.add_argument(
+        "--confirm-first",
+        required=True,
+        help="Actions that need human confirmation (Authorization Envelope)",
+    )
+    parser.add_argument(
+        "--merge-policy",
+        default="CD (default) — a PR whose recorded quality gates are green merges autonomously",
+        help="Merge policy line; record a human merge gate only as a named exception",
+    )
+    parser.add_argument(
+        "--gated-on",
+        default=None,
+        help="If the initial issue is not immediately runnable, the human decision or missing input it waits on",
+    )
+    verify = parser.add_mutually_exclusive_group(required=True)
+    verify.add_argument(
+        "--verify-machine",
+        help="Machine-verifiable acceptance for the initial issue: command and expected result",
+    )
+    verify.add_argument(
+        "--verify-human",
+        help="Human-review acceptance for the initial issue: who reviews what",
+    )
     impact = parser.add_mutually_exclusive_group(required=True)
     impact.add_argument("--guide", help="Guide ID updated by the initial issue")
     impact.add_argument("--no-guide-reason", help="Why the initial issue changes no implemented behavior")
@@ -61,6 +93,12 @@ def main() -> None:
     related_guides = f"[{args.guide}]" if args.guide else "[]"
     guide_reason = "" if args.guide else args.no_guide_reason.replace('"', "'")
 
+    runnability = f"gated on {args.gated_on}" if args.gated_on else "ready"
+    if args.verify_machine:
+        verify_line = f"machine — {args.verify_machine}"
+    else:
+        verify_line = f"human-review — {args.verify_human}"
+
     content = TEMPLATE.read_text()
     replacements = {
         "WS-YYYYMMDD-short-slug": workstream_id,
@@ -70,6 +108,11 @@ def main() -> None:
         "ISSUE-01-short-slug": issue_id,
         "One vertical slice": args.issue.replace("-", " "),
         "- Approved scope:": f"- Approved scope: {args.scope}",
+        "- Autonomous actions allowed:": f"- Autonomous actions allowed: {args.autonomous}",
+        "- Confirm first:": f"- Confirm first: {args.confirm_first}",
+        "- Merge policy: CD (default) — a PR whose recorded quality gates are green merges autonomously": f"- Merge policy: {args.merge_policy}",
+        "- runnability:": f"- runnability: {runnability}",
+        "- verify:": f"- verify: {verify_line}",
         "- guide_impact: required": f"- guide_impact: {guide_impact}",
         "- related_guides: [GUIDE-short-slug]": f"- related_guides: {related_guides}",
         '- guide_impact_reason: ""': f'- guide_impact_reason: "{guide_reason}"',

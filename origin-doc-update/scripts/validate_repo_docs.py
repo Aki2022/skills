@@ -160,9 +160,15 @@ def validate_guide_sources(
             )
 
 
-def parse_workstream_issue_blocks(content: str) -> list[tuple[str, dict[str, str]]]:
-    """Read compact issue metadata under `### ISSUE-*` headings."""
-    matches = list(re.finditer(r"^### (ISSUE-[A-Za-z0-9-]+).*$", content, re.MULTILINE))
+def parse_workstream_issue_blocks(content: str) -> list[tuple[str, dict[str, str], str]]:
+    """Read compact issue metadata, plus the raw block body, under `### ISSUE-*` headings.
+
+    Only a heading that is exactly the issue id (`### ISSUE-...` with nothing after it)
+    is an issue block. Prose headings that merely mention an id
+    (e.g. `### ISSUE-07 の切り出し`) used to be parsed as blocks and made
+    archiving fail twice with errors pointing at a block that did not exist.
+    """
+    matches = list(re.finditer(r"^### (ISSUE-[A-Za-z0-9-]+)[ \t]*$", content, re.MULTILINE))
     blocks: list[tuple[str, dict[str, str]]] = []
     for index, match in enumerate(matches):
         end = matches[index + 1].start() if index + 1 < len(matches) else len(content)
@@ -170,8 +176,132 @@ def parse_workstream_issue_blocks(content: str) -> list[tuple[str, dict[str, str
         metadata: dict[str, str] = {}
         for item in re.finditer(r"^- ([a-z_]+):[ \t]*(.*?)$", body, re.MULTILINE):
             metadata[item.group(1)] = item.group(2).strip().strip('"').strip("'")
-        blocks.append((match.group(1), metadata))
+        blocks.append((match.group(1), metadata, body))
     return blocks
+
+
+def extract_section(content: str, heading: str) -> str | None:
+    """Return the text between `heading` and the next same-level heading."""
+    match = re.search(
+        rf"^{re.escape(heading)}\s*$(.*?)(?=^## |\Z)",
+        content,
+        re.MULTILINE | re.DOTALL,
+    )
+    return match.group(1) if match else None
+
+
+# origin-ws-loop treats a missing runnability record as `gated` and stops the
+# whole run; origin-goal refuses to start on an unrecorded envelope and cannot
+# verify an empty acceptance. These checks keep those safe defaults from firing
+# where no human ever set a gate.
+RUNNABILITY_RE = re.compile(r"^(ready|gated on \S.*)$")
+VERIFY_LINE_RE = re.compile(
+    r"^-[ \t]*verify:[ \t]*(machine|human-review)[ \t]*[—–:-][ \t]*\S", re.MULTILINE
+)
+REQUIRED_ENVELOPE_BULLETS = ("Autonomous actions allowed", "Confirm first")
+
+
+def validate_envelope_bullets(rel: str, content: str, errors: list[str]) -> None:
+    envelope = extract_section(content, "## Authorization Envelope")
+    if envelope is None:
+        return  # the missing-section error is already reported
+    for bullet in REQUIRED_ENVELOPE_BULLETS:
+        match = re.search(rf"^- {re.escape(bullet)}:(.*)$", envelope, re.MULTILINE)
+        if match is None:
+            errors.append(f"{rel}: Authorization Envelope must record '- {bullet}: ...'")
+            continue
+        if match.group(1).strip():
+            continue
+        rest = envelope[match.end():]
+        continuation = False
+        for line in rest.splitlines():
+            if not line.strip():
+                continue
+            if line.startswith((" ", "\t")):
+                continuation = True
+            break
+        if not continuation:
+            errors.append(
+                f"{rel}: '- {bullet}:' is empty — an unrecorded boundary becomes a "
+                "question gate that stops autonomous runs"
+            )
+
+
+def validate_acceptance_verify(label: str, body: str, errors: list[str]) -> None:
+    if not VERIFY_LINE_RE.search(body):
+        errors.append(
+            f"{label}: Acceptance needs '- verify: machine — <command and expected "
+            "result>' or '- verify: human-review — <review gate>' — an agent cannot "
+            "self-verify an unstated acceptance"
+        )
+
+
+# `runnability` と Acceptance の `verify:` は、既存文書がまだ書かれていなかった頃の
+# 規約に対して後から足された。既存の corpus 全体に一斉に当たるため、導入したリポジトリ
+# では 100% の文書が落ちうる（実測: あるリポジトリで issue 134/139・workstream 19/19）。
+#
+# そこを一括バックフィルで埋めると、**中身を知らないまま「それらしい検証手順」を書く**
+# ことになり、この規則が防ごうとしているものそのものを作る。緑になるが嘘が増える。
+#
+# したがって既存分は「債務」として明示的に列挙して逃がし、新しい文書には最初から
+# 効かせる。逃がしたものは減る一方になるよう、リストが古びたら落ちる。
+BASELINE_RELPATH = "docs/validator-baseline.txt"
+BASELINED_CHECKS = "runnability / Acceptance の verify:"
+
+
+def load_baseline(root: Path) -> set[str]:
+    """Repo-relative paths exempted from the newer checks. Absent file = no exemptions."""
+    path = root / BASELINE_RELPATH
+    if not path.is_file():
+        return set()
+    entries: set[str] = set()
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.split("#", 1)[0].strip()
+        if line:
+            entries.add(line)
+    return entries
+
+
+def route_baselined(
+    rel: str,
+    baseline: set[str],
+    deferred: dict[str, list[str]],
+    errors: list[str],
+    produce,
+) -> None:
+    """Send the newer checks' errors to `deferred` when the file is baselined."""
+    collected: list[str] = []
+    produce(collected)
+    if rel in baseline:
+        deferred.setdefault(rel, []).extend(collected)
+    else:
+        errors.extend(collected)
+
+
+def validate_baseline_freshness(
+    root: Path,
+    baseline: set[str],
+    deferred: dict[str, list[str]],
+    errors: list[str],
+    warnings: list[str],
+) -> None:
+    """Keep the list shrinking: stale or already-compliant entries fail."""
+    for rel in sorted(baseline):
+        if not (root / rel).is_file():
+            errors.append(
+                f"{BASELINE_RELPATH}: '{rel}' is listed but does not exist — "
+                "remove the stale entry"
+            )
+        elif not deferred.get(rel):
+            errors.append(
+                f"{BASELINE_RELPATH}: '{rel}' now satisfies {BASELINED_CHECKS} — "
+                "remove it from the baseline so it cannot regress"
+            )
+    if baseline:
+        warnings.append(
+            f"{BASELINE_RELPATH}: {len(baseline)} file(s) still exempt from "
+            f"{BASELINED_CHECKS}"
+        )
 
 
 def parse_issue_queue_table_ids(content: str) -> set[str]:
@@ -198,6 +328,8 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
     root = Path(repo).resolve()
     errors: list[str] = []
     warnings: list[str] = []
+    baseline = load_baseline(root)
+    deferred: dict[str, list[str]] = {}
 
     required_dirs = (
         "docs/adrs",
@@ -314,6 +446,11 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
                 # guide-impact check below is skipped and the file passes clean.
                 errors.append(f"{rel}: schema_version must be 2")
             else:
+                body = path.read_text()
+                route_baselined(
+                    rel, baseline, deferred, errors,
+                    lambda sink: validate_acceptance_verify(rel, body, sink),
+                )
                 guide_refs = as_list(fm.get("related_guides", []))
                 guide_impact = as_text(fm.get("guide_impact", ""))
                 validate_guide_impact(
@@ -364,6 +501,7 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
             for heading in ("## Authorization Envelope", "## Human Gates", "## Issue Queue"):
                 if heading not in content:
                     errors.append(f"{rel}: missing section '{heading}'")
+            validate_envelope_bullets(rel, content, errors)
             issue_blocks = parse_workstream_issue_blocks(content)
             if not issue_blocks:
                 errors.append(f"{rel}: no embedded ISSUE-* blocks found")
@@ -372,7 +510,7 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
             # row whose block was never written — or whose block a table reformat
             # ate — was invisible, so committed scope could archive as complete.
             tabled = parse_issue_queue_table_ids(content)
-            blocked = {issue_id for issue_id, _metadata in issue_blocks}
+            blocked = {issue_id for issue_id, _metadata, _body in issue_blocks}
             for issue_id in sorted(tabled - blocked):
                 errors.append(
                     f"{rel}: {issue_id} is listed in the Issue Queue table but has no "
@@ -383,12 +521,22 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
                     f"{rel}: {issue_id} has a '### ' block but is missing from the "
                     "Issue Queue table"
                 )
-            for issue_id, metadata in issue_blocks:
+            for issue_id, metadata, block_body in issue_blocks:
                 issue_status = metadata.get("status", "")
                 if issue_status not in ("pending", "in_progress", "blocked", "complete"):
                     errors.append(
                         f"{rel}#{issue_id}: status must be pending, in_progress, blocked, or complete"
                     )
+                def _newer_checks(sink, _m=metadata, _b=block_body, _i=issue_id):
+                    if not RUNNABILITY_RE.fullmatch(_m.get("runnability", "")):
+                        sink.append(
+                            f"{rel}#{_i}: runnability must be 'ready' or "
+                            "'gated on <reason>' — executors treat a missing record as "
+                            "gated and stop"
+                        )
+                    validate_acceptance_verify(f"{rel}#{_i}", _b, sink)
+
+                route_baselined(rel, baseline, deferred, errors, _newer_checks)
                 guide_refs = parse_inline_list(metadata.get("related_guides", "[]"))
                 guide_impact = metadata.get("guide_impact", "")
                 validate_guide_impact(
@@ -423,6 +571,8 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
                     if reference in id_locations or ref_path.is_file():
                         continue
                     warnings.append(f"{rel}: {key} ref not found: {reference}")
+
+    validate_baseline_freshness(root, baseline, deferred, errors, warnings)
 
     return errors, warnings
 

@@ -301,6 +301,194 @@ source_issues:
         )
 
 
+class DuplicateFrontMatterKeyTest(unittest.TestCase):
+    """A key declared twice used to be applied twice, last one winning silently."""
+
+    def write(self, body: str) -> Path:
+        root = Path(tempfile.mkdtemp())
+        path = root / "doc.md"
+        path.write_text(body)
+        return path
+
+    def test_duplicate_scalar_key_is_recorded(self):
+        path = self.write(
+            """---
+id: ISSUE-example
+guide_impact: none
+guide_impact_reason: "first reason"
+related_specs: []
+guide_impact: none
+guide_impact_reason: "second reason"
+---
+
+# Example
+"""
+        )
+
+        fm = MODULE.parse_front_matter(path)
+
+        self.assertEqual(
+            MODULE.duplicate_keys(fm), ["guide_impact", "guide_impact_reason"]
+        )
+
+    def test_last_declaration_still_wins(self):
+        """Report the duplicate without changing which value is used."""
+        path = self.write(
+            """---
+id: ISSUE-example
+guide_impact_reason: "first reason"
+guide_impact_reason: "second reason"
+---
+
+# Example
+"""
+        )
+
+        fm = MODULE.parse_front_matter(path)
+
+        self.assertEqual(fm["guide_impact_reason"], "second reason")
+
+    def test_duplicate_block_list_key_is_recorded(self):
+        path = self.write(
+            """---
+id: GUIDE-example
+source_workstreams:
+  - WS-a
+source_issues:
+  - ISSUE-a
+source_workstreams:
+  - WS-b
+---
+
+# Example
+"""
+        )
+
+        fm = MODULE.parse_front_matter(path)
+
+        self.assertEqual(MODULE.duplicate_keys(fm), ["source_workstreams"])
+        self.assertEqual(fm["source_workstreams"], ["WS-b"])
+
+    def test_distinct_keys_record_no_duplicate(self):
+        path = self.write(
+            """---
+id: GUIDE-example
+updated_at: 2026-08-21
+source_issues:
+  - ISSUE-a
+  - ISSUE-b
+source_workstreams: []
+---
+
+# Example
+"""
+        )
+
+        fm = MODULE.parse_front_matter(path)
+
+        self.assertEqual(MODULE.duplicate_keys(fm), [])
+
+    def test_repeated_list_items_are_not_duplicate_keys(self):
+        """`- item` lines are values, not keys; they must not trip the check."""
+        path = self.write(
+            """---
+id: GUIDE-example
+source_issues:
+  - ISSUE-a
+  - ISSUE-a
+---
+
+# Example
+"""
+        )
+
+        fm = MODULE.parse_front_matter(path)
+
+        self.assertEqual(MODULE.duplicate_keys(fm), [])
+
+    def test_duplicate_key_is_reported_once_per_key(self):
+        path = self.write(
+            """---
+id: GUIDE-example
+updated_at: 2026-08-20
+updated_at: 2026-08-21
+updated_at: 2026-08-22
+---
+
+# Example
+"""
+        )
+
+        fm = MODULE.parse_front_matter(path)
+
+        self.assertEqual(MODULE.duplicate_keys(fm), ["updated_at"])
+
+
+class DuplicateKeyValidationTest(ValidateRepoDocsV2Test):
+    def test_validate_repo_errors_on_duplicate_front_matter_key(self):
+        root = self.make_repo()
+        (root / "docs/guides/example.md").write_text(
+            """---
+id: GUIDE-example
+updated_at: 2026-08-21
+source_workstreams:
+  - WS-20260821-example
+source_issues: []
+source_workstreams:
+  - WS-20260820-other
+related_specs: []
+---
+
+# Example
+"""
+        )
+
+        errors, _warnings = MODULE.validate_repo(root)
+
+        self.assertTrue(
+            any(
+                "docs/guides/example.md" in error
+                and "source_workstreams" in error
+                and "declared more than once" in error
+                for error in errors
+            ),
+            errors,
+        )
+
+    def test_duplicate_key_in_any_docs_subtree_is_caught(self):
+        """The sweep covers docs/**, including specs and archives."""
+        root = self.make_repo()
+        (root / "docs/specs/example.md").write_text(
+            """---
+id: SPEC-example
+updated_at: 2026-08-21
+updated_at: 2026-08-22
+---
+
+# Example
+"""
+        )
+
+        errors, _warnings = MODULE.validate_repo(root)
+
+        self.assertTrue(
+            any(
+                "docs/specs/example.md" in error and "declared more than once" in error
+                for error in errors
+            ),
+            errors,
+        )
+
+    def test_clean_repo_has_no_duplicate_key_error(self):
+        root = self.make_repo()
+
+        errors, _warnings = MODULE.validate_repo(root)
+
+        self.assertFalse(
+            [error for error in errors if "declared more than once" in error], errors
+        )
+
+
 class GeneratedFilesValidateTest(ValidateRepoDocsV2Test):
     """The generators and the validator must agree.
 
@@ -945,3 +1133,96 @@ class ValidatorReportsItsTargetTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SpecFrontMatterTest(ValidateRepoDocsV2Test):
+    """docs/specs had no per-file check at all: a spec could rot and stay green."""
+
+    VALID = (
+        "---\nid: SPEC-example\nstatus: active\ncreated_at: 2026-08-21\n"
+        "updated_at: 2026-08-21\nrelated_guides: []\naffected_workstreams: []\n"
+        "related_adrs: []\n---\n\n# Example\n"
+    )
+
+    def write_spec(self, root, text, name="example.md"):
+        (root / "docs/specs" / name).write_text(text)
+
+    def test_a_valid_spec_passes(self):
+        root = self.make_repo()
+        self.write_spec(root, self.VALID)
+
+        errors, _warnings = MODULE.validate_repo(root)
+
+        self.assertEqual([e for e in errors if "docs/specs" in e], [])
+
+    def test_a_bogus_status_is_reported(self):
+        # The regression that motivated this check: breaking `status` on a real
+        # spec changed nothing in the validator's output.
+        root = self.make_repo()
+        self.write_spec(root, self.VALID.replace("status: active", "status: bogus"))
+
+        errors, _warnings = MODULE.validate_repo(root)
+
+        self.assertTrue(any("status must be draft, active, or superseded" in e for e in errors))
+
+    def test_an_id_without_the_spec_prefix_is_reported(self):
+        root = self.make_repo()
+        self.write_spec(root, self.VALID.replace("id: SPEC-example", "id: example"))
+
+        errors, _warnings = MODULE.validate_repo(root)
+
+        self.assertTrue(any("id must start with SPEC-" in e for e in errors))
+
+    def test_a_missing_updated_at_is_reported(self):
+        root = self.make_repo()
+        self.write_spec(root, self.VALID.replace("updated_at: 2026-08-21\n", ""))
+
+        errors, _warnings = MODULE.validate_repo(root)
+
+        self.assertTrue(any("updated_at is required" in e for e in errors))
+
+    def test_a_malformed_date_is_reported(self):
+        root = self.make_repo()
+        self.write_spec(root, self.VALID.replace("created_at: 2026-08-21", "created_at: 2026/08/21"))
+
+        errors, _warnings = MODULE.validate_repo(root)
+
+        self.assertTrue(any("created_at must be YYYY-MM-DD" in e for e in errors))
+
+    def test_a_superseded_spec_needs_a_successor(self):
+        root = self.make_repo()
+        self.write_spec(root, self.VALID.replace("status: active", "status: superseded"))
+
+        errors, _warnings = MODULE.validate_repo(root)
+
+        self.assertTrue(any("superseded_by is required" in e for e in errors))
+
+    def test_an_unresolved_reference_is_a_warning(self):
+        root = self.make_repo()
+        self.write_spec(root, self.VALID.replace("related_adrs: []", "related_adrs: [ADR-nope]"))
+
+        errors, warnings = MODULE.validate_repo(root)
+
+        self.assertEqual([e for e in errors if "docs/specs" in e], [])
+        self.assertTrue(any("related_adrs ref not found: ADR-nope" in w for w in warnings))
+
+    def test_a_spec_with_no_front_matter_is_warned_not_silently_skipped(self):
+        root = self.make_repo()
+        self.write_spec(root, "# Legacy report with no envelope\n", name="legacy.md")
+
+        errors, warnings = MODULE.validate_repo(root)
+
+        self.assertEqual([e for e in errors if "docs/specs" in e], [])
+        self.assertTrue(any("no front matter" in w for w in warnings))
+
+    def test_archive_and_template_are_not_scanned(self):
+        root = self.make_repo()
+        (root / "docs/specs/archive").mkdir(parents=True, exist_ok=True)
+        (root / "docs/specs/template").mkdir(parents=True, exist_ok=True)
+        (root / "docs/specs/archive/old.md").write_text("# history\n")
+        (root / "docs/specs/template/prd_template.md").write_text("# placeholder\n")
+
+        errors, warnings = MODULE.validate_repo(root)
+
+        self.assertEqual([e for e in errors if "docs/specs" in e], [])
+        self.assertEqual([w for w in warnings if "docs/specs" in w], [])

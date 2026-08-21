@@ -33,11 +33,26 @@ KEY_LINE = re.compile(r"^[A-Za-z0-9_]+:")
 FLOW_STYLE_KEYS = "__flow_style_keys__"
 
 
+# Reserved result key holding the names of keys declared more than once. The
+# parser applies each declaration in turn, so the last one wins and the earlier
+# ones are dropped without a word — recording the names is what lets the caller
+# report that instead of validating a value the file does not appear to set.
+DUPLICATE_KEYS = "__duplicate_keys__"
+
+
 def flow_style_keys(front_matter: Optional[FrontMatter]) -> list[str]:
     """Keys whose value was a bracket list opened on the line after the key."""
     if not front_matter:
         return []
     keys = front_matter.get(FLOW_STYLE_KEYS, [])
+    return list(keys) if isinstance(keys, list) else []
+
+
+def duplicate_keys(front_matter: Optional[FrontMatter]) -> list[str]:
+    """Keys declared more than once, in the order they were first declared."""
+    if not front_matter:
+        return []
+    keys = front_matter.get(DUPLICATE_KEYS, [])
     return list(keys) if isinstance(keys, list) else []
 
 
@@ -80,6 +95,7 @@ def parse_front_matter(path: str | Path) -> Optional[FrontMatter]:
 
     result: FrontMatter = {}
     flow_keys: list[str] = []
+    duplicates: list[str] = []
     current_list: Optional[str] = None
     lines = content[3:end].strip().splitlines()
     index = 0
@@ -89,6 +105,8 @@ def parse_front_matter(path: str | Path) -> Optional[FrontMatter]:
         if KEY_LINE.match(line):
             key, _, raw = line.partition(":")
             raw = raw.strip()
+            if key in result and key not in duplicates:
+                duplicates.append(key)
             current_list = None
             if raw.startswith("[") and raw.endswith("]"):
                 result[key] = parse_inline_list(raw)
@@ -110,6 +128,8 @@ def parse_front_matter(path: str | Path) -> Optional[FrontMatter]:
                 cast.append(item.strip('"').strip("'"))
     if flow_keys:
         result[FLOW_STYLE_KEYS] = flow_keys
+    if duplicates:
+        result[DUPLICATE_KEYS] = duplicates
     return result
 
 
@@ -379,6 +399,12 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
                     "list on the line below the key; rewrite it in block style "
                     "(one '- item' per line)"
                 )
+            for key in duplicate_keys(fm):
+                errors.append(
+                    f"{path.relative_to(root)}: front matter '{key}' is declared more "
+                    "than once; only the last declaration is read, so merge them into "
+                    "one"
+                )
 
     archive_dirs = (
         root / "docs/issues/archive",
@@ -424,6 +450,50 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
                     f"{rel}: front matter '{key}' opens a bracket list on the line below the key; "
                     "rewrite it in block style (one '- item' per line)"
                 )
+
+    specs_dir = root / "docs/specs"
+    if specs_dir.is_dir():
+        valid_statuses = {"draft", "active", "superseded"}
+        # Only the top level: archive/ keeps history verbatim and template/ holds
+        # placeholder text that is not a spec.
+        for path in sorted(specs_dir.glob("*.md")):
+            rel = str(path.relative_to(root))
+            fm = parse_front_matter(path)
+            if fm is None:
+                errors.append(f"{rel}: broken front matter")
+                continue
+            if not fm:
+                # Predates the spec envelope. A warning rather than an error so
+                # the legacy population stays visible without blocking, but
+                # dropping the envelope from a managed spec cannot go unsaid.
+                warnings.append(
+                    f"{rel}: no front matter — not validated as a managed spec"
+                )
+                continue
+            spec_id = as_text(fm.get("id", ""))
+            if not spec_id.startswith("SPEC-"):
+                errors.append(f"{rel}: id must start with SPEC-")
+            for key in ("created_at", "updated_at"):
+                value = as_text(fm.get(key, ""))
+                if key == "created_at" and not value:
+                    # references/spec.template.md omits it; only grill's does not.
+                    continue
+                if not value:
+                    errors.append(f"{rel}: {key} is required")
+                elif not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+                    errors.append(f"{rel}: {key} must be YYYY-MM-DD, got '{value}'")
+            status = as_text(fm.get("status", ""))
+            if status not in valid_statuses:
+                errors.append(f"{rel}: status must be draft, active, or superseded")
+            if status == "superseded" and not as_text(fm.get("superseded_by", "")):
+                errors.append(
+                    f"{rel}: superseded_by is required when status is superseded"
+                )
+            for key in ("related_guides", "affected_workstreams", "related_adrs"):
+                for reference in as_list(fm.get(key, [])):
+                    if reference in id_locations or (root / reference).is_file():
+                        continue
+                    warnings.append(f"{rel}: {key} ref not found: {reference}")
 
     branch_owners: dict[str, list[str]] = {}
     issues_dir = root / "docs/issues"

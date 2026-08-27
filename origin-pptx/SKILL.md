@@ -4,9 +4,9 @@ description: >
   PowerPoint・スライド・プレゼン資料作成/編集で必ず使うこと。「PPTX作成」「スライド作って」
   「プレゼン資料」「プレゼンテーション」「パワポ」「パワーポイント」「資料作成」「deck」
   「presentation」「slides」「.pptx」など、これらの語が少しでも含まれる依頼で起動する。
-  ネイティブ（PptxGenJS）レイアウト・箱・矢印・日本語テキスト ＋ Codex image_gen による
-  文字なしアイコン/イラストのハイブリッド方式で、完全編集可能かつ視覚的にリッチな PPTX を
-  生成する、実証済み(PoC完了)のパイプライン。旧来の template + python-pptx 方式
+  ネイティブ（PptxGenJS）レイアウト・箱・矢印・日本語テキスト ＋ Material Symbols の
+  意味アイコン ＋ Codex image_gen による文字なしイラストのハイブリッド方式で、
+  完全編集可能かつ視覚的にリッチな PPTX を生成する、実証済み(PoC完了)のパイプライン。旧来の template + python-pptx 方式
   を置き換える現行スキル（旧方式は廃止済み）。PPTXが入力・出力どちらであっても
   （新規作成・既存ファイルの編集・読み込みも含め）このスキルを使う。
 ---
@@ -137,8 +137,13 @@ pptx 生成後の差し戻し（注入やり直し・成果物の版管理混乱
 実装させる**」形になる。outline.md / mockup_task.md のテキスト記述だけから組んではいけない——
 テキストは構図の近似でしかなく、2026-07-10 に24枚中18枚が承認モックアップと別物になった
 （アイコン・バッジ・吹き出し等のデバイス欠落、入れ子構図の平坦化）。
-モックアップに**アイコン・イラストが写っているなら、下記のアセット生成（image_gen）は省略できない
-必須工程**（各ビルダーが「このスライドに必要な文字なしアセット」を列挙→まとめて1バッチ生成）。
+モックアップに**アイコン・イラストが写っているなら、アセット準備は省略できない必須工程**。
+供給源は2系統に分かれる（2026-08-27 A/B実測で確定・`references/material-icons.md`）:
+**意味アイコン = Material Symbols 標準**（`vocab_map.json` に意味→symbol を起こし
+`scripts/fetch_material_icons.py` で取得〔ネットワーク・人間確認1回〕→ `scripts/recolor_svg.py`
+で4色化 → SVG を直接 `addImage`。wght300×opsz48 固定・normalize 不要・濃色セルは白fill直置き）、
+**イラスト（人物・いらすとや調等）= image_gen**（各ビルダーが必要アセットを列挙→1バッチ生成。
+語彙に無いアイコンはビルダーに発明させず「不足アセット」報告で集約）。
 
 `scripts/build_slide.example.js` が1枚もの参照実装（PoC実証済み・**v2時代のため座標/色は旧仕様、
 構成の参考のみ**）。複数枚デッキでは
@@ -149,9 +154,8 @@ pptx 生成後の差し戻し（注入やり直し・成果物の版管理混乱
 を渡す。**書く前に `references/pptxgenjs-gotchas.md` を必ず一読**（ShapeTypeはインスタンス側・chevron/
 homePlateのテキスト切れ・フッター下端clip・ST.line矢じりが薄い→塗り三角・画像アスペクト保持・
 addChartの限界・アイコン正規化）。
-**アイコンは埋め込み前に `scripts/normalize_icons.py` で正規化**（白背景透過＋ライン画を #404040 単色化。
-ポジ/ネガ意味のあるアイコンのみ `--color 44546A` / `--color C00000`）——
-生のimage_gen産は白ボックス露出＋線が淡く視認不良になる（2026-07-10に2周した）。
+**`scripts/normalize_icons.py` は image_gen 産イラストの透過処理専用**（ラインアイコンには使わない。
+Material Symbols は `recolor_svg.py` の fill 書き換えだけで足りる——`references/material-icons.md`）。
 
 - タイトル(tracker)・キーメッセージ・カード・ラベル・本文はネイティブテキスト/シェイプ。
   **できるだけPowerPoint標準プリセット図形を使い、単体で無理な形は標準図形の組み合わせで作る。
@@ -207,7 +211,8 @@ python3 <skill>/scripts/set_fonts.py 最終成果物.pptx     # 必須: テン�
 
 ## image_gen（Codex built-in, gpt-image-2）— 概要
 
-②のモックアップ、③のアセット生成の両方で使う。組立規約は `style-guide/imagegen-prompt-convention.md`。
+②のモックアップと、③の**イラスト**生成で使う（③の意味アイコンは Material Symbols 標準に置換済み
+——`references/material-icons.md`）。組立規約は `style-guide/imagegen-prompt-convention.md`。
 
 ```bash
 codex features list | grep image_generation   # → stable true を確認
@@ -296,11 +301,15 @@ imagegen-prompt-convention.md §10（型スライド=厳格 / 自由形=ブラ�
 - `references/image_gen.md` — image_gen の全詳細（保存先の罠・透過クロマキー・権限ルール・モデル仕様）
 - `references/pptxgenjs-gotchas.md` — ③ネイティブビルドの落とし穴集（ShapeType・chevron/homePlateの文字切れ・フッター下端clip・ST.line矢じり・画像フィット・addChart限界・アイコン正規化・LibreOffice特有の罠）
 - `references/builder_brief.template.md` — 各スライドビルダーへ渡す共通ブリーフの雛形（正本優先順位）
+- `references/material-icons.md` — **意味アイコンの標準（Material Symbols）**: 取得（wght300×opsz48）・vocab_map規約・再着色・SVG直接埋め込み・単一概念グリフの限界と対策・④但し書き（2026-08-27 A/B実測で image_gen 生成から置換）
 - `style-guide/` — tokens / layout-grammar / imagegen-prompt-convention / chart-rules
 - `scripts/build_slide.example.js` — PptxGenJS 1枚もの参照実装（v2時代・構成の参考のみ。座標/色はv3が正）
 - `scripts/deck_helpers.js` — 複数枚デッキ用の共通ヘルパ v3（③の土台に使う。masterクローム/numUnit含む）
 - `scripts/split_deck.py` — build_deck.js を slides/sNN.js に分割（ビルダー並列化用）
-- `scripts/normalize_icons.py` — image_gen産アイコンの正規化（白背景透過＋#404040単色化。埋め込み前に必須）
+- `scripts/fetch_material_icons.py` — 意味アイコンの取得（vocab_map.json → Material Symbols wght300×opsz48 を icons_std/ へキャッシュ・LICENSE同梱。**ネットワーク・実行前に人間確認**）
+- `scripts/recolor_svg.py` — Material Symbols の再着色（fill 書き換えで #404040/#44546A/#C00000/#FFFFFF の4色を機械生成・冪等）
+- `scripts/svg_to_png.py` — SVG→透過PNG のフォールバック（soffice 黒レンダ→輝度→アルファ着色。svgBlip 非対応の配布先が出た場合のみ）
+- `scripts/normalize_icons.py` — image_gen産**イラスト**の透過処理（`--illustrations`。ラインアイコンには使わない——material-icons.md）
 - `scripts/set_fonts.py` — **ビルド後必須**のフォント統一（全XMLの a:latin/a:ea/a:cs を BIZ UDPGothic に書き換え。ビルド直後と inject後の最終ファイルの2回実行・冪等）
 - `scripts/sanitize_pptx.py` — **ビルド後必須**のPowerPoint修復エラー矯正（チャートXMLスキーマ違反・負extentの修正。gotchas §15-17）
 - `scripts/inject_template.py` — **④.5（人間の画像確認OK）後の最終成果物化**: template_v3.pptx を土台に生成スライドを移植（人間がマスター準拠スライドを追加できる形にする）

@@ -145,3 +145,80 @@ class WrappedEntryTest(unittest.TestCase):
         new_content, _removed = MODULE.remove_index_entry(content, "docs/issues", "ISSUE-a")
 
         self.assertIn("Unrelated prose that must survive.", new_content)
+
+
+class CrossSectionLinkTest(unittest.TestCase):
+    """A bullet's *first* link decides its identity; later prose links don't.
+
+    2026-08-26: archiving ISSUE-20260812-approval-apply-audit-gap deleted the
+    unrelated `## Specs` bullet for governed-apply-audit-trail.md, because that
+    bullet's own description cites the archived issue as a supporting link. The
+    docstring on `_entry_line_pattern` already promised that a mere mention of
+    another entry is left alone; it just never covered mentions that happen to
+    be markdown links rather than bare text.
+    """
+
+    def test_a_bullet_whose_description_links_to_the_target_is_not_removed(self):
+        content = (
+            "## Specs\n\n"
+            "- [governed-apply-audit-trail](specs/governed-apply-audit-trail.md) — "
+            "監査証跡の仕様。詳細は [ISSUE-20260812-approval-apply-audit-gap]"
+            "(issues/ISSUE-20260812-approval-apply-audit-gap.md) を参照\n\n"
+            "## Active Issues\n\n"
+            "- [ISSUE-20260812-approval-apply-audit-gap]"
+            "(issues/ISSUE-20260812-approval-apply-audit-gap.md) — 未着手\n"
+        )
+
+        new_content, removed = MODULE.remove_index_entry(
+            content, "docs/issues", "ISSUE-20260812-approval-apply-audit-gap"
+        )
+
+        self.assertEqual(removed, 1)
+        self.assertIn(
+            "[governed-apply-audit-trail](specs/governed-apply-audit-trail.md)",
+            new_content,
+        )
+        self.assertIn("## Specs", new_content)
+
+    def test_the_targets_own_bullet_is_still_removed_alongside_a_citing_bullet(self):
+        content = (
+            "- [governed-apply-audit-trail](specs/governed-apply-audit-trail.md) — "
+            "詳細は [ISSUE-x](issues/ISSUE-x.md) を参照\n"
+            "- [ISSUE-x](issues/ISSUE-x.md) — 未着手\n"
+        )
+
+        new_content, removed = MODULE.remove_index_entry(content, "docs/issues", "ISSUE-x")
+
+        self.assertEqual(removed, 1)
+        self.assertIn("governed-apply-audit-trail", new_content)
+        self.assertNotIn("- [ISSUE-x](issues/ISSUE-x.md) — 未着手", new_content)
+
+
+class NestedSiblingCascadeTest(unittest.TestCase):
+    """The continuation clause must not eat indented sibling bullets.
+
+    2026-08-18: `[ \\t]+` in the continuation clause is a normal backtracking
+    quantifier. When a wrapped entry is immediately followed by a *nested*
+    sibling bullet (indented two spaces, as in a sub-list), the quantifier can
+    retry with a shorter whitespace match — landing the `(?![-*+][ \\t])`
+    lookahead one character short of the bullet marker, where it wrongly
+    succeeds. The rest of the sibling's line is then swallowed as if it were
+    continuation prose of the removed entry, and the cascade repeats for every
+    following nested sibling, wiping the whole block instead of one entry.
+    """
+
+    def test_nested_sibling_bullets_after_a_removed_entry_survive(self):
+        content = (
+            "## Active Issues\n\n"
+            "- [A](issues/A.md) — first line of entry A\n"
+            "  - [B](issues/B.md) — nested sibling bullet, indented 2 spaces\n"
+            "  - [C](issues/C.md) — another nested sibling bullet\n"
+            "- [D](issues/D.md) — unrelated top-level sibling\n"
+        )
+
+        new_content, removed = MODULE.remove_index_entry(content, "docs/issues", "A")
+
+        self.assertEqual(removed, 1)
+        self.assertIn("issues/B.md", new_content)
+        self.assertIn("issues/C.md", new_content)
+        self.assertIn("issues/D.md", new_content)

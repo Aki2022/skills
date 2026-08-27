@@ -10,11 +10,16 @@ sanitize_pptx.py — pptxgenjs 産 pptx の「PowerPoint 修復エラー」要�
   2) <c:marker> が <c:dLbls> の後に出力される（CT_LineSer 等の子要素順序は marker が先）
   3) defineSlideMaster の slideNumber オプションは idx="4294967295" の不正プレース
      ホルダを吐く（deck_helpers v3 は不使用。検出したら警告のみ＝手動対応）
+  4) pptxgenjs はプリセット図形の adjustment 値（吹き出しの尻尾位置等）を公開しないため、
+     deck_helpers.speechBubble() 等は shape 名に `<名前>@adj1=..,adj2=..` とエンコードする。
+     本スクリプトが <a:avLst> へ <a:gd> を注入して印を除去する（2026-08-27 追加。
+     --check は未注入の印を NG として検出する）
 
 使い方:
   python3 sanitize_pptx.py output.pptx          # in-place 修正
   python3 sanitize_pptx.py output.pptx --check  # 修正せず検査のみ（exit 1 = 要修正）
 """
+import re
 import sys
 import shutil
 import tempfile
@@ -86,6 +91,48 @@ def fix_negative_extents(data: bytes, name: str):
     return ET.tostring(root, encoding="UTF-8", xml_declaration=True), n
 
 
+P_NS = "http://schemas.openxmlformats.org/presentationml/2006/main"
+ET.register_namespace("p", P_NS)
+_ADJ_MARK = re.compile(r"^(?P<base>.*)@(?P<adjs>adj\d+=-?\d+(?:,adj\d+=-?\d+)*)$")
+
+
+def fix_callout_adjustments(data: bytes, name: str):
+    """shape 名 `<名前>@adj1=..,adj2=..` の印を <a:prstGeom> の <a:avLst>/<a:gd> に変換する。
+    pptxgenjs 4.0.1 はプリセット図形の adjustment（吹き出し尻尾位置等）を公開しないための後処理。
+    印は注入後に shape 名から除去する（冪等: 2回目は印が無いので no-op）。"""
+    if b"@adj" not in data:
+        return data, 0
+    _reject_dtd(data, name)
+    root = _fromstring(data)
+    n = 0
+    for sp in root.iter(f"{{{P_NS}}}sp"):
+        cnv = sp.find(f".//{{{P_NS}}}cNvPr")
+        if cnv is None:
+            continue
+        m = _ADJ_MARK.match(cnv.get("name", ""))
+        if not m:
+            continue
+        geom = sp.find(f".//{{{A}}}prstGeom")
+        if geom is None:
+            continue
+        av = geom.find(f"{{{A}}}avLst")
+        if av is None:
+            av = ET.SubElement(geom, f"{{{A}}}avLst")
+        else:
+            for gd in list(av):
+                av.remove(gd)
+        for pair in m.group("adjs").split(","):
+            key, val = pair.split("=")
+            gd = ET.SubElement(av, f"{{{A}}}gd")
+            gd.set("name", key)
+            gd.set("fmla", f"val {val}")
+        cnv.set("name", m.group("base"))
+        n += 1
+    if n == 0:
+        return data, 0
+    return ET.tostring(root, encoding="UTF-8", xml_declaration=True), n
+
+
 def fix_chart_xml(data: bytes, name: str = "chart.xml"):
     """(fixed_bytes, n_fixes) を返す。修正不要なら n_fixes=0。"""
     _reject_dtd(data, name)
@@ -144,6 +191,12 @@ def main():
                     issues += n
                     fixes[name] = fixed
                     print(f"negative-extent fix: {name} ({n} shapes)")
+            if name.endswith(".xml") and name.startswith("ppt/slides/"):
+                fixed, n = fix_callout_adjustments(fixes.get(name, data), name)
+                if n:
+                    issues += n
+                    fixes[name] = fixed
+                    print(f"callout-adj fix: {name} ({n} shapes)")
             if name.endswith(".xml") and b'idx="4294967295"' in data:
                 # 情報表示のみ（issues に数えない）: 実ファイルで PowerPoint が dt ph の
                 # idx=4294967295 を許容する反例を確認済み（2026-07-13）。修復トリガーとしては

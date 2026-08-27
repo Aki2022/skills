@@ -275,37 +275,29 @@ function mk({ date = "", year = new Date().getFullYear(), font } = {}) {
   // 三角を先に描くと本体の枠線が付け根を横切り「分離した浮遊三角」に見える
   // (2026-07-11に2回失敗した実証。tailCenterYは尻尾中心のy、尻尾は左向き)。
   // v3: 注釈用途（白地+枠線）が既定。警告は line: C.neg を明示。
+  // 吹き出し: PowerPoint 標準の wedgeRoundRectCallout を単一オブジェクトで置く（gotchas §10）。
+  // 旧v3の3オブジェクト合成（roundRect+三角+白矩形）は継ぎ目が露出し、後工程の人間編集の
+  // 負担になるため廃止（2026-08-27 ユーザー差し戻し）。標準シェイプなら PowerPoint 上で
+  // 黄色ハンドルで尻尾をドラッグ調整できる。
+  // 尻尾位置は OOXML adjustment 値だが pptxgenjs 4.0.1 は adj を公開しないため、
+  // objectName に `speechBubble@adj1=..,adj2=..,adj3=..` とエンコードし、必須工程
+  // sanitize_pptx.py（fix_callout_adjustments）が <a:avLst> へ注入する。
+  // 既定の尻尾: 左辺の tailCenterY 高さから tailLen 分左へ。o.tipX/o.tipY で任意方向。
   function speechBubble(s, x, y, w, h, tailCenterY, o = {}) {
     const tailLen = o.tailLen || 20;
-    const baseHalf = o.baseHalf || 12;
-    const overlap = 4;
-    const lc = o.line || C.heading;
-    const lw = o.lw || 1.25;
-    s.addShape(ST.roundRect, {
+    const tipX = o.tipX != null ? o.tipX : x - tailLen;
+    const tipY = o.tipY != null ? o.tipY : tailCenterY;
+    const adj1 = Math.round(((tipX - (x + w / 2)) / w) * 100000);
+    const adj2 = Math.round(((tipY - (y + h / 2)) / h) * 100000);
+    const adj3 = Math.round(((o.r || 11) / Math.min(w, h)) * 100000);
+    s.addShape(ST.wedgeRoundRectCallout, {
       x: IN(x),
       y: IN(y),
       w: IN(w),
       h: IN(h),
-      rectRadius: IN(o.r || 11),
       fill: { color: o.fill || C.white },
-      line: { color: lc, width: lw },
-    });
-    s.addShape(ST.triangle, {
-      x: IN(x + overlap - baseHalf - tailLen / 2),
-      y: IN(tailCenterY - tailLen / 2),
-      w: IN(2 * baseHalf),
-      h: IN(tailLen),
-      rotate: 270,
-      fill: { color: o.fill || C.white },
-      line: { color: lc, width: lw },
-    });
-    s.addShape(ST.rect, {
-      x: IN(x - 1),
-      y: IN(tailCenterY - baseHalf + 3),
-      w: IN(overlap + 2),
-      h: IN(2 * baseHalf - 6),
-      fill: { color: o.fill || C.white },
-      line: { type: "none" },
+      line: { color: o.line || C.heading, width: o.lw || 1.25 },
+      objectName: `speechBubble@adj1=${adj1},adj2=${adj2},adj3=${adj3}`,
     });
   }
   function badge(s, cx, cy, d, n, o = {}) {

@@ -182,7 +182,7 @@ addChartの限界・アイコン正規化）。
 - 色・サイズ・クローム座標は必ず `tokens.json`（v3）から引く（ハードコード禁止）
 - 品質基準（v3・test3実測）: tracker14pt / キーメッセージ28pt(1行) / カード見出し25pt bold /
   本文14pt / 数字20pt+単位10pt。本文・脚注の最下端 y≤500、フッター帯 y=512.8 は master 任せ。
-  吹き出しは`speechBubble()`ヘルパ（gotchas §9-10）
+  吹き出しは`speechBubble()`ヘルパ＝標準wedgeRoundRectCallout単一オブジェクト（gotchas §10・sanitize必須）
 - 人物・UIモック等の「密度が品質に直結するアセット」は**quality=high**＋人物はバストアップ指定で生成（gotchas §13）
 
 ```bash

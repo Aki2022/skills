@@ -95,12 +95,20 @@ y=392 は soffice 描画で下端 clip して日付が欠ける（§3の旧値�
 これを守るため、各スライドの本文・注記・source の最下端は **y≤370** に収める。
 source（出所）は y=372 でフッターの1段上。
 
-## 10. 吹き出しの尻尾は「本体→三角→白矩形で開口」の描画順（2026-07-11 に2回失敗）
+## 10. 吹き出しは標準 wedgeRoundRectCallout 単一オブジェクト＋adj後処理（2026-08-27 改訂）
 
-尻尾三角を本体より先に描くと、本体の枠線が付け根を横切り「分離した浮遊三角」に見える。
-正解の順序: ①本体 roundRect（枠線つき）→ ②尻尾 triangle（同じ塗り＋枠線、付け根を本体内側へ
-2-4pt 食い込ませる）→ ③付け根の継ぎ目を枠線なしの白矩形で覆い「開口」させる。
-実装済みヘルパ **`deck_helpers.speechBubble()`** を使う（自作しない）。
+吹き出しを roundRect＋尻尾三角＋白矩形の**3オブジェクト合成で作らない**。旧v3方式（2026-07-11
+の描画順対処）は継ぎ目・浮遊三角が出やすいうえ、**後工程で人間が動かすと3つバラバラで負担になる**
+（2026-08-27 ユーザー差し戻し。合成方式はレンダでも継ぎ目露出を実測）。
+正解: PowerPoint 標準プリセット `ST.wedgeRoundRectCallout` を1オブジェクトで置く——人間は
+黄色ハンドルで尻尾を直接ドラッグできる（SKILL.md の「標準プリセット図形を使う」原則の適用）。
+尻尾位置は OOXML adjustment 値（adj1=中心からのX offset（幅比×100000）・adj2=同Y・adj3=角丸）だが
+**pptxgenjs 4.0.1 は adj を公開しない**（rectRadius/angleRange の特殊ケースのみ）。このため
+`deck_helpers.speechBubble()` は objectName に `speechBubble@adj1=..,adj2=..` とエンコードし、
+必須工程 **`sanitize_pptx.py`（fix_callout_adjustments）が <a:avLst> へ注入**する。
+sanitize を通し忘れると尻尾が既定位置（左下）のままになる—— `--check` が未注入の印を NG として
+検出する。自作せず speechBubble() を使う（soffice レンダ＋sanitize --check で検証済み 2026-08-27。
+PowerPoint 実機は次回デッキの④.5で確認する）。
 
 ## 11. チャート軸ラベルの箱幅はバーピッチに合わせる
 
@@ -218,12 +226,12 @@ pptxgenjs は `addText([...])` の**ラン1つごとに段落プロパティ `<a
 このため「1つの箇条書き項目を複数ランに分ける」と、bullet の扱いが必ず壊れる。
 4通り全部踏んだので結論だけ守ること。
 
-| やり方 | 結果 |
-| --- | --- |
-| run1 に bullet あり / run2 に無し | run2 が `buNone` を出し、**その段落の■が消える** |
-| run1・run2 とも bullet あり | **段落が分割されて■が2個**になる（項目が途中で割れる） |
+| やり方                            | 結果                                                                                    |
+| --------------------------------- | --------------------------------------------------------------------------------------- |
+| run1 に bullet あり / run2 に無し | run2 が `buNone` を出し、**その段落の■が消える**                                        |
+| run1・run2 とも bullet あり       | **段落が分割されて■が2個**になる（項目が途中で割れる）                                  |
 | ■を本文に手で埋め込み bullet 無し | ■は出るが**ぶら下げインデントが効かず**、折返し行がマーカー位置まで戻って他項目とズレる |
-| 1ラン内に `\n` を入れる | **行ごとに新段落**が生成され、■が行数ぶん複製される |
+| 1ラン内に `\n` を入れる           | **行ごとに新段落**が生成され、■が行数ぶん複製される                                     |
 
 **唯一の安全な形**:
 
@@ -233,12 +241,32 @@ pptxgenjs は `addText([...])` の**ラン1つごとに段落プロパティ `<a
 - **「冒頭だけ太字」は諦めて、項目全体を太字にする**（部分強調のために割ると上の罠に落ちる）
 
 ```js
-const bulletOpts = { fontFace: F, fontSize: 16, color: C.heading,
-  bullet: { code: "25A0", indent: 16 }, paraSpaceAfter: 8, lineSpacingMultiple: 1.2 };
-s.addText([
-  { text: "強調したい項目は全体を太字にする", options: { ...bulletOpts, bold: true, breakLine: true } },
-  { text: "通常の項目", options: { ...bulletOpts, breakLine: true } },
-], { x: IN(630), y: IN(110), w: IN(288), h: IN(268), fontFace: F, fontSize: 16, valign: "top" });
+const bulletOpts = {
+  fontFace: F,
+  fontSize: 16,
+  color: C.heading,
+  bullet: { code: "25A0", indent: 16 },
+  paraSpaceAfter: 8,
+  lineSpacingMultiple: 1.2,
+};
+s.addText(
+  [
+    {
+      text: "強調したい項目は全体を太字にする",
+      options: { ...bulletOpts, bold: true, breakLine: true },
+    },
+    { text: "通常の項目", options: { ...bulletOpts, breakLine: true } },
+  ],
+  {
+    x: IN(630),
+    y: IN(110),
+    w: IN(288),
+    h: IN(268),
+    fontFace: F,
+    fontSize: 16,
+    valign: "top",
+  },
+);
 ```
 
 ※ 色を部分的に変えたい場合（例: 「約0.25%」だけ赤）も同じ罠に落ちる。

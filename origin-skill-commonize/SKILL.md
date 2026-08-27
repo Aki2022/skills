@@ -28,11 +28,11 @@ commandsやMCP設定を別々のconfiguration directoryに持ち得る。放置�
 
 ## 正典（single source of truth）の場所
 
-| スコープ                   | 正典                                                                           | symlink で向けるもの                                                |
-| -------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------- |
-| グローバル・ツール横断     | `~/.agents/AGENTS.md`、`~/.agents/skills/`                                     | `~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md`、`~/.claude/skills`ほか |
-| グローバル・ツール固有共有 | `~/.agents/<tool>/`配下。Claude例: `commands/`、非秘密の`mcp.json`             | primary/secondaryを含む各tool configuration directoryの対応path     |
-| リポジトリ単位             | `<repo>/AGENTS.md`、`<repo>/.agents/skills/`、必要なら`<repo>/.agents/<tool>/` | `<repo>/CLAUDE.md`、`<repo>/.claude/skills`、tool固有aliasほか      |
+| スコープ                   | 正典                                                                                                                       | symlink で向けるもの                                                |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| グローバル・ツール横断     | `~/.agents/AGENTS.md`、`~/.agents/skills/`                                                                                 | `~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md`、`~/.claude/skills`ほか |
+| グローバル・ツール固有共有 | `~/.agents/<tool>/`配下。Claude例: `commands/`、非秘密の`mcp.json`。Codex例: `hooks.json`、`AGENTS.override.md`、`agents/` | primary/secondaryを含む各tool configuration directoryの対応path     |
+| リポジトリ単位             | `<repo>/AGENTS.md`、`<repo>/.agents/skills/`、必要なら`<repo>/.agents/<tool>/`                                             | `<repo>/CLAUDE.md`、`<repo>/.claude/skills`、tool固有aliasほか      |
 
 `.agents/` を正典にする理由: Codex CLI がユーザースキルとして `~/.agents/skills` を公式に読み、
 かつ `.agents` はツール非依存の中立な名前のため。
@@ -102,18 +102,32 @@ for d in .agents/skills .claude/skills .codex/skills; do
   else echo "$d: 不在"; fi
 done
 
-# Claude複数accountの共有静的設定を確認（内容は読まない）
-for p in \
-  ~/.agents/claude/commands ~/.agents/claude/mcp.json \
-  ~/.claude/commands ~/.claude/mcp.json \
-  ~/.claude-seat2/commands ~/.claude-seat2/mcp.json
-do
-  if [ -L "$p" ]; then echo "$p: symlink → $(readlink "$p")";
-  elif [ -d "$p" ]; then echo "$p: 実体ディレクトリ";
-  elif [ -f "$p" ]; then echo "$p: 実体ファイル";
-  else echo "$p: 不在"; fi
+# 複数accountの共有静的設定を確認（内容は読まない）。
+# account homeの命名規約: 無印=main、-seat2=二席目、-private=旧personal
+for home in ~/.claude ~/.claude-seat2 ~/.claude-private; do
+  for p in "$home/CLAUDE.md" "$home/skills" "$home/commands" "$home/mcp.json"; do
+    if [ -L "$p" ]; then echo "$p: symlink → $(readlink "$p")";
+    elif [ -d "$p" ]; then echo "$p: 実体ディレクトリ";
+    elif [ -f "$p" ]; then echo "$p: 実体ファイル";
+    else echo "$p: 不在"; fi
+  done
+done
+for home in ~/.codex ~/.codex-seat2 ~/.codex-private; do
+  for p in "$home/AGENTS.md" "$home/AGENTS.override.md" "$home/agents" "$home/hooks.json"; do
+    if [ -L "$p" ]; then echo "$p: symlink → $(readlink "$p")";
+    elif [ -d "$p" ]; then echo "$p: 実体ディレクトリ";
+    elif [ -f "$p" ]; then echo "$p: 実体ファイル";
+    else echo "$p: 不在"; fi
+  done
+  # Codexのskillsはdirectory全体をsymlinkせず、skillごとのsymlinkを並べる
+  # （codexが skills/.system をaccount stateとして書き込むため）
+  links=$(find "$home/skills" -maxdepth 1 -type l 2>/dev/null | wc -l | tr -d ' ')
+  echo "$home/skills: per-skill symlink ${links}本"
 done
 ```
+
+Codexのper-skill symlinkは正典 `~/.agents/skills/` の各スキルへ直接向ける。
+本数が `~/.codex`（main）と他accountで食い違えば未統一と判定する。
 
 **棚卸し時の判定ルール（スキル）:**
 
@@ -279,10 +293,14 @@ bash ~/.agents/skills/origin-skill-commonize/scripts/skill_lint.sh
 ```
 正典:   .agents/AGENTS.md          .agents/skills/
         .agents/claude/commands/    .agents/claude/mcp.json（非秘密のみ）
+        .agents/codex/hooks.json    .agents/codex/AGENTS.override.md  .agents/codex/agents/
 別名:   CLAUDE.md  → AGENTS.md      .claude/skills → .agents/skills
         .codex/AGENTS.md → ...      .codex/skills/<name> → .agents/skills/<name>
         各Claude accountのcommands/mcp.json → .agents/claude/...
+        各Codex accountのhooks.json/AGENTS.override.md/agents → .agents/codex/...
+account home: 無印=main、-seat2=二席目、-private=旧personal（Claude/Codex共通）
 分離:   auth / session / history / project state / log / cache
+        （Claude settings.json・Codex config.tomlはaccount固有。symlinkしない）
 編集:   どの別名を編集しても正典が更新される（symlink を壊さない限り）
 禁止:   symlink の実体化 / 別コピー作成 / 正典削除 / secretやaccount stateの共有
 ```

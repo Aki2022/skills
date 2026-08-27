@@ -482,7 +482,10 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
                     errors.append(f"{rel}: {key} is required")
                 elif not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
                     errors.append(f"{rel}: {key} must be YYYY-MM-DD, got '{value}'")
-            status = as_text(fm.get("status", ""))
+            # Both spec templates ship `status: draft # draft | active | superseded`,
+            # and the front-matter reader does not strip YAML comments — so without
+            # this the check would reject a spec created straight from the template.
+            status = as_text(fm.get("status", "")).split("#")[0].strip()
             if status not in valid_statuses:
                 errors.append(f"{rel}: status must be draft, active, or superseded")
             if status == "superseded" and not as_text(fm.get("superseded_by", "")):

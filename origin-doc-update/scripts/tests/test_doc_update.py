@@ -1226,3 +1226,24 @@ class SpecFrontMatterTest(ValidateRepoDocsV2Test):
 
         self.assertEqual([e for e in errors if "docs/specs" in e], [])
         self.assertEqual([w for w in warnings if "docs/specs" in w], [])
+
+    def test_the_template_status_comment_is_tolerated(self):
+        root = self.make_repo()
+        self.write_spec(
+            root,
+            self.VALID.replace(
+                "status: active", "status: draft # draft | active | superseded"
+            ),
+        )
+
+        errors, _warnings = MODULE.validate_repo(root)
+
+        self.assertEqual([e for e in errors if "docs/specs" in e], [])
+
+    def test_a_bogus_status_behind_a_comment_still_fails(self):
+        root = self.make_repo()
+        self.write_spec(root, self.VALID.replace("status: active", "status: bogus # active"))
+
+        errors, _warnings = MODULE.validate_repo(root)
+
+        self.assertTrue(any("status must be draft, active, or superseded" in e for e in errors))

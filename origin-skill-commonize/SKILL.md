@@ -40,7 +40,7 @@ commandsやMCP設定を別々のconfiguration directoryに持ち得る。放置�
 | -------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
 | グローバル・skill          | `~/.agents/skills/`（**nix 管理外・書き込み可**。ここは従来どおり）                                                        | `~/.claude/skills`、`~/.codex/skills` ほか                          |
 | グローバル・静的設定 27 件 | **nix-darwin flake repo の `home/agent-config/<相対パス>`**（実ファイル・書き込み可・git 管理下）。`~/.agents/AGENTS.md` 等はその**描画先**であって編集元ではない | `~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md`、`~/.gemini/GEMINI.md` ほか |
-| グローバル・ツール固有共有 | `~/.agents/<tool>/`配下。Claude例: `commands/`、非秘密の`mcp.json`。Codex例: `hooks.json`、`AGENTS.override.md`、`agents/` | primary/secondaryを含む各tool configuration directoryの対応path     |
+| グローバル・ツール固有共有 | `~/.agents/<tool>/`配下。Claude例: `commands/`、非秘密の`mcp.json`。Codex例: `hooks.json`、`agents/`（`AGENTS.override.md` は**共有してはいけない** — 下記） | primary/secondaryを含む各tool configuration directoryの対応path     |
 | リポジトリ単位             | `<repo>/AGENTS.md`、`<repo>/.agents/skills/`、必要なら`<repo>/.agents/<tool>/`                                             | `<repo>/CLAUDE.md`、`<repo>/.claude/skills`、tool固有aliasほか      |
 
 `.agents/` を正典にする理由: Codex CLI がユーザースキルとして `~/.agents/skills` を公式に読み、
@@ -82,13 +82,48 @@ MCP設定は値を確認せず機械的に正典化しない。secretを含ま�
 `.agents/<tool>/`へ置き、credentialは参照名または環境変数だけにする。判定できない場合は移動を止め、
 既存fileを維持したままhuman reviewを求める。
 
+## symlink が正しくても正典が届かないことがある
+
+**配置の正しさは到達の証拠ではない。** 2026-08-28 に実測した失敗:
+`~/.codex/AGENTS.md` は正典への symlink として正しく張られていたのに、
+Codex は正典を 19 日間まったく読んでいなかった。
+
+原因は Codex の解決規則。公式仕様は
+"Codex reads `AGENTS.override.md` if it exists. Otherwise, Codex reads `AGENTS.md`."
+——**override は追加ではなく置換**で、同じ階層の `AGENTS.md` を無効化する。
+`~/.codex/AGENTS.override.md`（23 行・期限切れ）が存在したため、正典 50 行は
+一度も読まれなかった。Codex の全 account が同じ symlink を共有していたので
+全席が同時に影響を受けた。リポジトリ階層の `AGENTS.md` は正常に読まれ続けたため、
+壊れているようには見えなかった。
+
+したがって:
+
+- **`AGENTS.override.md` を正典化・共有してはいけない。** 存在自体が
+  「正典が読まれていない」ことを意味する。棚卸しでは symlink 先ではなく
+  **存在の有無**を検査する。
+- 他ツールにも同種の罠がありうる（Cursor は `.cursorrules` を Agent mode で
+  読まない、Copilot は `copilot-instructions.md` と AGENTS.md の優先順位が
+  未定義、など）。**新しいツールを正典に接続するときは、ファイル名だけでなく
+  「置換規則の有無」を公式ドキュメントで確認する。**
+- 最終的な確認は **canary** で行う。正典に一意な文字列を仕込み、各エージェントに
+  復唱させて初めて到達が証明できる。symlink の検査は代理経路にすぎない。
+
 ## 不変条件（これを破ると分岐が復活する）
 
 これは常に守ること。symlink 構成を前提に動く。
 
-1. **symlink 経由の編集は正しい。** `~/.claude/CLAUDE.md` や `.claude/skills/foo/SKILL.md` を
-   編集してよい — それは正典を編集することになり、全エージェントに反映される。`#` キーでの
-   書き戻しも同様に正典へ届く。
+1. **symlink 経由の編集が正しいのは、正典が書き込み可能な場合だけ。**
+   `.claude/skills/foo/SKILL.md` のように **nix 管理外**の正典を指す alias は、
+   編集すれば正典が更新され全エージェントへ反映される。
+   **nix 管理下の 12 件は違う。** `~/.claude/CLAUDE.md` の実体は `/nix/store/...` の
+   `r--r--r--`（所有者 `nixbld`）で、alias 経由でも直接でも書けない。
+   **`#` キーによるメモリ書き戻しもここでは失敗する** — 2026-08-28 に実測。
+   これらの編集元は上表のとおり nix-darwin flake repo 側で、反映には `switch` が要る。
+   どちらの側かは `ls -lL <path>` で実体の権限を見れば分かる。
+
+   **編集したまま `switch` を忘れると、宣言と実環境がズレる。** これは
+   `system_state.py --check` が「active or prospective system state drift」として
+   赤で報告する（2026-08-28 に実測で確認）ので、その赤を放置しないこと。
 2. **symlink を実体ファイル／ディレクトリに置き換えない。** `rm` してから `Write` で作り直す、
    といった操作は分岐を復活させる。編集は in-place（symlink を保ったまま中身を書く）で行う。
    エディタによっては「保存時に symlink を置換」する設定があるため注意。
@@ -137,12 +172,14 @@ for home in ~/.claude ~/.claude-seat2 ~/.claude-private; do
   done
 done
 for home in ~/.codex ~/.codex-seat2 ~/.codex-private; do
-  for p in "$home/AGENTS.md" "$home/AGENTS.override.md" "$home/agents" "$home/hooks.json"; do
+  for p in "$home/AGENTS.md" "$home/agents" "$home/hooks.json"; do
     if [ -L "$p" ]; then echo "$p: symlink → $(readlink "$p")";
     elif [ -d "$p" ]; then echo "$p: 実体ディレクトリ";
     elif [ -f "$p" ]; then echo "$p: 実体ファイル";
     else echo "$p: 不在"; fi
   done
+  # AGENTS.override.md は「あってはいけない」側。存在すれば正典が読まれていない
+  [ -e "$home/AGENTS.override.md" ] && echo "$home: AGENTS.override.md が正典を隠している"
   # Codexのskillsはdirectory全体をsymlinkせず、skillごとのsymlinkを並べる
   # （codexが skills/.system をaccount stateとして書き込むため）
   links=$(find "$home/skills" -maxdepth 1 -type l 2>/dev/null | wc -l | tr -d ' ')
@@ -283,7 +320,11 @@ symlink 統一と同じくこの Skill が所有する。原則は「**決定論
 
 `scripts/skill_lint.sh` を実行する。SKILL.md の存在、frontmatter の name/description、
 name とディレクトリ名の一致、同梱リソース参照（scripts/ references/ assets/）の実在、
-壊れた symlink を exit code で判定する。
+壊れた symlink を exit code で判定する。第三者由来の `design` の name/ディレクトリ不一致は
+`WARN S3` として exit code から分離し、自前 skill の不一致だけを `FAIL` とする。
+加えて、同一 root 内の frontmatter `name` の完全重複と `source-command-*` の対応先を
+`WARN S7` として報告し、隣接する `codex/hooks.json` の bash 参照先が存在しない場合は
+`FAIL S6` とする。description の意味的類似・発火競合は決定論的 lint の対象外で、トリアージで扱う。
 
 ```bash
 bash ~/.agents/skills/origin-skill-commonize/scripts/skill_lint.sh
@@ -317,11 +358,12 @@ bash ~/.agents/skills/origin-skill-commonize/scripts/skill_lint.sh
 ```
 正典:   .agents/AGENTS.md          .agents/skills/
         .agents/claude/commands/    .agents/claude/mcp.json（非秘密のみ）
-        .agents/codex/hooks.json    .agents/codex/AGENTS.override.md  .agents/codex/agents/
+        .agents/codex/hooks.json    .agents/codex/agents/
 別名:   CLAUDE.md  → AGENTS.md      .claude/skills → .agents/skills
         .codex/AGENTS.md → ...      .codex/skills/<name> → .agents/skills/<name>
         各Claude accountのcommands/mcp.json → .agents/claude/...
-        各Codex accountのhooks.json/AGENTS.override.md/agents → .agents/codex/...
+        各Codex accountのhooks.json/agents → .agents/codex/...
+禁止:   AGENTS.override.md（置換仕様。あると正典 AGENTS.md が読まれない）
 account home: 無印=main、-seat2=二席目、-private=旧personal（Claude/Codex共通）
 分離:   auth / session / history / project state / log / cache
         （Claude settings.json・Codex config.tomlはaccount固有。symlinkしない）

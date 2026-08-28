@@ -37,20 +37,30 @@ def _entry_line_pattern(rel_dir: str, entry_id: str) -> re.Pattern:
     # mention is left alone" guarantee below, which only ever covered bare ids.
     return re.compile(
         rf"^[ \t]*-[ \t]+(?:(?!\]\()[^\n])*(?:\]\([^)\n]*{target}\)|(?<![\w./]){target}(?![\w.]))[^\n]*\n?"
-        # 2026-08-18: `[ \t]+` here is a normal (backtracking) quantifier, so
-        # when the lookahead below rejects its greedy match it can retry with
-        # fewer whitespace chars. For a *nested* sibling bullet (e.g.
-        # "  - [B](...)") that retry finds a 1-space split where the next
-        # char is a plain space rather than `-`/`*`/`+`, so `(?![-*+][ \t])`
-        # is satisfied against the wrong offset and the trailing `[^\n]*`
-        # swallows the sibling bullet as if it were continuation prose —
-        # cascading into every following nested sibling and wiping the block.
-        # `++` (possessive) commits to the longest whitespace run and forbids
-        # backtracking it, so the lookahead is only ever evaluated at the true
-        # end of the line's leading indentation: if that position is a bullet
-        # marker, this line is correctly rejected as a continuation instead of
-        # being retried at a shorter, wrong split.
-        rf"(?:[ \t]++(?![-*+][ \t])[^\n]*\n?)*",
+        # 2026-08-18: a plain (backtracking) `[ \t]+` here let the quantifier
+        # retry with fewer whitespace chars whenever a lookahead placed right
+        # after it rejected the greedy match. For a *nested* sibling bullet
+        # (e.g. "  - [B](...)") that retry lands on a 1-space split where the
+        # next char is a plain space rather than `-`/`*`/`+`, so a lookahead
+        # sitting at that post-`[ \t]+` position gets satisfied against the
+        # wrong offset and the trailing `[^\n]*` swallows the sibling bullet
+        # as continuation prose — cascading into every following nested
+        # sibling and wiping the block.
+        #
+        # A first fix used `++` (possessive) to forbid that retry, but `++`
+        # is Python 3.11+ only (`re.error: multiple repeat` on 3.9/3.10) and
+        # the dependency was invisible from the call site — nothing declares
+        # a 3.11 floor, so `archive_issue.py` would die at import on an older
+        # interpreter. The portable fix instead moves the "is this a bullet
+        # line?" check to a fixed anchor that never moves: a lookahead
+        # evaluated *before* any indentation is consumed, which scans
+        # `[ \t]*` internally to ask "does *some* amount of leading
+        # whitespace on this line reach a bullet marker?" That question's
+        # answer does not depend on how the following `[ \t]+` later
+        # backtracks — the assertion was already resolved at a fixed offset
+        # — so the plain backtracking quantifier can no longer defeat it, and
+        # no possessive quantifier (or any 3.11+ syntax) is needed.
+        rf"(?:(?![ \t]*[-*+][ \t])[ \t]+[^\n]*\n?)*",
         re.MULTILINE,
     )
 

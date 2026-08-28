@@ -26,16 +26,40 @@ commandsやMCP設定を別々のconfiguration directoryに持ち得る。放置�
 これを防ぐため、**正典を 1 つ決め、他は正典への symlink にする**。これにより
 どのパスを編集しても正典が更新され、全エージェントに即時反映される（常にフレッシュ）。
 
+> **重要（2026-08-28 更新）**: グローバルの `~/.agents` **直下の静的ファイル 27 件**は
+> nix-darwin / Home Manager の管理下に入り、`/nix/store/...` への **root 所有・`0444` の
+> symlink** として描画されるようになった。**この 27 件については上の「どのパスを編集しても
+> 正典が更新される」は成り立たない** — エイリアス経由どころか `~/.agents` 側で直接編集しても
+> permission error になる。実際の編集元は下表を参照。
+> **`~/.agents/skills/` は nix の管理外**（独立した git repo・書き込み可）なので、
+> skill については従来どおり `~/.agents/skills/` が正典のまま。
+
 ## 正典（single source of truth）の場所
 
 | スコープ                   | 正典                                                                                                                       | symlink で向けるもの                                                |
 | -------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| グローバル・ツール横断     | `~/.agents/AGENTS.md`、`~/.agents/skills/`                                                                                 | `~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md`、`~/.claude/skills`ほか |
+| グローバル・skill          | `~/.agents/skills/`（**nix 管理外・書き込み可**。ここは従来どおり）                                                        | `~/.claude/skills`、`~/.codex/skills` ほか                          |
+| グローバル・静的設定 27 件 | **nix-darwin flake repo の `home/agent-config/<相対パス>`**（実ファイル・書き込み可・git 管理下）。`~/.agents/AGENTS.md` 等はその**描画先**であって編集元ではない | `~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md`、`~/.gemini/GEMINI.md` ほか |
 | グローバル・ツール固有共有 | `~/.agents/<tool>/`配下。Claude例: `commands/`、非秘密の`mcp.json`。Codex例: `hooks.json`、`AGENTS.override.md`、`agents/` | primary/secondaryを含む各tool configuration directoryの対応path     |
 | リポジトリ単位             | `<repo>/AGENTS.md`、`<repo>/.agents/skills/`、必要なら`<repo>/.agents/<tool>/`                                             | `<repo>/CLAUDE.md`、`<repo>/.claude/skills`、tool固有aliasほか      |
 
 `.agents/` を正典にする理由: Codex CLI がユーザースキルとして `~/.agents/skills` を公式に読み、
 かつ `.agents` はツール非依存の中立な名前のため。
+
+### 静的設定 27 件の編集手順（nix 管理下）
+
+1. nix-darwin flake repo の `home/agent-config/<相対パス>` を**直接編集する**（普通のファイル。
+   nix コードを書く必要は無い — `home/agents.nix` がそのディレクトリを**再帰的に取り込む**ため、
+   取り込み対象の増減を変えるとき以外は `.nix` に触らない）。
+2. 同 repo の driver script（`nix-darwin.sh`。repo 直下の `scripts` ディレクトリにある）を
+   `switch` 引数付きで実行して描画し直す。**このスキル配下のパスではない**ので、
+   相対パス表記で書くと skill lint の S4（参照の実在検査）に引っかかる。
+3. `~/.agents/<相対パス>` が新しい nix store のパスを指していることで反映を確認する。
+
+**`~/.agents` 側で 27 件を git 追跡してはいけない**（2026-08-28 に追跡を解除済み）。
+nix store のハッシュは `switch` のたびに変わるため、追跡すると `git status` に
+typechange が出続けて本物の変更が埋もれる。正典側の repo が既に追跡しているので、
+`~/.agents` での追跡は二重持ちにあたる。
 
 ## 共有設定とaccount stateの境界
 

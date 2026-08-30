@@ -184,3 +184,16 @@ image_gen のラインアイコンは **「白の不透明背景・細く淡い�
 
 ログから session id を抽出し、そのセッション専用ディレクトリの mtime 順で指定名に
 コピーする定型処理（上記の並列競合対策を実装済み）。手書きの find/ls -t 回収は禁止。
+
+**edit-mode（参照画像を渡す生成）では枚数が合わない。** 入力画像のコピーも session dir に
+保存されるため、1生成でも 2 枚残り `count mismatch: session <id> has 2 images, but 1 output
+names given` で止まる（2026-08-27 実測・同日 2 回）。**この時に `ls -t` の手動回収へ逃げない**
+（誤回収リスクを負う。実際に負った）。生成物だけを取るなら明示フラグを使う:
+
+```bash
+python3 <skill>/scripts/collect_codex_images.py --take-latest process/mockup_02_fix.log process/mockup_02.png
+```
+
+`--take-latest` は mtime の新しい側（＝生成物）、`--take-first` は古い側を取る。
+除外した枚数とファイル名は `note:` 行に出る。**足りない側（生成 < 出力名）は救済しない** —
+黙って欠落を埋めるのが最悪の失敗なので、そこは従来どおり止まる。

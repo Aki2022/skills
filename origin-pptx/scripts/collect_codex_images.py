@@ -68,8 +68,27 @@ def main():
     if not sid:
         raise SystemExit(f"session id not found in {log}（codexがstdin待ちでハングした可能性。"
                          "起動時に < /dev/null を付けたか確認）")
-    codex = os.environ.get("CODEX_HOME", os.path.expanduser("~/.codex"))
-    files = sorted(glob.glob(f"{codex}/generated_images/{sid}/*.png"), key=os.path.getmtime)
+    # session id からシート横断で generated_images を探索する。
+    # codex2 等のマルチシートラッパーは CODEX_HOME を子プロセス内だけで切り替えるため、
+    # 呼び出し側シェルの CODEX_HOME に頼ると別シートの生成物を見失う（2026-08-31 実測）。
+    # sid は UUID で一意なので、候補ルート全部から <root>/generated_images/<sid> を探せば決定的。
+    roots = []
+    env_home = os.environ.get("CODEX_HOME")
+    if env_home:
+        roots.append(env_home)
+    roots += sorted(glob.glob(os.path.expanduser("~/.codex*")))
+    session_dirs = []
+    for root in roots:
+        d = os.path.join(root, "generated_images", sid)
+        if os.path.isdir(d) and d not in session_dirs:
+            session_dirs.append(d)
+    if not session_dirs:
+        raise SystemExit(
+            f"generated_images/{sid} が見つからない（探索ルート: {', '.join(roots) or '~/.codex*'}）"
+        )
+    if len(session_dirs) > 1:
+        raise SystemExit(f"session {sid} が複数シートに存在して曖昧: {session_dirs}")
+    files = sorted(glob.glob(f"{session_dirs[0]}/*.png"), key=os.path.getmtime)
     try:
         picked = select_files(files, len(outs), take=take)
     except SystemExit as exc:

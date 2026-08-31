@@ -12,23 +12,41 @@ title: origin-pptx — Codex image_gen 完全ガイド
 ## モデル・認証・コスト
 
 - モデル: **gpt-image-2**（Codex 組み込みツール経由。CLIフォールバックの `gpt-image-1.5` とは別物）
-- 認証: ChatGPTサブスクリプションのOAuth（`~/.codex/auth.json` の `auth_mode=chatgpt`）
+- 認証: ChatGPTサブスクリプションのOAuth（使用シートの `auth.json` で `auth_mode=chatgpt`）
 - **`OPENAI_API_KEY` は不要。従量API課金も発生しない**（サブスクリプション内の利用）
 - 品質は実写レベルで確認済み（PoCで日本語オフィス協働シーン・柴犬系写実画像を検証、いずれも高忠実度）
+
+## コマンド解決（マルチシート・2026-08-31 導入）
+
+実行コマンドは `style-guide/skill-config.json` の `imageGen` で解決する:
+**`codexBin`（既定 `codex2`）が PATH にあればそれを、無ければ `fallbackBin`（`codex`）**。
+
+```bash
+CODEX_BIN=$(command -v codex2 || command -v codex)
+```
+
+- `codex2` は `CODEX_HOME=~/.codex-seat2` で同じ codex バイナリを起動する**別シートのラッパー**。
+  シートごとに認証・利用枠が分かれるため、メインシートが `Your workspace is out of credits` を
+  返す場合（2026-08-31 実測）はサブスクOAuth側のシートで実行する
+- ログイン確認はシート側で行う: `codex2 login status` → `Logged in using ChatGPT`
+- **生成物の保存先もシートに従う**（`~/.codex-seat2/generated_images/<session-id>/`）。
+  回収は `scripts/collect_codex_images.py` が session id から `~/.codex*` 全シートを自動探索する
+  ため、呼び出し側で CODEX_HOME を渡す必要はない（ラッパーは子プロセス内だけで CODEX_HOME を
+  切り替えるため、呼び出し側シェルの CODEX_HOME に頼る旧実装は別シートの生成物を見失う）
 
 ## 事前確認
 
 ```bash
-codex features list | grep image_generation
+"$CODEX_BIN" features list | grep image_generation
 # → image_generation  stable  true が出ればOK
 ```
 
-スキル定義本体は `$CODEX_HOME/skills/.system/imagegen/SKILL.md`（`CODEX_HOME` 既定値 `~/.codex`）に同梱されている。
+スキル定義本体は `$CODEX_HOME/skills/.system/imagegen/SKILL.md`（`CODEX_HOME` はシートに従う。既定シートは `~/.codex`）に同梱されている。
 
 ## 呼び出しコマンド（推奨: 安全モード）
 
 ```bash
-codex exec --sandbox workspace-write -c sandbox_workspace_write.network_access=true --cd "$PWD" "<prompt>"
+"$CODEX_BIN" exec --sandbox workspace-write -c sandbox_workspace_write.network_access=true --cd "$PWD" "<prompt>"
 ```
 
 ※作業ディレクトリがgitリポジトリ外（scratchpad等）の場合は `--skip-git-repo-check` を追加する（無いと「Not inside a trusted directory」で即終了する・2026-07-28実測）。

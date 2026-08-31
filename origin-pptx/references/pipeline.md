@@ -86,7 +86,8 @@ title: origin-pptx パイプライン詳細（⓪〜⑤）
      実データの図は③で `scripts/build_chart_svg.py` 等でネイティブ描画する。
 2. 安全モードで実行する（**AI が直接実行できる**。`references/image_gen.md` のAUTHORIZATIONルール参照）:
    ```bash
-   codex exec --sandbox workspace-write -c sandbox_workspace_write.network_access=true --cd "$PWD" "<組み立てたプロンプト>"
+   CODEX_BIN=$(command -v codex2 || command -v codex)   # skill-config.json imageGen で解決
+   "$CODEX_BIN" exec --sandbox workspace-write -c sandbox_workspace_write.network_access=true --cd "$PWD" "<組み立てたプロンプト>"
    ```
 3. 生成物を `$CODEX_HOME/generated_images/` から find してワークスペースへコピー（`references/image_gen.md` のSAVE-PATH GOTCHA参照）。
 4. **★人間がモックアップをレビューし、デザイン意思決定を完結させる**。この時点で構図（ノード数・配置・余白バランス・トーン）が確定する。③以降はこのモックアップの構図をそのまま実装するだけで、デザインをやり直さない。レビューは下記の**チャット対話式レビューループ**で実施する。

@@ -273,8 +273,9 @@ axes values, or numbers inside it — it is a placeholder to be replaced by a na
 ### 呼び出し
 
 ```bash
-codex features list | grep image_generation   # stable true を確認
-codex exec --sandbox workspace-write -c sandbox_workspace_write.network_access=true --cd "$PWD" "<組み立てたプロンプト>"
+CODEX_BIN=$(command -v codex2 || command -v codex)   # skill-config.json imageGen で解決（codex2=別シートラッパー優先）
+"$CODEX_BIN" features list | grep image_generation   # stable true を確認
+"$CODEX_BIN" exec --sandbox workspace-write -c sandbox_workspace_write.network_access=true --cd "$PWD" "<組み立てたプロンプト>"
 ```
 
 - Codex既定サンドボックスはネットワーク遮断のため、`-c sandbox_workspace_write.network_access=true` で

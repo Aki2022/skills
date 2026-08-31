@@ -215,11 +215,15 @@ python3 <skill>/scripts/set_fonts.py 最終成果物.pptx     # 必須: テン�
 ——`references/material-icons.md`）。組立規約は `style-guide/imagegen-prompt-convention.md`。
 
 ```bash
-codex features list | grep image_generation   # → stable true を確認
-codex exec --sandbox workspace-write -c sandbox_workspace_write.network_access=true --cd "$PWD" "<プロンプト>"
+# 実行コマンドは skill-config.json の imageGen で解決する（codexBin=codex2 優先・無ければ fallbackBin=codex）
+CODEX_BIN=$(command -v codex2 || command -v codex)
+"$CODEX_BIN" features list | grep image_generation   # → stable true を確認
+"$CODEX_BIN" exec --sandbox workspace-write -c sandbox_workspace_write.network_access=true --cd "$PWD" "<プロンプト>"
 ```
 
-- gpt-image-2、ChatGPTサブスクOAuth。**OPENAI_API_KEY 不要・従量課金なし**
+- gpt-image-2、ChatGPTサブスクOAuth。**OPENAI_API_KEY 不要・従量課金なし**。
+  `codex2` は CODEX_HOME を別シートへ切り替えるラッパー（マルチシート）——メインシートが
+  「out of credits」を返す環境ではサブスクOAuth側のシートを使う（skill-config.json `imageGen._note`）
 - アセットのプロンプトは必ず **"NO text, no labels"** で終える
 - **一貫性はスタイルアンカー方式**（シード値は存在しない）: 承認済み1枚目をedit-modeの参照画像に
 
@@ -291,7 +295,7 @@ imagegen-prompt-convention.md §10（型スライド=厳格 / 自由形=ブラ�
 - `pptxgenjs`（npm）
 - フォント: BIZ UDPGothic（Windows 10+標準。macはGoogle Fontsから導入・`fc-list | grep -i "biz ud"`で確認）
 - `soffice`（LibreOffice）・`pdftoppm`（poppler）
-- Codex CLI ログイン済み（`codex features list` で `image_generation stable true`）
+- Codex CLI ログイン済み（`"$CODEX_BIN" features list` で `image_generation stable true`。マルチシート環境では skill-config.json `imageGen.codexBin` のシート＝`codex2 login status` で確認）
 
 ## リファレンス
 

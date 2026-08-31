@@ -8,7 +8,81 @@ has to be deleted by hand every time.
 
 import re
 
-__all__ = ["remove_index_entry"]
+__all__ = ["find_index_entry_lines", "normalize_entry_id", "remove_index_entry"]
+
+
+def normalize_entry_id(value: str) -> str:
+    """Normalize an id, filename, or path to the stem used by an index link."""
+    value = value.strip().replace("\\", "/").rstrip("/")
+    value = value.rsplit("/", 1)[-1]
+    return value[:-3] if value.endswith(".md") else value
+
+
+def _section_bodies(content: str) -> list[tuple[int, int]]:
+    """Return ranges between headings, excluding heading lines themselves.
+
+    Markdown headings inside fenced code are ignored. If there is no heading, the
+    whole input remains one compatible fixture body.
+    """
+    headings: list[tuple[int, int]] = []
+    offset = 0
+    fence_char = None
+    fence_width = 0
+    for line in content.splitlines(keepends=True):
+        bare = line.rstrip("\r\n")
+        if fence_char is not None:
+            if re.match(
+                rf"^[ \t]{{0,3}}{re.escape(fence_char)}{{{fence_width},}}[ \t]*$",
+                bare,
+            ):
+                fence_char = None
+                fence_width = 0
+        else:
+            opening = re.match(r"^[ \t]{0,3}(`{3,}|~{3,})", bare)
+            if opening:
+                fence_char = opening.group(1)[0]
+                fence_width = len(opening.group(1))
+            elif re.match(r"^[ \t]{0,3}#{1,6}[ \t]+", bare):
+                headings.append((offset, offset + len(line)))
+        offset += len(line)
+
+    if not headings:
+        return [(0, len(content))]
+    return [
+        (heading_end, headings[index + 1][0] if index + 1 < len(headings) else len(content))
+        for index, (_heading_start, heading_end) in enumerate(headings)
+    ]
+
+
+def _editable_ranges(content: str) -> list[tuple[int, int]]:
+    """Return heading-body ranges with fenced code removed from edit scope."""
+    ranges: list[tuple[int, int]] = []
+    for section_start, section_end in _section_bodies(content):
+        segment_start = section_start
+        offset = section_start
+        fence_char = None
+        fence_width = 0
+        for line in content[section_start:section_end].splitlines(keepends=True):
+            bare = line.rstrip("\r\n")
+            if fence_char is not None:
+                if re.match(
+                    rf"^[ \t]{{0,3}}{re.escape(fence_char)}{{{fence_width},}}[ \t]*$",
+                    bare,
+                ):
+                    segment_start = offset + len(line)
+                    fence_char = None
+                    fence_width = 0
+            else:
+                opening = re.match(r"^[ \t]{0,3}(`{3,}|~{3,})", bare)
+                if opening:
+                    if segment_start < offset:
+                        ranges.append((segment_start, offset))
+                    fence_char = opening.group(1)[0]
+                    fence_width = len(opening.group(1))
+            offset += len(line)
+        if fence_char is None and segment_start < section_end:
+            ranges.append((segment_start, section_end))
+    return ranges
 
 
 def _entry_line_pattern(rel_dir: str, entry_id: str) -> re.Pattern:
@@ -17,7 +91,7 @@ def _entry_line_pattern(rel_dir: str, entry_id: str) -> re.Pattern:
     Deliberately anchored on the `.md` path so that a mere prose mention of the id in
     another entry's description is left alone.
     """
-    ident = re.escape(entry_id)
+    ident = re.escape(normalize_entry_id(entry_id))
     # docs/issues -> issues, so both "docs/issues/X.md" and "](issues/X.md)" match.
     leaf = re.escape(rel_dir.split("/")[-1])
     target = rf"(?:{re.escape(rel_dir)}|{leaf})/{ident}\.md"
@@ -65,22 +139,48 @@ def _entry_line_pattern(rel_dir: str, entry_id: str) -> re.Pattern:
     )
 
 
+def _table_row_pattern(rel_dir: str, entry_id: str) -> re.Pattern:
+    """Match a table row whose first cell points at the target entry."""
+    ident = re.escape(normalize_entry_id(entry_id))
+    leaf = re.escape(rel_dir.split("/")[-1])
+    target = rf"(?:{re.escape(rel_dir)}|{leaf})/{ident}\.md"
+    return re.compile(
+        rf"^[ \t]*\|[^\n|]*(?:\]\([^\)\n|]*{target}\)|(?<![\w./]){target}(?![\w.]))[^\n|]*\|[^\n]*\n?",
+        re.MULTILINE,
+    )
+
+
+def find_index_entry_lines(content: str, rel_dir: str, entry_id: str) -> list[tuple[int, str]]:
+    """Return ``(1-based line number, first line)`` for every target row/bullet."""
+    patterns = (_entry_line_pattern(rel_dir, entry_id), _table_row_pattern(rel_dir, entry_id))
+    found: set[tuple[int, str]] = set()
+    for body_start, body_end in _editable_ranges(content):
+        body = content[body_start:body_end]
+        for pattern in patterns:
+            for match in pattern.finditer(body):
+                line_number = content.count("\n", 0, body_start + match.start()) + 1
+                first_line = match.group(0).splitlines()[0].rstrip("\r")
+                found.add((line_number, first_line))
+    return sorted(found)
+
+
 def remove_index_entry(content: str, rel_dir: str, entry_id: str):
     """Drop every index list line pointing at ``<rel_dir>/<entry_id>.md``.
 
     Returns ``(new_content, removed_count)``. An entry can legitimately appear in more
     than one section (e.g. both Current Focus and Active Issues), so all are removed.
     """
-    pattern = _entry_line_pattern(rel_dir, entry_id)
-    new_content, removed = pattern.subn("", content)
-
-    # Indexes also grow markdown *table* rows (`| [X](issues/X.md) | ... |`).
-    # The list-line pattern missed those twice, printed "not found in
-    # docs/00_index.md", and left the archived entry listed as active.
-    ident = re.escape(entry_id)
-    leaf = re.escape(rel_dir.split("/")[-1])
-    target = rf"(?:{re.escape(rel_dir)}|{leaf})/{ident}\.md"
-    table_pattern = re.compile(rf"^[ \t]*\|[^\n]*{target}[^\n]*\n?", re.MULTILINE)
-    new_content, removed_rows = table_pattern.subn("", new_content)
-
-    return new_content, removed + removed_rows
+    ranges = _editable_ranges(content)
+    pieces: list[str] = []
+    cursor = 0
+    removed_total = 0
+    for start, end in ranges:
+        pieces.append(content[cursor:start])
+        body = content[start:end]
+        updated, removed = _entry_line_pattern(rel_dir, entry_id).subn("", body)
+        updated, removed_rows = _table_row_pattern(rel_dir, entry_id).subn("", updated)
+        pieces.append(updated)
+        removed_total += removed + removed_rows
+        cursor = end
+    pieces.append(content[cursor:])
+    return "".join(pieces), removed_total

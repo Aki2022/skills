@@ -1062,6 +1062,34 @@ x
         self.assertNotEqual(result.returncode, 0, "an unstarted issue archived cleanly")
         self.assertIn("checklist", (result.stdout + result.stderr).lower())
 
+    def test_completed_issue_archives_from_id_and_reports_index_row(self):
+        root = self.make_repo()
+        issue_id = "ISSUE-20260803-completed"
+        (root / "docs/issues" / f"{issue_id}.md").write_text(
+            "---\nschema_version: 2\nid: " + issue_id + "\n"
+            "status: active\ncreated_at: 2026-08-03\nupdated_at: 2026-08-03\n"
+            "branch: main\nguide_impact: none\nguide_impact_reason: x\n"
+            "related_guides: []\n---\n\n# Completed\n\n## Acceptance\n\n"
+            "- verify: machine — archive script completes\n\n## Completion\n\n"
+            "- [x] done\n"
+        )
+        (root / "docs/00_index.md").write_text(
+            "---\nupdated_at: 2026-08-03\ncurrent_focus: x\n---\n\n# 00 Index\n\n"
+            f"- [{issue_id}](issues/{issue_id}.md) — active\n"
+        )
+        self.assert_fixture_is_otherwise_valid(root)
+
+        result = self.run_script(self.ARCHIVE_ISSUE, issue_id, "--repo", str(root))
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertFalse((root / "docs/issues" / f"{issue_id}.md").exists())
+        archived = root / "docs/issues/archive" / f"{issue_id}.md"
+        self.assertTrue(archived.exists())
+        self.assertIn("status: archived", archived.read_text())
+        self.assertNotIn(issue_id, (root / "docs/00_index.md").read_text())
+        self.assertIn("removed 1 active reference", result.stdout)
+        self.assertIn("line 8:", result.stdout)
+
     def test_the_self_referential_archive_box_does_not_block_archiving(self):
         """The "Workspace archived" box is the action this script performs.
 

@@ -1,11 +1,11 @@
 ---
 name: origin-grill
-description: Shape, create, or materially revise repository specs through a rigorous one-question-at-a-time interview grounded in existing docs and code. Use at the start of greenfield development, when a feature or product direction is still ambiguous, when the user asks to create or grill a spec, or when an existing docs/specs file needs a substantive change. Create the expected docs scaffold when absent, persist resolved decisions into a draft spec during the dialogue, and finalize only after explicit shared-understanding approval. Do not use for mechanical spec edits, typo fixes, read-only summaries, or implementation after a spec is already settled.
+description: Shape, create, or materially revise repository specs through a rigorous interview that stress-tests material assumptions one question at a time, grounded in existing docs and code. Use at the start of greenfield development, when a feature or product direction is still ambiguous, when the user asks to create or grill a spec, or when an existing docs/specs file needs a substantive change. Create the expected docs scaffold when absent, persist resolved decisions into a draft spec during the dialogue, and finalize only after explicit shared-understanding approval. Do not use for mechanical spec edits, typo fixes, read-only summaries, or implementation after a spec is already settled.
 ---
 
 # Origin Grill
 
-Turn an ambiguous development direction into an approved `docs/specs/` source of intent. Interview the user, maintain the domain language, and write the spec as decisions resolve. Do not implement the result.
+Turn an ambiguous development direction into an approved `docs/specs/` source of intent. Interview the user, stress-test material assumptions, maintain the domain language, and write the spec as decisions resolve. Do not implement the result.
 
 ## Prepare the repository
 
@@ -19,6 +19,14 @@ Turn an ambiguous development direction into an approved `docs/specs/` source of
 
 Answer factual questions from the repository, tools, or authoritative sources. Ask the user only for decisions, priorities, domain knowledge, and acceptable tradeoffs.
 
+## Stress-test assumptions and delegate fact-finding
+
+- Keep facts and decisions separate. For each decision that materially affects scope, constraints, architecture, or acceptance, challenge the current assumption with a concrete counterexample, boundary case, or failure scenario.
+- Keep the exploration bounded: stop probing a branch once its outcome cannot change the stated goals, constraints, or acceptance criteria. Do not turn stress-testing into an exhaustive list of hypothetical branches.
+- When a factual prerequisite is not readily available and can be isolated, delegate a bounded, read-only fact-finding task to a sub-agent. Keep independent user decisions moving; do not wait for delegation before asking unrelated questions.
+- Treat a sub-agent report as a discovery lead, not primary evidence. Verify material findings against the repository, a tool result, or another authoritative source before recording them in the draft.
+- If delegation is unavailable or its latency or cost is disproportionate, use direct tools or record the factual gap explicitly rather than blocking the grill.
+
 ## Establish the draft
 
 For greenfield work, first resolve enough of the purpose and canonical name to choose a stable slug. Then create `docs/specs/<slug>.md` from `references/spec.template.md` with `status: draft` and add a clearly marked draft entry to `docs/00_index.md`.
@@ -29,7 +37,7 @@ Create files lazily. Do not invent a spec filename before its subject is underst
 
 ## Run the grill
 
-Build a decision tree privately, then walk it in dependency order. Ask exactly one question per turn and wait for the answer.
+Build a **bounded decision tree** privately. Mark each material branch `open`, `settled`, `deferred`, or `out-of-scope`, then walk it in dependency order. Ask exactly one question per turn and wait for the answer.
 
 For every question:
 
@@ -69,6 +77,7 @@ After each answer, update the draft before asking the next question:
 - preserve unrelated settled requirements;
 - record only the resolved outcome and important rationale, not the interview transcript;
 - keep unresolved branches in `Open Questions`;
+- mark each material branch as `open`, `settled`, `deferred`, or `out-of-scope`; do not silently collapse a branch into an assumption;
 - store the single next question in `Next Question` so an interrupted session can resume;
 - update `updated_at`.
 
@@ -84,10 +93,11 @@ Treat the grill as complete only when the spec has:
 - observable requirements and representative edge cases;
 - relevant constraints and tradeoffs;
 - testable acceptance criteria;
+- every material decision-tree branch has a terminal status (`settled`, `deferred`, or `out-of-scope`);
 - no hidden open decision, only explicitly deferred ones;
 - an identified impact on existing guides, code, and active work.
 
-Then summarize the resulting decisions and ask one final question: whether shared understanding has been reached and the spec is approved.
+Then summarize the resulting decisions, stress-tested assumptions, and deferred or out-of-scope branches, and ask one final question: whether shared understanding has been reached and the spec is approved.
 
 If the user says no, continue the grill. If the user approves:
 
@@ -106,6 +116,7 @@ Never during this skill:
 
 - ask multiple questions in one turn;
 - ask for facts the repository can answer;
+- claim exhaustive coverage of hypothetical branches; close every material branch explicitly instead;
 - start implementation, create a branch, or create a workstream;
 - mark a spec active without explicit approval;
 - silently overwrite a contradiction;

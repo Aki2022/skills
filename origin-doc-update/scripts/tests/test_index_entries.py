@@ -222,3 +222,54 @@ class NestedSiblingCascadeTest(unittest.TestCase):
         self.assertIn("issues/B.md", new_content)
         self.assertIn("issues/C.md", new_content)
         self.assertIn("issues/D.md", new_content)
+
+
+class SectionBoundaryAndAuditTest(unittest.TestCase):
+    def test_only_section_body_targets_are_removed(self):
+        content = (
+            "---\n"
+            "note: docs/issues/ISSUE-a.md\n"
+            "---\n\n"
+            "## Notes\n\n"
+            "```markdown\n"
+            "- docs/issues/ISSUE-a.md — code example\n"
+            "```\n\n"
+            "## Active Issues\n\n"
+            "- docs/issues/ISSUE-a.md — active\n"
+        )
+
+        new_content, removed = MODULE.remove_index_entry(
+            content, "docs/issues", "ISSUE-a.md"
+        )
+
+        self.assertEqual(removed, 1)
+        self.assertIn("note: docs/issues/ISSUE-a.md", new_content)
+        self.assertIn("code example", new_content)
+        self.assertIn("## Notes", new_content)
+        self.assertIn("## Active Issues", new_content)
+        self.assertNotIn("— active", new_content)
+
+    def test_a_table_description_link_does_not_identify_the_row(self):
+        content = (
+            "## Specs\n\n"
+            "| [spec](specs/spec.md) | cites [ISSUE-a](issues/ISSUE-a.md) |\n"
+            "| --- | --- |\n\n"
+            "## Active Issues\n\n"
+            "| [ISSUE-a](issues/ISSUE-a.md) | active |\n"
+            "| --- | --- |\n"
+        )
+
+        new_content, removed = MODULE.remove_index_entry(
+            content, "docs/issues", "ISSUE-a.md"
+        )
+
+        self.assertEqual(removed, 1)
+        self.assertIn("[spec](specs/spec.md)", new_content)
+        self.assertNotIn("| [ISSUE-a](issues/ISSUE-a.md) | active |", new_content)
+
+    def test_audit_helper_reports_normalized_target_lines(self):
+        content = "## Active Issues\n\n- [ISSUE-a](issues/ISSUE-a.md) — active\n"
+
+        lines = MODULE.find_index_entry_lines(content, "docs/issues", "ISSUE-a.md")
+
+        self.assertEqual(lines, [(3, "- [ISSUE-a](issues/ISSUE-a.md) — active")])

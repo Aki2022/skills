@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import argparse
 import re
-import shutil
 import sys
 from datetime import date
 from pathlib import Path
 
-from index_entries import remove_index_entry
+from archive_transaction import apply_archive, cleanup_staged, stage_text
+from index_entries import find_index_entry_lines, remove_index_entry
 from validate_repo_docs import parse_workstream_issue_blocks, validate_repo
 
 
@@ -55,7 +55,8 @@ def main() -> None:
         print(f"Error: active workstream not found: {source}", file=sys.stderr)
         raise SystemExit(1)
 
-    content = source.read_text()
+    original_content = source.read_text()
+    content = original_content
 
     # The template's "Workstream archived when complete" box is the very action
     # this script performs, so requiring it pre-checked made every straight run
@@ -113,7 +114,11 @@ def main() -> None:
             print(f"  - {error}", file=sys.stderr)
         raise SystemExit(1)
 
-    archive_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        archive_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as error:
+        print(f"Error: cannot prepare archive directory: {error}", file=sys.stderr)
+        raise SystemExit(1)
     destination = archive_dir / source.name
     if destination.exists():
         print(f"Error: already archived: {destination}", file=sys.stderr)
@@ -130,25 +135,73 @@ def main() -> None:
             file=sys.stderr,
         )
         raise SystemExit(1)
-    source.write_text(content)
-    shutil.move(str(source), str(destination))
-
     index = repo / "docs/00_index.md"
-    if index.is_file():
-        index_content = index.read_text()
-        workstream_id = source.stem
-        index_content, removed = remove_index_entry(
-            index_content, "docs/workstreams", workstream_id
-        )
-        index_content = re.sub(
-            r"(updated_at:[ \t]*)[\d-]+", rf"\g<1>{today}", index_content, count=1
-        )
-        index.write_text(index_content)
-        if not removed:
-            print(
-                f"Note: {workstream_id} not found in docs/00_index.md "
-                "active references (check manually if needed)"
+    workstream_id = source.stem
+    index_plan = None
+    staged_paths = []
+    try:
+        if index.exists() and not index.is_file():
+            raise OSError(f"index path is not a regular file: {index}")
+        if index.is_file():
+            index_content = index.read_text()
+            target_lines = find_index_entry_lines(
+                index_content, "docs/workstreams", workstream_id
             )
+            new_index, removed = remove_index_entry(
+                index_content, "docs/workstreams", workstream_id
+            )
+            if removed or target_lines:
+                if removed != len(target_lines):
+                    raise ValueError(
+                        "index target count mismatch: "
+                        f"removed={removed}, reported={len(target_lines)}"
+                    )
+                new_index = re.sub(
+                    r"(updated_at:[ \t]*)[\d-]+", rf"\g<1>{today}", new_index, count=1
+                )
+                index_plan = (index_content, new_index, target_lines)
+
+        staged_destination = stage_text(destination, content, source)
+        staged_paths.append(staged_destination)
+        staged_source_restore = stage_text(source, original_content, source)
+        staged_paths.append(staged_source_restore)
+
+        staged_index = None
+        staged_index_restore = None
+        if index_plan is not None:
+            original_index, new_index, _target_lines = index_plan
+            staged_index = stage_text(index, new_index, index)
+            staged_paths.append(staged_index)
+            staged_index_restore = stage_text(index, original_index, index)
+            staged_paths.append(staged_index_restore)
+
+        apply_archive(
+            source,
+            destination,
+            staged_destination,
+            staged_source_restore,
+            index if index_plan is not None else None,
+            staged_index,
+            staged_index_restore,
+        )
+    except (OSError, RuntimeError, ValueError) as error:
+        print(f"Error: {error}", file=sys.stderr)
+        raise SystemExit(1)
+    finally:
+        cleanup_staged(staged_paths)
+
+    if index_plan is not None:
+        target_lines = index_plan[2]
+        print(
+            f"Updated: docs/00_index.md (removed {len(target_lines)} active reference(s))"
+        )
+        for line_number, line in target_lines:
+            print(f"  line {line_number}: {line}")
+    else:
+        print(
+            f"Note: {workstream_id} not found in docs/00_index.md "
+            "active references (check manually if needed)"
+        )
 
     print(f"Archived: {source.name} -> docs/workstreams/archive/{source.name}")
 

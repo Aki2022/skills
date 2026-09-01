@@ -19,8 +19,6 @@ Read this file first. Do not scan all docs unless needed. Read the active workst
 
 - [pptx-content-eval-loop](specs/pptx-content-eval-loop.md) — **active（2026-08-31 承認）** origin-pptx コンテンツ評価ループの公式化——実装は origin-pptx 本体（content-eval.md ほか）
 
-- docs/specs/product.md — product direction and requirements
-- docs/specs/architecture.md — architecture and design policy
 
 ## ADRs
 
@@ -30,7 +28,7 @@ Read this file first. Do not scan all docs unless needed. Read the active workst
 
 ## Guides
 
-- docs/guides/feature-or-domain.md — current implemented behavior
+（スキルの現行挙動は各 skill の SKILL.md / references が正典であり、docs/guides は使わない）
 
 ## Archive Policy
 

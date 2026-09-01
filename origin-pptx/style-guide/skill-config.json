@@ -1,7 +1,7 @@
 {
   "_meta": {
     "name": "origin-pptx-skill-config",
-    "version": "1.4.0",
+    "version": "1.5.0",
     "usage": "実行設定の正典。⓪スタイルガイド読込時に読む。モデル割当・検証ループ・並列度を変えたいときはこのファイルを編集する（SKILL.md/pipeline.md 本文のハードコードは背景説明であり、実行時はここが優先）。"
   },
   "imageGen": {
@@ -37,12 +37,36 @@
       "role": "①outline下書き"
     }
   },
-  "evalLoop": {
+  "contentEval": {
+    "_note": "コンテンツ評価ループ（references/content-eval.md が正典・旧 evalLoop／②.5ペルソナレビューを置換）。発火は計画承認制——対象・評価者・モデル・回数・概算トークンを人間に提示し承認後にのみ実行。読者評価の入力は『その段階で読み手が受け取る成果物・単独』（画像段階は画像のみ・.md併給禁止）。",
     "maxRounds": 3,
+    "freshEvaluators": true,
     "reEvalOnlyChangedSlides": true,
-    "personaModel": "opus",
-    "personaEffort": "medium",
-    "_note": "②.5 ペルソナレビューの設定（references/persona-eval.md）。既定はスキップで、人間が指示した場合のみ実行する。scoreThreshold は毎回人間が承認して決める（デッキごとに満点構成が違うため固定値を持たない）。"
+    "passThreshold": {
+      "judgeMinEach": 75,
+      "judgeAvgMin": 80,
+      "criticalMustFixMax": 0,
+      "freshReaderUnclearMax": 0,
+      "_note": "既定値。計画承認時に人間が上書き可。freshReaderUnclearMax は初見読者の『分からない』本編枚数"
+    },
+    "models": {
+      "judge": {
+        "model": "opus",
+        "effort": "medium",
+        "role": "審査員（rubric採点・verdict・must_fix）"
+      },
+      "freshReader": {
+        "model": "opus",
+        "effort": "medium",
+        "role": "初見読者（採点なし・分かる/引っかかる/分からない）"
+      },
+      "advisor": {
+        "model": "opus",
+        "effort": "medium",
+        "role": "修正フェーズのゼロベース設計者（fail箇所のみ・構成案3つ＋推奨）"
+      }
+    },
+    "escalateIfNotConverging": true
   },
   "verifyLoop": {
     "maxRounds": 5,

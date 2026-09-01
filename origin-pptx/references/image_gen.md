@@ -180,6 +180,23 @@ image_gen のラインアイコンは **「白の不透明背景・細く淡い�
 - `style-guide/layout-grammar.md` — レイアウトパターンA/B/Cの座標定義（プロンプトのLayout Pattern指示に使う）
 - `style-guide/tokens.json` — 色・タイポグラフィトークン（プロンプトのColor Usage指示に使う）
 
+## ⚠️ バッチ生成の完了判定（2026-08-31 実証・stale-file pass-through 対策）
+
+**「同名ファイルが存在する」は生成成功の証拠にならない。** 上書き再生成のバッチが途中で失敗
+（例: `Your workspace is out of credits`）しても、旧世代の同名 PNG が残っていると存在チェックを
+通過し、旧構図のまま検分・人間レビューへ素通りする（2026-08-31 に8枚で実測。Haiku 検分も
+seen 書き出しなしでは旧画像を誤 ok した）。バッチ生成は次の3原則で組む:
+
+1. **生成前に旧成果物を退避**（`mv mockup_NN.png mockup_NN.png.stale`）。成功時のみ .stale を消す
+2. **回収（collect_codex_images.py）の失敗を必ず exit 非0 に反映**する（`|| echo FAIL` で
+   握りつぶさない）。存在チェックは補助であって完了判定の本体にしない
+3. **最初の1枚をスモークとして直列実行**し、シートのクレジット切れ等の即死を早期検出してから
+   残りを並列化する
+
+この3原則を実装した正典ランナーが **`scripts/run_mockups.sh`**
+（`bash run_mockups.sh <デッキdir> 02 03 ...`・並列度は `PARALLEL` 環境変数・CODEX_BIN は
+codex2→codex の順で解決）。デッキごとにランナーを再発明しない。
+
 ## ⚠️ 並列 codex セッションの回収は「自セッションのディレクトリ」から（2026-07-14 実証）
 
 複数の codex exec を並列実行し、各セッションに「`generated_images` 直下の最新pngをコピーせよ」と

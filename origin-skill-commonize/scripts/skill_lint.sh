@@ -37,6 +37,8 @@ for root in "${roots[@]}"; do
   for dir in "$root"/*/; do
     [ -d "$dir" ] || continue
     name=$(basename "$dir")
+    # skill ではない管理ディレクトリを除外（docs/ は origin-doc-update の scaffold）
+    case "$name" in docs|node_modules|.git) continue ;; esac
     md="$dir/SKILL.md"
 
     # S1

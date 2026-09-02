@@ -66,7 +66,7 @@ This skill consumes workstreams; it does not prepare them.
 
 ## Preflight — once per session
 
-Complete all five checks before the first iteration. The purpose is to move
+Complete all six checks before the first iteration. The purpose is to move
 every foreseeable human interaction to this single conversation so the run
 itself never has to wait.
 
@@ -245,6 +245,33 @@ settings, lifting a recorded gate, or widening an envelope requires.
    time/token/cost ceilings — each workstream's Authorization Envelope
    already owns its resource limits, and a second guardian invites
    conflicting accounting.
+6. **Data-gated coverage.** Survey whether the repository has tests that skip
+   when data that exists only locally and is gitignored is absent, and record
+   both the guarded paths and **which checkout holds that data** — normally the
+   primary checkout, never a fresh worktree. The survey is mechanical: grep the
+   test tree for skip conditions that guard on a path (`skipif`, `skipUnless`,
+   `skipIf` and equivalents), then run the guarded paths through
+   `git check-ignore`. Record the result in the journal; step 3 of each
+   iteration reads it.
+
+   The check exists because that kind of skip is invisible to every surface
+   this loop trusts. In one run a PR merged with a 6/6 green branch gate and
+   three independent reviews, all green, and turned the default branch red
+   immediately: the three tests that would have caught it were skipped for a
+   gitignored data directory that no worktree has, and the two defects — a
+   keyword-only stub called positionally, and a dataclass field left at its
+   `None` default — are perfectly well-typed, so the typechecker was clean too.
+   The post-merge gate on the default branch was the only detector, which is to
+   say the only detector ran after the merge.
+
+   Default: when the survey finds nothing, record "no data-gated tests" and
+   step 3 gains no extra work. When no human is there the survey still runs —
+   nothing in it needs a decision — and the data-bearing checkout defaults to
+   the directory this skill was pointed at, unless that directory is itself a
+   linked worktree (`git rev-parse --git-common-dir` points outside it), in
+   which case no known checkout has the data: say so in the digest and treat
+   every iteration that touches data-gated coverage as human-gated for the rest
+   of the run.
 
 ## Each iteration — one workstream
 
@@ -324,6 +351,22 @@ settings, lifting a recorded gate, or widening an envelope requires.
    executed pass from an inferred one. Carry `review: executed|inferred` plus the
    PR link into the digest's workstream row, where the human can see it, and treat
    an inferred pass as human-gated rather than merging on it.
+
+   **Execute the data-gated tests in the checkout that holds the data, before
+   the merge.** When this iteration's change touches code covered by tests the
+   preflight's survey recorded as data-gated, run those tests once in the
+   recorded data-bearing checkout — while it is still standing on the PR head —
+   and carry the command, its exit code, and how many actually ran (not skipped)
+   into the digest's workstream row. **The reviewer's run does not satisfy
+   this.** The reviewer is required to work in a fresh `git worktree`, and
+   gitignored data is by construction absent there, so its green is the branch
+   gate's green re-produced: the same skip, counted twice. That identity is the
+   whole problem — branch gate, reviewer worktree, and typechecker are blind in
+   exactly the same way, so leaving the worktree is the only way to obtain
+   evidence. Budget the time (13 minutes in the incident cited at preflight
+   check 6) rather than trading it away. If that checkout is unreachable or the
+   tests cannot be run there, do not merge on a skipped pass: the workstream is
+   human-gated and goes to the shelf.
 
    Fix confirmed findings within the iteration; a
    finding that needs a human decision is a question gate. With gates green
@@ -433,6 +476,12 @@ The rule applies hardest to anything downstream authorization rests on: the
 quality gates, the independent review, the survey that feeds a deletion plan, and
 the validator. If one of those was skipped, inferred, or run against a different
 target, the conclusions built on it are unsupported, and only this line says so.
+
+**A skipped test is not a passed test, and `N passed, M skipped` reads as
+green.** When a gate run this iteration skipped tests that cover code the
+iteration changed, name them and the reason for the skip (missing local data,
+missing marker, unavailable service) in the journal entry and the digest. The
+summary line is a count; it is not evidence of coverage.
 
 ## Improvement observations
 

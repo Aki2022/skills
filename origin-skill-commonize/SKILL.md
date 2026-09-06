@@ -46,6 +46,41 @@ commandsやMCP設定を別々のconfiguration directoryに持ち得る。放置�
 `.agents/` を正典にする理由: Codex CLI がユーザースキルとして `~/.agents/skills` を公式に読み、
 かつ `.agents` はツール非依存の中立な名前のため。
 
+## skill の供給源は正典のみ（第三者 skill のミラー規約）
+
+**skill を各エージェントへ供給する経路は正典 `~/.agents/skills/` の1本だけ**とする
+（`ADR-20260906-skill-supply-source-is-canon-only`・biz_ops）。根拠は実測: Codex CLI は
+`~/.agents/skills`（と `~/.agents/codex/skills`）しか読まず、Claude Code の plugin（`~/.claude/plugins/`）
+と CLI 同梱 built-in は **Claude 専用の供給路**である。plugin 由来の skill を使い続けると
+Claude と Codex・他 LLM の skill 群は必ずズレる（2026-09-05〜06 に frontend-design 3重・pdf 3重・
+plugin/built-in 2重6件を実測）。
+
+1. **使いたい第三者 skill は上流名で正典へミラーする。** ディレクトリ名＝上流の frontmatter `name`。
+   中身は上流と**バイト同一**に保ち、自前改変を入れない（改変が要るなら fork として別名の自前 skill にする）。
+2. **ミラーには取得メタを付け、`mirrors.yaml`（正典リポジトリ root）に記録する。** 上流の識別子・
+   上流の版（commit sha 等）・取得日・ローカルで比較可能な上流コピーのパス（あれば）。
+   ミラーディレクトリ自体には余計なファイルを足さない（バイト同一を保つため）。
+3. **skill しか供給していない Claude plugin は無効化する。** 無効化できない built-in との2重は残るが、
+   正典側を上流に同期し、`scripts/check_mirrors.sh` の同値検査（ローカル上流コピーとのハッシュ比較）と
+   鮮度検査（取得日からの経過）で**ズレを検出できる形**にする。Claude の一覧に同内容が2行載るのは
+   「ズレ」ではなく「重複表示」で、本規約には反しない。
+4. **`~/.agents/<tool>/skills/` に第三者ミラーを置かない。** tool 固有正典は tool 固有 skill のための
+   もので、Claude/Codex の非対称を固定化する用途には使わない。
+5. 上流の更新への追随は**人間が起動する**（鮮度検査が警告したら再取得）。自動追随はしない。
+
+`mirrors.yaml` の形式:
+
+```yaml
+mirrors:
+  - dir: frontend-design            # 正典内のディレクトリ名（＝上流 name）
+    upstream: anthropics/skills      # 上流の識別子（GitHub owner/repo 等）
+    upstream_path: skills/frontend-design
+    upstream_version: <commit sha>   # 上流の版。取得時点で分かるもの
+    fetched_at: 2026-09-06
+    local_copy: ~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/skills/frontend-design
+    # local_copy が無い（built-in 等）場合は省略。同値検査は skip され鮮度検査のみ
+```
+
 ### 静的設定 27 件の編集手順（nix 管理下）
 
 1. nix-darwin flake repo の `home/agent-config/<相対パス>` を**直接編集する**（普通のファイル。
@@ -320,8 +355,8 @@ symlink 統一と同じくこの Skill が所有する。原則は「**決定論
 
 `scripts/skill_lint.sh` を実行する。SKILL.md の存在、frontmatter の name/description、
 name とディレクトリ名の一致、同梱リソース参照（scripts/ references/ assets/）の実在、
-壊れた symlink を exit code で判定する。第三者由来の `design` の name/ディレクトリ不一致は
-`WARN S3` として exit code から分離し、自前 skill の不一致だけを `FAIL` とする。
+壊れた symlink を exit code で判定する。name とディレクトリ名の不一致は自前・第三者を問わず
+`FAIL` とする — 第三者 skill は上流名でミラーする規約（上記）により不一致は起きない。
 加えて、同一 root 内の frontmatter `name` の完全重複と `source-command-*` の対応先を
 `WARN S7` として報告し、隣接する `codex/hooks.json` の bash 参照先が存在しない場合は
 `FAIL S6` とする。description の意味的類似・発火競合は決定論的 lint の対象外で、トリアージで扱う。
@@ -331,7 +366,7 @@ bash ~/.agents/skills/origin-skill-commonize/scripts/skill_lint.sh
 ```
 
 実行タイミング: スキルの新規作成・編集・移動・削除の直後（この Skill の作業の一部として）。
-サードパーティ由来スキルの FAIL は情報として報告し、勝手に修正しない — 上流更新で上書き
+サードパーティ由来スキル（ミラー）の FAIL は**中身を手で直さず、上流から再取得して同期する**（ミラー規約: バイト同一）。同値・鮮度は `scripts/check_mirrors.sh` で確認する
 され得るため、直すのは origin-* など自前スキルのみ。
 
 ### トラブル・摩擦の記録は所有しない

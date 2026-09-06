@@ -1,0 +1,15 @@
+# 第三者 skill のミラー台帳。規約は origin-skill-commonize/SKILL.md「skill の供給源は正典のみ」。
+# 検査は origin-skill-commonize/scripts/check_mirrors.sh（同値: local_copy とのハッシュ比較 / 鮮度: fetched_at）。
+mirrors:
+  - dir: frontend-design
+    upstream: anthropics/skills
+    upstream_path: skills/frontend-design
+    upstream_version: 3b3fad96af16a10759d930941b4520ba0c40edae
+    fetched_at: 2026-09-06
+    local_copy: ~/.claude/plugins/cache/anthropic-agent-skills/example-skills/3b3fad96af16/skills/frontend-design
+  - dir: pdf
+    upstream: anthropics/skills
+    upstream_path: skills/pdf
+    upstream_version: 3b3fad96af16a10759d930941b4520ba0c40edae
+    fetched_at: 2026-09-06
+    local_copy: ~/.claude/plugins/cache/anthropic-agent-skills/example-skills/3b3fad96af16/skills/pdf

@@ -1380,8 +1380,170 @@ class RelativeLinkResolutionTest(unittest.TestCase):
 
         self.assertEqual(self._errors(root), [])
 
-    def test_the_check_holds_no_repository_specific_exclusions(self):
-        """It has to be safe in a cross-repo skill, so it may not know any repo."""
-        source = SCRIPT.read_text(encoding="utf-8")
-        for token in ("project_", "obsidian", "recorder", "vault"):
-            self.assertNotIn(token, source, f"repo-specific token {token!r} in the validator")
+    def test_the_check_treats_unrelated_vocabularies_identically(self):
+        """No repository's layout may be special.
+
+        Grepping the source for a few known words is not this property: any
+        capitalisation, or any vocabulary the grep never heard of, walks
+        straight past it. Two structurally identical repositories that share no
+        words must therefore produce the same verdict.
+        """
+        verdicts = []
+        for vocabulary in ("Obsidian-Vault/meeting-notes", "Zzz-Quux/widget-logs"):
+            root = self.make_repo()
+            (root / "docs/specs/spec.md").write_text(
+                f"---\nid: SPEC-x\n---\n\n# S\n\n[a](../{vocabulary}/absent.md)\n"
+            )
+            verdicts.append(len(self._errors(root)))
+        self.assertEqual(verdicts[0], verdicts[1], "one vocabulary is treated specially")
+        self.assertEqual(verdicts[0], 1)
+
+
+class RelativeLinkEdgeCaseTest(unittest.TestCase):
+    """Cases a cross-repo check gets wrong at somebody else's expense.
+
+    A false positive here is worse than a missed link: it fails a repository
+    whose markdown is perfectly legal, in a skill its owners did not write.
+    Every case below was reproduced against the shipped implementation before
+    being fixed.
+    """
+
+    def make_repo(self) -> Path:
+        root = Path(tempfile.mkdtemp())
+        for path in ("docs/adrs", "docs/specs", "docs/issues/archive",
+                     "docs/workstreams/archive", "docs/guides"):
+            (root / path).mkdir(parents=True, exist_ok=True)
+        (root / "docs/00_index.md").write_text(
+            "---\nupdated_at: 2026-09-07\ncurrent_focus: []\n---\n\n# 00 Index\n"
+        )
+        return root
+
+    def _link_errors(self, root: Path) -> list[str]:
+        errors, _warnings = MODULE.validate_repo(root)
+        return [e for e in errors if "broken relative link" in e]
+
+    def _doc(self, root: Path, body: str, name: str = "docs/specs/spec.md") -> None:
+        (root / name).write_text(f"---\nid: SPEC-x\n---\n\n# S\n\n{body}\n")
+
+    # --- false positives ---------------------------------------------------
+
+    def test_a_four_backtick_wrapper_does_not_expose_its_inner_example(self):
+        root = self.make_repo()
+        self._doc(root, "````markdown\n```\n[ex](../nowhere/absent.md)\n```\n````")
+        self.assertEqual(self._link_errors(root), [])
+
+    def test_percent_encoded_paths_resolve(self):
+        root = self.make_repo()
+        (root / "docs/guides/my file.md").write_text("---\nid: GUIDE-a\n---\n\n# G\n")
+        self._doc(root, "[a](../guides/my%20file.md)")
+        self.assertEqual(self._link_errors(root), [])
+
+    def test_links_inside_html_comments_are_ignored(self):
+        root = self.make_repo()
+        self._doc(root, "<!-- [old](../guides/gone.md) -->")
+        self.assertEqual(self._link_errors(root), [])
+
+    def test_a_query_suffix_is_not_part_of_the_path(self):
+        root = self.make_repo()
+        (root / "docs/guides/ok.md").write_text("---\nid: GUIDE-b\n---\n\n# G\n")
+        self._doc(root, "[a](../guides/ok.md?plain=1)")
+        self.assertEqual(self._link_errors(root), [])
+
+    def test_double_backtick_inline_spans_are_code(self):
+        root = self.make_repo()
+        self._doc(root, "``[a](../guides/gone.md)``")
+        self.assertEqual(self._link_errors(root), [])
+
+    def test_parentheses_in_a_destination_are_kept(self):
+        root = self.make_repo()
+        (root / "docs/guides/note(1).md").write_text("---\nid: GUIDE-c\n---\n\n# G\n")
+        self._doc(root, "[a](../guides/note(1).md)")
+        self.assertEqual(self._link_errors(root), [])
+
+    def test_indented_code_blocks_are_code(self):
+        root = self.make_repo()
+        self._doc(root, "text:\n\n    [a](../guides/gone.md)\n")
+        self.assertEqual(self._link_errors(root), [])
+
+    def test_case_differences_are_a_break_even_on_a_case_insensitive_disk(self):
+        """Otherwise the verdict depends on which machine ran it."""
+        root = self.make_repo()
+        (root / "docs/guides/example.md").write_text("---\nid: GUIDE-d\n---\n\n# G\n")
+        self._doc(root, "[a](../guides/Example.md)")
+        self.assertEqual(len(self._link_errors(root)), 1)
+
+    # --- false negatives ---------------------------------------------------
+
+    def test_an_unbalanced_fence_does_not_blank_the_rest_of_the_file(self):
+        root = self.make_repo()
+        self._doc(root, "```\ncode\n~~~\n```\n\n[a](../guides/gone.md)")
+        self.assertEqual(len(self._link_errors(root)), 1)
+
+    def test_a_stray_fence_in_prose_does_not_blank_the_rest_of_the_file(self):
+        root = self.make_repo()
+        self._doc(root, "a ``` stray\n\n[a](../guides/gone.md)")
+        self.assertEqual(len(self._link_errors(root)), 1)
+
+    def test_a_tilde_fence_is_not_closed_by_a_backtick_fence(self):
+        root = self.make_repo()
+        self._doc(root, "~~~\n```\n[ex](../nowhere/absent.md)\n~~~\n\n[a](../guides/gone.md)")
+        errors = self._link_errors(root)
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("../guides/gone.md", errors[0])
+
+
+class LinkBaselineTest(unittest.TestCase):
+    """An adopting repository can defer its historical rot, but only downwards.
+
+    Turning a new check on across every repository at once, with no way to
+    record existing breakage as debt, forces its owners to either fix an
+    unbounded backlog immediately or ignore a permanently red validator — and a
+    check nobody can get to green stops being read at all.
+    """
+
+    def make_repo(self) -> Path:
+        root = Path(tempfile.mkdtemp())
+        for path in ("docs/adrs", "docs/specs", "docs/issues/archive",
+                     "docs/workstreams/archive", "docs/guides"):
+            (root / path).mkdir(parents=True, exist_ok=True)
+        (root / "docs/00_index.md").write_text(
+            "---\nupdated_at: 2026-09-07\ncurrent_focus: []\n---\n\n# 00 Index\n"
+        )
+        (root / "docs/specs/spec.md").write_text(
+            "---\nid: SPEC-x\n---\n\n# S\n\n[a](../guides/gone.md)\n"
+        )
+        return root
+
+    def test_a_baselined_file_reports_a_warning_not_an_error(self):
+        root = self.make_repo()
+        (root / "docs/validator-link-baseline.txt").write_text("docs/specs/spec.md\n")
+
+        errors, warnings = MODULE.validate_repo(root)
+
+        self.assertEqual([e for e in errors if "broken relative link" in e], [])
+        self.assertTrue(any("link-baseline" in w for w in warnings), warnings)
+
+    def test_a_baselined_file_that_is_now_clean_must_be_removed(self):
+        """The list only shrinks: a stale exemption is itself an error."""
+        root = self.make_repo()
+        (root / "docs/guides/gone.md").write_text("---\nid: GUIDE-e\n---\n\n# G\n")
+        (root / "docs/validator-link-baseline.txt").write_text("docs/specs/spec.md\n")
+
+        errors, _warnings = MODULE.validate_repo(root)
+
+        self.assertTrue(any("no longer has broken links" in e for e in errors), errors)
+
+    def test_a_baseline_entry_for_a_missing_file_is_an_error(self):
+        root = self.make_repo()
+        (root / "docs/validator-link-baseline.txt").write_text("docs/specs/absent.md\n")
+
+        errors, _warnings = MODULE.validate_repo(root)
+
+        self.assertTrue(any("does not exist" in e for e in errors), errors)
+
+    def test_without_the_file_nothing_is_exempt(self):
+        root = self.make_repo()
+
+        errors, _warnings = MODULE.validate_repo(root)
+
+        self.assertEqual(len([e for e in errors if "broken relative link" in e]), 1)

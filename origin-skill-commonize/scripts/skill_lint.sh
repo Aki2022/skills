@@ -57,11 +57,7 @@ for root in "${roots[@]}"; do
     # S3
     fm_name=$(printf '%s\n' "$fm" | sed -n 's/^name:[[:space:]]*//p' | head -1 | sed 's/^["'"'"']//; s/["'"'"']$//')
     if [ -n "$fm_name" ] && [ "$fm_name" != "$name" ]; then
-      if [ "$name" = "design" ]; then
-        warn "S3 $name: third-party frontmatter name '$fm_name' がディレクトリ名と不一致"
-      else
-        fail "S3 $name: frontmatter name '$fm_name' がディレクトリ名と不一致"
-      fi
+      fail "S3 $name: frontmatter name '$fm_name' がディレクトリ名と不一致"
     fi
 
     if [ -n "$fm_name" ]; then

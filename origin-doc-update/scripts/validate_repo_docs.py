@@ -265,6 +265,71 @@ def validate_acceptance_verify(label: str, body: str, errors: list[str]) -> None
 #
 # したがって既存分は「債務」として明示的に列挙して逃がし、新しい文書には最初から
 # 効かせる。逃がしたものは減る一方になるよう、リストが古びたら落ちる。
+_CODE_FENCE = re.compile(r"^\s*(?:```|~~~)")
+_INLINE_CODE = re.compile(r"`[^`\n]*`")
+_MD_LINK = re.compile(r"!?\[[^\]]*\]\(([^)]*)\)")
+_URI_SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.\-]*:")
+
+
+def strip_code(text: str) -> str:
+    """Drop fenced blocks and inline spans: those are examples, not references."""
+    kept: list[str] = []
+    in_fence = False
+    for line in text.splitlines():
+        if _CODE_FENCE.match(line):
+            in_fence = not in_fence
+            continue
+        kept.append("" if in_fence else _INLINE_CODE.sub("", line))
+    return "\n".join(kept)
+
+
+def link_target(raw: str) -> Optional[str]:
+    """The path a markdown destination points at, or None when it is not a path."""
+    target = raw.strip()
+    if target.startswith("<") and target.endswith(">"):
+        target = target[1:-1].strip()
+    for quote in ('"', "'"):
+        cut = target.find(f" {quote}")
+        if cut != -1:
+            target = target[:cut].strip()
+    target = target.split("#", 1)[0].strip()
+    if not target or _URI_SCHEME.match(target):
+        return None
+    return target
+
+
+def validate_relative_links(root: Path, errors: list[str]) -> None:
+    """Every relative link under docs/ must resolve to something that exists.
+
+    Archiving is the routine operation that breaks these: it moves a file one
+    level deeper and leaves every referrer pointing at the old path. Measured in
+    a single session on one repository, archiving an issue broke 11 links and
+    archiving a workstream broke 5 more — and this validator stayed exit 0
+    through all of it, because nothing here ever resolved a link. Breakage is
+    invisible until a human or an agent actually follows one.
+
+    The rule is unconditional on purpose. An exclusion list would carry
+    knowledge of one repository's layout into a skill shared by all of them, and
+    exclusions only ever grow. A path that genuinely cannot resolve — a
+    placeholder, or a file outside the repository — is not a link and should not
+    be written as one.
+    """
+    for path in sorted(root.glob("docs/**/*.md")):
+        rel = path.relative_to(root).as_posix()
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError as exc:
+            errors.append(f"{rel}: unreadable while checking links ({exc})")
+            continue
+        for match in _MD_LINK.finditer(strip_code(text)):
+            target = link_target(match.group(1))
+            if target is None:
+                continue
+            base = root if target.startswith("/") else path.parent
+            if not (base / target.lstrip("/")).exists():
+                errors.append(f"{rel}: broken relative link: {target}")
+
+
 BASELINE_RELPATH = "docs/validator-baseline.txt"
 BASELINED_CHECKS = "runnability / Acceptance の verify:"
 
@@ -645,6 +710,7 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
                         continue
                     warnings.append(f"{rel}: {key} ref not found: {reference}")
 
+    validate_relative_links(root, errors)
     validate_baseline_freshness(root, baseline, deferred, errors, warnings)
 
     return errors, warnings

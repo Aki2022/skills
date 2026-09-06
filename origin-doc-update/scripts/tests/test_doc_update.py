@@ -1275,3 +1275,113 @@ class SpecFrontMatterTest(ValidateRepoDocsV2Test):
         errors, _warnings = MODULE.validate_repo(root)
 
         self.assertTrue(any("status must be draft, active, or superseded" in e for e in errors))
+
+
+class RelativeLinkResolutionTest(unittest.TestCase):
+    """`docs/**` relative links must resolve.
+
+    Archiving is the routine operation that breaks them: it moves a file one
+    level deeper and leaves every referrer pointing at the old path. Measured in
+    one session on a real repository, `archive_issue.py` broke 11 links and
+    `archive_workstream.py` broke 5 more — and this validator stayed exit 0
+    through all of it, because nothing here ever resolved a link.
+
+    The check is deliberately unconditional: it holds no repository-specific
+    exclusions, so it can live in a cross-repo skill. A path that genuinely
+    cannot resolve (a placeholder, something outside the repo) is not a link and
+    should not be written as one.
+    """
+
+    def make_repo(self) -> Path:
+        root = Path(tempfile.mkdtemp())
+        for path in ("docs/adrs", "docs/specs", "docs/issues/archive",
+                     "docs/workstreams/archive", "docs/guides"):
+            (root / path).mkdir(parents=True, exist_ok=True)
+        (root / "docs/00_index.md").write_text(
+            "---\nupdated_at: 2026-09-07\ncurrent_focus: []\n---\n\n# 00 Index\n"
+        )
+        return root
+
+    def _errors(self, root: Path) -> list[str]:
+        errors, _warnings = MODULE.validate_repo(root)
+        return [e for e in errors if "link" in e.lower()]
+
+    def test_a_resolving_link_is_accepted(self):
+        root = self.make_repo()
+        (root / "docs/guides/example.md").write_text("---\nid: GUIDE-example\n---\n\n# G\n")
+        (root / "docs/specs/spec.md").write_text(
+            "---\nid: SPEC-x\n---\n\n# S\n\nSee [the guide](../guides/example.md).\n"
+        )
+
+        self.assertEqual(self._errors(root), [])
+
+    def test_a_link_that_does_not_resolve_is_an_error(self):
+        root = self.make_repo()
+        (root / "docs/specs/spec.md").write_text(
+            "---\nid: SPEC-x\n---\n\n# S\n\nSee [the guide](../guides/missing.md).\n"
+        )
+
+        errors = self._errors(root)
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("docs/specs/spec.md", errors[0])
+        self.assertIn("../guides/missing.md", errors[0])
+
+    def test_the_archive_move_pattern_is_caught(self):
+        """The exact shape archiving produces, in both directions."""
+        root = self.make_repo()
+        (root / "docs/issues/archive/ISSUE-20260101-moved.md").write_text(
+            "---\nid: ISSUE-20260101-moved\n---\n\n# M\n\n"
+            "[spec](../specs/spec.md)\n"          # one ../ too few after the move
+        )
+        (root / "docs/adrs/ADR-20260101-x.md").write_text(
+            "---\nid: ADR-20260101-x\n---\n\n# A\n\n"
+            "[issue](../issues/ISSUE-20260101-moved.md)\n"  # referrer left behind
+        )
+        (root / "docs/specs/spec.md").write_text("---\nid: SPEC-x\n---\n\n# S\n")
+
+        errors = self._errors(root)
+        self.assertEqual(len(errors), 2, errors)
+
+    def test_external_and_anchor_links_are_ignored(self):
+        root = self.make_repo()
+        (root / "docs/specs/spec.md").write_text(
+            "---\nid: SPEC-x\n---\n\n# S\n\n"
+            "[web](https://example.com/x.md) [mail](mailto:a@b.c) [here](#section)\n"
+        )
+
+        self.assertEqual(self._errors(root), [])
+
+    def test_links_inside_fenced_code_are_ignored(self):
+        """Fenced blocks are examples, not references."""
+        root = self.make_repo()
+        (root / "docs/guides/example.md").write_text(
+            "---\nid: GUIDE-example\n---\n\n# G\n\n"
+            "```markdown\n[nope](../nowhere/absent.md)\n```\n"
+        )
+
+        self.assertEqual(self._errors(root), [])
+
+    def test_a_link_carrying_a_title_still_resolves(self):
+        root = self.make_repo()
+        (root / "docs/guides/example.md").write_text("---\nid: GUIDE-example\n---\n\n# G\n")
+        (root / "docs/specs/spec.md").write_text(
+            "---\nid: SPEC-x\n---\n\n# S\n\n"
+            '[g](../guides/example.md "The guide")\n'
+        )
+
+        self.assertEqual(self._errors(root), [])
+
+    def test_an_anchor_on_a_real_file_resolves(self):
+        root = self.make_repo()
+        (root / "docs/guides/example.md").write_text("---\nid: GUIDE-example\n---\n\n# G\n")
+        (root / "docs/specs/spec.md").write_text(
+            "---\nid: SPEC-x\n---\n\n# S\n\n[g](../guides/example.md#section)\n"
+        )
+
+        self.assertEqual(self._errors(root), [])
+
+    def test_the_check_holds_no_repository_specific_exclusions(self):
+        """It has to be safe in a cross-repo skill, so it may not know any repo."""
+        source = SCRIPT.read_text(encoding="utf-8")
+        for token in ("project_", "obsidian", "recorder", "vault"):
+            self.assertNotIn(token, source, f"repo-specific token {token!r} in the validator")

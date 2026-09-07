@@ -97,6 +97,7 @@ def check_per_skill_root(
 ) -> None:
     """Check one regular Codex/Gemini skills directory."""
 
+    failure_count_before = len(failures)
     expected: dict[str, Path] = {
         name: canonical / name for name in canonical_skill_names
     }
@@ -166,7 +167,8 @@ def check_per_skill_root(
         if not alias.is_symlink():
             continue
 
-    print(f"OK {kind} {alias_root}: per-skill topology checked")
+    if len(failures) == failure_count_before:
+        print(f"OK {kind} {alias_root}: per-skill topology checked")
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Project update"
+  short_description: "Obsidian project sync and bootstrap"
+  default_prompt: "Use $origin-project-update to sync or bootstrap Obsidian project notes safely."

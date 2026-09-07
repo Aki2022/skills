@@ -1787,3 +1787,74 @@ class FenceRecognitionTest(unittest.TestCase):
         self.assertEqual(
             self._links("- item\n\n```\nsh\n```\n\n    [x](../nowhere/a.md)\n"), []
         )
+
+
+class FencePairingInvariantTest(unittest.TestCase):
+    """Only a *closed* fence blanks anything.
+
+    Four review rounds each moved the same defect: some construct opened a fence
+    that never closed, and every link from there to the end of the document
+    vanished. Patching the constructs one at a time did not converge — markdown
+    is large. This invariant removes the class instead: an unclosed fence is not
+    a fence, so nothing it touches can be silently swallowed. The cost is a loud,
+    fixable false positive on an example that forgets its closing fence.
+    """
+
+    def make_repo(self) -> Path:
+        root = Path(tempfile.mkdtemp())
+        for path in ("docs/adrs", "docs/specs", "docs/issues/archive",
+                     "docs/workstreams/archive", "docs/guides"):
+            (root / path).mkdir(parents=True, exist_ok=True)
+        (root / "docs/00_index.md").write_text(
+            "---\nupdated_at: 2026-09-07\ncurrent_focus: []\n---\n\n# 00 Index\n"
+        )
+        return root
+
+    def _links(self, body: str) -> list[str]:
+        root = self.make_repo()
+        (root / "docs/specs/spec.md").write_text(
+            f"---\nid: SPEC-x\n---\n\n# S\n\n{body}\n"
+        )
+        errors, _warnings = MODULE.validate_repo(root)
+        return [e for e in errors if "broken relative link" in e]
+
+    def test_an_unclosed_fence_in_a_blockquote_does_not_swallow_the_document(self):
+        found = self._links("> ```\n> code\n\nReal [g](../guides/gone.md)\n")
+        self.assertEqual(len(found), 1, found)
+        self.assertIn("../guides/gone.md", found[0])
+
+    def test_a_blockquote_line_inside_a_fence_does_not_close_it(self):
+        """Console transcripts put `>` at the start of a continuation line."""
+        found = self._links(
+            "1. run\n\n"
+            "   ```console\n"
+            "   $ foo\n"
+            "   > bar\n"
+            "   [q](../guides/q.md)\n"
+            "   ```\n\n"
+            "   [g](../guides/gone.md)\n"
+        )
+        self.assertEqual(len(found), 1, found)
+        self.assertIn("../guides/gone.md", found[0])
+
+    def test_a_quoted_fence_inside_a_fence_does_not_close_it(self):
+        self.assertEqual(self._links("```\n> ```\n[g](../guides/gone.md)\n```\n"), [])
+
+    def test_a_fence_after_a_nested_bullet_keeps_list_continuation_visible(self):
+        found = self._links(
+            "2.  **Check**\n\n"
+            "    - nested bullet\n\n"
+            "    **Example**:\n\n"
+            "    ```json\n"
+            "    {}\n"
+            "    ```\n\n"
+            "    See [g](../guides/gone.md).\n"
+        )
+        self.assertEqual(len(found), 1, found)
+
+    def test_an_unclosed_fence_at_top_level_does_not_swallow_the_document(self):
+        found = self._links("```\ncode\n\n[g](../guides/gone.md)\n")
+        self.assertEqual(len(found), 1, found)
+
+    def test_a_closed_fence_still_hides_its_example(self):
+        self.assertEqual(self._links("```\n[x](../nowhere/a.md)\n```\n"), [])

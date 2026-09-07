@@ -280,72 +280,112 @@ _MAX_DESTINATION = 2048
 _URI_SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.\-]*:")
 
 
-def strip_code(text: str) -> str:
-    """Blank out everything that is an example rather than a reference.
+def _normalise(raw_line: str) -> tuple[str, bool]:
+    """The line as the block parser sees it, plus whether it was blockquoted.
 
-    Fenced blocks, indented code blocks, inline spans and HTML comments all
-    routinely contain markdown that points nowhere on purpose. Counting those
-    as broken links would fail repositories whose documentation is correct.
-
-    Fence tracking follows CommonMark closely enough to matter: a fence closes
-    only on the same marker character, at least as long as the opener. A naive
-    boolean toggle is silently destructive — one stray ``` in prose, or a ~~~
-    inside a ``` block, blanks the entire rest of the file and every real broken
-    link in it goes unreported.
+    Tabs are four columns, and a blockquote marker is a container prefix rather
+    than content. The original line is what survives for link extraction; only
+    the decisions are made on this copy.
     """
-    text = _HTML_COMMENT.sub("", text)
+    line = raw_line.expandtabs(4)
+    quoted = _BLOCKQUOTE.match(line)
+    return (line[quoted.end():] if quoted else line), bool(quoted)
 
-    kept: list[str] = []
-    fence: Optional[str] = None
-    fence_container = 0
+
+def _closed_fence_lines(raw_lines: list[str]) -> tuple[set[int], dict[int, int]]:
+    """Indices covered by closed fences, plus each opener's indent.
+
+    The opener indents are what lets the second pass keep list tracking honest:
+    a fence outdented past the list item it followed ends that item.
+
+    **An unclosed fence is not a fence.** Four review rounds each found a
+    different construct that opened one and never closed it, and every link from
+    there to the end of the document vanished silently. Pairing removes the
+    class rather than the instance: nothing can be swallowed past a closing
+    fence that does not exist. An example that forgets its closing fence becomes
+    a loud, fixable false positive instead of a silent hole.
+    """
+    fenced: set[int] = set()
+    opens: dict[int, int] = {}
     container = 0
-    prev_blank = True
-
-    for raw_line in text.splitlines():
-        # A fence inside a blockquote is still a fence, and tabs are four
-        # columns, so decisions are made on a normalised copy of the line while
-        # the original is what survives for link extraction.
-        probe = _BLOCKQUOTE.sub("", raw_line.expandtabs(4))
+    index = 0
+    while index < len(raw_lines):
+        probe, quoted = _normalise(raw_lines[index])
         stripped = probe.strip()
         indent = len(probe) - len(probe.lstrip(" "))
         opened = _FENCE.match(probe)
 
-        if fence is not None:
-            if (
-                opened
-                and opened.group("marker")[0] == fence[0]
-                and len(opened.group("marker")) >= len(fence)
-                and not opened.group("info").strip()
-            ):
-                fence = None
-                kept.append("")
-                prev_blank = True
-                continue
-            # An unclosed fence ends with its containing block: a line that
-            # outdents past the list item it lives in closes it. Without this a
-            # fence shown but never closed swallows the rest of the document.
-            if stripped and indent < fence_container:
-                fence = None
-            else:
-                kept.append("")
-                prev_blank = False
-                continue
-
-        # An opening fence may be indented at most three columns past its
-        # container. Beyond that it is content of an indented code block — which
-        # is exactly how a document that *explains* fences writes one.
         if opened and indent <= container + 3:
             marker = opened.group("marker")
             # A backtick fence's info string may not contain a backtick, so
             # "```code```" is a paragraph holding a code span, not a fence.
             if not (marker[0] == "`" and "`" in opened.group("info")):
-                fence = marker
-                if indent < container:
-                    container = 0
-                fence_container = container
-                kept.append("")
-                prev_blank = False
-                continue
+                closing = _find_closing_fence(raw_lines, index + 1, marker, quoted)
+                if closing is not None:
+                    fenced.update(range(index, closing + 1))
+                    opens[index] = indent
+                    container = min(container, indent)
+                    index = closing + 1
+                    continue
+                # Unclosed: fall through and read this line as prose.
+
+        item = _LIST_ITEM.match(probe)
+        if item:
+            container = item.end()
+        elif stripped and indent == 0:
+            container = 0
+        index += 1
+    return fenced, opens
+
+
+def _find_closing_fence(
+    raw_lines: list[str], start: int, marker: str, quoted: bool
+) -> Optional[int]:
+    """Index of the line closing `marker`, or None.
+
+    The closing fence has to sit in the same container: a `> ```' inside an
+    unquoted fence is content, not a terminator, and treating it as one ends the
+    block early and leaks its examples.
+    """
+    for index in range(start, len(raw_lines)):
+        probe, line_quoted = _normalise(raw_lines[index])
+        if line_quoted != quoted:
+            continue
+        closing = _FENCE.match(probe)
+        if (
+            closing
+            and closing.group("marker")[0] == marker[0]
+            and len(closing.group("marker")) >= len(marker)
+            and not closing.group("info").strip()
+        ):
+            return index
+    return None
+
+
+def strip_code(text: str) -> str:
+    """Blank out everything that is an example rather than a reference.
+
+    Fenced blocks, indented code blocks, inline spans and HTML comments all
+    routinely contain markdown that points nowhere on purpose. Counting those as
+    broken links would fail repositories whose documentation is correct.
+    """
+    raw_lines = _HTML_COMMENT.sub("", text).splitlines()
+    fenced, fence_opens = _closed_fence_lines(raw_lines)
+
+    kept: list[str] = []
+    container = 0
+    prev_blank = True
+    for index, raw_line in enumerate(raw_lines):
+        if index in fenced:
+            if index in fence_opens:
+                container = min(container, fence_opens[index])
+            kept.append("")
+            prev_blank = True
+            continue
+
+        probe, _quoted = _normalise(raw_line)
+        stripped = probe.strip()
+        indent = len(probe) - len(probe.lstrip(" "))
 
         item = _LIST_ITEM.match(probe)
         if item:
@@ -497,6 +537,11 @@ def validate_relative_links(
     Not covered, deliberately: reference-style links (`[x][ref]`), HTML `<a
     href>` and `<img src>`. They are rare in this convention's documents and
     each needs a different resolver.
+
+    A fence blanks content only when it is actually closed, so no construct can
+    silently swallow a document from some point onward — the failure four review
+    rounds kept relocating. An unclosed example fence is a false positive, which
+    is loud and fixable, rather than a hole.
 
     Known blind spots, all silent, all bounded:
 

@@ -268,7 +268,10 @@ def validate_acceptance_verify(label: str, body: str, errors: list[str]) -> None
 LINK_BASELINE_RELPATH = "docs/validator-link-baseline.txt"
 
 _HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
-_FENCE = re.compile(r"^ {0,3}(?P<marker>`{3,}|~{3,})")
+# Any indentation: inside a list item a fence is indented to the item's content
+# column, and refusing to see it there would scan the example as prose — which
+# breaks the very escape hatch this check tells authors to use.
+_FENCE = re.compile(r"^\s*(?P<marker>`{3,}|~{3,})")
 _INDENTED_CODE = re.compile(r"^(?: {4,}|\t)")
 _INLINE_CODE = re.compile(r"(`+)(.+?)\1", re.DOTALL)
 _PARAGRAPH_BREAK = re.compile(r"(\n[ \t]*\n)")
@@ -470,6 +473,14 @@ def validate_relative_links(
     Not covered, deliberately: reference-style links (`[x][ref]`), HTML `<a
     href>` and `<img src>`. They are rare in this convention's documents and
     each needs a different resolver.
+
+    Two known blind spots, both silent and both bounded:
+
+    * an unpaired backtick that later pairs with a real code span hides the
+      links between them — within one paragraph only, since a code span cannot
+      contain a blank line;
+    * a baseline entry for a target that appears more than once in a file
+      exempts every occurrence of it, including one added later.
 
     An adopting repository can record existing rot in
     `docs/validator-link-baseline.txt`, one entry per line, preferably as

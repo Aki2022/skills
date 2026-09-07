@@ -355,7 +355,8 @@ symlink 統一と同じくこの Skill が所有する。原則は「**決定論
 
 `scripts/skill_lint.sh` を実行する。SKILL.md の存在、frontmatter の name/description、
 name とディレクトリ名の一致、同梱リソース参照（scripts/ references/ assets/）の実在、
-壊れた symlink を exit code で判定する。name とディレクトリ名の不一致は自前・第三者を問わず
+canonical skill を指す cross-skill 参照の実在、壊れた symlink を exit code で判定する。
+name とディレクトリ名の不一致は自前・第三者を問わず
 `FAIL` とする — 第三者 skill は上流名でミラーする規約（上記）により不一致は起きない。
 加えて、同一 root 内の frontmatter `name` の完全重複と `source-command-*` の対応先を
 `WARN S7` として報告し、隣接する `codex/hooks.json` の bash 参照先が存在しない場合は
@@ -364,6 +365,27 @@ name とディレクトリ名の一致、同梱リソース参照（scripts/ ref
 ```bash
 bash ~/.agents/skills/origin-skill-commonize/scripts/skill_lint.sh
 ```
+
+グローバル alias の形状は `scripts/check_global_topology.py` で別に検査する。
+正典 root と各 account root を毎回明示し、推測で別名を増減させない。Claude と
+Antigravity は root 自体が正典への directory symlink、Codex と Gemini は regular
+directory 内の各 skill が正典への per-skill symlink でなければならない。
+Codex の `.system` と、`--local-only` で指定した seat-local path だけが例外で、
+Codex-only adapted skill は `--codex-adapted` で明示する。未登録の実体コピー、壊れた
+link、root 全体の symlink化は `FAIL` とする。
+
+```bash
+python3 ~/.agents/skills/origin-skill-commonize/scripts/check_global_topology.py \
+  --canonical <global-skills-root> \
+  --claude <claude-skills-root> --codex <codex-skills-root> \
+  --gemini <gemini-skills-root> --antigravity <antigravity-skills-root> \
+  --codex-adapted <codex-adapted-skill-dir> \
+  --local-only <seat-local-skill-path>
+```
+
+この checker は alias と skill の配置だけを検査し、認証・session・history・cache・
+plugin cache・Codex `.system` の中身は読んだり変更したりしない。canary による実読込確認は
+別途人間が行う。
 
 実行タイミング: スキルの新規作成・編集・移動・削除の直後（この Skill の作業の一部として）。
 サードパーティ由来スキル（ミラー）の FAIL は**中身を手で直さず、上流から再取得して同期する**（ミラー規約: バイト同一）。同値・鮮度は `scripts/check_mirrors.sh` で確認する

@@ -13,3 +13,48 @@ mirrors:
     upstream_version: 3b3fad96af16a10759d930941b4520ba0c40edae
     fetched_at: 2026-09-06
     local_copy: ~/.claude/plugins/cache/anthropic-agent-skills/example-skills/3b3fad96af16/skills/pdf
+  # Google agents-cli 1.5.0 wheel data is the local upstream comparison copy.
+  # The release exposes a package version rather than a repository SHA; do
+  # not replace this pin automatically when a newer wheel is installed.
+  - dir: google-agents-cli-adk-code
+    upstream: google/agents-cli
+    upstream_path: google/agents/cli/skills/data/google-agents-cli-adk-code
+    upstream_version: 1.5.0
+    fetched_at: 2026-09-07
+    local_copy: ~/.local/share/uv/tools/google-agents-cli/lib/python3.12/site-packages/google/agents/cli/skills/data/google-agents-cli-adk-code
+  - dir: google-agents-cli-deploy
+    upstream: google/agents-cli
+    upstream_path: google/agents/cli/skills/data/google-agents-cli-deploy
+    upstream_version: 1.5.0
+    fetched_at: 2026-09-07
+    local_copy: ~/.local/share/uv/tools/google-agents-cli/lib/python3.12/site-packages/google/agents/cli/skills/data/google-agents-cli-deploy
+  - dir: google-agents-cli-eval
+    upstream: google/agents-cli
+    upstream_path: google/agents/cli/skills/data/google-agents-cli-eval
+    upstream_version: 1.5.0
+    fetched_at: 2026-09-07
+    local_copy: ~/.local/share/uv/tools/google-agents-cli/lib/python3.12/site-packages/google/agents/cli/skills/data/google-agents-cli-eval
+  - dir: google-agents-cli-observability
+    upstream: google/agents-cli
+    upstream_path: google/agents/cli/skills/data/google-agents-cli-observability
+    upstream_version: 1.5.0
+    fetched_at: 2026-09-07
+    local_copy: ~/.local/share/uv/tools/google-agents-cli/lib/python3.12/site-packages/google/agents/cli/skills/data/google-agents-cli-observability
+  - dir: google-agents-cli-publish
+    upstream: google/agents-cli
+    upstream_path: google/agents/cli/skills/data/google-agents-cli-publish
+    upstream_version: 1.5.0
+    fetched_at: 2026-09-07
+    local_copy: ~/.local/share/uv/tools/google-agents-cli/lib/python3.12/site-packages/google/agents/cli/skills/data/google-agents-cli-publish
+  - dir: google-agents-cli-scaffold
+    upstream: google/agents-cli
+    upstream_path: google/agents/cli/skills/data/google-agents-cli-scaffold
+    upstream_version: 1.5.0
+    fetched_at: 2026-09-07
+    local_copy: ~/.local/share/uv/tools/google-agents-cli/lib/python3.12/site-packages/google/agents/cli/skills/data/google-agents-cli-scaffold
+  - dir: google-agents-cli-workflow
+    upstream: google/agents-cli
+    upstream_path: google/agents/cli/skills/data/google-agents-cli-workflow
+    upstream_version: 1.5.0
+    fetched_at: 2026-09-07
+    local_copy: ~/.local/share/uv/tools/google-agents-cli/lib/python3.12/site-packages/google/agents/cli/skills/data/google-agents-cli-workflow

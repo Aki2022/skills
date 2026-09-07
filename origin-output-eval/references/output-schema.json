@@ -1,0 +1,27 @@
+{
+  "$comment": "評価者の出力は自由記述にしない。judge_round.py がこの形を検証して数える。",
+  "judge": {
+    "persona": "審査員名（rubric 準拠）",
+    "round": 1,
+    "scores": [{ "item": "項目", "score": 0, "max": 0, "reason": "対象内の位置を含む根拠" }],
+    "total_score": 0,
+    "total_max": 100,
+    "verdict": "pass|revise",
+    "strengths": ["最大3件"],
+    "improvements": ["最大3件"],
+    "must_fix": ["納品前に直さないと致命的な事項のみ"],
+    "comments": [{ "loc": "位置", "comment": "具体的指摘" }],
+    "advice": ["次の修正で最も効く助言・最大3件"]
+  },
+  "reader": {
+    "persona": "初見読者",
+    "round": 1,
+    "per_slide": [{ "n": 1, "verdict": "分かる|引っかかる|分からない", "note": "理由1-2文" }],
+    "through_line": "通しの所見",
+    "naive_questions": ["素朴な疑問・最大7件"],
+    "top_fixes": ["直すと最も効く修正・最大3件"]
+  },
+  "review": { "findings": [{ "severity": "critical|major|minor", "loc": "位置", "msg": "指摘", "source": "code-review 等の skill 名" }] },
+  "tests": { "exit_code": 0, "command": "実行したコマンド", "summary": "N passed" },
+  "verdict_for_state": { "pass": false, "findings_count": 0, "must_fix": [], "rejected": [] }
+}

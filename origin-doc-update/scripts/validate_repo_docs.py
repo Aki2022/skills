@@ -268,156 +268,40 @@ def validate_acceptance_verify(label: str, body: str, errors: list[str]) -> None
 LINK_BASELINE_RELPATH = "docs/validator-link-baseline.txt"
 
 _HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
-_BLOCKQUOTE = re.compile(r"^(?:\s*>)+\s?")
-_FENCE = re.compile(r"^(?P<indent>[ ]*)(?P<marker>`{3,}|~{3,})(?P<info>.*)$")
-_LIST_ITEM = re.compile(r"^[ ]*(?:[-*+]|\d+[.)])\s+")
-_INLINE_CODE = re.compile(r"(`+)(.+?)\1", re.DOTALL)
-_PARAGRAPH_BREAK = re.compile(r"(\n[ \t]*\n)")
 # Only the `](` matters: the link text may contain brackets, or a whole nested
 # image, and anchoring on `[` would skip the outer destination entirely.
 _LINK_OPEN = re.compile(r"\]\(")
 _MAX_DESTINATION = 2048
 _URI_SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.\-]*:")
-
-
-def _normalise(raw_line: str) -> tuple[str, bool]:
-    """The line as the block parser sees it, plus whether it was blockquoted.
-
-    Tabs are four columns, and a blockquote marker is a container prefix rather
-    than content. The original line is what survives for link extraction; only
-    the decisions are made on this copy.
-    """
-    line = raw_line.expandtabs(4)
-    quoted = _BLOCKQUOTE.match(line)
-    return (line[quoted.end():] if quoted else line), bool(quoted)
-
-
-def _closed_fence_lines(raw_lines: list[str]) -> tuple[set[int], dict[int, int]]:
-    """Indices covered by closed fences, plus each opener's indent.
-
-    The opener indents are what lets the second pass keep list tracking honest:
-    a fence outdented past the list item it followed ends that item.
-
-    **An unclosed fence is not a fence.** Four review rounds each found a
-    different construct that opened one and never closed it, and every link from
-    there to the end of the document vanished silently. Pairing removes the
-    class rather than the instance: nothing can be swallowed past a closing
-    fence that does not exist. An example that forgets its closing fence becomes
-    a loud, fixable false positive instead of a silent hole.
-    """
-    fenced: set[int] = set()
-    opens: dict[int, int] = {}
-    container = 0
-    index = 0
-    while index < len(raw_lines):
-        probe, quoted = _normalise(raw_lines[index])
-        stripped = probe.strip()
-        indent = len(probe) - len(probe.lstrip(" "))
-        opened = _FENCE.match(probe)
-
-        if opened and indent <= container + 3:
-            marker = opened.group("marker")
-            # A backtick fence's info string may not contain a backtick, so
-            # "```code```" is a paragraph holding a code span, not a fence.
-            if not (marker[0] == "`" and "`" in opened.group("info")):
-                closing = _find_closing_fence(raw_lines, index + 1, marker, quoted)
-                if closing is not None:
-                    fenced.update(range(index, closing + 1))
-                    opens[index] = indent
-                    container = min(container, indent)
-                    index = closing + 1
-                    continue
-                # Unclosed: fall through and read this line as prose.
-
-        item = _LIST_ITEM.match(probe)
-        if item:
-            container = item.end()
-        elif stripped and indent == 0:
-            container = 0
-        index += 1
-    return fenced, opens
-
-
-def _find_closing_fence(
-    raw_lines: list[str], start: int, marker: str, quoted: bool
-) -> Optional[int]:
-    """Index of the line closing `marker`, or None.
-
-    The closing fence has to sit in the same container: a `> ```' inside an
-    unquoted fence is content, not a terminator, and treating it as one ends the
-    block early and leaks its examples.
-    """
-    for index in range(start, len(raw_lines)):
-        probe, line_quoted = _normalise(raw_lines[index])
-        if line_quoted != quoted:
-            continue
-        closing = _FENCE.match(probe)
-        if (
-            closing
-            and closing.group("marker")[0] == marker[0]
-            and len(closing.group("marker")) >= len(marker)
-            and not closing.group("info").strip()
-        ):
-            return index
-    return None
+# Same-length backtick delimiters, within one line. Line-scoped on purpose: a
+# span cannot contain a blank line, and a pattern that crosses lines lets one
+# unpaired backtick delete every link until the next one.
+_INLINE_CODE = re.compile(r"(`+)([^\n]+?)\1")
 
 
 def strip_code(text: str) -> str:
-    """Blank out everything that is an example rather than a reference.
+    """Blank out inline code spans, and nothing else.
 
-    Fenced blocks, indented code blocks, inline spans and HTML comments all
-    routinely contain markdown that points nowhere on purpose. Counting those as
-    broken links would fail repositories whose documentation is correct.
+    Earlier versions also tracked fenced blocks, indented code blocks,
+    blockquotes and HTML comments, so that examples inside them would not be
+    read as references. Six review rounds each found a construct where that
+    tracking opened a block it never closed and silently deleted every link to
+    the end of the document — the exact failure this check exists to prevent.
+
+    It was then measured. Across two real repositories the whole block layer
+    changed the finding count by **zero**: 18 and 0 with it, 18 and 0 with only
+    this line-scoped span removal. Roughly 150 lines of parsing were buying
+    nothing, at the price of an unbounded silent-loss surface.
+
+    What remains cannot swallow more than one line, and the residual blind spot
+    is one unpaired backtick hiding the links after it *on that line*.
+
+    The consequence for authors: a markdown link inside a fenced example is
+    reported. Write an unresolvable path as an inline code span, or record it in
+    `docs/validator-link-baseline.txt`. That is a loud, fixable cost; the
+    alternative was a quiet one.
     """
-    raw_lines = _HTML_COMMENT.sub("", text).splitlines()
-    fenced, fence_opens = _closed_fence_lines(raw_lines)
-
-    kept: list[str] = []
-    container = 0
-    prev_blank = True
-    for index, raw_line in enumerate(raw_lines):
-        if index in fenced:
-            if index in fence_opens:
-                container = min(container, fence_opens[index])
-            kept.append("")
-            prev_blank = True
-            continue
-
-        probe, _quoted = _normalise(raw_line)
-        stripped = probe.strip()
-        indent = len(probe) - len(probe.lstrip(" "))
-
-        item = _LIST_ITEM.match(probe)
-        if item:
-            container = item.end()
-        elif stripped and indent == 0:
-            container = 0
-
-        # An indented code block cannot interrupt a paragraph, and four spaces
-        # inside a list item are continuation, not code.
-        if prev_blank and stripped and indent >= container + 4:
-            kept.append("")
-            continue
-
-        kept.append(raw_line)
-        prev_blank = not stripped
-
-    return _strip_inline_code("\n".join(kept))
-
-
-def _strip_inline_code(text: str) -> str:
-    """Remove code spans, one paragraph at a time.
-
-    A code span cannot contain a blank line, so matching across paragraphs is
-    always wrong — and catastrophically so: one unpaired backtick in prose would
-    delete every link between it and the next backtick. Measured on a real
-    document, a single stray backtick hid all 13 of its links.
-    """
-    blocks = _PARAGRAPH_BREAK.split(text)
-    return "".join(
-        block if index % 2 else _INLINE_CODE.sub(" ", block)
-        for index, block in enumerate(blocks)
-    )
+    return "\n".join(_INLINE_CODE.sub(" ", line) for line in text.splitlines())
 
 
 def iter_link_destinations(text: str):
@@ -538,21 +422,15 @@ def validate_relative_links(
     href>` and `<img src>`. They are rare in this convention's documents and
     each needs a different resolver.
 
-    A fence blanks content only when it is actually closed, so no construct can
-    silently swallow a document from some point onward — the failure four review
-    rounds kept relocating. An unclosed example fence is a false positive, which
-    is loud and fixable, rather than a hole.
+    Known blind spots, both silent, both bounded to what they can reach:
 
-    Known blind spots, all silent, all bounded:
-
-    * an unpaired backtick that later pairs with a real code span hides the
-      links between them — within one paragraph only, since a code span cannot
-      contain a blank line;
+    * an unpaired backtick hides the links after it on that line;
     * a baseline entry for a target that appears more than once in a file
       exempts every occurrence of it, including one added later.
 
-    The list is what has actually been probed, not a claim of completeness:
-    markdown is large, and three review rounds each found another construct.
+    Links inside fenced code blocks are **reported**, not ignored. Tracking
+    fences was tried and abandoned: it changed the finding count by zero across
+    two real repositories while repeatedly introducing unbounded silent loss.
 
     An adopting repository can record existing rot in
     `docs/validator-link-baseline.txt`, one entry per line, preferably as

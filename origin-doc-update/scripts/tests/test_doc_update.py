@@ -1277,21 +1277,7 @@ class SpecFrontMatterTest(ValidateRepoDocsV2Test):
         self.assertTrue(any("status must be draft, active, or superseded" in e for e in errors))
 
 
-class RelativeLinkResolutionTest(unittest.TestCase):
-    """`docs/**` relative links must resolve.
-
-    Archiving is the routine operation that breaks them: it moves a file one
-    level deeper and leaves every referrer pointing at the old path. Measured in
-    one session on a real repository, `archive_issue.py` broke 11 links and
-    `archive_workstream.py` broke 5 more — and this validator stayed exit 0
-    through all of it, because nothing here ever resolved a link.
-
-    The check is deliberately unconditional: it holds no repository-specific
-    exclusions, so it can live in a cross-repo skill. A path that genuinely
-    cannot resolve (a placeholder, something outside the repo) is not a link and
-    should not be written as one.
-    """
-
+class _LinkRepoMixin:
     def make_repo(self) -> Path:
         root = Path(tempfile.mkdtemp())
         for path in ("docs/adrs", "docs/specs", "docs/issues/archive",
@@ -1304,24 +1290,37 @@ class RelativeLinkResolutionTest(unittest.TestCase):
 
     def _errors(self, root: Path) -> list[str]:
         errors, _warnings = MODULE.validate_repo(root)
-        return [e for e in errors if "link" in e.lower()]
+        return [e for e in errors if "broken relative link" in e]
+
+    def _doc(self, root: Path, body: str) -> None:
+        (root / "docs/specs/spec.md").write_text(
+            f"---\nid: SPEC-x\n---\n\n# S\n\n{body}\n"
+        )
+
+    def _links(self, body: str) -> list[str]:
+        root = self.make_repo()
+        self._doc(root, body)
+        return self._errors(root)
+
+
+class RelativeLinkResolutionTest(_LinkRepoMixin, unittest.TestCase):
+    """`docs/**` relative links must resolve.
+
+    Archiving is the routine operation that breaks them: it moves a file one
+    level deeper and leaves every referrer pointing at the old path. Measured in
+    one session on a real repository, `archive_issue.py` broke 11 links and
+    `archive_workstream.py` broke 5 more — and this validator stayed exit 0
+    through all of it, because nothing here ever resolved a link.
+    """
 
     def test_a_resolving_link_is_accepted(self):
         root = self.make_repo()
         (root / "docs/guides/example.md").write_text("---\nid: GUIDE-example\n---\n\n# G\n")
-        (root / "docs/specs/spec.md").write_text(
-            "---\nid: SPEC-x\n---\n\n# S\n\nSee [the guide](../guides/example.md).\n"
-        )
-
+        self._doc(root, "See [the guide](../guides/example.md).")
         self.assertEqual(self._errors(root), [])
 
     def test_a_link_that_does_not_resolve_is_an_error(self):
-        root = self.make_repo()
-        (root / "docs/specs/spec.md").write_text(
-            "---\nid: SPEC-x\n---\n\n# S\n\nSee [the guide](../guides/missing.md).\n"
-        )
-
-        errors = self._errors(root)
+        errors = self._links("See [the guide](../guides/missing.md).")
         self.assertEqual(len(errors), 1, errors)
         self.assertIn("docs/specs/spec.md", errors[0])
         self.assertIn("../guides/missing.md", errors[0])
@@ -1330,55 +1329,20 @@ class RelativeLinkResolutionTest(unittest.TestCase):
         """The exact shape archiving produces, in both directions."""
         root = self.make_repo()
         (root / "docs/issues/archive/ISSUE-20260101-moved.md").write_text(
-            "---\nid: ISSUE-20260101-moved\n---\n\n# M\n\n"
-            "[spec](../specs/spec.md)\n"          # one ../ too few after the move
+            "---\nid: ISSUE-20260101-moved\n---\n\n# M\n\n[spec](../specs/spec.md)\n"
         )
         (root / "docs/adrs/ADR-20260101-x.md").write_text(
             "---\nid: ADR-20260101-x\n---\n\n# A\n\n"
-            "[issue](../issues/ISSUE-20260101-moved.md)\n"  # referrer left behind
+            "[issue](../issues/ISSUE-20260101-moved.md)\n"
         )
         (root / "docs/specs/spec.md").write_text("---\nid: SPEC-x\n---\n\n# S\n")
-
-        errors = self._errors(root)
-        self.assertEqual(len(errors), 2, errors)
+        self.assertEqual(len(self._errors(root)), 2, self._errors(root))
 
     def test_external_and_anchor_links_are_ignored(self):
-        root = self.make_repo()
-        (root / "docs/specs/spec.md").write_text(
-            "---\nid: SPEC-x\n---\n\n# S\n\n"
-            "[web](https://example.com/x.md) [mail](mailto:a@b.c) [here](#section)\n"
+        self.assertEqual(
+            self._links("[web](https://example.com/x.md) [mail](mailto:a@b.c) [here](#s)"),
+            [],
         )
-
-        self.assertEqual(self._errors(root), [])
-
-    def test_links_inside_fenced_code_are_ignored(self):
-        """Fenced blocks are examples, not references."""
-        root = self.make_repo()
-        (root / "docs/guides/example.md").write_text(
-            "---\nid: GUIDE-example\n---\n\n# G\n\n"
-            "```markdown\n[nope](../nowhere/absent.md)\n```\n"
-        )
-
-        self.assertEqual(self._errors(root), [])
-
-    def test_a_link_carrying_a_title_still_resolves(self):
-        root = self.make_repo()
-        (root / "docs/guides/example.md").write_text("---\nid: GUIDE-example\n---\n\n# G\n")
-        (root / "docs/specs/spec.md").write_text(
-            "---\nid: SPEC-x\n---\n\n# S\n\n"
-            '[g](../guides/example.md "The guide")\n'
-        )
-
-        self.assertEqual(self._errors(root), [])
-
-    def test_an_anchor_on_a_real_file_resolves(self):
-        root = self.make_repo()
-        (root / "docs/guides/example.md").write_text("---\nid: GUIDE-example\n---\n\n# G\n")
-        (root / "docs/specs/spec.md").write_text(
-            "---\nid: SPEC-x\n---\n\n# S\n\n[g](../guides/example.md#section)\n"
-        )
-
-        self.assertEqual(self._errors(root), [])
 
     def test_the_verdict_depends_only_on_whether_the_path_exists(self):
         """Randomised vocabularies, so no fixed word list is being relied on.
@@ -1386,11 +1350,10 @@ class RelativeLinkResolutionTest(unittest.TestCase):
         **What this does not establish.** An exclusion written for a vocabulary
         this test never generates would still pass, and no behavioural test can
         rule that out — you cannot probe a name you have not thought of.
-        Grepping the source is the complement (an earlier version did exactly
-        that, and was defeated by capitalisation alone), and it is just as
-        partial. What is checked here is the property that actually matters in
-        use: across unrelated vocabularies, a path that exists is never an
-        error and a path that does not is always one.
+        Grepping the source is the complement, and is just as partial. What is
+        checked is the property that matters in use: across unrelated
+        vocabularies, a path that exists is never an error and one that does not
+        is always one.
         """
         import random
         import string
@@ -1402,111 +1365,114 @@ class RelativeLinkResolutionTest(unittest.TestCase):
             (root / f"docs/guides/{word}.md").write_text(
                 f"---\nid: GUIDE-{word}\n---\n\n# G\n"
             )
-            (root / "docs/specs/spec.md").write_text(
-                "---\nid: SPEC-x\n---\n\n# S\n\n"
-                f"[present](../guides/{word}.md)\n\n[absent](../{word}/{word}.md)\n"
+            self._doc(
+                root,
+                f"[present](../guides/{word}.md)\n\n[absent](../{word}/{word}.md)",
             )
-
             errors = self._errors(root)
-
             self.assertEqual(len(errors), 1, f"vocabulary {word!r}: {errors}")
             self.assertIn(f"../{word}/{word}.md", errors[0])
 
 
-class RelativeLinkEdgeCaseTest(unittest.TestCase):
-    """Cases a cross-repo check gets wrong at somebody else's expense.
+class CodeSpanScopeTest(_LinkRepoMixin, unittest.TestCase):
+    """Only inline code spans are excluded — and only within one line.
 
-    A false positive here is worse than a missed link: it fails a repository
-    whose markdown is perfectly legal, in a skill its owners did not write.
-    Every case below was reproduced against the shipped implementation before
-    being fixed.
+    Six review rounds each found a construct where block-level tracking (fences,
+    indented blocks, blockquotes, HTML comments) opened a region it never closed
+    and silently deleted every link to the end of the document. Measured across
+    two real repositories, that whole layer changed the finding count by zero.
+    It was removed. These tests pin the contract that replaced it.
     """
 
-    def make_repo(self) -> Path:
-        root = Path(tempfile.mkdtemp())
-        for path in ("docs/adrs", "docs/specs", "docs/issues/archive",
-                     "docs/workstreams/archive", "docs/guides"):
-            (root / path).mkdir(parents=True, exist_ok=True)
-        (root / "docs/00_index.md").write_text(
-            "---\nupdated_at: 2026-09-07\ncurrent_focus: []\n---\n\n# 00 Index\n"
+    def test_an_inline_span_hides_its_example(self):
+        self.assertEqual(self._links("write `[a](../nowhere/x.md)` like this"), [])
+
+    def test_a_double_backtick_span_hides_its_example(self):
+        self.assertEqual(self._links("``[a](../nowhere/x.md)``"), [])
+
+    def test_a_stray_backtick_cannot_reach_the_next_line(self):
+        """The blind spot is bounded to its own line, and that is the point."""
+        errors = self._links(
+            "Do not use ` alone as a quote.\n[g](../guides/gone.md)"
         )
-        return root
+        self.assertEqual(len(errors), 1, errors)
 
-    def _link_errors(self, root: Path) -> list[str]:
-        errors, _warnings = MODULE.validate_repo(root)
-        return [e for e in errors if "broken relative link" in e]
+    def test_a_link_inside_a_fenced_block_is_reported(self):
+        """Documented contract, not an oversight: fences are no longer parsed."""
+        errors = self._links("```md\n[a](../nowhere/x.md)\n```")
+        self.assertEqual(len(errors), 1, errors)
 
-    def _doc(self, root: Path, body: str, name: str = "docs/specs/spec.md") -> None:
-        (root / name).write_text(f"---\nid: SPEC-x\n---\n\n# S\n\n{body}\n")
-
-    # --- false positives ---------------------------------------------------
-
-    def test_a_four_backtick_wrapper_does_not_expose_its_inner_example(self):
+    def test_a_fenced_example_can_be_recorded_as_debt(self):
+        """Which is how a repository that must show such an example proceeds."""
         root = self.make_repo()
-        self._doc(root, "````markdown\n```\n[ex](../nowhere/absent.md)\n```\n````")
-        self.assertEqual(self._link_errors(root), [])
+        self._doc(root, "```md\n[a](../nowhere/x.md)\n```")
+        (root / "docs/validator-link-baseline.txt").write_text(
+            "docs/specs/spec.md\t../nowhere/x.md\n"
+        )
+        self.assertEqual(self._errors(root), [])
+
+
+class RelativeLinkEdgeCaseTest(_LinkRepoMixin, unittest.TestCase):
+    """A false positive here fails a repository whose markdown is legal."""
 
     def test_percent_encoded_paths_resolve(self):
         root = self.make_repo()
         (root / "docs/guides/my file.md").write_text("---\nid: GUIDE-a\n---\n\n# G\n")
         self._doc(root, "[a](../guides/my%20file.md)")
-        self.assertEqual(self._link_errors(root), [])
-
-    def test_links_inside_html_comments_are_ignored(self):
-        root = self.make_repo()
-        self._doc(root, "<!-- [old](../guides/gone.md) -->")
-        self.assertEqual(self._link_errors(root), [])
+        self.assertEqual(self._errors(root), [])
 
     def test_a_query_suffix_is_not_part_of_the_path(self):
         root = self.make_repo()
         (root / "docs/guides/ok.md").write_text("---\nid: GUIDE-b\n---\n\n# G\n")
         self._doc(root, "[a](../guides/ok.md?plain=1)")
-        self.assertEqual(self._link_errors(root), [])
-
-    def test_double_backtick_inline_spans_are_code(self):
-        root = self.make_repo()
-        self._doc(root, "``[a](../guides/gone.md)``")
-        self.assertEqual(self._link_errors(root), [])
+        self.assertEqual(self._errors(root), [])
 
     def test_parentheses_in_a_destination_are_kept(self):
         root = self.make_repo()
         (root / "docs/guides/note(1).md").write_text("---\nid: GUIDE-c\n---\n\n# G\n")
         self._doc(root, "[a](../guides/note(1).md)")
-        self.assertEqual(self._link_errors(root), [])
+        self.assertEqual(self._errors(root), [])
 
-    def test_indented_code_blocks_are_code(self):
+    def test_a_link_carrying_a_title_still_resolves(self):
         root = self.make_repo()
-        self._doc(root, "text:\n\n    [a](../guides/gone.md)\n")
-        self.assertEqual(self._link_errors(root), [])
+        (root / "docs/guides/example.md").write_text("---\nid: GUIDE-d\n---\n\n# G\n")
+        self._doc(root, '[g](../guides/example.md "The guide")')
+        self.assertEqual(self._errors(root), [])
+
+    def test_an_anchor_on_a_real_file_resolves(self):
+        root = self.make_repo()
+        (root / "docs/guides/example.md").write_text("---\nid: GUIDE-e\n---\n\n# G\n")
+        self._doc(root, "[g](../guides/example.md#section)")
+        self.assertEqual(self._errors(root), [])
 
     def test_case_differences_are_a_break_even_on_a_case_insensitive_disk(self):
         """Otherwise the verdict depends on which machine ran it."""
         root = self.make_repo()
-        (root / "docs/guides/example.md").write_text("---\nid: GUIDE-d\n---\n\n# G\n")
+        (root / "docs/guides/example.md").write_text("---\nid: GUIDE-f\n---\n\n# G\n")
         self._doc(root, "[a](../guides/Example.md)")
-        self.assertEqual(len(self._link_errors(root)), 1)
+        self.assertEqual(len(self._errors(root)), 1)
 
-    # --- false negatives ---------------------------------------------------
+    def test_a_bracket_inside_the_link_text_does_not_hide_the_destination(self):
+        self.assertEqual(len(self._links("[see [note]](../x/gone.md)")), 1)
 
-    def test_an_unbalanced_fence_does_not_blank_the_rest_of_the_file(self):
+    def test_an_image_inside_a_link_does_not_hide_the_outer_destination(self):
+        errors = self._links("[![img](../i/logo.png)](../x/gone.md)")
+        self.assertEqual(len(errors), 2, errors)
+        self.assertTrue(any("../x/gone.md" in e for e in errors), errors)
+
+    def test_a_pathological_line_does_not_take_forever(self):
+        """Generous margin on purpose: a wall-clock assertion that flakes is
+        worse than no assertion, because a sometimes-red suite stops being read."""
+        import time
+
         root = self.make_repo()
-        self._doc(root, "```\ncode\n~~~\n```\n\n[a](../guides/gone.md)")
-        self.assertEqual(len(self._link_errors(root)), 1)
-
-    def test_a_stray_fence_in_prose_does_not_blank_the_rest_of_the_file(self):
-        root = self.make_repo()
-        self._doc(root, "a ``` stray\n\n[a](../guides/gone.md)")
-        self.assertEqual(len(self._link_errors(root)), 1)
-
-    def test_a_tilde_fence_is_not_closed_by_a_backtick_fence(self):
-        root = self.make_repo()
-        self._doc(root, "~~~\n```\n[ex](../nowhere/absent.md)\n~~~\n\n[a](../guides/gone.md)")
-        errors = self._link_errors(root)
-        self.assertEqual(len(errors), 1, errors)
-        self.assertIn("../guides/gone.md", errors[0])
+        self._doc(root, "[a](" * 2000)
+        started = time.monotonic()
+        self._errors(root)
+        self.assertLess(time.monotonic() - started, 10.0)
 
 
-class LinkBaselineTest(unittest.TestCase):
+class LinkBaselineTest(_LinkRepoMixin, unittest.TestCase):
     """An adopting repository can defer its historical rot, but only downwards.
 
     Turning a new check on across every repository at once, with no way to
@@ -1515,119 +1481,34 @@ class LinkBaselineTest(unittest.TestCase):
     check nobody can get to green stops being read at all.
     """
 
-    def make_repo(self) -> Path:
-        root = Path(tempfile.mkdtemp())
-        for path in ("docs/adrs", "docs/specs", "docs/issues/archive",
-                     "docs/workstreams/archive", "docs/guides"):
-            (root / path).mkdir(parents=True, exist_ok=True)
-        (root / "docs/00_index.md").write_text(
-            "---\nupdated_at: 2026-09-07\ncurrent_focus: []\n---\n\n# 00 Index\n"
-        )
-        (root / "docs/specs/spec.md").write_text(
-            "---\nid: SPEC-x\n---\n\n# S\n\n[a](../guides/gone.md)\n"
-        )
+    def _repo_with_rot(self) -> Path:
+        root = self.make_repo()
+        self._doc(root, "[a](../guides/gone.md)")
         return root
 
     def test_a_baselined_file_reports_a_warning_not_an_error(self):
-        root = self.make_repo()
+        root = self._repo_with_rot()
         (root / "docs/validator-link-baseline.txt").write_text("docs/specs/spec.md\n")
-
         errors, warnings = MODULE.validate_repo(root)
-
         self.assertEqual([e for e in errors if "broken relative link" in e], [])
         self.assertTrue(any("link-baseline" in w for w in warnings), warnings)
 
     def test_a_baselined_file_that_is_now_clean_must_be_removed(self):
         """The list only shrinks: a stale exemption is itself an error."""
-        root = self.make_repo()
-        (root / "docs/guides/gone.md").write_text("---\nid: GUIDE-e\n---\n\n# G\n")
+        root = self._repo_with_rot()
+        (root / "docs/guides/gone.md").write_text("---\nid: GUIDE-g\n---\n\n# G\n")
         (root / "docs/validator-link-baseline.txt").write_text("docs/specs/spec.md\n")
-
         errors, _warnings = MODULE.validate_repo(root)
-
         self.assertTrue(any("no longer has broken links" in e for e in errors), errors)
 
     def test_a_baseline_entry_for_a_missing_file_is_an_error(self):
-        root = self.make_repo()
+        root = self._repo_with_rot()
         (root / "docs/validator-link-baseline.txt").write_text("docs/specs/absent.md\n")
-
         errors, _warnings = MODULE.validate_repo(root)
-
         self.assertTrue(any("does not exist" in e for e in errors), errors)
 
     def test_without_the_file_nothing_is_exempt(self):
-        root = self.make_repo()
-
-        errors, _warnings = MODULE.validate_repo(root)
-
-        self.assertEqual(len([e for e in errors if "broken relative link" in e]), 1)
-
-
-class RelativeLinkRegressionTest(unittest.TestCase):
-    """The check must not be silently switchable-off by ordinary prose.
-
-    Every case here was found by making the check *worse* in a plausible way and
-    watching nothing go red. They exist so the next such regression cannot land
-    quietly.
-    """
-
-    def make_repo(self) -> Path:
-        root = Path(tempfile.mkdtemp())
-        for path in ("docs/adrs", "docs/specs", "docs/issues/archive",
-                     "docs/workstreams/archive", "docs/guides"):
-            (root / path).mkdir(parents=True, exist_ok=True)
-        (root / "docs/00_index.md").write_text(
-            "---\nupdated_at: 2026-09-07\ncurrent_focus: []\n---\n\n# 00 Index\n"
-        )
-        return root
-
-    def _link_errors(self, root: Path) -> list[str]:
-        errors, _warnings = MODULE.validate_repo(root)
-        return [e for e in errors if "broken relative link" in e]
-
-    def _doc(self, root: Path, body: str) -> None:
-        (root / "docs/specs/spec.md").write_text(f"---\nid: SPEC-x\n---\n\n# S\n\n{body}\n")
-
-    def test_a_stray_backtick_does_not_hide_later_links(self):
-        """A code span cannot contain a blank line, so it cannot swallow a document."""
-        self.maxDiff = None
-        root = self.make_repo()
-        self._doc(
-            root,
-            "Use the `--flag` option.\n\n"
-            "Do not use ` alone as a quote.\n\n"
-            "See [guide](../guides/gone.md) and [spec](../specs/gone.md).\n\n"
-            "Also `x` here.",
-        )
-        self.assertEqual(len(self._link_errors(root)), 2, self._link_errors(root))
-
-    def test_links_in_list_continuations_are_still_checked(self):
-        """A 4-space indent inside a loose list is list content, not a code block."""
-        root = self.make_repo()
-        self._doc(root, "- item one\n\n    continued: see [a](../x/gone.md)\n\n- item two")
-        self.assertEqual(len(self._link_errors(root)), 1, self._link_errors(root))
-
-    def test_links_in_nested_list_items_are_still_checked(self):
-        root = self.make_repo()
-        self._doc(root, "Steps:\n\n- outer\n\n    - inner [a](../x/gone.md)")
-        self.assertEqual(len(self._link_errors(root)), 1, self._link_errors(root))
-
-    def test_a_bracket_inside_the_link_text_does_not_hide_the_destination(self):
-        root = self.make_repo()
-        self._doc(root, "[see [note]](../x/gone.md)")
-        self.assertEqual(len(self._link_errors(root)), 1, self._link_errors(root))
-
-    def test_an_image_inside_a_link_does_not_hide_the_outer_destination(self):
-        root = self.make_repo()
-        self._doc(root, "[![img](../i/logo.png)](../x/gone.md)")
-        errors = self._link_errors(root)
-        self.assertEqual(len(errors), 2, errors)
-        self.assertTrue(any("../x/gone.md" in e for e in errors), errors)
-
-    def test_an_indented_line_after_a_closing_fence_is_code(self):
-        root = self.make_repo()
-        self._doc(root, "```\ncode\n```\n    [a](../x/gone.md)")
-        self.assertEqual(self._link_errors(root), [])
+        self.assertEqual(len(self._errors(self._repo_with_rot())), 1)
 
     def test_a_baselined_file_still_reports_a_newly_added_link(self):
         """File-level exemption would hide tomorrow's breakage as well as today's."""
@@ -1636,225 +1517,16 @@ class RelativeLinkRegressionTest(unittest.TestCase):
         (root / "docs/validator-link-baseline.txt").write_text(
             "docs/specs/spec.md\t../guides/old.md\n"
         )
-
-        errors = self._link_errors(root)
+        errors = self._errors(root)
         self.assertEqual(len(errors), 1, errors)
         self.assertIn("../guides/new.md", errors[0])
 
     def test_a_target_scoped_baseline_entry_that_is_fixed_must_be_removed(self):
         root = self.make_repo()
-        (root / "docs/guides/old.md").write_text("---\nid: GUIDE-f\n---\n\n# G\n")
+        (root / "docs/guides/old.md").write_text("---\nid: GUIDE-h\n---\n\n# G\n")
         self._doc(root, "[old](../guides/old.md)")
         (root / "docs/validator-link-baseline.txt").write_text(
             "docs/specs/spec.md\t../guides/old.md\n"
         )
-
         errors, _warnings = MODULE.validate_repo(root)
         self.assertTrue(any("no longer broken" in e for e in errors), errors)
-
-    def test_a_pathological_line_does_not_take_forever(self):
-        """Generous margin on purpose: a wall-clock assertion that flakes is worse
-        than no assertion, because a sometimes-red suite stops being read."""
-        import time
-
-        root = self.make_repo()
-        self._doc(root, "[a](" * 2000)
-        started = time.monotonic()
-        self._link_errors(root)
-        self.assertLess(time.monotonic() - started, 10.0)
-
-    def test_a_fenced_example_indented_inside_a_list_is_still_code(self):
-        """The rule tells authors to write unresolvable paths as code.
-
-        That escape hatch has to work where examples actually live — indented
-        under a numbered step — or the advice is false and the author sees a red
-        build on correct markdown.
-        """
-        root = self.make_repo()
-        self._doc(
-            root,
-            "1. Add the front matter:\n\n"
-            "    ```md\n"
-            "    ---\n"
-            "    id: SPEC-example\n"
-            "    ---\n\n"
-            "    See [the spec](../specs/YOUR-SPEC.md) for details.\n"
-            "    ```\n",
-        )
-        self.assertEqual(self._link_errors(root), [])
-
-    def test_a_tilde_fenced_example_inside_a_list_is_still_code(self):
-        root = self.make_repo()
-        self._doc(
-            root,
-            "1. Example:\n\n"
-            "    ~~~md\n"
-            "    [a](../nowhere/x.md)\n"
-            "    ~~~\n",
-        )
-        self.assertEqual(self._link_errors(root), [])
-
-    def test_an_indented_fence_does_not_swallow_the_rest_of_the_document(self):
-        root = self.make_repo()
-        self._doc(
-            root,
-            "1. Example:\n\n"
-            "    ```\n"
-            "    [a](../nowhere/x.md)\n"
-            "    ```\n\n"
-            "[real](../guides/gone.md)\n",
-        )
-        errors = self._link_errors(root)
-        self.assertEqual(len(errors), 1, errors)
-        self.assertIn("../guides/gone.md", errors[0])
-
-
-class FenceRecognitionTest(unittest.TestCase):
-    """Fence recognition follows CommonMark closely enough to be safe.
-
-    Every case here is one where a wrong answer silently blanks the rest of a
-    document — the exact failure this check exists to prevent. Two rounds of
-    fixes each reintroduced it by a different route, so the rules are pinned.
-    """
-
-    def make_repo(self) -> Path:
-        root = Path(tempfile.mkdtemp())
-        for path in ("docs/adrs", "docs/specs", "docs/issues/archive",
-                     "docs/workstreams/archive", "docs/guides"):
-            (root / path).mkdir(parents=True, exist_ok=True)
-        (root / "docs/00_index.md").write_text(
-            "---\nupdated_at: 2026-09-07\ncurrent_focus: []\n---\n\n# 00 Index\n"
-        )
-        return root
-
-    def _links(self, body: str) -> list[str]:
-        root = self.make_repo()
-        (root / "docs/specs/spec.md").write_text(
-            f"---\nid: SPEC-x\n---\n\n# S\n\n{body}\n"
-        )
-        errors, _warnings = MODULE.validate_repo(root)
-        return [e for e in errors if "broken relative link" in e]
-
-    def test_a_fence_shown_inside_an_indented_code_block_opens_nothing(self):
-        """Documents that explain markdown contain fences as *content*."""
-        found = self._links(
-            "To open a code block, write:\n\n"
-            "    ```bash\n\n"
-            "Then your commands.\n\n"
-            "See [the guide](../guides/gone.md) and [the spec](../specs/gone.md).\n"
-        )
-        self.assertEqual(len(found), 2, found)
-
-    def test_an_unpaired_fence_inside_a_numbered_step_opens_nothing(self):
-        found = self._links(
-            "1. Open a fence:\n\n"
-            "    ```\n\n"
-            "2. Done.\n\n"
-            "See [the guide](../guides/gone.md).\n"
-        )
-        self.assertEqual(len(found), 1, found)
-
-    def test_a_tab_indented_pseudo_fence_opens_nothing(self):
-        found = self._links(
-            "Write:\n\n\t```bash\n\nThen:\n\n[g](../guides/gone.md)\n"
-        )
-        self.assertEqual(len(found), 1, found)
-
-    def test_a_backtick_code_span_at_line_start_is_not_a_fence(self):
-        """A backtick fence's info string may not contain a backtick."""
-        found = self._links(
-            "```code``` is the fence syntax.\n\n[g](../guides/gone.md)\n"
-        )
-        self.assertEqual(len(found), 1, found)
-
-    def test_a_real_fence_with_an_info_string_still_opens(self):
-        self.assertEqual(
-            self._links("```bash\n[x](../nowhere/a.md)\n```\n"), []
-        )
-
-    def test_a_fence_indented_to_a_list_item_still_opens(self):
-        self.assertEqual(
-            self._links("1. Example:\n\n    ```md\n    [x](../nowhere/a.md)\n    ```\n"),
-            [],
-        )
-
-    def test_a_fence_inside_a_blockquote_is_code(self):
-        self.assertEqual(
-            self._links("> ```\n> [x](../nowhere/a.md)\n> ```\n"), []
-        )
-
-    def test_an_indented_block_after_a_fence_closes_the_list_is_code(self):
-        self.assertEqual(
-            self._links("- item\n\n```\nsh\n```\n\n    [x](../nowhere/a.md)\n"), []
-        )
-
-
-class FencePairingInvariantTest(unittest.TestCase):
-    """Only a *closed* fence blanks anything.
-
-    Four review rounds each moved the same defect: some construct opened a fence
-    that never closed, and every link from there to the end of the document
-    vanished. Patching the constructs one at a time did not converge — markdown
-    is large. This invariant removes the class instead: an unclosed fence is not
-    a fence, so nothing it touches can be silently swallowed. The cost is a loud,
-    fixable false positive on an example that forgets its closing fence.
-    """
-
-    def make_repo(self) -> Path:
-        root = Path(tempfile.mkdtemp())
-        for path in ("docs/adrs", "docs/specs", "docs/issues/archive",
-                     "docs/workstreams/archive", "docs/guides"):
-            (root / path).mkdir(parents=True, exist_ok=True)
-        (root / "docs/00_index.md").write_text(
-            "---\nupdated_at: 2026-09-07\ncurrent_focus: []\n---\n\n# 00 Index\n"
-        )
-        return root
-
-    def _links(self, body: str) -> list[str]:
-        root = self.make_repo()
-        (root / "docs/specs/spec.md").write_text(
-            f"---\nid: SPEC-x\n---\n\n# S\n\n{body}\n"
-        )
-        errors, _warnings = MODULE.validate_repo(root)
-        return [e for e in errors if "broken relative link" in e]
-
-    def test_an_unclosed_fence_in_a_blockquote_does_not_swallow_the_document(self):
-        found = self._links("> ```\n> code\n\nReal [g](../guides/gone.md)\n")
-        self.assertEqual(len(found), 1, found)
-        self.assertIn("../guides/gone.md", found[0])
-
-    def test_a_blockquote_line_inside_a_fence_does_not_close_it(self):
-        """Console transcripts put `>` at the start of a continuation line."""
-        found = self._links(
-            "1. run\n\n"
-            "   ```console\n"
-            "   $ foo\n"
-            "   > bar\n"
-            "   [q](../guides/q.md)\n"
-            "   ```\n\n"
-            "   [g](../guides/gone.md)\n"
-        )
-        self.assertEqual(len(found), 1, found)
-        self.assertIn("../guides/gone.md", found[0])
-
-    def test_a_quoted_fence_inside_a_fence_does_not_close_it(self):
-        self.assertEqual(self._links("```\n> ```\n[g](../guides/gone.md)\n```\n"), [])
-
-    def test_a_fence_after_a_nested_bullet_keeps_list_continuation_visible(self):
-        found = self._links(
-            "2.  **Check**\n\n"
-            "    - nested bullet\n\n"
-            "    **Example**:\n\n"
-            "    ```json\n"
-            "    {}\n"
-            "    ```\n\n"
-            "    See [g](../guides/gone.md).\n"
-        )
-        self.assertEqual(len(found), 1, found)
-
-    def test_an_unclosed_fence_at_top_level_does_not_swallow_the_document(self):
-        found = self._links("```\ncode\n\n[g](../guides/gone.md)\n")
-        self.assertEqual(len(found), 1, found)
-
-    def test_a_closed_fence_still_hides_its_example(self):
-        self.assertEqual(self._links("```\n[x](../nowhere/a.md)\n```\n"), [])

@@ -1707,3 +1707,83 @@ class RelativeLinkRegressionTest(unittest.TestCase):
         errors = self._link_errors(root)
         self.assertEqual(len(errors), 1, errors)
         self.assertIn("../guides/gone.md", errors[0])
+
+
+class FenceRecognitionTest(unittest.TestCase):
+    """Fence recognition follows CommonMark closely enough to be safe.
+
+    Every case here is one where a wrong answer silently blanks the rest of a
+    document — the exact failure this check exists to prevent. Two rounds of
+    fixes each reintroduced it by a different route, so the rules are pinned.
+    """
+
+    def make_repo(self) -> Path:
+        root = Path(tempfile.mkdtemp())
+        for path in ("docs/adrs", "docs/specs", "docs/issues/archive",
+                     "docs/workstreams/archive", "docs/guides"):
+            (root / path).mkdir(parents=True, exist_ok=True)
+        (root / "docs/00_index.md").write_text(
+            "---\nupdated_at: 2026-09-07\ncurrent_focus: []\n---\n\n# 00 Index\n"
+        )
+        return root
+
+    def _links(self, body: str) -> list[str]:
+        root = self.make_repo()
+        (root / "docs/specs/spec.md").write_text(
+            f"---\nid: SPEC-x\n---\n\n# S\n\n{body}\n"
+        )
+        errors, _warnings = MODULE.validate_repo(root)
+        return [e for e in errors if "broken relative link" in e]
+
+    def test_a_fence_shown_inside_an_indented_code_block_opens_nothing(self):
+        """Documents that explain markdown contain fences as *content*."""
+        found = self._links(
+            "To open a code block, write:\n\n"
+            "    ```bash\n\n"
+            "Then your commands.\n\n"
+            "See [the guide](../guides/gone.md) and [the spec](../specs/gone.md).\n"
+        )
+        self.assertEqual(len(found), 2, found)
+
+    def test_an_unpaired_fence_inside_a_numbered_step_opens_nothing(self):
+        found = self._links(
+            "1. Open a fence:\n\n"
+            "    ```\n\n"
+            "2. Done.\n\n"
+            "See [the guide](../guides/gone.md).\n"
+        )
+        self.assertEqual(len(found), 1, found)
+
+    def test_a_tab_indented_pseudo_fence_opens_nothing(self):
+        found = self._links(
+            "Write:\n\n\t```bash\n\nThen:\n\n[g](../guides/gone.md)\n"
+        )
+        self.assertEqual(len(found), 1, found)
+
+    def test_a_backtick_code_span_at_line_start_is_not_a_fence(self):
+        """A backtick fence's info string may not contain a backtick."""
+        found = self._links(
+            "```code``` is the fence syntax.\n\n[g](../guides/gone.md)\n"
+        )
+        self.assertEqual(len(found), 1, found)
+
+    def test_a_real_fence_with_an_info_string_still_opens(self):
+        self.assertEqual(
+            self._links("```bash\n[x](../nowhere/a.md)\n```\n"), []
+        )
+
+    def test_a_fence_indented_to_a_list_item_still_opens(self):
+        self.assertEqual(
+            self._links("1. Example:\n\n    ```md\n    [x](../nowhere/a.md)\n    ```\n"),
+            [],
+        )
+
+    def test_a_fence_inside_a_blockquote_is_code(self):
+        self.assertEqual(
+            self._links("> ```\n> [x](../nowhere/a.md)\n> ```\n"), []
+        )
+
+    def test_an_indented_block_after_a_fence_closes_the_list_is_code(self):
+        self.assertEqual(
+            self._links("- item\n\n```\nsh\n```\n\n    [x](../nowhere/a.md)\n"), []
+        )

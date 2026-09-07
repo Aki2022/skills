@@ -268,14 +268,11 @@ def validate_acceptance_verify(label: str, body: str, errors: list[str]) -> None
 LINK_BASELINE_RELPATH = "docs/validator-link-baseline.txt"
 
 _HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
-# Any indentation: inside a list item a fence is indented to the item's content
-# column, and refusing to see it there would scan the example as prose — which
-# breaks the very escape hatch this check tells authors to use.
-_FENCE = re.compile(r"^\s*(?P<marker>`{3,}|~{3,})")
-_INDENTED_CODE = re.compile(r"^(?: {4,}|\t)")
+_BLOCKQUOTE = re.compile(r"^(?:\s*>)+\s?")
+_FENCE = re.compile(r"^(?P<indent>[ ]*)(?P<marker>`{3,}|~{3,})(?P<info>.*)$")
+_LIST_ITEM = re.compile(r"^[ ]*(?:[-*+]|\d+[.)])\s+")
 _INLINE_CODE = re.compile(r"(`+)(.+?)\1", re.DOTALL)
 _PARAGRAPH_BREAK = re.compile(r"(\n[ \t]*\n)")
-_LIST_ITEM = re.compile(r"^ {0,3}(?:[-*+]|\d+[.)])\s")
 # Only the `](` matters: the link text may contain brackets, or a whole nested
 # image, and anchoring on `[` would skip the outer destination entirely.
 _LINK_OPEN = re.compile(r"\]\(")
@@ -300,43 +297,70 @@ def strip_code(text: str) -> str:
 
     kept: list[str] = []
     fence: Optional[str] = None
+    fence_container = 0
+    container = 0
     prev_blank = True
-    in_list = False
-    for line in text.splitlines():
-        opened = _FENCE.match(line)
-        if fence is None:
-            if opened:
-                fence = opened.group("marker")
+
+    for raw_line in text.splitlines():
+        # A fence inside a blockquote is still a fence, and tabs are four
+        # columns, so decisions are made on a normalised copy of the line while
+        # the original is what survives for link extraction.
+        probe = _BLOCKQUOTE.sub("", raw_line.expandtabs(4))
+        stripped = probe.strip()
+        indent = len(probe) - len(probe.lstrip(" "))
+        opened = _FENCE.match(probe)
+
+        if fence is not None:
+            if (
+                opened
+                and opened.group("marker")[0] == fence[0]
+                and len(opened.group("marker")) >= len(fence)
+                and not opened.group("info").strip()
+            ):
+                fence = None
+                kept.append("")
+                prev_blank = True
+                continue
+            # An unclosed fence ends with its containing block: a line that
+            # outdents past the list item it lives in closes it. Without this a
+            # fence shown but never closed swallows the rest of the document.
+            if stripped and indent < fence_container:
+                fence = None
+            else:
                 kept.append("")
                 prev_blank = False
                 continue
-            stripped = line.strip()
-            if _LIST_ITEM.match(line):
-                in_list = True
-            elif stripped and not line[:1].isspace():
-                in_list = False
-            # An indented code block cannot interrupt a paragraph, and cannot
-            # occur inside a list item — where four spaces mean continuation.
-            if prev_blank and not in_list and _INDENTED_CODE.match(line):
+
+        # An opening fence may be indented at most three columns past its
+        # container. Beyond that it is content of an indented code block — which
+        # is exactly how a document that *explains* fences writes one.
+        if opened and indent <= container + 3:
+            marker = opened.group("marker")
+            # A backtick fence's info string may not contain a backtick, so
+            # "```code```" is a paragraph holding a code span, not a fence.
+            if not (marker[0] == "`" and "`" in opened.group("info")):
+                fence = marker
+                if indent < container:
+                    container = 0
+                fence_container = container
                 kept.append("")
+                prev_blank = False
                 continue
-            kept.append(line)
-            prev_blank = not stripped
+
+        item = _LIST_ITEM.match(probe)
+        if item:
+            container = item.end()
+        elif stripped and indent == 0:
+            container = 0
+
+        # An indented code block cannot interrupt a paragraph, and four spaces
+        # inside a list item are continuation, not code.
+        if prev_blank and stripped and indent >= container + 4:
+            kept.append("")
             continue
 
-        if (
-            opened
-            and opened.group("marker")[0] == fence[0]
-            and len(opened.group("marker")) >= len(fence)
-            and not line.strip()[len(opened.group("marker")):].strip()
-        ):
-            fence = None
-            # The fence ended the block, so the next indented line may be code.
-            kept.append("")
-            prev_blank = True
-            continue
-        kept.append("")
-        prev_blank = False
+        kept.append(raw_line)
+        prev_blank = not stripped
 
     return _strip_inline_code("\n".join(kept))
 
@@ -474,13 +498,16 @@ def validate_relative_links(
     href>` and `<img src>`. They are rare in this convention's documents and
     each needs a different resolver.
 
-    Two known blind spots, both silent and both bounded:
+    Known blind spots, all silent, all bounded:
 
     * an unpaired backtick that later pairs with a real code span hides the
       links between them — within one paragraph only, since a code span cannot
       contain a blank line;
     * a baseline entry for a target that appears more than once in a file
       exempts every occurrence of it, including one added later.
+
+    The list is what has actually been probed, not a claim of completeness:
+    markdown is large, and three review rounds each found another construct.
 
     An adopting repository can record existing rot in
     `docs/validator-link-baseline.txt`, one entry per line, preferably as

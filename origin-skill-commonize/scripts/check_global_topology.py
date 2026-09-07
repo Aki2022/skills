@@ -226,6 +226,9 @@ def main(argv: list[str] | None = None) -> int:
         if not path.is_dir() or not (path / "SKILL.md").is_file():
             report_failure(failures, f"codex-adapted {path}: skill directory/SKILL.md missing")
             continue
+        if resolved(path) == resolved(canonical) or resolved(path).is_relative_to(resolved(canonical)):
+            report_failure(failures, f"codex-adapted {path}: target must be outside canonical root")
+            continue
         adapted_targets[name] = path
 
     per_skill_roots = [*(lexical(p) for p in args.codex), *(lexical(p) for p in args.gemini)]

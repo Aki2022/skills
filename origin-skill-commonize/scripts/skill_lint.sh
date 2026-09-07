@@ -23,6 +23,12 @@ warn() { printf 'WARN %s\n' "$*"; }
 scratch_dir=$(mktemp -d)
 trap 'rm -rf "$scratch_dir"' EXIT
 
+reference_parser="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/skill_lint_refs.py"
+if [ ! -f "$reference_parser" ] || ! command -v python3 >/dev/null 2>&1; then
+  fail "S4: skill_lint_refs.py と python3 が必要"
+  exit "$FAIL"
+fi
+
 roots=("$@")
 if [ ${#roots[@]} -eq 0 ]; then
   roots=("$HOME/.agents/skills")
@@ -68,11 +74,29 @@ for root in "${roots[@]}"; do
       printf '%s\t%s\n' "$fm_name" "$name" >> "$names_file"
     fi
 
-    # S4: 同梱リソース参照の実在確認
-    while IFS= read -r ref; do
-      [ -e "$dir/$ref" ] || fail "S4 $name: 参照 '$ref' が実在しない"
-    done < <(grep -oE '(^|[[:space:]`"'"'"'(])(scripts|references|assets)/[A-Za-z0-9._/-]+' "$md" \
-      | sed 's/^[[:space:]`"'"'"'(]*//; s/[.,)]*$//' | sort -u)
+    # S4: 同梱リソース参照の実在確認。相対参照はこのskill配下、
+    # /skill-name → references/file 形式はcanonical root配下で解決する。
+    refs_output=""
+    if ! refs_output=$(python3 "$reference_parser" "$root" "$md"); then
+      fail "S4 $name: 参照 parser が失敗"
+    fi
+    while IFS=$'\t' read -r kind first second; do
+      [ -n "$kind" ] || continue
+      case "$kind" in
+        same)
+          [ -e "$dir/$first" ] || fail "S4 $name: 参照 '$first' が実在しない"
+          ;;
+        cross)
+          [ -e "$root/$first/$second" ] || fail "S4 $name: cross-skill 参照 '$first/$second' が実在しない"
+          ;;
+        unsafe)
+          fail "S4 $name: unsafe reference '$second'"
+          ;;
+        *)
+          fail "S4 $name: 参照 parser の出力が不正"
+          ;;
+      esac
+    done <<< "$refs_output"
 
     # S5: 壊れた symlink
     while IFS= read -r link; do

@@ -271,7 +271,12 @@ _HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
 _FENCE = re.compile(r"^ {0,3}(?P<marker>`{3,}|~{3,})")
 _INDENTED_CODE = re.compile(r"^(?: {4,}|\t)")
 _INLINE_CODE = re.compile(r"(`+)(.+?)\1", re.DOTALL)
-_LINK_OPEN = re.compile(r"!?\[[^\]]*\]\(")
+_PARAGRAPH_BREAK = re.compile(r"(\n[ \t]*\n)")
+_LIST_ITEM = re.compile(r"^ {0,3}(?:[-*+]|\d+[.)])\s")
+# Only the `](` matters: the link text may contain brackets, or a whole nested
+# image, and anchoring on `[` would skip the outer destination entirely.
+_LINK_OPEN = re.compile(r"\]\(")
+_MAX_DESTINATION = 2048
 _URI_SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.\-]*:")
 
 
@@ -293,6 +298,7 @@ def strip_code(text: str) -> str:
     kept: list[str] = []
     fence: Optional[str] = None
     prev_blank = True
+    in_list = False
     for line in text.splitlines():
         opened = _FENCE.match(line)
         if fence is None:
@@ -301,12 +307,18 @@ def strip_code(text: str) -> str:
                 kept.append("")
                 prev_blank = False
                 continue
-            # An indented code block cannot interrupt a paragraph.
-            if prev_blank and _INDENTED_CODE.match(line):
+            stripped = line.strip()
+            if _LIST_ITEM.match(line):
+                in_list = True
+            elif stripped and not line[:1].isspace():
+                in_list = False
+            # An indented code block cannot interrupt a paragraph, and cannot
+            # occur inside a list item — where four spaces mean continuation.
+            if prev_blank and not in_list and _INDENTED_CODE.match(line):
                 kept.append("")
                 continue
             kept.append(line)
-            prev_blank = not line.strip()
+            prev_blank = not stripped
             continue
 
         if (
@@ -316,10 +328,29 @@ def strip_code(text: str) -> str:
             and not line.strip()[len(opened.group("marker")):].strip()
         ):
             fence = None
+            # The fence ended the block, so the next indented line may be code.
+            kept.append("")
+            prev_blank = True
+            continue
         kept.append("")
         prev_blank = False
 
-    return _INLINE_CODE.sub(" ", "\n".join(kept))
+    return _strip_inline_code("\n".join(kept))
+
+
+def _strip_inline_code(text: str) -> str:
+    """Remove code spans, one paragraph at a time.
+
+    A code span cannot contain a blank line, so matching across paragraphs is
+    always wrong — and catastrophically so: one unpaired backtick in prose would
+    delete every link between it and the next backtick. Measured on a real
+    document, a single stray backtick hid all 13 of its links.
+    """
+    blocks = _PARAGRAPH_BREAK.split(text)
+    return "".join(
+        block if index % 2 else _INLINE_CODE.sub(" ", block)
+        for index, block in enumerate(blocks)
+    )
 
 
 def iter_link_destinations(text: str):
@@ -350,6 +381,8 @@ def iter_link_destinations(text: str):
                     break
             chars.append(char)
             index += 1
+            if len(chars) > _MAX_DESTINATION:
+                break
         if closed:
             yield "".join(chars)
 
@@ -397,16 +430,23 @@ def resolves_case_sensitively(base: Path, target: str) -> bool:
     return current.exists()
 
 
-def load_link_baseline(root: Path) -> set[str]:
-    """Repo-relative paths whose existing link rot is recorded as debt."""
+def load_link_baseline(root: Path) -> set[tuple[str, Optional[str]]]:
+    """Existing link rot recorded as debt, as (file, target-or-None) entries.
+
+    `path<TAB>target` exempts one link and is the form to prefer: a bare `path`
+    exempts the whole file, so a link broken there tomorrow would never be
+    reported either.
+    """
     path = root / LINK_BASELINE_RELPATH
     if not path.is_file():
         return set()
-    entries: set[str] = set()
+    entries: set[tuple[str, Optional[str]]] = set()
     for line in path.read_text(encoding="utf-8").splitlines():
         line = line.split("#", 1)[0].strip()
-        if line:
-            entries.add(line)
+        if not line:
+            continue
+        parts = line.split("\t", 1) if "\t" in line else line.split(None, 1)
+        entries.add((parts[0], parts[1].strip() if len(parts) == 2 else None))
     return entries
 
 
@@ -432,9 +472,10 @@ def validate_relative_links(
     each needs a different resolver.
 
     An adopting repository can record existing rot in
-    `docs/validator-link-baseline.txt`, one repo-relative path per line. The
-    list only shrinks: an entry whose file is now clean, or missing, is an
-    error.
+    `docs/validator-link-baseline.txt`, one entry per line, preferably as
+    `path<TAB>target` so that only the known-broken link is exempt. The list
+    only shrinks: an entry that is now resolvable, or whose file is missing, is
+    an error.
     """
     baseline = load_link_baseline(root)
     broken: dict[str, list[str]] = {}
@@ -454,21 +495,30 @@ def validate_relative_links(
             if not resolves_case_sensitively(base, target.lstrip("/")):
                 broken.setdefault(rel, []).append(target)
 
+    exempt_files = {rel for rel, target in baseline if target is None}
+    exempt_links = {(rel, target) for rel, target in baseline if target is not None}
+
     for rel in sorted(broken):
-        if rel in baseline:
-            continue
         for target in broken[rel]:
+            if rel in exempt_files or (rel, target) in exempt_links:
+                continue
             errors.append(f"{rel}: broken relative link: {target}")
 
-    for rel in sorted(baseline):
+    for rel, target in sorted(baseline, key=lambda entry: (entry[0], entry[1] or "")):
         if not (root / rel).is_file():
             errors.append(
                 f"{LINK_BASELINE_RELPATH}: '{rel}' is listed but does not exist — "
                 "remove the stale entry"
             )
-        elif rel not in broken:
+        elif target is None:
+            if rel not in broken:
+                errors.append(
+                    f"{LINK_BASELINE_RELPATH}: '{rel}' no longer has broken links — "
+                    "remove it from the baseline so it cannot regress"
+                )
+        elif target not in broken.get(rel, []):
             errors.append(
-                f"{LINK_BASELINE_RELPATH}: '{rel}' no longer has broken links — "
+                f"{LINK_BASELINE_RELPATH}: '{rel}' -> '{target}' is no longer broken — "
                 "remove it from the baseline so it cannot regress"
             )
     if baseline:
@@ -879,6 +929,14 @@ def main() -> None:
         print("ERRORS:")
         for error in errors:
             print(f"  ✗ {error}")
+        if any("broken relative link" in error for error in errors):
+            # The escape hatch is useless if nobody meeting the errors knows it
+            # exists; a check that cannot be brought to green stops being read.
+            print(
+                f"  note: existing link rot can be recorded as debt in "
+                f"{LINK_BASELINE_RELPATH} (one 'path<TAB>target' per line); "
+                "the list only shrinks."
+            )
     if warnings:
         print("WARNINGS:")
         for warning in warnings:

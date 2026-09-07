@@ -23,5 +23,25 @@
   },
   "review": { "findings": [{ "severity": "critical|major|minor", "loc": "位置", "msg": "指摘", "source": "code-review 等の skill 名" }] },
   "tests": { "exit_code": 0, "command": "実行したコマンド", "summary": "N passed" },
-  "verdict_for_state": { "pass": false, "findings_count": 0, "must_fix": [], "rejected": [] }
+  "provenance": {
+    "$comment": "round_K/provenance.json。無いと judge_round が exit 2 で止まる。",
+    "round": 2,
+    "evaluators": [
+      { "role": "judge", "id": "j1", "fresh": true, "inputs": ["artifact", "rubric", "carry"] },
+      { "role": "reader", "id": "r1", "fresh": true, "inputs": ["artifact"] }
+    ],
+    "gates_passed": ["audit_html.py exit 0"],
+    "cache_cleared": true
+  },
+  "verdict": {
+    "$comment": "judge_round の --json-out が書く。findings_count は機械が数える（手書き不可）。",
+    "pass": false,
+    "round": 2,
+    "methods": {},
+    "reasons": [],
+    "findings_count": 0,
+    "must_fix": [],
+    "rejected": [],
+    "provenance": {}
+  }
 }

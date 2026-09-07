@@ -28,8 +28,10 @@ spec: biz_ops `SPEC-eval-loop-shared-protocol`（2026-09-06 承認）。
 | `references/eval-plan.template.md` | Envelope に書く評価計画（事前承認の実体） | ws で使うとき |
 | `references/final-report.template.md` | 最終報告の契約 | ループ終了時に必ず |
 | `references/caller-contract.md` | 工場からの呼び出し規約と単発利用の手順 | 初めて呼ぶとき |
-| `scripts/judge_round.py` | 1巡の合否を機械判定（A/B/C）・スキーマ検証 | 毎巡 |
-| `scripts/eval_state.py` | 巡をまたぐ状態・収束判定・次巡への引き継ぎ | 毎巡 |
+| `references/provenance.md` | `provenance.json` の書き方（評価者の申告。無いと判定が走らない） | **毎巡・評価者を立てる前** |
+| `scripts/run_round.sh` | 1巡を通す入口（判定→記録→収束判定を中継） | **毎巡。手で組まない** |
+| `scripts/judge_round.py` | 1巡の合否を機械判定（A/B/C）・スキーマと申告の検証 | `run_round.sh` が呼ぶ |
+| `scripts/eval_state.py` | 巡をまたぐ状態・収束判定・次巡への引き継ぎ | `run_round.sh` が呼ぶ／`carry` は直接使う |
 
 ## 手順（要約 — 詳細は protocol.md）
 
@@ -60,7 +62,11 @@ spec: biz_ops `SPEC-eval-loop-shared-protocol`（2026-09-06 承認）。
 
 ## やってはいけないこと
 
-- 合否・収束を LLM が数えて宣言する（必ず `judge_round.py` / `eval_state.py` の出力を判定源にする）
+- 合否・収束を LLM が数えて宣言する（必ず `run_round.sh` の exit code と `verdict.json` を判定源にする。
+  `findings_count` は機械が数える。手書きの verdict は `exit 2` で拒否される）
+- **`provenance.json` を書かずに判定を走らせる**（評価者の申告が無い round は判定できない。
+  申告と実ファイルが食い違う・`fresh: false`・読者にサイド情報を渡した・キャッシュ未クリアも `exit 2`）
+- **1巡を手で組む**（`run_round.sh` を使う。判定を2箇所で再計算するとズレる）
 - ループの途中で人間へ戻る（人間ゲートはループの外に1つ。`SPEC-eval-loop-shared-protocol` 決定3）
 - 作った本人に採点させる。単発利用でも審査員は**別 subagent**として立てる
 - 読者評価にサイド情報（設計意図・仕様書・過去版）を渡す。画像段階は画像のみ

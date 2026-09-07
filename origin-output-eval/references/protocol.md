@@ -33,19 +33,24 @@ pytest 全緑／`audit_html.py` exit 0）。ゲートが無い対象（文章・
 ## 4. ループ（無人・有界で完走する）
 
 ```text
-state = eval_state.py init --max-rounds N
-loop:
-  eval_state.py next state         # exit 4 なら上限到達 → 7 へ / exit 5 なら pass 済み → 7 へ
-  carry = eval_state.py carry state   # 前巡 must-fix の反映確認と却下済み提案の一覧**だけ**
-  評価者を新規 subagent として立てる（方式ごと・並列可）。渡すのは 対象 + ルーブリック + carry のみ
-  出力を output-schema.json の形で round_k/ に保存
-  judge_round.py round_k --thresholds T   # exit 0 pass / 1 fail / 2 スキーマ違反（評価者の出力が壊れている）
-  verdict に findings_count / must_fix / rejected を添えて eval_state.py record
-  pass なら 7 へ
-  指摘を A/B/C に分ける（§5）。A/B を呼び出し側へ返す。C は保留リストへ
-  呼び出し側が直す（この skill は直さない）
-  eval_state.py converged state     # exit 3 なら未収束 → 7 へ（上限前でも終了）
-7. 最終報告（final-report.template.md）
+# 準備（1回）
+mkdir -p <eval_dir>; cp <rubric から写した> <eval_dir>/thresholds.json
+
+# 各巡
+1. eval_state.py carry <eval_dir>/state.json   # 2巡目以降。前巡 must-fix の反映確認と却下済みだけ
+2. 評価者を新規 subagent として立てる（方式ごと・並列可）
+   渡すのは 対象 + ルーブリック + carry のみ。**初見読者に carry を渡さない**（サイド情報になる）
+3. 出力を <eval_dir>/round_K/ に置く（judges/*.json readers/*.json review.json tests.json）
+4. <eval_dir>/round_K/provenance.json を書く（references/provenance.md）
+5. run_round.sh <eval_dir> --thresholds <eval_dir>/thresholds.json [--max-rounds N]
+      exit 0 → 合格。6 へ
+      exit 1 → 不合格。指摘を A/B/C に分け、A/B を呼び出し側が直して次巡へ
+      exit 2 → 入力の不備（provenance 不備・評価者の欠落や未申告・round 不一致・severity 語彙外・
+               スキーマ違反）。**直してから再実行**。判定はまだ行われていない
+      exit 3 → 未収束（前巡より指摘が減っていない）。上限前でも終了して 6 へ
+      exit 4 → 回数上限に到達。終了して 6 へ
+      exit 5 → 前巡で既に合格。6 へ
+6. 最終報告（final-report.template.md）
 ```
 
 このループの中に、人へ問い合わせる手順は存在しない。上限到達・未収束・C 分類は**終了して報告**する。
@@ -69,7 +74,10 @@ loop:
   設計意図・仕様書・過去版を渡すと「そう書いてあるから読める」に流れる（lp-review）。
 - **キャッシュを外す。** 採点者が修正前の版を見て報告した実測あり（lp-review 2026-08-11）。
 
-これらは機械で検出できないため、**最終報告の「評価者の起動条件」欄に必ず記録**し、事後に検証できる形にする。
+これらは**`provenance.json` で機械が検証する**（`references/provenance.md`）。申告と実ファイルの不一致・
+`fresh: false`・読者への余分な入力・キャッシュ未クリアは `exit 2` で止まり、判定に進めない。
+規律を文書に書くだけでは破られた実績があるので、構造で拒否する形にしてある。
+申告の内容はそのまま最終報告の「評価者の起動条件」欄に載る（`verdict.json` の `provenance`）。
 
 ## 7. 非代理
 

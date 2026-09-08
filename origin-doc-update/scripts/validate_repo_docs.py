@@ -265,6 +265,238 @@ def validate_acceptance_verify(label: str, body: str, errors: list[str]) -> None
 #
 # したがって既存分は「債務」として明示的に列挙して逃がし、新しい文書には最初から
 # 効かせる。逃がしたものは減る一方になるよう、リストが古びたら落ちる。
+LINK_BASELINE_RELPATH = "docs/validator-link-baseline.txt"
+
+# Only the `](` matters: the link text may contain brackets, or a whole nested
+# image, and anchoring on `[` would skip the outer destination entirely.
+_LINK_OPEN = re.compile(r"\]\(")
+_MAX_DESTINATION = 2048
+_URI_SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.\-]*:")
+# Same-length backtick delimiters, within one line. Line-scoped on purpose: a
+# span cannot contain a blank line, and a pattern that crosses lines lets one
+# unpaired backtick delete every link until the next one.
+_INLINE_CODE = re.compile(r"(`+)([^\n]+?)\1")
+
+
+def strip_code(text: str) -> str:
+    """Blank out inline code spans, and nothing else.
+
+    Earlier versions also tracked fenced blocks, indented code blocks,
+    blockquotes and HTML comments, so that examples inside them would not be
+    read as references. Six review rounds each found a construct where that
+    tracking opened a block it never closed and silently deleted every link to
+    the end of the document — the exact failure this check exists to prevent.
+
+    It was then measured. Across 26 repositories using this convention (1,924
+    documents), removing the whole block layer changed the finding count by
+    **+5, in 2 of them** — and never lost a finding it previously had. The two
+    repositories originally sampled changed by zero. Roughly 150 lines of
+    parsing were buying five loud, baselineable false positives, at the price of
+    an unbounded silent-loss surface.
+
+    The five are real document shapes, not accidents: a `](` inside a
+    `gcloud --format` string in a shell example, a markdown table row quoted
+    inside a fence, and an `![](...)` inside an example data record.
+
+    What remains cannot swallow more than one line, and the residual blind spot
+    is one unpaired backtick hiding the links after it *on that line*.
+
+    The consequence for authors: a markdown link inside a fenced example — or
+    inside an HTML comment — is reported. Write an unresolvable path as an
+    inline code span, or record it in `docs/validator-link-baseline.txt`. That
+    is a loud, fixable cost; the alternative was a quiet one.
+    """
+    return "\n".join(_INLINE_CODE.sub(" ", line) for line in text.splitlines())
+
+
+def iter_link_destinations(text: str):
+    """Yield the raw destination of every inline link, parens balanced.
+
+    `[a](../x/note(1).md)` is one link with a destination containing
+    parentheses, not a truncated one — CommonMark allows balanced pairs.
+    """
+    for match in _LINK_OPEN.finditer(text):
+        index = match.end()
+        depth = 1
+        chars: list[str] = []
+        closed = False
+        while index < len(text):
+            char = text[index]
+            if char == "\\" and index + 1 < len(text):
+                chars.append(text[index + 1])
+                index += 2
+                continue
+            if char == "\n":
+                break
+            if char == "(":
+                depth += 1
+            elif char == ")":
+                depth -= 1
+                if depth == 0:
+                    closed = True
+                    break
+            chars.append(char)
+            index += 1
+            if len(chars) > _MAX_DESTINATION:
+                break
+        if closed:
+            yield "".join(chars)
+
+
+def link_target(raw: str) -> Optional[str]:
+    """The path a destination points at, or None when it is not a path."""
+    from urllib.parse import unquote
+
+    target = raw.strip()
+    if target.startswith("<"):
+        closing = target.find(">")
+        target = target[1:closing] if closing != -1 else target[1:]
+    else:
+        # A bare destination cannot contain unescaped whitespace, so anything
+        # after the first space is a title, not part of the path.
+        target = target.split()[0] if target.split() else ""
+    for separator in ("#", "?"):
+        target = target.split(separator, 1)[0]
+    target = target.strip()
+    if not target or _URI_SCHEME.match(target):
+        return None
+    return unquote(target)
+
+
+def resolves_case_sensitively(base: Path, target: str) -> bool:
+    """Whether `target` names an existing entry, matching case exactly.
+
+    `Path.exists()` answers what the filesystem thinks, so a link that differs
+    only in case passes on macOS and fails on Linux. A cross-repo check whose
+    verdict depends on the machine that ran it is worse than no check.
+    """
+    current = base
+    for part in target.split("/"):
+        if part in ("", "."):
+            continue
+        if part == "..":
+            current = current.parent
+            continue
+        try:
+            if part not in os.listdir(current):
+                return False
+        except OSError:
+            return False
+        current = current / part
+    return current.exists()
+
+
+def load_link_baseline(root: Path) -> set[tuple[str, Optional[str]]]:
+    """Existing link rot recorded as debt, as (file, target-or-None) entries.
+
+    `path<TAB>target` exempts one link and is the form to prefer: a bare `path`
+    exempts the whole file, so a link broken there tomorrow would never be
+    reported either.
+    """
+    path = root / LINK_BASELINE_RELPATH
+    if not path.is_file():
+        return set()
+    entries: set[tuple[str, Optional[str]]] = set()
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.split("#", 1)[0].strip()
+        if not line:
+            continue
+        parts = line.split("\t", 1) if "\t" in line else line.split(None, 1)
+        entries.add((parts[0], parts[1].strip() if len(parts) == 2 else None))
+    return entries
+
+
+def validate_relative_links(
+    root: Path, errors: list[str], warnings: list[str]
+) -> None:
+    """Every relative link under docs/ must resolve to something that exists.
+
+    Archiving is the routine operation that breaks these: it moves a file one
+    level deeper and leaves every referrer pointing at the old path. Measured in
+    a single session on one repository, archiving an issue broke 11 links and
+    archiving a workstream broke 5 more — and this validator stayed exit 0
+    through all of it, because nothing here ever resolved a link. Breakage is
+    invisible until a human or an agent actually follows one.
+
+    The rule carries no knowledge of any repository. A path that genuinely
+    cannot resolve — a placeholder, or a file outside the repository — is not a
+    link and should not be written as one; write it as code instead, which this
+    check ignores.
+
+    Not covered, deliberately: reference-style links (`[x][ref]`), HTML `<a
+    href>` and `<img src>`. They are rare in this convention's documents and
+    each needs a different resolver.
+
+    Known blind spots, both silent, both bounded to what they can reach:
+
+    * an unpaired backtick hides the links after it on that line
+      (the span match is lazy so that a link *between* two spans survives;
+      `tests/test_doc_update.py` pins that);
+    * a baseline entry for a target that appears more than once in a file
+      exempts every occurrence of it, including one added later.
+
+    Links inside fenced code blocks and HTML comments are **reported**, not
+    ignored. Tracking them was tried and abandoned: across 26 repositories it
+    cost 5 loud false positives in 2 of them while repeatedly introducing
+    unbounded silent loss, and it never found a link this does not.
+
+    An adopting repository can record existing rot in
+    `docs/validator-link-baseline.txt`, one entry per line, preferably as
+    `path<TAB>target` so that only the known-broken link is exempt. The list
+    only shrinks: an entry that is now resolvable, or whose file is missing, is
+    an error.
+    """
+    baseline = load_link_baseline(root)
+    broken: dict[str, list[str]] = {}
+
+    for path in sorted(root.glob("docs/**/*.md")):
+        rel = path.relative_to(root).as_posix()
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError as exc:
+            errors.append(f"{rel}: unreadable while checking links ({exc})")
+            continue
+        for raw in iter_link_destinations(strip_code(text)):
+            target = link_target(raw)
+            if target is None:
+                continue
+            base = root if target.startswith("/") else path.parent
+            if not resolves_case_sensitively(base, target.lstrip("/")):
+                broken.setdefault(rel, []).append(target)
+
+    exempt_files = {rel for rel, target in baseline if target is None}
+    exempt_links = {(rel, target) for rel, target in baseline if target is not None}
+
+    for rel in sorted(broken):
+        for target in broken[rel]:
+            if rel in exempt_files or (rel, target) in exempt_links:
+                continue
+            errors.append(f"{rel}: broken relative link: {target}")
+
+    for rel, target in sorted(baseline, key=lambda entry: (entry[0], entry[1] or "")):
+        if not (root / rel).is_file():
+            errors.append(
+                f"{LINK_BASELINE_RELPATH}: '{rel}' is listed but does not exist — "
+                "remove the stale entry"
+            )
+        elif target is None:
+            if rel not in broken:
+                errors.append(
+                    f"{LINK_BASELINE_RELPATH}: '{rel}' no longer has broken links — "
+                    "remove it from the baseline so it cannot regress"
+                )
+        elif target not in broken.get(rel, []):
+            errors.append(
+                f"{LINK_BASELINE_RELPATH}: '{rel}' -> '{target}' is no longer broken — "
+                "remove it from the baseline so it cannot regress"
+            )
+    if baseline:
+        warnings.append(
+            f"{LINK_BASELINE_RELPATH}: {len(baseline)} file(s) still exempt from "
+            "link resolution"
+        )
+
+
 BASELINE_RELPATH = "docs/validator-baseline.txt"
 BASELINED_CHECKS = "runnability / Acceptance の verify:"
 
@@ -645,6 +877,7 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
                         continue
                     warnings.append(f"{rel}: {key} ref not found: {reference}")
 
+    validate_relative_links(root, errors, warnings)
     validate_baseline_freshness(root, baseline, deferred, errors, warnings)
 
     return errors, warnings
@@ -665,6 +898,14 @@ def main() -> None:
         print("ERRORS:")
         for error in errors:
             print(f"  ✗ {error}")
+        if any("broken relative link" in error for error in errors):
+            # The escape hatch is useless if nobody meeting the errors knows it
+            # exists; a check that cannot be brought to green stops being read.
+            print(
+                f"  note: existing link rot can be recorded as debt in "
+                f"{LINK_BASELINE_RELPATH} (one 'path<TAB>target' per line); "
+                "the list only shrinks."
+            )
     if warnings:
         print("WARNINGS:")
         for warning in warnings:

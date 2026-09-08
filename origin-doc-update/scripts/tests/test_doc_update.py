@@ -1275,3 +1275,273 @@ class SpecFrontMatterTest(ValidateRepoDocsV2Test):
         errors, _warnings = MODULE.validate_repo(root)
 
         self.assertTrue(any("status must be draft, active, or superseded" in e for e in errors))
+
+
+class _LinkRepoMixin:
+    def make_repo(self) -> Path:
+        root = Path(tempfile.mkdtemp())
+        for path in ("docs/adrs", "docs/specs", "docs/issues/archive",
+                     "docs/workstreams/archive", "docs/guides"):
+            (root / path).mkdir(parents=True, exist_ok=True)
+        (root / "docs/00_index.md").write_text(
+            "---\nupdated_at: 2026-09-07\ncurrent_focus: []\n---\n\n# 00 Index\n"
+        )
+        return root
+
+    def _errors(self, root: Path) -> list[str]:
+        errors, _warnings = MODULE.validate_repo(root)
+        return [e for e in errors if "broken relative link" in e]
+
+    def _doc(self, root: Path, body: str) -> None:
+        (root / "docs/specs/spec.md").write_text(
+            f"---\nid: SPEC-x\n---\n\n# S\n\n{body}\n"
+        )
+
+    def _links(self, body: str) -> list[str]:
+        root = self.make_repo()
+        self._doc(root, body)
+        return self._errors(root)
+
+
+class RelativeLinkResolutionTest(_LinkRepoMixin, unittest.TestCase):
+    """`docs/**` relative links must resolve.
+
+    Archiving is the routine operation that breaks them: it moves a file one
+    level deeper and leaves every referrer pointing at the old path. Measured in
+    one session on a real repository, `archive_issue.py` broke 11 links and
+    `archive_workstream.py` broke 5 more — and this validator stayed exit 0
+    through all of it, because nothing here ever resolved a link.
+    """
+
+    def test_a_resolving_link_is_accepted(self):
+        root = self.make_repo()
+        (root / "docs/guides/example.md").write_text("---\nid: GUIDE-example\n---\n\n# G\n")
+        self._doc(root, "See [the guide](../guides/example.md).")
+        self.assertEqual(self._errors(root), [])
+
+    def test_a_link_that_does_not_resolve_is_an_error(self):
+        errors = self._links("See [the guide](../guides/missing.md).")
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("docs/specs/spec.md", errors[0])
+        self.assertIn("../guides/missing.md", errors[0])
+
+    def test_the_archive_move_pattern_is_caught(self):
+        """The exact shape archiving produces, in both directions."""
+        root = self.make_repo()
+        (root / "docs/issues/archive/ISSUE-20260101-moved.md").write_text(
+            "---\nid: ISSUE-20260101-moved\n---\n\n# M\n\n[spec](../specs/spec.md)\n"
+        )
+        (root / "docs/adrs/ADR-20260101-x.md").write_text(
+            "---\nid: ADR-20260101-x\n---\n\n# A\n\n"
+            "[issue](../issues/ISSUE-20260101-moved.md)\n"
+        )
+        (root / "docs/specs/spec.md").write_text("---\nid: SPEC-x\n---\n\n# S\n")
+        self.assertEqual(len(self._errors(root)), 2, self._errors(root))
+
+    def test_external_and_anchor_links_are_ignored(self):
+        self.assertEqual(
+            self._links("[web](https://example.com/x.md) [mail](mailto:a@b.c) [here](#s)"),
+            [],
+        )
+
+    def test_the_verdict_depends_only_on_whether_the_path_exists(self):
+        """Randomised vocabularies, so no fixed word list is being relied on.
+
+        **What this does not establish.** An exclusion written for a vocabulary
+        this test never generates would still pass, and no behavioural test can
+        rule that out — you cannot probe a name you have not thought of.
+        Grepping the source is the complement, and is just as partial. What is
+        checked is the property that matters in use: across unrelated
+        vocabularies, a path that exists is never an error and one that does not
+        is always one.
+        """
+        import random
+        import string
+
+        rng = random.Random(20260907)
+        for _ in range(12):
+            word = "".join(rng.choice(string.ascii_letters) for _ in range(8))
+            root = self.make_repo()
+            (root / f"docs/guides/{word}.md").write_text(
+                f"---\nid: GUIDE-{word}\n---\n\n# G\n"
+            )
+            self._doc(
+                root,
+                f"[present](../guides/{word}.md)\n\n[absent](../{word}/{word}.md)",
+            )
+            errors = self._errors(root)
+            self.assertEqual(len(errors), 1, f"vocabulary {word!r}: {errors}")
+            self.assertIn(f"../{word}/{word}.md", errors[0])
+
+
+class CodeSpanScopeTest(_LinkRepoMixin, unittest.TestCase):
+    """Only inline code spans are excluded — and only within one line.
+
+    Six review rounds each found a construct where block-level tracking (fences,
+    indented blocks, blockquotes, HTML comments) opened a region it never closed
+    and silently deleted every link to the end of the document. Measured across
+    two real repositories, that whole layer changed the finding count by zero.
+    It was removed. These tests pin the contract that replaced it.
+    """
+
+    def test_an_inline_span_hides_its_example(self):
+        self.assertEqual(self._links("write `[a](../nowhere/x.md)` like this"), [])
+
+    def test_a_double_backtick_span_hides_its_example(self):
+        self.assertEqual(self._links("``[a](../nowhere/x.md)``"), [])
+
+    def test_a_stray_backtick_cannot_reach_the_next_line(self):
+        """The blind spot is bounded to its own line, and that is the point."""
+        errors = self._links(
+            "Do not use ` alone as a quote.\n[g](../guides/gone.md)"
+        )
+        self.assertEqual(len(errors), 1, errors)
+
+    def test_a_link_between_two_spans_on_one_line_survives(self):
+        """The span match must be lazy.
+
+        A greedy one pairs the first backtick with the last, swallowing the link
+        between them — silently, which is the class this whole check exists to
+        remove. Nothing else in the suite fails if the quantifier changes.
+        """
+        errors = self._links("Set `A` then link [g](../guides/gone.md) then `B`.")
+        self.assertEqual(len(errors), 1, errors)
+
+    def test_a_link_inside_an_html_comment_is_reported(self):
+        """Documented contract: comment stripping was removed with the rest."""
+        errors = self._links("<!--\n[g](../guides/gone.md)\n-->")
+        self.assertEqual(len(errors), 1, errors)
+
+    def test_a_link_inside_a_fenced_block_is_reported(self):
+        """Documented contract, not an oversight: fences are no longer parsed."""
+        errors = self._links("```md\n[a](../nowhere/x.md)\n```")
+        self.assertEqual(len(errors), 1, errors)
+
+    def test_a_fenced_example_can_be_recorded_as_debt(self):
+        """Which is how a repository that must show such an example proceeds."""
+        root = self.make_repo()
+        self._doc(root, "```md\n[a](../nowhere/x.md)\n```")
+        (root / "docs/validator-link-baseline.txt").write_text(
+            "docs/specs/spec.md\t../nowhere/x.md\n"
+        )
+        self.assertEqual(self._errors(root), [])
+
+
+class RelativeLinkEdgeCaseTest(_LinkRepoMixin, unittest.TestCase):
+    """A false positive here fails a repository whose markdown is legal."""
+
+    def test_percent_encoded_paths_resolve(self):
+        root = self.make_repo()
+        (root / "docs/guides/my file.md").write_text("---\nid: GUIDE-a\n---\n\n# G\n")
+        self._doc(root, "[a](../guides/my%20file.md)")
+        self.assertEqual(self._errors(root), [])
+
+    def test_a_query_suffix_is_not_part_of_the_path(self):
+        root = self.make_repo()
+        (root / "docs/guides/ok.md").write_text("---\nid: GUIDE-b\n---\n\n# G\n")
+        self._doc(root, "[a](../guides/ok.md?plain=1)")
+        self.assertEqual(self._errors(root), [])
+
+    def test_parentheses_in_a_destination_are_kept(self):
+        root = self.make_repo()
+        (root / "docs/guides/note(1).md").write_text("---\nid: GUIDE-c\n---\n\n# G\n")
+        self._doc(root, "[a](../guides/note(1).md)")
+        self.assertEqual(self._errors(root), [])
+
+    def test_a_link_carrying_a_title_still_resolves(self):
+        root = self.make_repo()
+        (root / "docs/guides/example.md").write_text("---\nid: GUIDE-d\n---\n\n# G\n")
+        self._doc(root, '[g](../guides/example.md "The guide")')
+        self.assertEqual(self._errors(root), [])
+
+    def test_an_anchor_on_a_real_file_resolves(self):
+        root = self.make_repo()
+        (root / "docs/guides/example.md").write_text("---\nid: GUIDE-e\n---\n\n# G\n")
+        self._doc(root, "[g](../guides/example.md#section)")
+        self.assertEqual(self._errors(root), [])
+
+    def test_case_differences_are_a_break_even_on_a_case_insensitive_disk(self):
+        """Otherwise the verdict depends on which machine ran it."""
+        root = self.make_repo()
+        (root / "docs/guides/example.md").write_text("---\nid: GUIDE-f\n---\n\n# G\n")
+        self._doc(root, "[a](../guides/Example.md)")
+        self.assertEqual(len(self._errors(root)), 1)
+
+    def test_a_bracket_inside_the_link_text_does_not_hide_the_destination(self):
+        self.assertEqual(len(self._links("[see [note]](../x/gone.md)")), 1)
+
+    def test_an_image_inside_a_link_does_not_hide_the_outer_destination(self):
+        errors = self._links("[![img](../i/logo.png)](../x/gone.md)")
+        self.assertEqual(len(errors), 2, errors)
+        self.assertTrue(any("../x/gone.md" in e for e in errors), errors)
+
+    def test_a_pathological_line_does_not_take_forever(self):
+        """Generous margin on purpose: a wall-clock assertion that flakes is
+        worse than no assertion, because a sometimes-red suite stops being read."""
+        import time
+
+        root = self.make_repo()
+        self._doc(root, "[a](" * 2000)
+        started = time.monotonic()
+        self._errors(root)
+        self.assertLess(time.monotonic() - started, 10.0)
+
+
+class LinkBaselineTest(_LinkRepoMixin, unittest.TestCase):
+    """An adopting repository can defer its historical rot, but only downwards.
+
+    Turning a new check on across every repository at once, with no way to
+    record existing breakage as debt, forces its owners to either fix an
+    unbounded backlog immediately or ignore a permanently red validator — and a
+    check nobody can get to green stops being read at all.
+    """
+
+    def _repo_with_rot(self) -> Path:
+        root = self.make_repo()
+        self._doc(root, "[a](../guides/gone.md)")
+        return root
+
+    def test_a_baselined_file_reports_a_warning_not_an_error(self):
+        root = self._repo_with_rot()
+        (root / "docs/validator-link-baseline.txt").write_text("docs/specs/spec.md\n")
+        errors, warnings = MODULE.validate_repo(root)
+        self.assertEqual([e for e in errors if "broken relative link" in e], [])
+        self.assertTrue(any("link-baseline" in w for w in warnings), warnings)
+
+    def test_a_baselined_file_that_is_now_clean_must_be_removed(self):
+        """The list only shrinks: a stale exemption is itself an error."""
+        root = self._repo_with_rot()
+        (root / "docs/guides/gone.md").write_text("---\nid: GUIDE-g\n---\n\n# G\n")
+        (root / "docs/validator-link-baseline.txt").write_text("docs/specs/spec.md\n")
+        errors, _warnings = MODULE.validate_repo(root)
+        self.assertTrue(any("no longer has broken links" in e for e in errors), errors)
+
+    def test_a_baseline_entry_for_a_missing_file_is_an_error(self):
+        root = self._repo_with_rot()
+        (root / "docs/validator-link-baseline.txt").write_text("docs/specs/absent.md\n")
+        errors, _warnings = MODULE.validate_repo(root)
+        self.assertTrue(any("does not exist" in e for e in errors), errors)
+
+    def test_without_the_file_nothing_is_exempt(self):
+        self.assertEqual(len(self._errors(self._repo_with_rot())), 1)
+
+    def test_a_baselined_file_still_reports_a_newly_added_link(self):
+        """File-level exemption would hide tomorrow's breakage as well as today's."""
+        root = self.make_repo()
+        self._doc(root, "[old](../guides/old.md)\n\n[new](../guides/new.md)")
+        (root / "docs/validator-link-baseline.txt").write_text(
+            "docs/specs/spec.md\t../guides/old.md\n"
+        )
+        errors = self._errors(root)
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("../guides/new.md", errors[0])
+
+    def test_a_target_scoped_baseline_entry_that_is_fixed_must_be_removed(self):
+        root = self.make_repo()
+        (root / "docs/guides/old.md").write_text("---\nid: GUIDE-h\n---\n\n# G\n")
+        self._doc(root, "[old](../guides/old.md)")
+        (root / "docs/validator-link-baseline.txt").write_text(
+            "docs/specs/spec.md\t../guides/old.md\n"
+        )
+        errors, _warnings = MODULE.validate_repo(root)
+        self.assertTrue(any("no longer broken" in e for e in errors), errors)

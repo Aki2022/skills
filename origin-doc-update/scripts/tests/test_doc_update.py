@@ -1397,6 +1397,21 @@ class CodeSpanScopeTest(_LinkRepoMixin, unittest.TestCase):
         )
         self.assertEqual(len(errors), 1, errors)
 
+    def test_a_link_between_two_spans_on_one_line_survives(self):
+        """The span match must be lazy.
+
+        A greedy one pairs the first backtick with the last, swallowing the link
+        between them — silently, which is the class this whole check exists to
+        remove. Nothing else in the suite fails if the quantifier changes.
+        """
+        errors = self._links("Set `A` then link [g](../guides/gone.md) then `B`.")
+        self.assertEqual(len(errors), 1, errors)
+
+    def test_a_link_inside_an_html_comment_is_reported(self):
+        """Documented contract: comment stripping was removed with the rest."""
+        errors = self._links("<!--\n[g](../guides/gone.md)\n-->")
+        self.assertEqual(len(errors), 1, errors)
+
     def test_a_link_inside_a_fenced_block_is_reported(self):
         """Documented contract, not an oversight: fences are no longer parsed."""
         errors = self._links("```md\n[a](../nowhere/x.md)\n```")

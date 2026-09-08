@@ -116,6 +116,13 @@ class GlobalTopologyTest(unittest.TestCase):
         self.assertEqual(rc, 1, output)
         self.assertIn("broken symlink", output)
 
+    def test_missing_per_skill_link_is_red(self):
+        _, roots = self._fixture()
+        (roots["gemini"] / "beta").unlink()
+        rc, output = self._run(self._args(roots))
+        self.assertEqual(rc, 1, output)
+        self.assertIn("missing per-skill symlink", output)
+
     def test_unregistered_entry_is_red(self):
         _, roots = self._fixture()
         _skill(roots["gemini"], "not-shared")

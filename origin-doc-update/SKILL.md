@@ -180,4 +180,18 @@ Scripts in `scripts/`:
 - `archive_transaction.py`: stage and atomically roll back archive/index file updates
 - `validate_repo_docs.py <repo>` (prints the repository it validated)
 
+  It also resolves every relative link under `docs/**/*.md` and fails on any
+  that does not exist — archiving moves a file one level deeper and leaves its
+  referrers behind, and that breakage is otherwise invisible until someone
+  follows a link. Only inline code spans are excluded — write an unresolvable
+  path as `` `[x](../placeholder.md)` `` and it is ignored. **A link inside a
+  fenced block or an HTML comment is reported**: block-level parsing was tried
+  and removed, because across 26 repositories using this convention it cost 5
+  loud false positives in 2 of them and never found a link the simpler rule
+  misses, while repeatedly opening regions it never closed and silently deleting
+  every link to the end of a document. A repository adopting the check
+  with existing rot can record it as debt in `docs/validator-link-baseline.txt`
+  (one `path<TAB>target` per line, preferring the target-scoped form); the list
+  only shrinks, so an entry that is now resolvable is itself an error.
+
 Read the matching template before creating a file manually. Keep legacy archives in place; promote useful current knowledge into a guide or spec instead of renaming history.

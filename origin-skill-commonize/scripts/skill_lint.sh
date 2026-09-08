@@ -13,6 +13,7 @@
 #   S5: スキルディレクトリ内に壊れた symlink がない
 #   S6: 同じ正典にある hooks.json の bash 参照先が実在する
 #   S7: skill 間の機械的な重複候補を warn-only で報告する
+#   S8: 各 skill の scripts/tests/test_*.py を pytest で実行する
 set -u
 
 FAIL=0
@@ -28,6 +29,18 @@ if [ ${#roots[@]} -eq 0 ]; then
   roots=("$HOME/.agents/skills")
   [ -d ".agents/skills" ] && roots+=(".agents/skills")
 fi
+
+# S8 の事前判定: skip すべき理由があれば一度だけ明示する（黙ってスキップしない）。
+pytest_skip_reason=""
+if [ "${SKILL_LINT_SKIP_PYTEST:-}" = "1" ]; then
+  pytest_skip_reason="環境変数 SKILL_LINT_SKIP_PYTEST=1"
+elif ! command -v python3 >/dev/null 2>&1; then
+  pytest_skip_reason="python3 が見つからない"
+elif ! python3 -m pytest --version >/dev/null 2>&1; then
+  pytest_skip_reason="pytest が使えない"
+fi
+[ -n "$pytest_skip_reason" ] && note "S8: skip（$pytest_skip_reason のため pytest を実行しない）"
+pytest_ran=0
 
 root_index=0
 for root in "${roots[@]}"; do
@@ -78,6 +91,21 @@ for root in "${roots[@]}"; do
     while IFS= read -r link; do
       fail "S5 $name: 壊れた symlink: $link"
     done < <(find "$dir" -type l ! -exec test -e {} \; -print 2>/dev/null)
+
+    # S8: scripts/tests/test_*.py があれば pytest を走らせる（赤いまま編集させない）
+    if [ -z "$pytest_skip_reason" ] && [ -d "${dir}scripts/tests" ] \
+      && ls "${dir}scripts/tests"/test_*.py >/dev/null 2>&1; then
+      pytest_ran=$((pytest_ran + 1))
+      pytest_out=$(python3 -m pytest -q "${dir}scripts/tests" 2>&1)
+      pytest_rc=$?
+      summary=$(printf '%s\n' "$pytest_out" | tail -1)
+      if [ "$pytest_rc" -ne 0 ]; then
+        failed_n=$(printf '%s\n' "$pytest_out" | grep -oE '[0-9]+ failed' | tail -1)
+        fail "S8 $name: pytest が失敗（${failed_n:-$summary}）"
+      else
+        note "S8 $name: pytest 成功（${summary}）"
+      fi
+    fi
   done
 
   # `source-command-*` wrappers are a deterministic duplicate candidate. Keep the
@@ -109,6 +137,10 @@ for root in "${roots[@]}"; do
   fi
   root_index=$((root_index + 1))
 done
+
+if [ -z "$pytest_skip_reason" ] && [ "$pytest_ran" -eq 0 ]; then
+  note "S8: pytest を持つ skill が無い"
+fi
 
 if [ "$FAIL" -eq 0 ]; then
   note "OK: all skill checks passed"

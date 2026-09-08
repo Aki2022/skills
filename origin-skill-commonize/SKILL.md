@@ -36,12 +36,12 @@ commandsやMCP設定を別々のconfiguration directoryに持ち得る。放置�
 
 ## 正典（single source of truth）の場所
 
-| スコープ                   | 正典                                                                                                                       | symlink で向けるもの                                                |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| グローバル・skill          | `~/.agents/skills/`（**nix 管理外・書き込み可**。ここは従来どおり）                                                        | `~/.claude/skills`、`~/.codex/skills` ほか                          |
+| スコープ                   | 正典                                                                                                                                                              | symlink で向けるもの                                                    |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| グローバル・skill          | `~/.agents/skills/`（**nix 管理外・書き込み可**。ここは従来どおり）                                                                                               | `~/.claude/skills`、`~/.codex/skills` ほか                              |
 | グローバル・静的設定 27 件 | **nix-darwin flake repo の `home/agent-config/<相対パス>`**（実ファイル・書き込み可・git 管理下）。`~/.agents/AGENTS.md` 等はその**描画先**であって編集元ではない | `~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md`、`~/.gemini/GEMINI.md` ほか |
-| グローバル・ツール固有共有 | `~/.agents/<tool>/`配下。Claude例: `commands/`、非秘密の`mcp.json`。Codex例: `hooks.json`、`agents/`（`AGENTS.override.md` は**共有してはいけない** — 下記） | primary/secondaryを含む各tool configuration directoryの対応path     |
-| リポジトリ単位             | `<repo>/AGENTS.md`、`<repo>/.agents/skills/`、必要なら`<repo>/.agents/<tool>/`                                             | `<repo>/CLAUDE.md`、`<repo>/.claude/skills`、tool固有aliasほか      |
+| グローバル・ツール固有共有 | `~/.agents/<tool>/`配下。Claude例: `commands/`、非秘密の`mcp.json`。Codex例: `hooks.json`、`agents/`（`AGENTS.override.md` は**共有してはいけない** — 下記）      | primary/secondaryを含む各tool configuration directoryの対応path         |
+| リポジトリ単位             | `<repo>/AGENTS.md`、`<repo>/.agents/skills/`、必要なら`<repo>/.agents/<tool>/`                                                                                    | `<repo>/CLAUDE.md`、`<repo>/.claude/skills`、tool固有aliasほか          |
 
 `.agents/` を正典にする理由: Codex CLI がユーザースキルとして `~/.agents/skills` を公式に読み、
 かつ `.agents` はツール非依存の中立な名前のため。
@@ -72,10 +72,10 @@ plugin/built-in 2重6件を実測）。
 
 ```yaml
 mirrors:
-  - dir: frontend-design            # 正典内のディレクトリ名（＝上流 name）
-    upstream: anthropics/skills      # 上流の識別子（GitHub owner/repo 等）
+  - dir: frontend-design # 正典内のディレクトリ名（＝上流 name）
+    upstream: anthropics/skills # 上流の識別子（GitHub owner/repo 等）
     upstream_path: skills/frontend-design
-    upstream_version: <commit sha>   # 上流の版。取得時点で分かるもの
+    upstream_version: <commit sha> # 上流の版。取得時点で分かるもの
     fetched_at: 2026-09-06
     local_copy: ~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/skills/frontend-design
     # local_copy が無い（built-in 等）場合は省略。同値検査は skip され鮮度検査のみ
@@ -159,6 +159,7 @@ Codex は正典を 19 日間まったく読んでいなかった。
    **編集したまま `switch` を忘れると、宣言と実環境がズレる。** これは
    `system_state.py --check` が「active or prospective system state drift」として
    赤で報告する（2026-08-28 に実測で確認）ので、その赤を放置しないこと。
+
 2. **symlink を実体ファイル／ディレクトリに置き換えない。** `rm` してから `Write` で作り直す、
    といった操作は分岐を復活させる。編集は in-place（symlink を保ったまま中身を書く）で行う。
    エディタによっては「保存時に symlink を置換」する設定があるため注意。
@@ -360,6 +361,13 @@ name とディレクトリ名の一致、同梱リソース参照（scripts/ ref
 加えて、同一 root 内の frontmatter `name` の完全重複と `source-command-*` の対応先を
 `WARN S7` として報告し、隣接する `codex/hooks.json` の bash 参照先が存在しない場合は
 `FAIL S6` とする。description の意味的類似・発火競合は決定論的 lint の対象外で、トリアージで扱う。
+
+さらに `S8` として、各 skill 直下の `scripts/tests/` にある `test_*.py` を
+`python3 -m pytest -q <skill>/scripts/tests` で実行する。テストが赤ければ `FAIL S8`
+として exit code に反映する（テストが赤いまま skill を編集させないため、warn ではなく fail）。
+`pytest` を持つ skill が 1 件も無ければ「S8: pytest を持つ skill が無い」と明示し、対象0件を
+黙って合格扱いにしない。`pytest` 自体が使えない環境、または環境変数
+`SKILL_LINT_SKIP_PYTEST=1` を設定した場合は S8 を skip するが、その旨を必ず出力する。
 
 ```bash
 bash ~/.agents/skills/origin-skill-commonize/scripts/skill_lint.sh

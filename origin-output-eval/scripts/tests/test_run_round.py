@@ -35,15 +35,18 @@ DUMMY_JUDGE_ROUND_SRC = textwrap.dedent(
 
         exit_code = int(os.environ.get("DUMMY_JUDGE_EXIT", "0"))
         findings = int(os.environ.get("DUMMY_JUDGE_FINDINGS", "0"))
+        blocking = int(os.environ.get("DUMMY_JUDGE_BLOCKING", str(findings)))
+        methods = [m for m in os.environ.get("DUMMY_JUDGE_METHODS", "C_judges").split(",") if m]
         round_no = a.round if a.round is not None else int(os.environ.get("DUMMY_JUDGE_ROUND", "1"))
         passed = exit_code == 0
 
         verdict = {
             "pass": passed,
             "round": round_no,
-            "methods": {},
+            "methods": {m: {} for m in methods},
             "reasons": [] if passed else ["dummy: 不合格"],
             "findings_count": findings,
+            "blocking_count": blocking,
             "must_fix": [],
             "rejected": [],
             "provenance": {},
@@ -154,6 +157,27 @@ class RunRoundTest(unittest.TestCase):
             (eval_dir / "round_1").mkdir()
             rc, out, err = self._run(eval_dir, env=self._env(DUMMY_JUDGE_EXIT=2, DUMMY_JUDGE_FINDINGS=0))
             self.assertEqual(rc, 2, f"stdout={out}\nstderr={err}")
+
+    def test_blocking_count_relayed_and_method_change_not_stopped(self):
+        """ISSUE-07: run_round は blocking_count と methods をそのまま中継する。
+        方式集合が変わった巡は件数が増えても not-converging(3) にしない。"""
+        with TemporaryDirectory() as t:
+            eval_dir = Path(t)
+            self._make_thresholds(eval_dir)
+            (eval_dir / "round_1").mkdir()
+            rc, out, err = self._run(eval_dir, env=self._env(
+                DUMMY_JUDGE_EXIT=1, DUMMY_JUDGE_FINDINGS=1, DUMMY_JUDGE_BLOCKING=1,
+                DUMMY_JUDGE_METHODS="A_tests"))
+            self.assertEqual(rc, 1, f"stdout={out}\nstderr={err}")
+            (eval_dir / "round_2").mkdir()
+            rc, out, err = self._run(eval_dir, env=self._env(
+                DUMMY_JUDGE_EXIT=1, DUMMY_JUDGE_FINDINGS=6, DUMMY_JUDGE_BLOCKING=6,
+                DUMMY_JUDGE_METHODS="A_tests,B_review"))
+            self.assertEqual(rc, 1, f"stdout={out}\nstderr={err}")  # 3 ではない
+            self.assertIn("方式集合", out)
+            state = json.loads((eval_dir / "state.json").read_text())
+            self.assertEqual(state["history"][-1]["blocking_count"], 6)
+            self.assertEqual(state["history"][-1]["methods"], ["A_tests", "B_review"])
 
 
 class RunRoundIntegratorHardeningTest(unittest.TestCase):

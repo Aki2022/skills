@@ -45,5 +45,5 @@ content-eval が**ループの中**に持つ人間ゲート3つを外へ出す: 
 | 初見読者ゼロで審査員だけ回る | 「審査員だけで回すな」と文書に記載 | 申告と実ファイルで検査 |
 | 前巡の残骸が混ざる | — | 各出力の `round` を照合（`exit 2`） |
 | `severity` 語彙外を既定値で吸収 | — | 語彙外は `exit 2` |
-| 収束判定の入力が手書き | `eval_results.json` を人が書く | `findings_count` は機械が数え、手書き verdict は `exit 2` |
+| 収束判定の入力が手書き | `eval_results.json` を人が書く | 件数は機械が数え、手書き verdict は `exit 2`。収束は `blocking_count` で判定する |
 | フレッシュ性・入力範囲・キャッシュが自己申告 | 文書の規律 | `provenance.json` で検査 |

@@ -47,7 +47,8 @@ mkdir -p <eval_dir>; cp <rubric から写した> <eval_dir>/thresholds.json
       exit 1 → 不合格。指摘を A/B/C に分け、A/B を呼び出し側が直して次巡へ
       exit 2 → 入力の不備（provenance 不備・評価者の欠落や未申告・round 不一致・severity 語彙外・
                スキーマ違反）。**直してから再実行**。判定はまだ行われていない
-      exit 3 → 未収束（前巡より指摘が減っていない）。上限前でも終了して 6 へ
+      exit 3 → 未収束（前巡より blocking_count が減っていない）。上限前でも終了して 6 へ
+               方式集合が変わった巡は分母が変わるので比較しない（停止しない）
       exit 4 → 回数上限に到達。終了して 6 へ
       exit 5 → 前巡で既に合格。6 へ
 6. 最終報告（final-report.template.md）
@@ -55,6 +56,19 @@ mkdir -p <eval_dir>; cp <rubric から写した> <eval_dir>/thresholds.json
 
 このループの中に、人へ問い合わせる手順は存在しない。上限到達・未収束・C 分類は**終了して報告**する。
 判定源は常に `judge_round.py` と `eval_state.py` の exit code と出力であり、LLM が数えて宣言しない。
+
+### 収束は `blocking_count` で見る（`findings_count` ではない）
+
+`findings_count` は評価単位の総数（A の失敗 + B の counted + Σ must_fix + Σ comments +
+読者の非「分かる」）で、**分母が変わると巡間で比較できない**。実測: 文書を3段落から7見出しへ
+再構成した巡で「分からない」は 4→1 に減ったのに `findings_count` は 6→7 になり、改善した巡が
+`not-converging` で止まった。
+
+そこで収束は `blocking_count`（A の失敗 + B の counted + Σ must_fix + 読者の「分からない」。
+**comments と「引っかかる」を除く** = 直さないと合格にならないもの）で判定する。
+さらに**方式集合が変わった巡**（例: 方式A が緑になり方式B を足した）は blocking_count でも
+分母が変わるため、`eval_state.py converged` は比較を「不成立」として停止させない。
+`findings_count` は人が推移を読む値として残す。
 
 ## 5. トリアージ（指摘をそのまま反映しない）
 

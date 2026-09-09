@@ -3,6 +3,7 @@ title: origin-pptx — Codex image_gen 完全ガイド
 ---
 
 # Codex image_gen（built-in, gpt-image-2）完全ガイド
+> 器と実行機構の正典は `origin-image-gen`。本書はその派生で pptx 固有の運用を足したもの。
 
 このスキルの②（デザインモックアップ生成）と③（文字なし**イラスト**生成）で使う唯一の画像生成手段。Codex CLI 組み込みの `image_gen` ツール（モデル: **gpt-image-2**）を使う。
 **③の意味アイコンは対象外**——2026-08-27 の A/B 実測で Material Symbols 標準に置換した

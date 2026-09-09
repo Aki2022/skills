@@ -1,0 +1,52 @@
+id: digital-agency
+# 等級（決定8）: observed = 外部観察。上流が公式 token を公開しているため tokens/ と媒体別資産を持つ。
+# 値の出力利用は usage_policy.license_gate_approved が true であることが条件（等級とは直交する属性）。
+tier: observed
+source:
+  upstream: https://design.digital.go.jp/
+  upstream_version: unversioned   # 上流が版番号を公開していない
+  fetched_at: 2026-07-04
+name: Digital Agency Design System Plugin (参考実装)
+version: 0.1.0
+status: experimental
+license: "See references.md"
+design_md_version: draft
+language:
+  primary: ja
+  supported: [ja, en]
+extends: []
+
+supported_media: [html, dashboard, pptx]
+
+priority:
+  default: 50
+  contexts:
+    public-sector: 90
+    dashboard: 95
+    corporate-presentation: 40
+
+entrypoints:
+  design_md: DESIGN.md
+  references: references.md
+
+# ライセンスゲート承認済み（references.md 参照）。フォントファイル・ロゴ・境界データは同梱しない。
+assets:
+  tokens:
+    - tokens/color.json
+    - tokens/typography.json
+    - tokens/spacing.json
+  examples:
+    - examples/html/
+    - examples/dashboard/
+
+validators:
+  - validators/accessibility.md
+  - validators/dashboard.md
+
+usage_policy:
+  allow_reference: true
+  allow_asset_copy: depends_on_license
+  require_attribution: true
+  prohibit_font_redistribution: true
+  # 【ゲート】references.md の承認記録が入るまで false。true になるまで資産値を出力に使わない。
+  license_gate_approved: true

@@ -1,6 +1,6 @@
 ---
 name: origin-design-check-routing
-description: デザインの検査・レビューの入口。何かのデザイン品質を確認したいとき、個別の skill 名を思い出せなくても、これを呼べば対象（LP / プロダクト UI / 資料）を判定し、カバレッジ表に沿って必要な検査 skill を正しい順序で連鎖させる。「デザインをチェックして」「デザインをレビューして」「デザイン品質を見て」「UI を確認して」「見た目を検査して」「まとめてデザイン検査」「design check」で必ず使う。デザイン系 skill が複数あってどれを使うか迷う場面でも、個別 skill を直接選ばずまずこれを使う。使わない場面: デザインの新規生成（origin-design-runtime）、対象が LP だと明確で LP 評価だけを回したい場合（origin-lp-review を直接）、コンプライアンス単体の監査（origin-website-audit を直接）、選んだ検査を合格ラインまで直して再評価するループ自体（origin-output-eval が持つ。受付はどの検査を並べるかを決めるだけ）。
+description: デザインの検査・レビューの入口。何かのデザイン品質を確認したいとき、個別の skill 名を思い出せなくても、これを呼べば対象（LP / プロダクト UI / 資料）を判定し、カバレッジ表に沿って必要な検査 skill を正しい順序で連鎖させる。「デザインをチェックして」「デザインをレビューして」「デザイン品質を見て」「UI を確認して」「見た目を検査して」「まとめてデザイン検査」「design check」で必ず使う。デザイン系 skill が複数あってどれを使うか迷う場面でも、個別 skill を直接選ばずまずこれを使う。使わない場面: デザインの新規生成（web は origin-web-design、スライドは origin-pptx）、対象が LP だと明確で LP 評価だけを回したい場合（origin-lp-review を直接）、コンプライアンス単体の監査（origin-website-audit を直接）、選んだ検査を合格ラインまで直して再評価するループ自体（origin-output-eval が持つ。受付はどの検査を並べるかを決めるだけ）。
 ---
 
 # Design Check Routing
@@ -36,14 +36,14 @@ description: デザインの検査・レビューの入口。何かのデザイ�
 
 | 観点                             | LP                                            | プロダクト UI                                                        | 資料                                                       |
 | -------------------------------- | --------------------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------- |
-| 審美・レイアウト実測（決定論）   | `origin-lp-review` の `measure_lp.mjs`        | 同スクリプト流用可。ただし `fold-cta` 等 LP 前提の検査は解釈を添える | `origin-design-runtime` の validator（自己点検が主・弱い） |
+| 審美・レイアウト実測（決定論）   | `origin-lp-review` の `measure_lp.mjs`        | 同スクリプト流用可。ただし `fold-cta` 等 LP 前提の検査は解釈を添える | `origin-web-design` の validator（自己点検が主・弱い） |
 | マーケ定性（独立レビュアー採点） | `origin-lp-review` の rubric                  | **欠落**                                                             | **欠落**                                                   |
 | 広告審査・法務・SEO・計測        | `origin-website-audit`                        | `origin-website-audit`（該当節のみ）                                 | 対象外                                                     |
 | UI ガイドライン準拠              | `web-design-guidelines`                       | `web-design-guidelines`                                              | 対象外                                                     |
 | アクセシビリティ修正             | `fixing-accessibility`                        | `fixing-accessibility`                                               | **欠落**（validator の自己点検のみ）                       |
 | 表示性能（Core Web Vitals）      | `web-perf`                                    | `web-perf`                                                           | 対象外                                                     |
 | AI 生成様式の検出                | `baseline-ui`                                 | `baseline-ui`                                                        | **欠落**                                                   |
-| ブランド一貫性                   | `origin-design-runtime` validator（自己点検） | 同左                                                                 | 同左                                                       |
+| ブランド一貫性                   | `origin-web-design` validator（自己点検）     | 同左                                                                 | 同左                                                       |
 
 補足:
 

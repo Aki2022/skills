@@ -28,7 +28,7 @@ image_gen で独自生成せず **Google Material Symbols**（Apache 2.0）を�
   （2026-08-27 人間ラダー選定）。24px 系は使わない。
 - `scripts/fetch_material_icons.py` が vocab_map.json から一括取得し、`process/icons_std/` に
   LICENSE（Apache 2.0）ごとキャッシュする。**ネットワーク取得はリポジトリ規約に従い人間確認を
-  取ってから**（デッキごとに1回。数百KB）。ライセンス前例: origin-design-runtime の
+  取ってから**（デッキごとに1回。数百KB）。ライセンス前例: origin-brand の
   digital-agency プラグインで Apache 2.0 利用可を確認済み。
 
 ## vocab_map.json 規約

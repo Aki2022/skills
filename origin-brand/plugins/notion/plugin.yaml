@@ -1,0 +1,42 @@
+id: notion
+# 等級（決定8）: observed（散文のみ）= DESIGN.md のみを持つ等級。
+# tokens/ は 2026-09-09 に退役済み — 上流が公式 token を公開しておらず、ゲート未承認で出力に使えない実値だった。
+tier: observed
+source:
+  upstream: https://github.com/kzhrknt/awesome-design-md-jp/blob/main/design-md/notion/DESIGN.md
+  upstream_version: unrecorded    # git リポジトリだが取得時の commit を記録していなかった
+  fetched_at: 2026-07-04
+name: Notion-inspired (abstracted) Plugin
+version: 0.1.0
+status: experimental
+license: "参照抽象化。参照元 DESIGN.md の権利は提供元に帰属。references.md 参照"
+design_md_version: draft
+language:
+  primary: ja
+  supported: [ja, en]
+extends: []
+
+supported_media: [html, dashboard]
+
+priority:
+  default: 40
+  contexts:
+    modern-saas: 90
+    dark-ui: 90
+    corporate-presentation: 30
+    public-sector: 20
+
+entrypoints:
+  design_md: DESIGN.md
+  references: references.md
+
+assets: {}   # 2026-09-09: tokens/ を退役（observed 散文のみの等級・ゲート未承認で出力に使えない実値だった）
+
+validators: []
+
+usage_policy:
+  allow_reference: true
+  allow_asset_copy: false
+  require_attribution: true
+  prohibit_font_redistribution: true
+  license_gate_approved: false

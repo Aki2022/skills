@@ -1,0 +1,47 @@
+{
+  "_source": "初期値は origin-pptx/style-guide/tokens.json の現行値（決定6）。web 側は 2026-09-09 に会社サイトの実値を読んで確定した。",
+  "_note": "フォントは媒体別に持つ（2026-09-09 オーナー判断）。食い違いの向きが色と逆で、サイト実値と破棄した下書きが Noto Sans JP 側で一致し、BIZ UDPGothic は pptx だけだった。どちらも実稼働中の実値なので、この確定で壊れる現物は無い。",
+  "mediaProfiles": {
+    "pptx": {
+      "unit": "pt",
+      "fontFamily": {
+        "sans": "BIZ UDPGothic",
+        "mono": "\"Noto Sans Mono\", monospace",
+        "_note": "全デッキ一律。Windows 10+ 標準搭載・プロポーショナル。mac は Google Fonts から導入。"
+      },
+      "scale": {
+        "title": { "sizePt": 14, "lineHeight": 0.9, "weight": 400 },
+        "keyMessage": { "sizePt": 28, "lineHeight": 0.9, "weight": 400 },
+        "heading": { "sizePt": 25, "lineHeight": 1.2, "weight": 700 },
+        "body": { "sizePt": 14, "lineHeight": 1.3, "weight": 400 },
+        "label": { "sizePt": 11, "lineHeight": 1.2, "weight": 400 }
+      },
+      "policy": {
+        "bodyMinPt": 11,
+        "_note": "退役した media/pptx の pptx-min-font は本文18pt を要求していたが、実運用値は 14pt / 下限 11pt だった。呼ばれない媒体ルールに矛盾する制約が入っていた形（2026-09-09 実測）。"
+      }
+    },
+    "web": {
+      "unit": "px",
+      "fontFamily": {
+        "sans": "\"Inter\", \"Noto Sans JP\", system-ui, sans-serif",
+        "mono": "\"Noto Sans Mono\", monospace",
+        "_note": "会社サイトの実値。Inter がラテン、Noto Sans JP が CJK を受ける。"
+      },
+      "scale": {
+        "display": { "size": "40px", "lineHeight": 1.35, "weight": 600 },
+        "h1": { "size": "30px", "lineHeight": 1.4, "weight": 600 },
+        "h2": { "size": "24px", "lineHeight": 1.5, "weight": 600 },
+        "h3": { "size": "20px", "lineHeight": 1.6, "weight": 600 },
+        "body": { "size": "16px", "lineHeight": 1.7, "weight": 400 },
+        "small": { "size": "14px", "lineHeight": 1.75, "weight": 400 },
+        "caption": { "size": "12px", "lineHeight": 1.6, "weight": 400 }
+      },
+      "policy": {
+        "bodyMinPx": 14,
+        "maxFamiliesPerScreen": 2,
+        "cjkLineHeightMin": 1.7
+      }
+    }
+  }
+}

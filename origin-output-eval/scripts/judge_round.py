@@ -9,12 +9,16 @@ round_dir の中身:
   provenance.json   必須。評価者の起動条件の申告（無ければ exit 2）
   tests.json        任意（方式A）: {"exit_code": 0}
   review.json       任意（方式B）: {"findings": [{"severity": "critical|major|minor", ...}, ...]}
+                    置く場合は provenance に role: "reviewer" の申告が要る（逆も同じ）
   judges/*.json     任意（方式C 審査員、content-eval 固定スキーマ）
   readers/*.json    任意（方式C 初見読者、同）
 tests.json / review.json / judges/*.json / readers/*.json が1つも無ければ exit 2。
 
-thresholds.json: judgeMinEach / judgeAvgMin / criticalMustFixMax / freshReaderUnclearMax /
-                 reviewFindingsMax / reviewMaxSeverity
+thresholds.json: judgeMinEach / judgeAvgMin / itemMinEach / criticalMustFixMax /
+                 freshReaderUnclearMax / reviewFindingsMax / reviewMaxSeverity
+  judgeMinEach は審査員ごとの「総合率」の下限。itemMinEach は**観点ごと**の下限（省略可）。
+  総合率だけだと 9/10・10/10・10/10・1/10 = 75% が合格になる（実測）ので、
+  「総合 >= 75 かつ全観点 >= 6」のような実運用の合格ラインは itemMinEach で表す。
 
 provenance.json は起動条件を機械で検証する（黙って合格させない）:
   - round が --round（省略時は provenance 自身の round）と一致する
@@ -22,7 +26,8 @@ provenance.json は起動条件を機械で検証する（黙って合格させ�
     （届いていない評価者・未申告の評価者を両方とも許さない）
   - fresh が全 entry で true（同一エージェントの再評価を許さない）
   - reader の inputs は artifact のみ／judge の inputs は artifact・rubric・carry のみ
-    （読者評価にサイド情報を渡さない）
+    ／reviewer（方式B）の inputs は artifact・diff・carry のみ（評価者にサイド情報を渡さない）
+  - reviewer の申告と review.json の存在が双方向に一致する（方式B の独立性を機械の内側に入れる）
   - cache_cleared が true（採点者が旧版を見た疑いを機械で否定できないなら通さない）
   - --expect-judges / --expect-readers を明示した場合、実ファイル数と食い違えば exit 2
     （provenance 自体が実態に合わせて縮小申告していても、計画側の数値で欠落を検出する）
@@ -30,23 +35,32 @@ provenance.json は起動条件を機械で検証する（黙って合格させ�
   - round が provenance の round と不一致（前巡の残骸が紛れ込んでいる）→ exit 2
   - review.json の severity が critical/major/minor 以外 → exit 2（既定値で吸収しない）
 
-findings_count は機械が一意に数える:
+findings_count は機械が一意に数える（人が推移を読む用）:
   A(tests.json の exit_code != 0 なら1、それ以外0)
   + B(review.json の counted 件数)
   + C(全審査員の must_fix 件数の合計)
   + C(全審査員の comments 件数の合計)
   + C(全初見読者の per_slide のうち verdict != "分かる" の件数)
 
+blocking_count は**収束判定に使う**数え方（ISSUE-07）。comments と読者の「引っかかる」を除く:
+  A(失敗なら1) + B(counted 件数) + C(Σ must_fix) + C(読者の「分からない」件数)
+findings_count は評価単位の総数なので、成果物を再構成すると分母が変わり、改善した巡が
+「増えた」ように見える（eval-1 で実測: 「分からない」4->1 なのに 6->7）。
+なお方式集合そのものが変わった場合は blocking_count でも分母が変わるため、
+巡間の比較は eval_state.py 側で「不成立」として扱う。
+
 scope: 本スクリプトは「渡された評価出力が閾値を満たすか」（A: exit code / B: 指摘件数と重大度 /
-C: 審査員の各下限・平均・must-fix・初見読者の「分からない」）に加えて、provenance.json が申告する
+C: 審査員の総合下限・観点別下限・平均・must-fix・初見読者の「分からない」）に加えて、provenance.json が申告する
 起動条件が実ファイルと機械的に整合するか（評価者の申告漏れ・未申告・フレッシュ性・読者への入力・
 cache_cleared・round 一致）を見る。申告そのものの真偽（本当にフレッシュか・本当にキャッシュを
 外したか）そのものは見ない（自己申告を信じる。虚偽申告の検出はできない）。
+方式B は出力が review.json 1本なので、reviewer の申告と review.json の**存在**だけを双方向に
+照合する。reviewer が複数申告された場合に findings の source と id を突き合わせることはしない。
 
 exit: 0 pass / 1 fail / 2 入力不備（スキーマ違反・provenance 不備・評価者の欠落/未申告・round 不一致・
       severity 語彙外）
-出力: 標準出力は1行目 scope ＋ JSON（pass, round, methods, reasons, findings_count, must_fix,
-      rejected, provenance）。--json-out 指定時はそのパスへ scope 行を含まない純 JSON を書く
+出力: 標準出力は1行目 scope ＋ JSON（pass, round, methods, reasons, findings_count, blocking_count,
+      must_fix, rejected, provenance）。--json-out 指定時はそのパスへ scope 行を含まない純 JSON を書く
       （eval_state.py へ機械的に渡す口）。
 """
 from __future__ import annotations
@@ -59,7 +73,9 @@ READER_REQ = {"persona", "round", "per_slide"}
 READER_VERDICTS = {"分かる", "引っかかる", "分からない"}
 PROV_REQ = {"round", "evaluators", "gates_passed", "cache_cleared"}
 EVALUATOR_REQ = {"role", "id", "fresh", "inputs"}
-ROLE_ALLOWED_INPUTS = {"judge": {"artifact", "rubric", "carry"}, "reader": {"artifact"}}
+ROLE_ALLOWED_INPUTS = {"judge": {"artifact", "rubric", "carry"},
+                       "reader": {"artifact"},
+                       "reviewer": {"artifact", "diff", "carry"}}
 
 
 class SchemaError(Exception):
@@ -82,7 +98,7 @@ def check_judge(j: dict, name: str):
     if not isinstance(j["scores"], list) or not j["scores"]:
         raise SchemaError(f"{name}: scores が空")
     for s in j["scores"]:
-        if not {"item", "score", "max"} <= set(s) or s["score"] > s["max"]:
+        if not {"item", "score", "max"} <= set(s) or s["score"] > s["max"] or s["max"] <= 0:
             raise SchemaError(f"{name}: scores の要素が不正 {s}")
     if not j["total_max"]:
         raise SchemaError(f"{name}: total_max が 0")
@@ -125,7 +141,7 @@ def load_provenance(d: Path, round_arg):
     if not isinstance(evaluators, list):
         raise SchemaError("provenance.json: evaluators が list でない")
 
-    declared: dict[str, dict[str, dict]] = {"judge": {}, "reader": {}}
+    declared: dict[str, dict[str, dict]] = {"judge": {}, "reader": {}, "reviewer": {}}
     for i, e in enumerate(evaluators):
         if not isinstance(e, dict):
             raise SchemaError(f"provenance.json: evaluators[{i}] が object でない")
@@ -133,7 +149,7 @@ def load_provenance(d: Path, round_arg):
         if emiss:
             raise SchemaError(f"provenance.json: evaluators[{i}] 必須キー欠落 {sorted(emiss)}")
         role = e["role"]
-        if role not in ("judge", "reader"):
+        if role not in ROLE_ALLOWED_INPUTS:
             raise SchemaError(f"provenance.json: evaluators[{i}].role が語彙外 '{role}'")
         if e.get("fresh") is not True:
             raise SchemaError(f"provenance.json: evaluators[{i}]（id={e.get('id')!r}）の"
@@ -144,7 +160,9 @@ def load_provenance(d: Path, round_arg):
         allowed = ROLE_ALLOWED_INPUTS[role]
         bad = [x for x in inputs if x not in allowed]
         if bad:
-            reason = "reader にはサイド情報を渡さない" if role == "reader" else "judge の許容は artifact/rubric/carry のみ"
+            reason = {"reader": "reader にはサイド情報を渡さない",
+                      "judge": "judge の許容は artifact/rubric/carry のみ",
+                      "reviewer": "reviewer（方式B）の許容は artifact/diff/carry のみ"}[role]
             raise SchemaError(f"provenance.json: evaluators[{i}]（role={role}）の inputs に許容外 {bad}（{reason}）")
         eid = e["id"]
         if eid in declared[role]:
@@ -170,6 +188,17 @@ def load_provenance(d: Path, round_arg):
         if eid not in declared["reader"]:
             raise SchemaError(f"readers/{eid}.json が実在するが provenance.json に申告が無い（未申告の評価者）")
 
+    # 方式B は出力が review.json 1本なので、id ごとのファイル照合ではなく存在の双方向照合を行う。
+    # これで「レビュー結果はあるが誰が出したか申告されていない」＝独立性が機械検証の外、を塞ぐ。
+    review_exists = (d / "review.json").is_file()
+    if declared["reviewer"] and not review_exists:
+        ids = sorted(declared["reviewer"])
+        raise SchemaError(f"provenance.json: reviewer {ids} を申告しているが review.json が無い"
+                           "（届いていない評価者を検出）")
+    if review_exists and not declared["reviewer"]:
+        raise SchemaError("review.json が実在するが provenance.json に reviewer の申告が無い"
+                           "（方式B のレビュアーの独立性を機械で確かめられない）")
+
     return prov, round_value, judge_files, reader_files
 
 
@@ -191,9 +220,10 @@ def main(argv=None) -> int:
     ap.add_argument("--json-out")
     a = ap.parse_args(argv)
     d = Path(a.round_dir)
-    print("scope: 渡された評価出力が閾値を満たすか（A: exit code / B: 指摘件数と重大度 / C: 審査員の各下限・平均・"
-          "must-fix・初見読者の「分からない」）に加え、provenance.json が申告する起動条件が実ファイルと機械的に"
-          "整合するか（評価者の申告漏れ・未申告・フレッシュ性・読者への入力・cache_cleared・round 一致）を見る。"
+    print("scope: 渡された評価出力が閾値を満たすか（A: exit code / B: 指摘件数と重大度 / C: 審査員の総合下限・"
+          "観点別下限・平均・must-fix・初見読者の「分からない」）に加え、provenance.json が申告する起動条件が"
+          "実ファイルと機械的に整合するか（評価者の申告漏れ・未申告・フレッシュ性・各 role への入力・"
+          "reviewer と review.json の対応・cache_cleared・round 一致）を見る。"
           "申告そのものの真偽（本当にフレッシュか・本当にキャッシュを外したか）は見ない。")
     try:
         th = load_json(Path(a.thresholds))
@@ -244,9 +274,11 @@ def main(argv=None) -> int:
         c_must_fix: list = []
         c_comments = 0
         c_nonwakaru = 0
+        unclear = 0
         if judges or readers:
             seen = True
             pcts, mf = [], 0
+            item_min = th.get("itemMinEach")
             for jp in judges:
                 j = load_json(jp)
                 if j.get("round") != round_value:
@@ -254,10 +286,15 @@ def main(argv=None) -> int:
                                        "（前巡の残骸が紛れ込んでいる）")
                 check_judge(j, jp.name)
                 pcts.append(100.0 * j["total_score"] / j["total_max"])
+                if item_min is not None:
+                    for sc in j["scores"]:
+                        ipct = 100.0 * sc["score"] / sc["max"]
+                        if ipct < item_min:
+                            reasons.append(f"itemMinEach: {jp.stem}.{sc['item']} = {ipct:.1f}"
+                                           f" (< {item_min})")
                 mf += len(j["must_fix"])
                 c_must_fix.extend(j["must_fix"])
                 c_comments += len(j.get("comments", []))
-            unclear = 0
             for rp2 in readers:
                 r = load_json(rp2)
                 if r.get("round") != round_value:
@@ -266,7 +303,7 @@ def main(argv=None) -> int:
                 check_reader(r, rp2.name)
                 unclear += sum(1 for ps in r["per_slide"] if ps["verdict"] == "分からない")
                 c_nonwakaru += sum(1 for ps in r["per_slide"] if ps["verdict"] != "分かる")
-            c_ok = True
+            c_ok = not any(r.startswith("itemMinEach:") for r in reasons)
             if judges:
                 if min(pcts) < th.get("judgeMinEach", 75):
                     c_ok = False
@@ -289,12 +326,16 @@ def main(argv=None) -> int:
             raise SchemaError(f"{d}: 判定対象の出力が1つも無い（tests.json / review.json / judges/ / readers/）")
         passed = not reasons
         findings_count = a_findings + b_findings + len(c_must_fix) + c_comments + c_nonwakaru
+        # 収束判定に使うのはこちら。comments と読者の「引っかかる」は成果物を再構成すると
+        # 評価単位ごと増減するため、巡をまたいだ比較の分母が壊れる（eval-1 で実測）。
+        blocking_count = a_findings + b_findings + len(c_must_fix) + unclear
         result = {
             "pass": passed,
             "round": round_value,
             "methods": methods,
             "reasons": reasons,
             "findings_count": findings_count,
+            "blocking_count": blocking_count,
             "must_fix": c_must_fix,
             "rejected": [],
             "provenance": prov,

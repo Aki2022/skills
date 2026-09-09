@@ -17,9 +17,16 @@ title: ルーブリックの器（呼び出し側が中身を埋める）
 ## 合格ライン（thresholds.json に写す）
 
 ```json
-{ "judgeMinEach": 75, "judgeAvgMin": 80, "criticalMustFixMax": 0,
+{ "judgeMinEach": 75, "judgeAvgMin": 80, "itemMinEach": 60, "criticalMustFixMax": 0,
   "freshReaderUnclearMax": 0, "reviewFindingsMax": 0, "reviewMaxSeverity": "minor" }
 ```
+
+- `judgeMinEach` は審査員ごとの**総合率**の下限、`itemMinEach` は**観点ごと**の下限（%）。
+- 総合率だけだと**1観点が崩れていても合格になる** — 9/10・10/10・10/10・1/10 = 75% は
+  `judgeMinEach: 75` を満たす（実測）。「総合 ≥ 75 かつ全観点 ≥ 6」のような実運用の合格ラインは
+  `itemMinEach` で書く。ルーブリックに「7点未満は must_fix に書け」と指示する形は、
+  審査員が守らなければすり抜けるので**閾値で表す**。
+- `itemMinEach` を省略すれば観点別の検査は行わない（従来どおり）。
 
 ## ペルソナ（審査員・初見読者は別 subagent）
 

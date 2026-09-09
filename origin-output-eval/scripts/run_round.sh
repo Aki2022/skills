@@ -126,8 +126,8 @@ if [ "$judge_rc" -ne 0 ] && [ "$judge_rc" -ne 1 ]; then
   cat "$JUDGE_LOG" >&2
   exit 2
 fi
-if ! python3 -c "import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if 'findings_count' in d else 1)" "$VERDICT_JSON" 2>/dev/null; then
-  echo "run_round: $VERDICT_JSON が無い・壊れている・findings_count が無い。判定は行われていない" >&2
+if ! python3 -c "import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if {'findings_count','blocking_count','methods'} <= set(d) else 1)" "$VERDICT_JSON" 2>/dev/null; then
+  echo "run_round: $VERDICT_JSON が無い・壊れている・findings_count/blocking_count/methods が欠けている。判定は行われていない" >&2
   cat "$JUDGE_LOG" >&2
   exit 2
 fi

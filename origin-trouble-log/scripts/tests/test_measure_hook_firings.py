@@ -396,3 +396,109 @@ class CliTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def codex_exec(command, *, ts="2026-09-10T00:00:00.000Z", call_id="call_1"):
+    """A Codex rollout tool-call record. Codex does not persist hook output, so the
+    firing must come from the guard's own log and be joined back to this."""
+    return {
+        "type": "response_item",
+        "timestamp": ts,
+        "payload": {"type": "custom_tool_call", "name": "exec", "call_id": call_id,
+                    "input": json.dumps({"command": ["bash", "-lc", command]})},
+    }
+
+
+def log_line(command, *, ts="2026-09-10T00:00:00Z", tags=("H1",), tool="Bash", session="c1"):
+    return {
+        "ts": ts,
+        "guard_version": "2026-09-09.1",
+        "event": "PreToolUse",
+        "tool": tool,
+        "session_id": session,
+        "command": command,
+        "command_sha": "",
+        "file_path": "",
+        "tags": list(tags),
+    }
+
+
+class CodexJoinTests(unittest.TestCase):
+    def setUp(self):
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.root = Path(self.tempdir.name)
+        self.sessions = self.root / "sessions/2026/09/10"
+        self.sessions.mkdir(parents=True)
+
+    def tearDown(self):
+        self.tempdir.cleanup()
+
+    def write_jsonl(self, path, records):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8") as handle:
+            for record in records:
+                handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+        return path
+
+    def test_a_logged_firing_joins_to_the_rollout_and_finds_the_next_exec(self):
+        self.write_jsonl(self.sessions / "rollout-a.jsonl", [
+            codex_exec("pytest -q | tail -1", ts="2026-09-10T00:00:05.000Z", call_id="c1"),
+            codex_exec("pytest -q > run.log 2>&1", ts="2026-09-10T00:00:30.000Z", call_id="c2"),
+        ])
+        log = self.write_jsonl(self.root / "firings.jsonl",
+                               [log_line("pytest -q | tail -1", ts="2026-09-10T00:00:05Z")])
+        scan = measure.parse_codex(log, self.root / "sessions")
+        self.assertEqual(len(scan.firings), 1)
+        firing = scan.firings[0]
+        self.assertEqual(firing["tags"], ["H1"])
+        self.assertEqual(firing["next_command"], "pytest -q > run.log 2>&1")
+        self.assertTrue(firing["joined"])
+
+    def test_the_join_matches_the_first_line_so_a_heredoc_tail_does_not_break_it(self):
+        """The guard logs the heredoc-stripped form; the rollout keeps the whole thing."""
+        self.write_jsonl(self.sessions / "rollout-a.jsonl", [
+            codex_exec("git commit -q -F - << 'EOF'\nmessage body\nEOF\n",
+                       ts="2026-09-10T00:00:05.000Z"),
+        ])
+        log = self.write_jsonl(self.root / "firings.jsonl", [
+            log_line("git commit -q -F - << 'EOF'\n", ts="2026-09-10T00:00:05Z", tags=("H5e",)),
+        ])
+        firing = measure.parse_codex(log, self.root / "sessions").firings[0]
+        self.assertTrue(firing["joined"])
+
+    def test_an_unjoinable_firing_is_kept_and_counted(self):
+        self.write_jsonl(self.sessions / "rollout-a.jsonl", [codex_exec("ls")])
+        log = self.write_jsonl(self.root / "firings.jsonl", [log_line("something else entirely")])
+        scan = measure.parse_codex(log, self.root / "sessions")
+        self.assertEqual(len(scan.firings), 1)
+        self.assertFalse(scan.firings[0]["joined"])
+        self.assertIsNone(scan.firings[0]["next_command"])
+
+    def test_a_far_away_timestamp_does_not_join(self):
+        self.write_jsonl(self.sessions / "rollout-a.jsonl", [
+            codex_exec("pytest -q | tail -1", ts="2026-09-10T06:00:00.000Z"),
+        ])
+        log = self.write_jsonl(self.root / "firings.jsonl",
+                               [log_line("pytest -q | tail -1", ts="2026-09-10T00:00:05Z")])
+        scan = measure.parse_codex(log, self.root / "sessions")
+        self.assertFalse(scan.firings[0]["joined"])
+
+    def test_codex_firings_aggregate_with_a_join_rate(self):
+        self.write_jsonl(self.sessions / "rollout-a.jsonl", [
+            codex_exec("pytest -q | tail -1", ts="2026-09-10T00:00:05.000Z", call_id="c1"),
+            codex_exec("ls", ts="2026-09-10T00:00:30.000Z", call_id="c2"),
+        ])
+        log = self.write_jsonl(self.root / "firings.jsonl", [
+            log_line("pytest -q | tail -1", ts="2026-09-10T00:00:05Z"),
+            log_line("nowhere to be found", ts="2026-09-10T00:00:06Z"),
+        ])
+        scan = measure.parse_codex(log, self.root / "sessions")
+        stats = measure.aggregate([scan])
+        self.assertEqual(stats.firings, 2)
+        self.assertEqual(stats.joined, 1)
+        self.assertEqual(stats.unjoined, 1)
+        self.assertIn("Codex", measure.render_report(stats))
+
+    def test_missing_log_or_sessions_directory_is_not_an_error(self):
+        scan = measure.parse_codex(self.root / "absent.jsonl", self.root / "sessions")
+        self.assertEqual(scan.firings, [])

@@ -59,6 +59,11 @@ SELF_REFERENTIAL = ("origin_warn_guards", "measure_hook_firings")
 
 DEFAULT_TRANSCRIPTS = Path.home() / ".claude/projects"
 DEFAULT_CACHE = Path.home() / ".local/share/origin-warn-guards/cache"
+DEFAULT_HOOK_LOG = Path.home() / ".local/share/origin-warn-guards/firings.jsonl"
+DEFAULT_CODEX_SESSIONS = Path.home() / ".codex/sessions"
+# Codex は hook 出力を rollout に残さないので、発火はガード自身のログから来る。
+# 突き合わせはコマンドの先頭行一致 + 時刻近接で行う近似 join。
+CODEX_JOIN_WINDOW_SECONDS = 120
 
 # Guard tag -> response_id in triage/responses.tsv.
 # `None` means the tag fires in production but no response row owns it yet; the
@@ -244,6 +249,123 @@ def parse_transcript(path: Path) -> TranscriptScan:
     return scan
 
 
+def _first_line(text: str | None) -> str:
+    return (text or "").strip().splitlines()[0].strip() if (text or "").strip() else ""
+
+
+def _codex_exec_command(payload: dict) -> str | None:
+    raw = payload.get("input")
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except ValueError:
+            return raw
+    if isinstance(raw, dict):
+        command = raw.get("command")
+        if isinstance(command, list):
+            # Codex wraps shell calls as ["bash", "-lc", "<command>"].
+            return command[-1] if command else None
+        if isinstance(command, str):
+            return command
+    return None
+
+
+def _parse_ts(value: str) -> float | None:
+    text = (value or "").strip().replace("Z", "+00:00")
+    if not text:
+        return None
+    try:
+        from datetime import datetime
+
+        return datetime.fromisoformat(text).timestamp()
+    except ValueError:
+        return None
+
+
+def parse_codex(hook_log: Path, sessions: Path) -> TranscriptScan:
+    """Join guard-log firings to Codex rollouts to recover the following command.
+
+    Approximate by construction: the log and the rollout share no id, so the join is
+    first-line equality plus timestamp proximity. Every firing is kept either way and
+    carries `joined`, so the report can state how much of it actually resolved.
+    """
+    scan = TranscriptScan(path=str(hook_log))
+    if not Path(hook_log).exists():
+        return scan
+
+    execs: list[dict] = []
+    if Path(sessions).exists():
+        for path in sorted(Path(sessions).rglob("*.jsonl")):
+            ordered: list[dict] = []
+            try:
+                handle = Path(path).open(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            with handle:
+                for line in handle:
+                    try:
+                        record = json.loads(line)
+                    except ValueError:
+                        continue
+                    payload = record.get("payload")
+                    if not isinstance(payload, dict):
+                        continue
+                    if payload.get("type") not in ("custom_tool_call", "function_call",
+                                                   "local_shell_call"):
+                        continue
+                    if payload.get("name") not in (None, "exec", "shell", "container.exec"):
+                        continue
+                    command = _codex_exec_command(payload)
+                    if command is None:
+                        continue
+                    ordered.append({
+                        "command": command,
+                        "first_line": _first_line(command),
+                        "ts": _parse_ts(record.get("timestamp") or ""),
+                        "rollout": str(path),
+                    })
+            for index, entry in enumerate(ordered):
+                entry["next_command"] = ordered[index + 1]["command"] if index + 1 < len(ordered) else None
+                execs.append(entry)
+
+    with Path(hook_log).open(encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            try:
+                record = json.loads(line)
+            except ValueError:
+                continue
+            if record.get("event") not in (None, "PreToolUse"):
+                continue
+            logged = _first_line(record.get("command"))
+            when = _parse_ts(record.get("ts") or "")
+            match = None
+            for entry in execs:
+                if not logged or entry["first_line"] != logged:
+                    continue
+                if when is not None and entry["ts"] is not None:
+                    if abs(entry["ts"] - when) > CODEX_JOIN_WINDOW_SECONDS:
+                        continue
+                match = entry
+                break
+            scan.firings.append({
+                "session_id": record.get("session_id") or "",
+                "timestamp": record.get("ts") or "",
+                "tool_use_id": "",
+                "tool_name": record.get("tool") or "Bash",
+                "tags": sorted(set(record.get("tags") or [])),
+                "duration_ms": None,
+                "command": record.get("command"),
+                "is_error": None,
+                "sidechain": False,
+                "transcript": str(hook_log),
+                "harness": "codex",
+                "joined": match is not None,
+                "next_command": match["next_command"] if match else None,
+                "next_tags": [],
+            })
+    return scan
+
+
 @dataclass
 class Stats:
     since: str | None = None
@@ -257,6 +379,8 @@ class Stats:
     denominators: Counter = field(default_factory=Counter)
     echo_records: int = 0
     transcripts: int = 0
+    joined: int = 0
+    unjoined: int = 0
 
 
 def _is_self_referential(firing: dict) -> bool:
@@ -291,6 +415,9 @@ def aggregate(scans, since: str | None = None, until: str | None = None) -> Stat
     stats.firings = len(firings)
     stats.sidechain_firings = sum(1 for f in firings if f["sidechain"])
     stats.self_referential = sum(1 for f in firings if _is_self_referential(f))
+    codex = [f for f in firings if f.get("harness") == "codex"]
+    stats.joined = sum(1 for f in codex if f.get("joined"))
+    stats.unjoined = len(codex) - stats.joined
     durations = [f["duration_ms"] for f in firings if isinstance(f["duration_ms"], (int, float))]
     if durations:
         stats.duration_median = round(statistics.median(durations))
@@ -339,6 +466,8 @@ def render_report(stats: Stats) -> str:
         + (", ".join(f"{k} {v}" for k, v in sorted(stats.denominators.items())) or "なし"),
         f"hook 実行時間: 中央値 {stats.duration_median if stats.duration_median is not None else '-'}ms"
         f" / 最大 {stats.duration_max if stats.duration_max is not None else '-'}ms",
+        f"Codex 分（ガードのログ由来・先頭行と時刻の近似 join）: 突き合わせ成功 {stats.joined} 件"
+        f" / 失敗 {stats.unjoined} 件。Claude 分は toolUseID による厳密 join",
         "",
         "| タグ | response_id | 発火 | 自己参照 | 分母 | 発火率 | セッション | 再発セッション | 是正率 | 直後是正率 |",
         "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",

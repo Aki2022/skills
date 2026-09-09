@@ -1,0 +1,53 @@
+{
+  "_source": "初期値は origin-pptx/style-guide/tokens.json の現行値（決定6）。2026-09-09 に3者比較（origin-pptx 現行値 / 会社サイトの実値 / 破棄した下書き値）を実測し、リポジトリオーナーが確定した。",
+  "_note": "原則グレー階調。色相を持つのはトーン色（positive/negative）だけ。色のみ依存禁止は親 digital-agency から継承。破棄した下書き値（濃紺 #1F3A5F + 金 #A67C2E）は採らない。会社サイトの実値（IBM Carbon 由来）も採らない — サイト側の spec が自ら負債として記録しているため、倉庫の初期値にすると負債を正典に固定する。",
+  "shared": {
+    "_note": "媒体をまたいで同じ値。単位を持たない色はここに置く。",
+    "gray": {
+      "heading": "#404040",
+      "panel": "#F2F2F2",
+      "footer": "#D9D9D9",
+      "copyright": "#BFBFBF"
+    },
+    "tone": {
+      "neutral": "#404040",
+      "positive": "#44546A",
+      "negative": "#C00000"
+    },
+    "background": {
+      "default": "#FFFFFF",
+      "border": "#D9D9D9"
+    }
+  },
+  "mediaProfiles": {
+    "_note": "決定8: owned は媒体プロファイルとして実値を持つ。単位変換を各工場に書かせない。",
+    "pptx": {
+      "unit": "pt",
+      "text": {
+        "body": "#7F7F7F",
+        "heading": "#404040"
+      },
+      "contrastPolicy": {
+        "bodyMin": 3.0,
+        "_note": "#7F7F7F on white = 4.00:1。会社標準として承認済み（origin-pptx 実運用値）。"
+      }
+    },
+    "web": {
+      "unit": "px",
+      "text": {
+        "body": "#666666",
+        "heading": "#404040"
+      },
+      "contrastPolicy": {
+        "bodyMin": 4.5,
+        "largeTextMin": 3.0,
+        "uiComponentMin": 3.0,
+        "_note": "#666666 on white = 5.74:1。media/html の 4.5:1 は type: constraint でロックされ意匠より強いため、pptx の #7F7F7F（4.00:1）は web で使えない。無彩色を保ったまま濃度を上げた。#767676（4.54:1）が 4.5 を満たす最も明るい値だが余裕が 0.04 しかなく、背景が真っ白でなくなると割るため採らなかった（2026-09-09 オーナー判断）。"
+      }
+    }
+  },
+  "dataViz": {
+    "_note": "系列色。無彩色階調では系列を区別できないため、トーン色を起点に彩度を抑えた色相を並べる。",
+    "categorical": ["#44546A", "#7F7F7F", "#4A7C7C", "#8A6E4E", "#6E6E8A", "#404040"]
+  }
+}

@@ -1,6 +1,6 @@
 ---
 name: origin-lp-review
-description: ランディングページ（LP）を4つの観点で評価する。審美とレイアウトは実測で決定論的に、マーケティングの定性は独立レビュアーの項目別スコアで、広告審査・法務・SEO・計測は origin-website-audit へ委譲する。「LPを評価して」「このコピーは刺さるか」「LPを公開前に見て」「リデザインの良し悪しを判定して」で使う。対象がLPだと明確なときの入口。デザイン全般のチェック（対象が LP かどうか不明・複数観点をまとめて）は origin-design-check-routing が入口で、そこからこの skill が呼ばれる。使わない場面: LP でない web プロダクト UI の評価、デザインの新規生成（origin-design-runtime が持つ）、コンプライアンス単体の監査（origin-website-audit を直接使う）、**決定論の実測だけを回したい場合**（この skill を経由せず `scripts/measure_lp.mjs` を直接叩く。CI・hook・他の skill から呼べる）。
+description: ランディングページ（LP）を4つの観点で評価する。審美とレイアウトは実測で決定論的に、マーケティングの定性は独立レビュアーの項目別スコアで、広告審査・法務・SEO・計測は origin-website-audit へ委譲する。「LPを評価して」「このコピーは刺さるか」「LPを公開前に見て」「リデザインの良し悪しを判定して」で使う。対象がLPだと明確なときの入口。デザイン全般のチェック（対象が LP かどうか不明・複数観点をまとめて）は origin-design-check-routing が入口で、そこからこの skill が呼ばれる。使わない場面: LP でない web プロダクト UI の評価、デザインの新規生成（web は origin-web-design が持つ）、コンプライアンス単体の監査（origin-website-audit を直接使う）、**決定論の実測だけを回したい場合**（この skill を経由せず `scripts/measure_lp.mjs` を直接叩く。CI・hook・他の skill から呼べる）。
 ---
 
 # LP Review

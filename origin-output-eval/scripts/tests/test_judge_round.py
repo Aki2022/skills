@@ -12,10 +12,18 @@ THRESH = {"judgeMinEach": 75, "judgeAvgMin": 80, "criticalMustFixMax": 0,
           "freshReaderUnclearMax": 0, "reviewFindingsMax": 0, "reviewMaxSeverity": "minor"}
 
 
-def judge(total, must_fix=(), comments=(), round_=1):
-    return {"persona": "J", "round": round_,
-            "scores": [{"item": "a", "score": total, "max": 100, "reason": "r"}],
-            "total_score": total, "total_max": 100, "verdict": "pass" if total >= 75 else "revise",
+def judge(total, must_fix=(), comments=(), round_=1, scores=None):
+    if scores is None:
+        scores = [{"item": "a", "score": total, "max": 100, "reason": "r"}]
+        total_score, total_max = total, 100
+    else:
+        scores = [dict(item=f"i{i}", score=sc, max=mx, reason="r")
+                  for i, (sc, mx) in enumerate(scores)]
+        total_score = sum(s["score"] for s in scores)
+        total_max = sum(s["max"] for s in scores)
+    return {"persona": "J", "round": round_, "scores": scores,
+            "total_score": total_score, "total_max": total_max,
+            "verdict": "pass" if 100.0 * total_score / total_max >= 75 else "revise",
             "strengths": [], "improvements": [], "must_fix": list(must_fix),
             "comments": list(comments), "advice": []}
 
@@ -29,13 +37,15 @@ def reader(unclear=0, hikkakaru=0, total=3, round_=1):
             "naive_questions": [], "top_fixes": []}
 
 
-def make_provenance(round_=1, judge_ids=(), reader_ids=(), cache_cleared=True, fresh=True,
-                     judge_inputs=("artifact", "rubric"), reader_inputs=("artifact",),
-                     gates=("dummy gate",)):
+def make_provenance(round_=1, judge_ids=(), reader_ids=(), reviewer_ids=(), cache_cleared=True,
+                     fresh=True, judge_inputs=("artifact", "rubric"), reader_inputs=("artifact",),
+                     reviewer_inputs=("artifact",), gates=("dummy gate",)):
     evaluators = [{"role": "judge", "id": jid, "fresh": fresh, "inputs": list(judge_inputs)}
                   for jid in judge_ids]
     evaluators += [{"role": "reader", "id": rid, "fresh": fresh, "inputs": list(reader_inputs)}
                    for rid in reader_ids]
+    evaluators += [{"role": "reviewer", "id": vid, "fresh": fresh, "inputs": list(reviewer_inputs)}
+                   for vid in reviewer_ids]
     return {"round": round_, "evaluators": evaluators, "gates_passed": list(gates),
             "cache_cleared": cache_cleared}
 
@@ -54,11 +64,14 @@ class JudgeRoundTest(unittest.TestCase):
             rid = f"r{i}"
             (d / "readers" / f"{rid}.json").write_text(json.dumps(r))
             reader_ids.append(rid)
+        reviewer_ids = []
         if review is not None:
             (d / "review.json").write_text(json.dumps(review))
+            reviewer_ids = ["code-review"]
         if tests is not None:
             (d / "tests.json").write_text(json.dumps(tests))
-        p = prov if prov is not None else make_provenance(round_=round_, judge_ids=judge_ids, reader_ids=reader_ids)
+        p = prov if prov is not None else make_provenance(
+            round_=round_, judge_ids=judge_ids, reader_ids=reader_ids, reviewer_ids=reviewer_ids)
         (d / "provenance.json").write_text(json.dumps(p))
         (Path(tmp) / "thresholds.json").write_text(json.dumps(THRESH))
         return d
@@ -228,5 +241,90 @@ class JudgeRoundTest(unittest.TestCase):
             self.assertIn("findings_count", parsed)
             self.assertEqual(parsed["round"], 1)
 
+
+    # --- ここから ISSUE-07（skill eval で実測した設計欠陥）追加分 ---
+
+    def test_blocking_count_excludes_comments_and_hikkakaru(self):
+        """①: 収束用の blocking_count は must_fix と「分からない」だけを数える。
+        comments と「引っかかる」は findings_count には入るが blocking_count には入らない。"""
+        with TemporaryDirectory() as t:
+            d = self._round(t,
+                            judges=[judge(90, must_fix=["m1"],
+                                          comments=[{"loc": "a", "comment": "c"}] * 3)],
+                            readers=[reader(unclear=1, hikkakaru=2, total=5)])
+            rc, out = self._run(d)
+            res = json.loads(out.split("\n", 1)[1])
+            self.assertEqual(res["findings_count"], 1 + 3 + 3)  # must_fix1 + comments3 + 非「分かる」3
+            self.assertEqual(res["blocking_count"], 1 + 1)      # must_fix1 + 「分からない」1
+            self.assertEqual(rc, 1, out)  # must_fix と unclear があるので不合格
+
+    def test_item_min_each_catches_one_collapsed_item(self):
+        """②の陽性対照: 9/10・10/10・10/10・1/10 は総合 75% で judgeMinEach を満たすが、
+        itemMinEach=60 を入れると 1/10 の観点で不合格になる。"""
+        with TemporaryDirectory() as t:
+            d = self._round(t, judges=[judge(0, scores=[(9, 10), (10, 10), (10, 10), (1, 10)])])
+            th = json.loads((Path(t) / "thresholds.json").read_text())
+            th.update({"judgeAvgMin": 75, "itemMinEach": 60})
+            (Path(t) / "thresholds.json").write_text(json.dumps(th))
+            rc, out = self._run(d)
+            self.assertEqual(rc, 1, out)
+            self.assertIn("itemMinEach", out)
+
+    def test_item_min_each_absent_reproduces_the_defect(self):
+        """②の対照（現状の再現）: itemMinEach を書かなければ同じ審査員が合格する。
+        閾値を書かない限り従来の挙動が変わらないことも同時に示す。"""
+        with TemporaryDirectory() as t:
+            d = self._round(t, judges=[judge(0, scores=[(9, 10), (10, 10), (10, 10), (1, 10)])])
+            th = json.loads((Path(t) / "thresholds.json").read_text())
+            th.update({"judgeAvgMin": 75})
+            (Path(t) / "thresholds.json").write_text(json.dumps(th))
+            rc, out = self._run(d)
+            self.assertEqual(rc, 0, out)
+
+    def test_item_min_each_passes_when_all_items_clear(self):
+        with TemporaryDirectory() as t:
+            d = self._round(t, judges=[judge(0, scores=[(9, 10), (10, 10), (10, 10), (7, 10)])])
+            th = json.loads((Path(t) / "thresholds.json").read_text())
+            th.update({"judgeAvgMin": 75, "itemMinEach": 60})
+            (Path(t) / "thresholds.json").write_text(json.dumps(th))
+            rc, out = self._run(d)
+            self.assertEqual(rc, 0, out)
+
+    def test_reviewer_role_is_accepted(self):
+        """③: 方式B のレビュアーを role: reviewer で申告できる。"""
+        with TemporaryDirectory() as t:
+            d = self._round(t, review={"findings": []})
+            rc, out = self._run(d)
+            self.assertEqual(rc, 0, out)
+
+    def test_review_json_without_reviewer_declaration_exit2(self):
+        """③の陽性対照: review.json があるのに reviewer の申告が無ければ独立性を検証できない。"""
+        with TemporaryDirectory() as t:
+            d = self._round(t, review={"findings": []},
+                            prov=make_provenance(round_=1))  # reviewer 申告なし
+            rc, out = self._run(d)
+            self.assertEqual(rc, 2, out)
+            self.assertIn("review.json", out)
+
+    def test_reviewer_declared_without_review_json_exit2(self):
+        """③の陽性対照: reviewer を申告したのに review.json が届いていない（評価者の欠落）。"""
+        with TemporaryDirectory() as t:
+            d = self._round(t, judges=[judge(90)])
+            prov = make_provenance(round_=1, judge_ids=["j0"], reviewer_ids=["code-review"])
+            (d / "provenance.json").write_text(json.dumps(prov))
+            rc, out = self._run(d)
+            self.assertEqual(rc, 2, out)
+            self.assertIn("review.json", out)
+
+    def test_reviewer_inputs_out_of_allowed_exit2(self):
+        """③: reviewer にも入力範囲がある（設計意図を渡せば独立レビューではない）。"""
+        with TemporaryDirectory() as t:
+            d = self._round(t, review={"findings": []})
+            prov = make_provenance(round_=1, reviewer_ids=["code-review"],
+                                   reviewer_inputs=("artifact", "design_intent"))
+            (d / "provenance.json").write_text(json.dumps(prov))
+            rc, out = self._run(d)
+            self.assertEqual(rc, 2, out)
+            self.assertIn("design_intent", out)
 
 if __name__ == "__main__": unittest.main()

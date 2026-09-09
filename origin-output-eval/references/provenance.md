@@ -17,7 +17,8 @@ title: provenance.json — 評価者の申告
   "evaluators": [
     { "role": "judge",  "id": "j1", "fresh": true, "inputs": ["artifact", "rubric", "carry"] },
     { "role": "judge",  "id": "j2", "fresh": true, "inputs": ["artifact", "rubric", "carry"] },
-    { "role": "reader", "id": "r1", "fresh": true, "inputs": ["artifact"] }
+    { "role": "reader", "id": "r1", "fresh": true, "inputs": ["artifact"] },
+    { "role": "reviewer", "id": "code-review", "fresh": true, "inputs": ["artifact", "diff"] }
   ],
   "gates_passed": ["audit_html.py exit 0", "measure_lp.mjs 失格ゼロ"],
   "cache_cleared": true
@@ -34,9 +35,16 @@ title: provenance.json — 評価者の申告
 | `fresh` | すべて `true` | 同一エージェントの再評価は文脈汚染で甘くなる |
 | `inputs`（reader） | `artifact` のみ | 読者にサイド情報を渡すと「そう書いてあるから読める」に流れる。**carry も渡さない** |
 | `inputs`（judge） | `artifact` / `rubric` / `carry` のみ | 同上（設計意図・仕様書・過去版を渡さない） |
+| `inputs`（reviewer） | `artifact` / `diff` / `carry` のみ | 同上。方式B のレビュー skill に設計意図を渡せば独立レビューではない |
+| reviewer ⇄ `review.json` | 申告があれば `review.json` が実在し、`review.json` があれば申告がある | **方式B の独立性が機械検証の外に落ちる**（レビュー結果はあるが誰が出したか分からない） |
 | `cache_cleared` | `true` | 採点者が修正前の版を見て報告した実測がある |
 
 `gates_passed` は前段の決定論ゲートの申告（`protocol.md` §1）。内容は検査せず、最終報告へ中継する。
+
+## reviewer（方式B）で見ていないこと
+
+方式B の出力は `review.json` 1本なので、照合するのは**存在**だけ。reviewer を複数申告した場合に
+`findings[].source` と `id` を突き合わせることはしない。複数レビュアーの内訳は最終報告に文章で書く。
 
 ## 書くタイミング
 

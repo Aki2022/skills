@@ -267,7 +267,6 @@ def validate_acceptance_verify(label: str, body: str, errors: list[str]) -> None
 # 効かせる。逃がしたものは減る一方になるよう、リストが古びたら落ちる。
 LINK_BASELINE_RELPATH = "docs/validator-link-baseline.txt"
 
-_HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
 # Only the `](` matters: the link text may contain brackets, or a whole nested
 # image, and anchoring on `[` would skip the outer destination entirely.
 _LINK_OPEN = re.compile(r"\]\(")
@@ -288,18 +287,24 @@ def strip_code(text: str) -> str:
     tracking opened a block it never closed and silently deleted every link to
     the end of the document — the exact failure this check exists to prevent.
 
-    It was then measured. Across two real repositories the whole block layer
-    changed the finding count by **zero**: 18 and 0 with it, 18 and 0 with only
-    this line-scoped span removal. Roughly 150 lines of parsing were buying
-    nothing, at the price of an unbounded silent-loss surface.
+    It was then measured. Across 26 repositories using this convention (1,924
+    documents), removing the whole block layer changed the finding count by
+    **+5, in 2 of them** — and never lost a finding it previously had. The two
+    repositories originally sampled changed by zero. Roughly 150 lines of
+    parsing were buying five loud, baselineable false positives, at the price of
+    an unbounded silent-loss surface.
+
+    The five are real document shapes, not accidents: a `](` inside a
+    `gcloud --format` string in a shell example, a markdown table row quoted
+    inside a fence, and an `![](...)` inside an example data record.
 
     What remains cannot swallow more than one line, and the residual blind spot
     is one unpaired backtick hiding the links after it *on that line*.
 
-    The consequence for authors: a markdown link inside a fenced example is
-    reported. Write an unresolvable path as an inline code span, or record it in
-    `docs/validator-link-baseline.txt`. That is a loud, fixable cost; the
-    alternative was a quiet one.
+    The consequence for authors: a markdown link inside a fenced example — or
+    inside an HTML comment — is reported. Write an unresolvable path as an
+    inline code span, or record it in `docs/validator-link-baseline.txt`. That
+    is a loud, fixable cost; the alternative was a quiet one.
     """
     return "\n".join(_INLINE_CODE.sub(" ", line) for line in text.splitlines())
 
@@ -424,13 +429,16 @@ def validate_relative_links(
 
     Known blind spots, both silent, both bounded to what they can reach:
 
-    * an unpaired backtick hides the links after it on that line;
+    * an unpaired backtick hides the links after it on that line
+      (the span match is lazy so that a link *between* two spans survives;
+      `tests/test_doc_update.py` pins that);
     * a baseline entry for a target that appears more than once in a file
       exempts every occurrence of it, including one added later.
 
-    Links inside fenced code blocks are **reported**, not ignored. Tracking
-    fences was tried and abandoned: it changed the finding count by zero across
-    two real repositories while repeatedly introducing unbounded silent loss.
+    Links inside fenced code blocks and HTML comments are **reported**, not
+    ignored. Tracking them was tried and abandoned: across 26 repositories it
+    cost 5 loud false positives in 2 of them while repeatedly introducing
+    unbounded silent loss, and it never found a link this does not.
 
     An adopting repository can record existing rot in
     `docs/validator-link-baseline.txt`, one entry per line, preferably as

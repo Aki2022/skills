@@ -55,6 +55,14 @@ forgotten. First-permissions-then-docs-then-git keeps one reviewable,
 self-consistent commit whose docs match what actually happened to any access
 this session was granted.
 
+### Human review handoff
+
+Before Step 3, if a related current guide contains a `## 承認前レビュー` section, read it and
+surface each listed decision in the handoff. Honor any item that the guide marks as human-gated;
+tests, lint, and an archived issue are evidence, not a substitute for that approval. Do not copy
+the checklist into `origin-trouble-log`: that skill stores observed trouble evidence, while the
+guide remains the current operational procedure.
+
 ## How to run it
 
 ### Step 0 — origin-permission-audit (only if this session granted elevated access)

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Daily aggregate-only Codex/Claude skill usage measurement.
+
+  The shell expands HOME at launch time so this template contains no
+  account-specific absolute path.  The installer creates the local state
+  directory before bootstrapping the job.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.origin.skill-usage-metrics</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/sh</string>
+        <string>-c</string>
+        <string>umask 077; exec /usr/bin/python3 "$HOME/.agents/skills/origin-skill-commonize/scripts/run_skill_usage_metrics.py" &gt;&gt; "$HOME/.local/state/origin-skill-usage/launchd.stdout.log" 2&gt;&gt; "$HOME/.local/state/origin-skill-usage/launchd.stderr.log"</string>
+    </array>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>3</integer>
+        <key>Minute</key>
+        <integer>30</integer>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+    <key>LowPriorityIO</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>3600</integer>
+</dict>
+</plist>

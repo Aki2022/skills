@@ -1,5 +1,5 @@
 ---
-updated_at: 2026-09-01
+updated_at: 2026-09-10
 current_focus:
 ---
 
@@ -22,13 +22,14 @@ Read this file first. Do not scan all docs unless needed. Read the active workst
 
 ## ADRs
 
-
 ## Active Issues
 
 
 ## Guides
 
 （スキルの現行挙動は各 skill の SKILL.md / references が正典であり、docs/guides は使わない）
+
+- [GUIDE-skill-usage-metrics](guides/GUIDE-skill-usage-metrics.md) — Codex/Claude の明示 skill 使用量を集計する手順
 
 ## Archive Policy
 

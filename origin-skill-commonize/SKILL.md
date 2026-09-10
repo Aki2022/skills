@@ -398,6 +398,12 @@ plugin cache・Codex `.system` の中身は読んだり変更したりしない�
 実行タイミング: スキルの新規作成・編集・移動・削除の直後（この Skill の作業の一部として）。
 サードパーティ由来スキル（ミラー）の FAIL は**中身を手で直さず、上流から再取得して同期する**（ミラー規約: バイト同一）。同値・鮮度は `scripts/check_mirrors.sh` で確認する。第三者本文を手で直さず、修正対象は origin-* など自前スキルのみとする。
 
+使用実績を定量化するときは `scripts/measure_skill_usage.py` を使う。Claude/Codex の履歴 root と
+正典 root を明示して、実ユーザーメッセージに残る `$skill` / `/skill` だけを account 別に集計する。
+本文・path・session ID は出力せず、証拠不足は `unknown` にする。出力保存は `--output` または
+`--append` を指定した場合だけで、スケジューラの導入や削除判断はこのコマンドの責務に含めない。
+使い方と schema は `docs/guides/GUIDE-skill-usage-metrics.md` を参照する。
+
 ### トラブル・摩擦の記録は所有しない
 
 記録先は `origin-trouble-log`（保管ルートは `ORIGIN_TROUBLE_LOG_ROOT`）へ移した。

@@ -102,6 +102,37 @@ class ScanFilesTest(unittest.TestCase):
             rc, out = self._run("scan-files", str(f))
             self.assertEqual(rc, 0, out)
 
+    def test_scans_only_the_paths_given_not_the_cwd(self):
+        """`gitleaks dir` は path を1つしか取らない（Usage: gitleaks dir [flags] [path]）。
+        scan_files が "${paths[@]}" を渡すと、2つ以上のとき gitleaks は**カレントディレクトリ**を
+        検査する。「A と B を検査して」と頼むと、いる場所を検査する — 頼んだ対象を検査して
+        いないのに緑/赤を返すので、常に赤くなるより深刻。
+
+        秘密を使わずに突く: gitleaks が報告する「scanned ~N bytes」を見れば、
+        何を検査したかが分かる。CWD に大きなファイルを置き、小さな2ディレクトリを指定して、
+        報告バイト数が小さいままであることを確かめる。
+        """
+        import re
+        with self._homedir_tmp() as t:
+            d = Path(t)
+            # CWD に置く大きなファイル（指定していないので検査されてはいけない）
+            (d / "big.txt").write_text("filler line for size\n" * 20000)
+            big = (d / "big.txt").stat().st_size
+            for name in ("a", "b"):
+                sub = d / name
+                sub.mkdir()
+                (sub / f"{name}.md").write_text(f"tiny content in {name}\n")
+            r = subprocess.run([str(VIBE_GUARD), "scan-files", str(d / "a"), str(d / "b")],
+                               capture_output=True, text=True, cwd=str(d))
+            out = r.stdout + r.stderr
+            scanned = [int(m) for m in re.findall(r"scanned ~(\d+) bytes", out)]
+            self.assertTrue(scanned, f"gitleaks の scanned 行が読めない:\n{out[:400]}")
+            total = sum(scanned)
+            self.assertLess(
+                total, big // 10,
+                f"指定した2ディレクトリ（数十バイト）ではなく CWD を検査している。"
+                f"scanned={total} bytes / CWD の big.txt だけで {big} bytes\n{out[:400]}")
+
     def test_scan_text_not_regressed(self):
         """退行防止: scan-text（push の判定に使う経路）が清潔/汚染で 0/1 を返す。"""
         with self._homedir_tmp() as t:

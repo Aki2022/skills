@@ -58,3 +58,10 @@ mirrors:
     upstream_version: 1.5.0
     fetched_at: 2026-09-07
     local_copy: ~/.local/share/uv/tools/google-agents-cli/lib/python3.12/site-packages/google/agents/cli/skills/data/google-agents-cli-workflow
+  # typesafe-ai は GitHub repo が上流で、ローカルに上流コピーを置く tool cache が無い。
+  # local_copy は省略し、同値検査は SKIP・鮮度検査のみとする（再取得は人間が起動する）。
+  - dir: typesafe-ai
+    upstream: typesafe-ai/skills
+    upstream_path: skills/typesafe-ai
+    upstream_version: 65a39f393687675ce170e6094757de20370365b9
+    fetched_at: 2026-09-19

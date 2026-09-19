@@ -57,7 +57,9 @@ for root in "${roots[@]}"; do
     [ -d "$dir" ] || continue
     name=$(basename "$dir")
     # skill ではない管理ディレクトリを除外（docs/ は origin-doc-update の scaffold）
-    case "$name" in docs|node_modules|.git) continue ;; esac
+    # synced/ は Claude Code のスキル同期バケット（UUID ディレクトリと manifest.json）で、
+    # skill ではなくアプリ管理のインフラ。正典 root 直下に現れるが S1 の対象ではない。
+    case "$name" in docs|node_modules|synced|.git) continue ;; esac
     md="$dir/SKILL.md"
 
     # S1
@@ -109,7 +111,12 @@ for root in "${roots[@]}"; do
           fail "S4 $name: 参照 parser の出力が不正"
           ;;
       esac
-    done <<< "$refs_output"
+      # process substitution であって here-string ではない。here-string だと bash が
+      # 内容をパイプへ書き、その読み手が同じプロセスのこのループになる。参照が多い
+      # skill（cloudflare / agents-sdk 等）で内容がパイプバッファ 16KB を超えると、
+      # ループが読み始める前に write(2) が埋まって自己デッドロックする。実測では
+      # skill_lint が 1 日以上ぶら下がったまま誰も気づかなかった。
+    done < <(printf '%s\n' "$refs_output")
 
     # S5: 壊れた symlink
     while IFS= read -r link; do

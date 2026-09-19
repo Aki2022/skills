@@ -1,0 +1,36 @@
+# origin-* skill 名の末尾に置ける動詞（ADR-20260915-unify-skill-naming-to-object-action）
+#
+# 規則: origin-<対象>-<動作>。末尾は必ずこのリストの語。
+# これは allowlist であって denylist ではない。新しい動詞が要るときは
+# 「落ちてから足す」— 知らない語を黙って通すより、止まって人間が判断する側に倒す。
+# 幅広い動詞（handle / work / manage / process 等）は足さない。情報を持たない動詞は
+# 「名前から何をするか読める」という規則の目的を満たさず、D型を動詞の面で復活させる。
+
+audit
+author
+authenticate
+build
+clean
+close
+commonize
+coordinate
+design
+drain
+escalate
+eval
+gen
+grill
+harden
+implement
+log
+maintain
+monitor
+provision
+query
+research
+resolve
+review
+route
+run
+triage
+update

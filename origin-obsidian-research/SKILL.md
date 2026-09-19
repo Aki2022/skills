@@ -16,19 +16,24 @@ vault を vector 検索して、テーマ・観点で整理し出典リンク付
 
 ## 手順
 
-1. vault のパスを取得する（絶対パスは秘匿情報。応答やログに出さない）:
+1. `vector.sh` のパスを取得する（絶対パスは秘匿情報。応答やログに出さない）:
 
    ```bash
-   VAULT="$(cat "<skill-dir>/vault_path.local" 2>/dev/null || echo "$OBSIDIAN_VAULT")"
+   CODE="$(cat "<skill-dir>/code_path.local" 2>/dev/null || echo "$HOME/code/obsidian_code")"
    ```
 
-   取れない場合は `script/vector.sh` を含むディレクトリをユーザーに聞き、
-   `<skill-dir>/vault_path.local` に1行で書く（gitignore 済み）。
+   **`vector.sh` はコード側リポジトリ `obsidian_code` にある。** vault（データ側）の
+   `script/` は 2 リポジトリ分離で空になっており、そこを叩くと
+   `No such file or directory` で空振りする。データ root は `vector.sh` が
+   `.env` の `OBSIDIAN_DATA_ROOT` から自力で解決するため、vault のパスは渡さなくてよい。
+
+   取れない場合は `script/vector.sh` を含むリポジトリの root をユーザーに聞き、
+   `<skill-dir>/code_path.local` に1行で書く（gitignore 済み）。
 
 2. 検索する（出典リンクを返すので `--dedupe --abs-links` を常に付ける）:
 
    ```bash
-   bash "$VAULT/script/vector.sh" search "大腸がん 診療 課題" --dedupe --abs-links
+   bash "$CODE/script/vector.sh" search "大腸がん 診療 課題" --dedupe --abs-links
    ```
 
    観点が複数で1クエリに収まらなければ複数回呼ぶ。絞るなら `--limit N`。
@@ -50,4 +55,8 @@ vault を vector 検索して、テーマ・観点で整理し出典リンク付
 - ノート内の画像はローカル参照のため表示されない（本文テキストは読める）。
 - リンクは mac ではクリックで開けるが、スマホからは開けない。スマホで中身を読みたい時は
   「このノートを読んで」と頼めばセッションがファイルを読んで返す。
-- 索引が古く最新ノートが出ない時は `bash "$VAULT/script/vector.sh" update` を案内する。
+- 索引が古く最新ノートが出ない時は `bash "$CODE/script/vector.sh" update` を案内する。
+- vault はクラウド同期ストレージ上にあるため、ヒットしたノートの本文読み込みが
+  `ETIMEDOUT` / `Operation timed out` で失敗することがある（`ls` は通るのに read だけ落ちる）。
+  数回のリトライで復帰しなければ、preview だけで答えを作り、**本文を読めなかったノートを
+  明示して報告する**。読めた前提で書かない。

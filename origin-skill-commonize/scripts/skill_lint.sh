@@ -14,6 +14,8 @@
 #   S6: 同じ正典にある hooks.json の bash 参照先が実在する
 #   S7: skill 間の機械的な重複候補を warn-only で報告する
 #   S8: 各 skill の scripts/tests/test_*.py を pytest で実行する
+#   S9: 自前 skill の名前が own-<対象>-<動作>（末尾は動詞）で、語数が所属と一致する
+#       3語=グローバル正典 $HOME/.agents/skills / 4語=リポジトリ固有 <repo>/.agents/skills
 set -u
 
 FAIL=0
@@ -48,9 +50,30 @@ fi
 [ -n "$pytest_skip_reason" ] && note "S8: skip（$pytest_skip_reason のため pytest を実行しない）"
 pytest_ran=0
 
+# S9 の語彙。allowlist（知らない語は通さない）と、既存逸脱の burn-down リスト。
+naming_refs="$(cd "$(dirname "${BASH_SOURCE[0]}")/../references" && pwd)"
+naming_verbs_file="$naming_refs/naming-verbs.txt"
+naming_exceptions_file="$naming_refs/naming-exceptions.txt"
+if [ ! -f "$naming_verbs_file" ]; then
+  fail "S9: naming-verbs.txt が無い（動詞 allowlist が読めないと検査が空振りする）"
+  exit "$FAIL"
+fi
+naming_verbs=" $(grep -v '^[[:space:]]*#' "$naming_verbs_file" | tr -s '[:space:]' ' ') "
+naming_exceptions=" "
+naming_home_root=$(cd "$HOME/.agents/skills" 2>/dev/null && pwd -P || echo "")
+[ -f "$naming_exceptions_file" ] && \
+  naming_exceptions=" $(grep -v '^[[:space:]]*#' "$naming_exceptions_file" | tr -s '[:space:]' ' ') "
+
 root_index=0
 for root in "${roots[@]}"; do
   [ -d "$root" ] || { note "skip (not a directory): $root"; continue; }
+  # S9: この root がグローバル正典か、リポジトリ固有かで期待語数が変わる
+  naming_root_real=$(cd "$root" 2>/dev/null && pwd -P || echo "$root")
+  if [ -n "$naming_home_root" ] && [ "$naming_root_real" = "$naming_home_root" ]; then
+    naming_want=3; naming_where="グローバル正典"
+  else
+    naming_want=4; naming_where="リポジトリ固有"
+  fi
   names_file="$scratch_dir/names.$root_index"
   : > "$names_file"
   for dir in "$root"/*/; do
@@ -80,6 +103,31 @@ for root in "${roots[@]}"; do
     if [ -n "$fm_name" ] && [ "$fm_name" != "$name" ]; then
       fail "S3 $name: frontmatter name '$fm_name' がディレクトリ名と不一致"
     fi
+
+    # S9: 自前 skill の命名規則。第三者ミラー（cloudflare-* 等）は対象外。
+    case "$name" in
+      own-*|origin-*)
+        case "$naming_exceptions" in
+          *" $name "*) : ;;   # burn-down リスト掲載。改名時に1行消す
+          *)
+            case "$name" in
+              origin-*)
+                fail "S9 $name: 接頭辞は own-（origin- は移行対象。references/naming-exceptions.txt 参照）"
+                ;;
+              *)
+                naming_last="${name##*-}"
+                naming_segments=$(( $(printf '%s' "$name" | tr -cd '-' | wc -c) + 1 ))
+                if [ "$naming_segments" -ne "$naming_want" ]; then
+                  fail "S9 $name: ${naming_where}は${naming_want}語（現在 ${naming_segments}語）。語数が所属を表す"
+                elif case "$naming_verbs" in *" $naming_last "*) false ;; *) true ;; esac; then
+                  fail "S9 $name: 末尾 '$naming_last' が動詞リストに無い（references/naming-verbs.txt）"
+                fi
+                ;;
+            esac
+            ;;
+        esac
+        ;;
+    esac
 
     if [ -n "$fm_name" ]; then
       previous=$(awk -F '\t' -v key="$fm_name" '$1 == key {print $2; exit}' "$names_file")

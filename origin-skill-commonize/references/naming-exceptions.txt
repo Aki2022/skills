@@ -1,0 +1,48 @@
+# 命名規則 S9 の猶予リスト（ADR-20260915 時点で既に存在した自前 skill 35本）
+#
+# **新規 skill をここに足してはいけない。** これは burn-down リストで、
+# own- へ改名した skill を1本ずつ消していく。空になったら S9 の猶予は終わる。
+# 常に赤い検査を残さないための暫定措置であって、規則の例外ではない。
+#
+# 接頭辞が own- に変わったので、**逸脱24本だけでなく35本すべて**が改名対象。
+# 改名先は biz_ops の ISSUE-20260905-improve-loop-skill-naming-convention の表が正典。
+# 実行は WS-20260919-skill-naming-own-prefix-migration。参照の少ない順に1本ずつ。
+
+# --- グローバル正典 ~/.agents/skills/ (26) → own-<対象>-<動作> 3語 ---
+origin-bizops-mole-maintenance
+origin-vibe-security-setup
+origin-r-coding-style
+origin-browser-automation-policy
+origin-quarto-routing
+origin-gcp-project-setup
+origin-grill
+origin-quarto
+origin-git-cleanup
+origin-design-check-routing
+origin-close-session
+origin-ws-loop
+origin-brand
+origin-goal
+origin-pptx
+origin-obsidian-research
+origin-website-audit
+origin-project-update
+origin-permission-audit
+origin-lp-review
+origin-output-eval
+origin-image-gen
+origin-web-design
+origin-trouble-log
+origin-doc-update
+origin-skill-commonize
+
+# --- リポジトリ固有 <repo>/.agents/skills/ (9) → own-<repo>-<対象>-<動作> 4語 ---
+origin-trial-driven-development
+origin-trade-trial-batch
+origin-trade-data-access
+origin-trade-cycle-manager
+origin-yorisoi-engagement-monitoring
+origin-bizops-daily-mail
+origin-gcp-auth
+origin-stale-approval-report
+origin-consumer-capability-feedback

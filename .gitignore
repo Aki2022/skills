@@ -1,5 +1,6 @@
 .DS_Store
 origin-obsidian-research/vault_path.local
+origin-obsidian-research/code_path.local
 
 # Python bytecode（生成物。インタプリタのバージョンごとに増えるため追跡しない）
 __pycache__/

@@ -12,7 +12,7 @@ description: >-
   コピー作成、正典ディレクトリの削除）をしようとする時。グローバルでもリポジトリ単位でも適用される。
   スキルの静的チェック（lint）もこのスキルが所有する。「スキルを改善したい」「スキルの品質を
   チェックして」と言われた時もこのスキルを使う。トラブル・摩擦の**記録**は所有しない
-  （`origin-trouble-log` が所有する）。
+  （`own-trouble-log` が所有する）。
 ---
 
 # Agent Config Symlink 統一
@@ -112,7 +112,7 @@ repo トークンは `trade` / `yorisoi` / `bizops` / `iscore` / `marketing`。
 `-cleanup` `-maintenance` `-routing` `-warehouse` 等）と、`動作-対象` の逆順。
 
 **skill 名は description と並んで発火条件そのもの**で、動作の無い名前は「何をする skill か」を
-名前から読めなくする。実害があった — `origin-design-runtime` と `origin-design-check-routing` の
+名前から読めなくする。実害があった — `origin-design-runtime` と `own-design-route` の
 役割が名前から区別できず、人間が指摘して初めて分かった。名詞末尾が機能を隠していた実例は
 ほかにも4件あり、いずれも description を読むと名前と実体が違っていた
 （`-policy` の実体は振り分け、`-access` の実体は質問への回答、`-report` の実体は実装）。
@@ -514,7 +514,7 @@ python3 scripts/sync_per_skill_aliases.py \
 
 ### トラブル・摩擦の記録は所有しない
 
-記録先は `origin-trouble-log`（保管ルートは `ORIGIN_TROUBLE_LOG_ROOT`）へ移した。
+記録先は `own-trouble-log`（保管ルートは `ORIGIN_TROUBLE_LOG_ROOT`）へ移した。
 `~/.agents/skills/FRICTION.md` は廃止（ファイル自体は移行の道標として期限付きで残す）。
 
 移した理由: 記録対象は skill 起因に限らず、skill を使っていない場面の作業規律の
@@ -523,13 +523,13 @@ python3 scripts/sync_per_skill_aliases.py \
 このスキルの scope と一致しない。
 
 **受け渡しの境界。** 「skill の記述が現実とズレていた」型のトラブルは、
-**集めるのが `origin-trouble-log`・直すのがこのスキル**。境界を書かないと
+**集めるのが `own-trouble-log`・直すのがこのスキル**。境界を書かないと
 どちらも動かないケースが生じる。
 
 改善の原則は変わらない。**記録と改善を分離し、改善は需要駆動で人間が判断してから**
 このスキルの手順で行う。測定データなしの定期自動改善はやらない。
 同一スキルに記録が複数件溜まったら、skill-creator の eval 付き改善ループを回す
-（`origin-trouble-log` の `skills` フィールドで絞り込める）。
+（`own-trouble-log` の `skills` フィールドで絞り込める）。
 
 ## クイックリファレンス
 

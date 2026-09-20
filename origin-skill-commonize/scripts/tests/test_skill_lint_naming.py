@@ -126,7 +126,7 @@ class NamingRuleTests(unittest.TestCase):
         with TemporaryDirectory() as d:
             home = Path(d)
             root = self._global(home)
-            _write_skill(root, "origin-pptx")
+            _write_skill(root, "own-pptx-build")
             r = _lint_home(root, home)
             self.assertEqual(r.returncode, 0, f"猶予リストの skill は通すべき\n{r.stdout}{r.stderr}")
 

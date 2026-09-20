@@ -9,30 +9,6 @@
 # 実行は WS-20260919-skill-naming-own-prefix-migration。参照の少ない順に1本ずつ。
 
 # --- グローバル正典 ~/.agents/skills/ (26) → own-<対象>-<動作> 3語 ---
-origin-bizops-mole-maintenance
-origin-vibe-security-setup
-origin-r-coding-style
-origin-browser-automation-policy
-origin-quarto-routing
-origin-gcp-project-setup
-origin-grill
-origin-quarto
-origin-git-cleanup
-origin-design-check-routing
-origin-close-session
-origin-ws-loop
-origin-brand
-origin-goal
-origin-pptx
-origin-obsidian-research
-origin-website-audit
-origin-project-update
-origin-permission-audit
-origin-lp-review
-origin-output-eval
-origin-image-gen
-origin-web-design
-origin-trouble-log
 origin-doc-update
 origin-skill-commonize
 

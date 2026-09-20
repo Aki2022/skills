@@ -71,7 +71,7 @@ launchctl bootout "gui/$(id -u)/com.origin.skill-usage-metrics"
 ## 承認前レビュー
 
 commit または push の前に、次の4項目を人間ゲートとして確認する。これは自動承認ではなく、
-`origin-close-session` が完了時に案内するための現在の checklist である。
+`own-session-close` が完了時に案内するための現在の checklist である。
 
 1. **スケジュール** — 毎日03:30、30日窓、180日保持、`RunAtLoad=false` の設定を許可する。
 2. **保存データ** — `~/.local/state/origin-skill-usage/` への aggregate JSONL 保存を許可し、
@@ -88,7 +88,7 @@ python3 ~/.agents/skills/origin-skill-commonize/scripts/install_skill_usage_laun
 launchctl print "gui/$(id -u)/com.origin.skill-usage-metrics"
 ```
 
-この checklist 自体は `origin-trouble-log` の entry に複製しない。実際に確認を漏らした、
+この checklist 自体は `own-trouble-log` の entry に複製しない。実際に確認を漏らした、
 誤った完了を報告した、または同型の摩擦が発生した場合だけ、同 skill の証拠 entry として記録する。
 
 出力の主な項目は次の通り。

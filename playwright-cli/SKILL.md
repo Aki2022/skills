@@ -6,7 +6,7 @@ allowed-tools: Bash(playwright-cli:*) Bash(npx:*) Bash(npm:*)
 
 # Browser Automation with playwright-cli
 
-If the task needs a logged-in session or Chrome specifically, check the `origin-browser-automation-policy` Skill first (headless default, dedicated profile, when Chrome vs playwright-cli).
+If the task needs a logged-in session or Chrome specifically, check the `own-browser-route` Skill first (headless default, dedicated profile, when Chrome vs playwright-cli).
 
 ## Quick start
 

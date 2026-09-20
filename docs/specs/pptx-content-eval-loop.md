@@ -7,15 +7,15 @@ related_guides: []
 affected_workstreams: []
 ---
 
-# origin-pptx コンテンツ評価ループの公式化
+# own-pptx-build コンテンツ評価ループの公式化
 
 ## Purpose
 
-20260831_nissay デッキ制作（kanpu_kaigo リポ）でアドホックに運用して有効だった「subagent 評価を基準点まで反復するループ」を、origin-pptx スキルの正式工程として組み込む。あわせて同セッションの実測トラブル3件（検分の誤ok・バッチ完了判定の穴・審査合格と可読性の乖離）への対策を skill 本体へ反映する。
+20260831_nissay デッキ制作（kanpu_kaigo リポ）でアドホックに運用して有効だった「subagent 評価を基準点まで反復するループ」を、own-pptx-build スキルの正式工程として組み込む。あわせて同セッションの実測トラブル3件（検分の誤ok・バッチ完了判定の穴・審査合格と可読性の乖離）への対策を skill 本体へ反映する。
 
 ## Problem
 
-- origin-pptx の評価系は ②.5 persona-eval（任意・合成デッキ対象）と ④ VLM 比較（構図一致）のみで、**①テキスト段階（base.md / outline.md）の内容品質を測る工程が無い**。今回そこをアドホックに補い、v8→v14 の品質を駆動した
+- own-pptx-build の評価系は ②.5 persona-eval（任意・合成デッキ対象）と ④ VLM 比較（構図一致）のみで、**①テキスト段階（base.md / outline.md）の内容品質を測る工程が無い**。今回そこをアドホックに補い、v8→v14 の品質を駆動した
 - 審査員型ペルソナだけを回すと防御的追記が積み上がり可読性が劣化する（2026-08-31 実測: AI審査6回合格の直後に人間初見レビューで本編全面差し戻し・モックアップ20枚廃棄）
 - 評価はトークン大量消費（今回の Luna 審査は入力 0.8〜1.4M/人/回）。**何を読ませ・どのモデルで回すか**の規律が無いと運用できない
 
@@ -51,7 +51,7 @@ affected_workstreams: []
 
 ### Functional
 
-- **発火条件＝計画承認制（2026-08-31 決定・案A）**: 各段階（base/outline/画像）で orchestrator が評価計画（対象・評価者の構成と人数・モデル・回数上限・概算トークン）を必ず提案し、人間の承認後にのみ実行する。承認なしの評価ループは回さない。自律ラン（origin-goal 等）で使う場合は、WS の Authorization Envelope に評価計画の事前承認を明記することで往復を省略できる
+- **発火条件＝計画承認制（2026-08-31 決定・案A）**: 各段階（base/outline/画像）で orchestrator が評価計画（対象・評価者の構成と人数・モデル・回数上限・概算トークン）を必ず提案し、人間の承認後にのみ実行する。承認なしの評価ループは回さない。自律ラン（own-goal-run 等）で使う場合は、WS の Authorization Envelope に評価計画の事前承認を明記することで往復を省略できる
 
 - **評価者の構成＝2役評価＋修正時アドバイザー（2026-08-31 決定・案A）**: 評価ループは**審査員**（rubric採点・verdict・must_fix・advice欄）と**初見読者**（採点なし・予備知識ゼロで対象だけを読み、スライド別の 分かる/引っかかる/分からない と素朴な疑問を返す）の2役で回す。**初見読者の「分からない」が本編スライドに1枚以上あれば must-fix 相当としてループ継続**（可読性を合否に組み込む）。**アドバイザー（ゼロベース設計者）は評価者ではなく修正フェーズの道具**——不合格箇所に対して「構成案を3つ＋推奨1つ＋根拠」を出させる形式で投入する（2026-08-31 の S2/S3/S9 再設計で実証済み・fail 箇所だけに使うためトークン効率が良い）
 - **モデル割当の既定（2026-08-31 決定・skill-config `contentEval` 節に記載・デッキごとに変更可）**:
@@ -89,8 +89,8 @@ affected_workstreams: []
 
 ## Acceptance Criteria
 
-1. `origin-pptx/references/content-eval.md` が存在し、本 spec の決定（計画承認制・2役＋修正時アドバイザー・読者評価の対象単独規約・段階マップ・閾値/回数既定・フレッシュ評価・収束ガード）を全て含む。`persona-eval.md` は残存しない
-2. `git grep -l "persona-eval" -- origin-pptx/` が 0 件（参照の付け替え漏れなし）
+1. `own-pptx-build/references/content-eval.md` が存在し、本 spec の決定（計画承認制・2役＋修正時アドバイザー・読者評価の対象単独規約・段階マップ・閾値/回数既定・フレッシュ評価・収束ガード）を全て含む。`persona-eval.md` は残存しない
+2. `git grep -l "persona-eval" -- own-pptx-build/` が 0 件（参照の付け替え漏れなし）
 3. `style-guide/skill-config.json` に `contentEval` 節（モデル割当・passThreshold・maxRounds）があり JSON として妥当
 4. `references/pipeline.md` の④検分・VLM比較に「seen（実写の書き出し）を判定前に必須出力とし、書き出しなしの ok は無効」が明記されている
 5. `references/image_gen.md` にバッチ生成規律（旧成果物の事前退避・回収失敗の exit 反映・開始前スモーク1枚）が明記され、`scripts/run_mockups.sh`（正典ランナー雛形）が存在する
@@ -100,7 +100,7 @@ affected_workstreams: []
 
 ## Impact on Existing System
 
-- `origin-pptx/SKILL.md`（①手順・パイプライン表）、`references/persona-eval.md`、`references/pipeline.md`（④検分）、`references/image_gen.md`（バッチ）、`style-guide/skill-config.json`（モデル割当）
+- `own-pptx-build/SKILL.md`（①手順・パイプライン表）、`references/persona-eval.md`、`references/pipeline.md`（④検分）、`references/image_gen.md`（バッチ）、`style-guide/skill-config.json`（モデル割当）
 - 実装は origin-skill-commonize の規約（in-place 編集・lint）に従う
 
 ## Deferred Decisions

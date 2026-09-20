@@ -52,6 +52,7 @@ def apply_archive(
     index_path: Optional[Path] = None,
     staged_index: Optional[Path] = None,
     staged_index_restore: Optional[Path] = None,
+    extra: Optional[list[tuple[Path, Path, Path]]] = None,
 ) -> None:
     """Install staged archive/index contents, restoring all files on failure.
 
@@ -59,6 +60,12 @@ def apply_archive(
     be on the same filesystem, as they are for ``docs/*/archive``. A failure in a
     later replacement therefore does not leave an archived document with a stale
     active index row.
+
+    ``extra`` carries ``(path, staged_new, staged_restore)`` for every other file
+    the move rewrites -- the referring documents whose relative links must follow
+    the archived file. They are installed after the index and rolled back before
+    it, so a partial failure never leaves a repointed referrer beside a document
+    that stayed put.
     """
     source = Path(source)
     destination = Path(destination)
@@ -73,9 +80,11 @@ def apply_archive(
         staged_index is None or staged_index_restore is None
     ):
         raise ValueError("index transaction requires both staged index files")
+    extra = [(Path(a), Path(b), Path(c)) for a, b, c in (extra or [])]
 
     moved = False
     installed_new_index = False
+    installed_extra: list[tuple[Path, Path]] = []
     try:
         os.replace(source, destination)
         moved = True
@@ -83,8 +92,17 @@ def apply_archive(
         if index_path is not None and staged_index is not None:
             os.replace(staged_index, index_path)
             installed_new_index = True
+        for path, staged_new, staged_restore in extra:
+            os.replace(staged_new, path)
+            installed_extra.append((path, staged_restore))
     except BaseException as error:
         rollback_errors: list[str] = []
+
+        for path, staged_restore in reversed(installed_extra):
+            try:
+                os.replace(staged_restore, path)
+            except OSError as rollback_error:
+                rollback_errors.append(f"referrer rollback failed for {path}: {rollback_error}")
 
         if installed_new_index and index_path is not None and staged_index_restore is not None:
             try:

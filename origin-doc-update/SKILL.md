@@ -16,6 +16,7 @@ Treat `docs/` as persistent AI context. Keep each fact in one layer only.
 | `docs/guides/`      | Current implemented behavior; source of truth                                  |
 | `docs/adrs/`        | Decision rationale, alternatives, and consequences; historical decision record |
 | `*/archive/`        | Historical work context, not current truth                                     |
+| `docs/log/`         | Narrative moved out of the index and hygiene reports; history, never current truth |
 
 Do not copy implementation history into guides or current behavior into workstreams. Keep decision rationale in an ADR and link to it from the relevant spec, workstream/issue, or guide.
 
@@ -111,6 +112,7 @@ Write guides as current truth, not as a changelog. Include what the system does,
 - When that change follows a qualifying decision, update the related spec with the current policy and link the ADR; do not duplicate the full rationale in the spec.
 - Keep chronological investigation and abandoned approaches in the active work unit, then archive it.
 - Keep `docs/00_index.md` as links plus one-line routing descriptions. Do not add a second progress dashboard unless ordering across many workstreams cannot fit in the index.
+- The index is injected whole at session start and must stay **under 32 KB with no line over 500 characters**; `validate_repo_docs.py` rejects both. Past the ceiling the hook injects only `## Current Focus`. Progress narrative, postmortems, and metrics belong in the work unit or in `docs/log/`, never in the index. `docs_hygiene.py --fix` moves them there and shortens over-long rows; when the ceiling still cannot be met the row count is the problem and only closing work fixes it.
 
 ## Complete work
 
@@ -122,16 +124,26 @@ Before archive:
 4. Verify qualifying decisions have an ADR in `docs/adrs/`, with a settled status or an explicit proposed human gate, and that related specs/guides/work units link to it.
 5. Update specs if direction changed.
 6. Reach the recorded human gate or record why the workstream stopped.
-7. Run `validate_repo_docs.py <repo path>`. Name the repository rather than
+7. Run `docs_hygiene.py <repo path> --fix --report`, then read the report it
+   names. The fixes are mechanical (archive what says `complete`, move index
+   narrative to `docs/log/`, normalize status aliases, add missing front matter
+   from git dates); the report lists what needs a decision — issues whose
+   branch is gone, untouched work, dead references, history mixed into guides —
+   and every count is printed, zero included. Decide the reported items that
+   belong to this session's work; leave the rest in the report.
+8. Run `validate_repo_docs.py <repo path>`. Name the repository rather than
    relying on the current directory: reached through an orchestrator, the current
    directory is a different repository, whose docs would validate clean and be
    reported as this one's result. Check the `validated:` line it prints.
-8. Archive the work unit and update `docs/00_index.md`. The archive scripts accept an issue/
+9. Archive the work unit and update `docs/00_index.md`. The archive scripts accept an issue/
    workstream id, `.md` filename, or path, stage the document/index changes before applying them,
    and roll back both files if a later replacement fails. They print the removal count plus the
    exact index lines they changed. Treat a zero or unexpected count as a stop condition and
-   inspect the diff before continuing.
-9. Hand merged branch cleanup to `origin-git-cleanup`.
+   inspect the diff before continuing. An entry the row matcher does not recognize (prose, a
+   nested bullet) is repointed at the archive path instead of being left pointing at the file
+   that just moved; pass `--keep-row` when the index's own policy keeps completed rows, and the
+   row is repointed in place rather than removed.
+10. Hand merged branch cleanup to `origin-git-cleanup`.
 
 ## Resume and onboard
 
@@ -143,7 +155,13 @@ When onboarding scattered docs, initialize the scaffold, classify each file by t
 
 Keep hooks best-effort and non-blocking:
 
-- `session_start.sh` may inject only `docs/00_index.md`.
+- `session_start.sh` injects a routing digest of `docs/00_index.md` built by
+  `index_digest.py`, never the file itself. A hook's output reaches the agent inline
+  only up to about 10,000 characters (measured 2026-09-19: largest delivered 8,957,
+  smallest spilled 10,019); past that it is written to a file and the agent receives
+  a 2 KB preview, so a whole-file injection is read by nobody and nothing reports it.
+  The digest keeps every active entry with one line of routing, counts what it
+  dropped, and names the full file.
 - `stop_nudge.sh` may emit one short reminder when non-doc changes lack docs changes.
 - Do not force-load this full skill from a hook and do not block commits or task completion from a semantic guess.
 
@@ -178,6 +196,17 @@ Scripts in `scripts/`:
 - `archive_workstream.py <workstream> [--repo <repo>]`
 - `archive_issue.py <issue> [--repo <repo>]`
 - `archive_transaction.py`: stage and atomically roll back archive/index file updates
+- `docs_hygiene.py <repo> [--fix] [--report] [--json]`: `--fix` applies the
+  mechanical repairs above; `--report` writes `docs/log/hygiene-YYYYMMDD.md` with
+  the judgment candidates (R1 stale + branch gone, R2 untouched 60 days, R3 dead
+  `npm run`/workflow/path references, R4 history in guides or specs, R5
+  non-canonical directories and duplicate basenames, R6 baseline debt). Without
+  `--fix` it is a dry run that counts. It uses git dates and never an LLM, so it
+  is safe to run across every governed repository. Exit 2 when the repository has
+  no `docs/00_index.md`. Do not run `--fix` against a deliberately shaped fixture
+  repository (e.g. `ws-loop-fixture`).
+- `index_digest.py <path to docs/00_index.md>`: the routing digest the SessionStart
+  hook injects, bounded in characters rather than bytes
 - `validate_repo_docs.py <repo>` (prints the repository it validated)
 
   It also resolves every relative link under `docs/**/*.md` and fails on any

@@ -411,6 +411,18 @@ Claude Code v2.1.277以降の対応sessionは、作業ディレクトリと祖�
 `.claude/CLAUDE.md`、`CLAUDE.local.md`が無いとき、リポジトリの`AGENTS.md`を直接読む。
 したがってrepo固有ルールの共有だけが目的なら`AGENTS.md`単独でよい。
 
+移行対象repoの構造は、`scripts/check_repo_instruction_topology.py`で機械検査する。
+native modeは通常形（正規ファイルの`AGENTS.md`、`CLAUDE.md`なし）を要求し、compat modeは
+旧Claudeや非対応provider向けの`CLAUDE.md -> AGENTS.md` symlinkだけを許可する。実体の
+`CLAUDE.md`、壊れたlink、`AGENTS.override.md`、`CLAUDE.local.md`はFAILとする。
+
+```bash
+python3 ~/.agents/skills/origin-skill-commonize/scripts/check_repo_instruction_topology.py \
+  --repo <repo-root> --mode native
+python3 ~/.agents/skills/origin-skill-commonize/scripts/check_repo_instruction_topology.py \
+  --repo <compat-repo-root> --mode compat
+```
+
 `CLAUDE.md`を残すのは、非対応sessionを支える場合、Claude固有指示を加える場合、または
 `InstructionsLoaded` hookや`/context`表示が必要な場合である。単一正典を保つには、Claude固有内容が
 無ければsymlink、内容を足すなら先頭の`@AGENTS.md` importを使う。

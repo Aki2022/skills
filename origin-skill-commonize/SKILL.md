@@ -17,11 +17,11 @@ description: >-
 
 # Agent Config Symlink 統一
 
-Claude Code・Codex CLI・Antigravity/Gemini CLI など複数のエージェントは、それぞれ別名の
-設定ファイル（`CLAUDE.md` / `AGENTS.md` / `GEMINI.md`）と別ディレクトリのスキル
-（`.claude/skills` / `.agents/skills` / `.codex/skills`）を読む。さらに同じ製品の複数accountは、
-commandsやMCP設定を別々のconfiguration directoryに持ち得る。放置すると同じ内容が
-複数箇所に分岐し、「どれが最新か分からない」状態になる。
+Claude Code・Codex CLI・Antigravity/Gemini CLI など複数のエージェントは、設定ファイルや
+skill の探索規則が一致しない。Claude Code v2.1.277 以降はリポジトリの `AGENTS.md` を直接
+読めるが、グローバル設定・skill directory・非対応sessionには依然としてtool固有aliasが要る。
+さらに同じ製品の複数accountは、commandsやMCP設定を別々のconfiguration directoryに持ち得る。
+放置すると同じ内容が複数箇所に分岐し、「どれが最新か分からない」状態になる。
 
 これを防ぐため、**正典を 1 つ決め、他は正典への symlink にする**。これにより
 どのパスを編集しても正典が更新され、全エージェントに即時反映される（常にフレッシュ）。
@@ -41,7 +41,7 @@ commandsやMCP設定を別々のconfiguration directoryに持ち得る。放置�
 | グローバル・skill          | `~/.agents/skills/`（**nix 管理外・書き込み可**。ここは従来どおり）                                                                                               | `~/.claude/skills`、`~/.codex/skills` ほか                              |
 | グローバル・静的設定 27 件 | **nix-darwin flake repo の `home/agent-config/<相対パス>`**（実ファイル・書き込み可・git 管理下）。`~/.agents/AGENTS.md` 等はその**描画先**であって編集元ではない | `~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md`、`~/.gemini/GEMINI.md` ほか |
 | グローバル・ツール固有共有 | `~/.agents/<tool>/`配下。Claude例: `commands/`、非秘密の`mcp.json`。Codex例: `hooks.json`、`agents/`（`AGENTS.override.md` は**共有してはいけない** — 下記）      | primary/secondaryを含む各tool configuration directoryの対応path         |
-| リポジトリ単位             | `<repo>/AGENTS.md`、`<repo>/.agents/skills/`、必要なら`<repo>/.agents/<tool>/`                                                                                    | `<repo>/CLAUDE.md`、`<repo>/.claude/skills`、tool固有aliasほか          |
+| リポジトリ単位             | `<repo>/AGENTS.md`、`<repo>/.agents/skills/`、必要なら`<repo>/.agents/<tool>/`                                                                                    | `.claude/skills` 等。`CLAUDE.md` は互換性が必要な場合だけ               |
 
 `.agents/` を正典にする理由: Codex CLI がユーザースキルとして `~/.agents/skills` を公式に読み、
 かつ `.agents` はツール非依存の中立な名前のため。
@@ -238,6 +238,17 @@ Codexのper-skill symlinkは正典 `~/.agents/skills/` の各スキルへ直接�
 commandsやMCP設定も同様に、複数accountのうち一つが実体で他がそこへのsymlinkなら未統一と判定する。
 `~/.agents/<tool>/`正典へ直接向いて初めて統一済みとする。ただしMCPはsecret-safe確認前に移動しない。
 
+**棚卸し時の判定ルール（リポジトリ指示）:**
+
+- `AGENTS.md` があり `CLAUDE.md` が不在 → Claude Code v2.1.277+ の対応sessionでは正常
+- `CLAUDE.md → AGENTS.md` → 互換alias。直接読込できるsessionでは冗長だが内容は二重読込されない
+- `CLAUDE.md` が別内容の実体 → defaultでは`AGENTS.md`が読まれないため、意図的な分離か確認する
+- `CLAUDE.local.md` がある → defaultでは`AGENTS.md`が読まれない。両方必要なら
+  `claude-md-and-agents-md`をuser/managed settingsで選ぶ
+
+直接読込の対象はリポジトリの`AGENTS.md`と`.claude/AGENTS.md`で、`~/.agents/AGENTS.md`や
+`.agents/`配下ではない。したがってグローバル`~/.claude/CLAUDE.md` aliasは維持する。
+
 ### 2. 正典を決める
 
 上表の正典（`.agents/` 側）を採用する。正典がまだ無ければ、最も内容が充実した実体を
@@ -268,12 +279,17 @@ D=$(date +%Y%m%d)
 cp -a AGENTS.md "AGENTS.md.bak_$D" 2>/dev/null || true
 ```
 
-### 5. symlink 化
+### 5. 必要な alias だけ作る
+
+リポジトリでは `AGENTS.md` 単独を標準形とする。Claude Code v2.1.277未満、Bedrock等の
+feature flagを取得しないsession、telemetry無効、built-in `agents-md` plugin無効なども支える場合だけ、
+`CLAUDE.md`から`@AGENTS.md`をimportするかsymlinkを残す。`AGENTS.md`対応とskill探索は別なので、
+`.agents/skills`に中身がある場合の`.claude/skills` aliasは引き続き必要である。
 
 `scripts/unify_config.sh` を使うと、バックアップ・分岐検出・symlink 作成・検証を安全に行える:
 
 ```bash
-# ファイル: CLAUDE.md を AGENTS.md（正典）へ向ける
+# 互換性が必要な場合だけ: CLAUDE.md を AGENTS.md（正典）へ向ける
 bash scripts/unify_config.sh AGENTS.md CLAUDE.md
 
 # ディレクトリ: .claude/skills を .agents/skills（正典）へ向ける
@@ -300,12 +316,11 @@ ln -s AGENTS.md CLAUDE.md                      # 同階層なら相対パスで�
 
 ### 6. 検証
 
-```bash
-ls -l CLAUDE.md                       # → AGENTS.md を指していること
-head -1 CLAUDE.md && head -1 AGENTS.md  # 同一内容が見えること
-```
-
-フレッシュ性テスト: 正典を 1 行だけ一時編集し、別名側から同じ変更が見えることを確認して元に戻す。
+互換aliasがある場合は`readlink CLAUDE.md`と内容一致を確認する。`AGENTS.md`を直接読む構成では、
+interactive sessionの`AGENTS.md loaded`起動表示、または一意なcanaryの復唱で確認する。
+直接読込された`AGENTS.md`は`/context`のMemory filesに表示されず、`InstructionsLoaded` hookも
+発火しないため、これらを不合格の根拠にしない。canaryは確認後に必ず戻し、正典のhashが元と
+一致することを確かめる。
 
 複数accountでは、各aliasがprimary account経由ではなく`.agents/<tool>/`正典へ直接解決されることを
 `readlink`で確認する。認証・session・history・cacheがsymlinkでないことも確認する。
@@ -321,17 +336,15 @@ head -1 CLAUDE.md && head -1 AGENTS.md  # 同一内容が見えること
 - **全般的な AI 行動設定**（口調・ツール選択・並列実行方針等）→ グローバルの
   `~/.agents/AGENTS.md` で管理すべき内容が誤ってリポジトリに置かれている可能性がある。
 
-### リポジトリ CLAUDE.md は必須ではない
+### リポジトリ CLAUDE.md は互換用
 
-`~/.claude/CLAUDE.md → ~/.agents/AGENTS.md` のグローバル symlink が既に設定済みなら、
-リポジトリに `CLAUDE.md` を作らなくても Claude Code はグローバル設定を読む。
+Claude Code v2.1.277以降の対応sessionは、作業ディレクトリと祖先に`CLAUDE.md`、
+`.claude/CLAUDE.md`、`CLAUDE.local.md`が無いとき、リポジトリの`AGENTS.md`を直接読む。
+したがってrepo固有ルールの共有だけが目的なら`AGENTS.md`単独でよい。
 
-リポジトリに `CLAUDE.md` を作る（`AGENTS.md` への symlink）価値があるのは:
-
-- そのリポジトリ専用の `AGENTS.md` があり、Claude Code に自動ロードさせたい場合
-- Codex CLI と Claude Code 両方でプロジェクト固有ルールを共有したい場合
-
-不要な場合: グローバル設定で十分で、リポジトリに余計なファイルを増やしたくない場合。
+`CLAUDE.md`を残すのは、非対応sessionを支える場合、Claude固有指示を加える場合、または
+`InstructionsLoaded` hookや`/context`表示が必要な場合である。単一正典を保つには、Claude固有内容が
+無ければsymlink、内容を足すなら先頭の`@AGENTS.md` importを使う。
 
 ### symlink が git にコミットされる点
 
@@ -395,6 +408,20 @@ python3 ~/.agents/skills/origin-skill-commonize/scripts/check_global_topology.py
 plugin cache・Codex `.system` の中身は読んだり変更したりしない。canary による実読込確認は
 別途人間が行う。
 
+per-skill rootの不足を直すときは`scripts/sync_per_skill_aliases.py`を使う。正典と対象rootを
+明示し、最初はdry-runする。`--apply`で不足linkを作り、壊れた未登録linkを消す場合だけ
+`--prune-stale`も付ける。有効な外部linkや実体entryがあれば上書きせず`CONFLICT`で停止する。
+Codexの`.system`やadapted skillなど正当な例外は、直下名を`--ignore-entry`で1件ずつ明示する。
+
+```bash
+python3 scripts/sync_per_skill_aliases.py \
+  --canonical <global-skills-root> --alias-root <gemini-or-codex-skills-root>
+python3 scripts/sync_per_skill_aliases.py \
+  --canonical <global-skills-root> --alias-root <gemini-or-codex-skills-root> \
+  --apply --prune-stale \
+  --ignore-entry <product-owned-or-adapted-entry>
+```
+
 実行タイミング: スキルの新規作成・編集・移動・削除の直後（この Skill の作業の一部として）。
 サードパーティ由来スキル（ミラー）の FAIL は**中身を手で直さず、上流から再取得して同期する**（ミラー規約: バイト同一）。同値・鮮度は `scripts/check_mirrors.sh` で確認する。第三者本文を手で直さず、修正対象は origin-* など自前スキルのみとする。
 
@@ -429,7 +456,9 @@ plugin cache・Codex `.system` の中身は読んだり変更したりしない�
 正典:   .agents/AGENTS.md          .agents/skills/
         .agents/claude/commands/    .agents/claude/mcp.json（非秘密のみ）
         .agents/codex/hooks.json    .agents/codex/agents/
-別名:   CLAUDE.md  → AGENTS.md      .claude/skills → .agents/skills
+repo:   AGENTS.md 単独が標準         CLAUDE.md → AGENTS.md は互換用のみ
+別名:   ~/.claude/CLAUDE.md → ~/.agents/AGENTS.md（globalでは引き続き必要）
+        .claude/skills → .agents/skills
         .codex/AGENTS.md → ...      .codex/skills/<name> → .agents/skills/<name>
         各Claude accountのcommands/mcp.json → .agents/claude/...
         各Codex accountのhooks.json/agents → .agents/codex/...

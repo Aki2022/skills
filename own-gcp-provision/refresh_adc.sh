@@ -52,6 +52,7 @@ SOURCE_ADC="${SOURCE_ADC_PATH:-$GLOBAL_ADC}"
 CODE_DIR="${CODE_DIR:-$HOME/code}"
 GCLOUD_BIN="$(resolve_gcloud || true)"
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PYTHON="$(command -v python3 || true)"
 [ -z "$PYTHON" ] && { echo "❌ python3 が見つからない"; exit 1; }
 [ -n "$GCLOUD_BIN" ] || {
@@ -66,24 +67,7 @@ echo "=== source_credentials を抽出中 ==="
 # グローバル ADC から authorized_user の source を取り出す。
 # 既に impersonated_service_account なら .source_credentials を、
 # 素の authorized_user ならトップレベルを source として使う。
-SOURCE_JSON="$("$PYTHON" - "$SOURCE_ADC" <<'PY'
-import json, sys
-with open(sys.argv[1]) as f:
-    d = json.load(f)
-t = d.get("type")
-if t == "impersonated_service_account":
-    src = d.get("source_credentials")
-    if not src:
-        sys.exit("グローバル ADC に source_credentials が無い")
-elif t == "authorized_user":
-    src = {k: d[k] for k in d}
-else:
-    sys.exit(f"未対応の ADC type: {t}")
-if src.get("type") != "authorized_user" or "refresh_token" not in src:
-    sys.exit("source は authorized_user + refresh_token である必要がある")
-print(json.dumps(src))
-PY
-)"
+SOURCE_JSON="$("$PYTHON" "${SCRIPT_DIR}/scripts/adc_source.py" "$SOURCE_ADC")"
 echo "  ✅ authorized_user source を取得"
 
 # .mise.toml を走査して repo -> SA を収集
@@ -104,38 +88,14 @@ for MISE in "${CODE_DIR}"/*/.mise.toml; do
   echo "  • ${REPO_NAME}  ->  ${SA_EMAIL}"
 
   # per-repo ADC を生成
-  SOURCE_JSON="$SOURCE_JSON" IMP_URL="$IMP_URL" "$PYTHON" - "$ADC_PATH" <<'PY'
-import json, os, sys
-adc = {
-    "delegates": [],
-    "service_account_impersonation_url": os.environ["IMP_URL"],
-    "source_credentials": json.loads(os.environ["SOURCE_JSON"]),
-    "type": "impersonated_service_account",
-}
-with open(sys.argv[1], "w") as f:
-    json.dump(adc, f, indent=2)
-PY
+  SOURCE_JSON="$SOURCE_JSON" IMP_URL="$IMP_URL" "$PYTHON" "${SCRIPT_DIR}/scripts/write_repo_adc.py" "$ADC_PATH"
   chmod 600 "$ADC_PATH"
 
   # .mise.toml に GOOGLE_APPLICATION_CREDENTIALS が無ければ追記
   if ! grep -qE '^[[:space:]]*GOOGLE_APPLICATION_CREDENTIALS' "$MISE"; then
     # [env] セクション直下に挿入。無ければ末尾に追記。
     if grep -qE '^\[env\]' "$MISE"; then
-      "$PYTHON" - "$MISE" "$ADC_PATH" <<'PY'
-import sys
-mise, adc = sys.argv[1], sys.argv[2]
-lines = open(mise).read().splitlines()
-out, inserted = [], False
-for ln in lines:
-    out.append(ln)
-    if not inserted and ln.strip() == "[env]":
-        out.append(f'# SDK(Node/Python)用 ADC。CLIのIMPERSONATE変数はSDKに効かないため必須')
-        out.append(f'GOOGLE_APPLICATION_CREDENTIALS = "{adc}"')
-        inserted = True
-if not inserted:
-    out.append(f'GOOGLE_APPLICATION_CREDENTIALS = "{adc}"')
-open(mise, "w").write("\n".join(out) + "\n")
-PY
+      "$PYTHON" "${SCRIPT_DIR}/scripts/mise_insert_adc.py" "$MISE" "$ADC_PATH"
     else
       printf '\nGOOGLE_APPLICATION_CREDENTIALS = "%s"\n' "$ADC_PATH" >> "$MISE"
     fi
@@ -151,12 +111,7 @@ shopt -u nullglob
 # グローバル ADC を素の authorized_user に戻す
 echo ""
 echo "=== グローバル ADC を素のユーザー認証へ戻す ==="
-SOURCE_JSON="$SOURCE_JSON" "$PYTHON" - "$GLOBAL_ADC" <<'PY'
-import json, os, sys
-src = json.loads(os.environ["SOURCE_JSON"])
-with open(sys.argv[1], "w") as f:
-    json.dump(src, f, indent=2)
-PY
+SOURCE_JSON="$SOURCE_JSON" "$PYTHON" "${SCRIPT_DIR}/scripts/restore_global_adc.py" "$GLOBAL_ADC"
 chmod 600 "$GLOBAL_ADC"
 echo "  ✅ グローバル ADC = authorized_user (impersonate なし)"
 

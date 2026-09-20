@@ -12,6 +12,28 @@ from typing import Optional
 
 FrontMatter = dict[str, object]
 
+# docs/00_index.md is the routing index the SessionStart hook injects -- as a
+# digest, not as the file: measured 2026-09-19, Claude Code delivers a hook's
+# output to the agent inline only up to about 10,000 CHARACTERS (largest ever
+# delivered inline 8,957; smallest ever spilled 10,019, and that one was an index
+# injection), so index_digest.py compresses it to fit and the agent opens the file
+# when it needs the rest.
+#
+# This ceiling is therefore a readability bound on the file, not the injection
+# bound it was first written as. That earlier reading was wrong twice over: it
+# named a ~19 KB spill point and claimed 32 KB sat under it, and the index passed
+# the ceiling at 24,234 characters while still spilling every session. What the
+# ceiling does say is that an index past it has stopped being a routing index and
+# become a progress dashboard -- the same thing the line-length and prose-ratio
+# rules below measure. docs_hygiene.py moves narrative out to docs/log/ to meet it.
+INDEX_MAX_BYTES = 32 * 1024
+INDEX_MAX_LINE_CHARS = 500
+INDEX_MAX_PROSE_RATIO = 0.5
+
+# The issue template ships `status: active`, so `active` is canonical for a
+# standalone issue even though embedded workstream blocks use the four-value set.
+ISSUE_STATUSES = ("active", "pending", "in_progress", "blocked", "complete")
+
 
 def parse_inline_list(value: str) -> list[str]:
     value = value.strip()
@@ -306,11 +328,20 @@ def strip_code(text: str) -> str:
     inline code span, or record it in `docs/validator-link-baseline.txt`. That
     is a loud, fixable cost; the alternative was a quiet one.
     """
-    return "\n".join(_INLINE_CODE.sub(" ", line) for line in text.splitlines())
+    # Blank to the SAME LENGTH, not to one space: `archive_links` rewrites links
+    # in place and needs the offsets from this text to address the original.
+    return "\n".join(
+        _INLINE_CODE.sub(lambda match: " " * len(match.group(0)), line)
+        for line in text.splitlines()
+    )
 
 
 def iter_link_destinations(text: str):
-    """Yield the raw destination of every inline link, parens balanced.
+    """Yield `(start, end, raw)` for every inline link, parens balanced.
+
+    The span is over the text handed in. `strip_code` blanks to the same length,
+    so a span taken from stripped text addresses the original -- which is what
+    `archive_links` rewrites through.
 
     `[a](../x/note(1).md)` is one link with a destination containing
     parentheses, not a truncated one — CommonMark allows balanced pairs.
@@ -340,7 +371,7 @@ def iter_link_destinations(text: str):
             if len(chars) > _MAX_DESTINATION:
                 break
         if closed:
-            yield "".join(chars)
+            yield match.end(), index, "".join(chars)
 
 
 def link_target(raw: str) -> Optional[str]:
@@ -456,7 +487,7 @@ def validate_relative_links(
         except OSError as exc:
             errors.append(f"{rel}: unreadable while checking links ({exc})")
             continue
-        for raw in iter_link_destinations(strip_code(text)):
+        for _start, _end, raw in iter_link_destinations(strip_code(text)):
             target = link_target(raw)
             if target is None:
                 continue
@@ -576,6 +607,55 @@ def parse_issue_queue_table_ids(content: str) -> set[str]:
     return ids
 
 
+INDEX_LINK_RE = re.compile(r"\]\([^)\s]+\.md(?:#[^)\s]*)?\)|^[ \t]*[-*+][ \t]+docs/")
+
+
+def validate_index_size(index_path: Path, errors: list[str], warnings: list[str]) -> None:
+    """The routing index must stay small enough to be read whole.
+
+    Measured 2026-09-18: four repositories carried indexes of 34–291 KB, and a
+    reader handed one of those was handed a progress dashboard, not a route.
+    The injection itself is bounded by index_digest.py (see the note on
+    INDEX_MAX_BYTES), so this is a bound on the file a human or an agent opens.
+    Long lines are the same defect one row at a time; a low share of routing
+    lines says the file has become a dashboard.
+    """
+    content = index_path.read_text()
+    size = len(content.encode())
+    if size > INDEX_MAX_BYTES:
+        errors.append(
+            f"docs/00_index.md: {size // 1024} KB exceeds the {INDEX_MAX_BYTES // 1024} KB "
+            "ceiling — move narrative to docs/log/ (docs_hygiene.py --fix does this)"
+        )
+    long_lines = [
+        n for n, line in enumerate(content.splitlines(), 1) if len(line) > INDEX_MAX_LINE_CHARS
+    ]
+    if long_lines:
+        shown = ", ".join(str(n) for n in long_lines[:5])
+        errors.append(
+            f"docs/00_index.md: {len(long_lines)} line(s) over {INDEX_MAX_LINE_CHARS} chars "
+            f"(lines {shown}{', …' if len(long_lines) > 5 else ''}) — an index row is a link "
+            "and one line of routing, not a status report"
+        )
+    body = content
+    end = content.find("\n---", 3) if content.startswith("---") else -1
+    if end != -1:
+        body = content[end + 4:]
+    text_lines = [
+        line for line in body.splitlines()
+        if line.strip() and not re.match(r"^[ \t]{0,3}#{1,6}[ \t]+", line)
+        and not re.match(r"^[ \t]*\|?[ \t]*:?-{3,}", line)
+    ]
+    if len(text_lines) >= 10:
+        routing = sum(1 for line in text_lines if INDEX_LINK_RE.search(line))
+        ratio = 1 - routing / len(text_lines)
+        if ratio > INDEX_MAX_PROSE_RATIO:
+            warnings.append(
+                f"docs/00_index.md: {ratio:.0%} of body lines carry no routing link — "
+                "the index is turning into a dashboard; keep prose in docs/log/"
+            )
+
+
 def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
     root = Path(repo).resolve()
     errors: list[str] = []
@@ -605,6 +685,10 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
             errors.append("docs/00_index.md: broken front matter")
         elif "updated_at" not in fm:
             warnings.append("docs/00_index.md: missing updated_at in front matter")
+        route_baselined(
+            "docs/00_index.md", baseline, deferred, errors,
+            lambda sink: validate_index_size(index_path, sink, warnings),
+        )
 
     id_locations: dict[str, Path] = {}
     for path in sorted((root / "docs").glob("**/*.md")):
@@ -739,6 +823,21 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
             if fm is None:
                 errors.append(f"{rel}: broken front matter")
                 continue
+            status = as_text(fm.get("status", "")).split("#")[0].strip()
+            def _status_checks(sink, _s=status, _rel=rel):
+                if _s not in ISSUE_STATUSES:
+                    sink.append(
+                        f"{_rel}: status must be one of {', '.join(ISSUE_STATUSES)}, got '{_s}' "
+                        "(docs_hygiene.py --fix normalizes known aliases)"
+                    )
+                elif _s == "complete":
+                    # archive_issue.py / archive_workstream.py exclude this message
+                    # from their pre-move gate; it names the move that clears it.
+                    sink.append(
+                        f"{_rel}: complete but not archived — run archive_issue.py "
+                        "(or docs_hygiene.py --fix)"
+                    )
+            route_baselined(rel, baseline, deferred, errors, _status_checks)
             branch = as_text(fm.get("branch", "")).strip()
             if not branch:
                 warnings.append(f"{rel}: missing branch (no branch recorded to resume/clean up)")
@@ -869,6 +968,15 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
             fm = parse_front_matter(path)
             if fm is None:
                 errors.append(f"{rel}: broken front matter")
+                continue
+            if not fm:
+                route_baselined(
+                    rel, baseline, deferred, errors,
+                    lambda sink, _rel=rel: sink.append(
+                        f"{_rel}: no front matter — a guide without updated_at cannot be "
+                        "dated or filtered (docs_hygiene.py --fix adds one from git)"
+                    ),
+                )
                 continue
             for key in ("source_issues", "source_workstreams"):
                 for reference in as_list(fm.get(key, [])):

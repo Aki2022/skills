@@ -94,6 +94,15 @@ and invoke `origin-doc-update` for the active workstream/issue. It owns ADR
 recording, guide impact, and current-document updates. **Stop before committing**
 — origin-close-session commits via origin-git-cleanup in Step 3.
 
+As part of this step, run the repository's hygiene pass and name the repository:
+`python3 ~/.agents/skills/origin-doc-update/scripts/docs_hygiene.py <repo> --fix --report`.
+It archives what is marked complete, keeps `docs/00_index.md` under its size
+ceiling, and writes `docs/log/hygiene-YYYYMMDD.md` with the items that need a
+decision. Read the counts it prints; act on the reported items that belong to
+this session's work and leave the rest recorded. This is the only scheduled
+maintenance docs/ gets (decision 2026-09-18: no weekly job), so skipping it here
+means the repository is never cleaned.
+
 Skip this step only when the repo has no `docs/` governance (`docs/00_index.md`
 absent). Say so, then go straight to Step 3.
 

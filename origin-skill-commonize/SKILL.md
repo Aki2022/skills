@@ -96,6 +96,75 @@ nix store のハッシュは `switch` のたびに変わるため、追跡する
 typechange が出続けて本物の変更が埋もれる。正典側の repo が既に追跡しているので、
 `~/.agents` での追跡は二重持ちにあたる。
 
+## 自前 skill の命名規則
+
+**許容する形は1つだけ。末尾は必ず動詞。** 語数が所属を表す。
+
+```
+3語   own-<対象>-<動作>            → グローバル正典 ~/.agents/skills/
+4語   own-<repo>-<対象>-<動作>     → リポジトリ固有 <repo>/.agents/skills/
+```
+
+4語なら必ずリポジトリ固有、3語なら必ずグローバル。**名前だけ見てどこを編集するか分かる。**
+repo トークンは `trade` / `yorisoi` / `bizops` / `iscore` / `marketing`。
+
+**禁止**: 動作でない名詞を末尾に置く形（`-runtime` `-loop` `-policy` `-style` `-setup`
+`-cleanup` `-maintenance` `-routing` `-warehouse` 等）と、`動作-対象` の逆順。
+
+**skill 名は description と並んで発火条件そのもの**で、動作の無い名前は「何をする skill か」を
+名前から読めなくする。実害があった — `origin-design-runtime` と `origin-design-check-routing` の
+役割が名前から区別できず、人間が指摘して初めて分かった。名詞末尾が機能を隠していた実例は
+ほかにも4件あり、いずれも description を読むと名前と実体が違っていた
+（`-policy` の実体は振り分け、`-access` の実体は質問への回答、`-report` の実体は実装）。
+
+### 動詞は allowlist で持つ
+
+`references/naming-verbs.txt` に列挙した語だけを末尾に置ける。**denylist にしない** —
+知らない名詞を黙って通すからで、それは「黙って間違う」側。allowlist なら新しい動詞が
+要るときに落ちて止まり、人間が判断して足せる。
+
+幅広い動詞（`handle` `work` `manage` `process` 等）は**足さない**。情報を持たない動詞は
+「名前から何をするか読める」という目的を満たさず、禁じた形を動詞の面で復活させるだけ。
+動作が複数ある skill にも動詞を1つ選び、選べないときは対象の切り方を見直す。
+
+### 移行中の猶予リスト
+
+`references/naming-exceptions.txt` は burn-down リスト。規則を入れた時点で既にあった
+自前 skill を載せ、**改名するたび1行消す**。空になったら猶予は終わる。
+**新規 skill をここに足してはいけない。**
+
+猶予が要るのは、規則をそのまま適用すると既存の全 skill が即座に赤くなり、
+`skill_lint.sh` は skill 編集のたびに走るので**永久に赤い検査**になるため。
+赤が情報でなくなると本物の失敗が埋もれる。
+
+### 改名するときは密結合クラスタごと
+
+**skill は他の skill を名前で呼ぶ。** 特に frontmatter の `description` に書かれた名前は
+発火の連鎖に直結し、取りこぼすと**エラーにならずに連鎖だけ壊れる**。
+
+2026-09-20 の実測では、SKILL.md 内の相互参照が **178件**（うち frontmatter **42件**）あり、
+デザイン系・ループ系・quarto 系が密に絡んでいた。**1本ずつ改名すると途中で参照が壊れる**ので、
+互いを参照し合う塊は**一括で改名して1コミットにする**。
+
+改名の1スライスに含めるもの:
+
+1. ディレクトリ名（`git mv`）と frontmatter の `name:`
+2. **他の skill からの参照**（frontmatter・body の両方。grep で旧名 0 件を確認）
+3. symlink の張り直し（`~/.claude/skills` は正典を丸ごと指すが、Codex は skill ごと・3席ぶん）
+4. docs・AGENTS.md・hooks・スラッシュコマンドからの参照
+5. `naming-exceptions.txt` から該当行を削除
+6. canary で**実際に発火するか**の確認
+
+`skill_lint.sh` の S9 が (1) と規則違反を機械で見る。**(2)〜(4) は lint では見えない**ので、
+grep で旧名が 0 件であることを別に確かめる。
+
+### lint
+
+`scripts/skill_lint.sh` の S9 が3点を検査する — 接頭辞が `own-` か、語数が所属と一致するか、
+末尾が動詞か。第三者ミラー（`cloudflare-*` `google-*` 等）は対象外。
+
+規則の根拠と却下案は biz_ops の `ADR-20260915-unify-skill-naming-to-object-action`。
+
 ## 共有設定とaccount stateの境界
 
 このSkillは**共有する静的設定とsymlink topology**を所有する。shell、Home Manager、各製品の

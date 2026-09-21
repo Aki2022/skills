@@ -179,7 +179,7 @@ echo ok
             "invalid confidence": lambda p: p["links"][0].update(confidence="certain"),
             "empty basis": lambda p: p["links"][0].update(basis=""),
             "absolute path": lambda p: p["links"][0].update(
-                basis="/" + "Users/example/private"
+                basis="path=" + "/" + "Users/example/private"
             ),
         }
         for label, mutate in cases.items():
@@ -248,7 +248,7 @@ echo ok
             "invalid confidence": lambda rows: rows[0].update(confidence="certain"),
             "empty basis": lambda rows: rows[0].update(basis=""),
             "absolute path": lambda rows: rows[0].update(
-                basis="/" + "Users/example/private"
+                basis="path=" + "/" + "Users/example/private"
             ),
             "duplicate link": lambda rows: rows.append(dict(rows[0])),
         }

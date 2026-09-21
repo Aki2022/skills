@@ -64,7 +64,7 @@ STATUS_TARGETS = {
 }
 PATTERN_ID_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 DATE_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
-PERSONAL_PATH_RE = re.compile(r"(?:^|[\s`'\"(])(?:/Users|/home)/[^/\s]+/")
+PERSONAL_PATH_RE = re.compile(r"(?:/Users|/home)/[^/\s]+(?:/|$)")
 SECTION_RE = re.compile(r"^## ", re.MULTILINE)
 
 

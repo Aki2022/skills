@@ -2,7 +2,7 @@
 name: own-session-close
 description: >-
   Close out a finished repository task by optionally running own-permission-audit,
-  then own-trouble-log, then origin-doc-update, then own-git-clean. Commit/merge/sync the finished
+  then own-trouble-log, then own-doc-update, then own-git-clean. Commit/merge/sync the finished
   work and remove only approved stale branches and worktrees. Use for "店じまい",
   "後片付け", "片付けて", "クリーンに", "整理", "wrap up", "close out",
   "get back to a clean main", or after a PR is merged. Prefer this over
@@ -37,10 +37,10 @@ Commits, pushes, and green PR merges are autonomous; only destructive cleanup
    not interact with the commit ordering below. It runs before the git phase on
    purpose: that phase can stop for a confirmation, and anything placed after it
    would silently never run.
-2. **origin-doc-update next — edit, don't commit.** Update the active
+2. **own-doc-update next — edit, don't commit.** Update the active
    workstream/issue, classify guide impact (required vs none), and make any
    `docs/` edits in the working tree — including the outcome of Step 0, if it
-   ran. `origin-doc-update` owns ADR recording. Leave the edits uncommitted;
+   ran. `own-doc-update` owns ADR recording. Leave the edits uncommitted;
    own-git-clean will pick them up as part of
    the same commit in the next phase.
 3. **own-git-clean last — commit everything, then clean.** It surveys the repo
@@ -86,16 +86,16 @@ step writes outside git and never blocks the git phase.
 Its main trigger is a user pointing out how the work was done, which fires during
 the session; this sweep is the backstop for the ones nobody pointed out.
 
-### Step 2 — origin-doc-update
+### Step 2 — own-doc-update
 
-Invoke the **origin-doc-update** skill and follow its SKILL.md against the current work.
+Invoke the **own-doc-update** skill and follow its SKILL.md against the current work.
 Concretely: read `docs/00_index.md` if present, pass the Step 0 report through,
-and invoke `origin-doc-update` for the active workstream/issue. It owns ADR
+and invoke `own-doc-update` for the active workstream/issue. It owns ADR
 recording, guide impact, and current-document updates. **Stop before committing**
 — own-session-close commits via own-git-clean in Step 3.
 
 As part of this step, run the repository's hygiene pass and name the repository:
-`python3 ~/.agents/skills/origin-doc-update/scripts/docs_hygiene.py <repo> --fix --report`.
+`python3 ~/.agents/skills/own-doc-update/scripts/docs_hygiene.py <repo> --fix --report`.
 It archives what is marked complete, keeps `docs/00_index.md` under its size
 ceiling, and writes `docs/log/hygiene-YYYYMMDD.md` with the items that need a
 decision. Read the counts it prints; act on the reported items that belong to
@@ -166,7 +166,7 @@ invocation so the removal process is no longer inside the directory it removes.
 
 ## Destructive-cleanup approval principle
 
-Do not request approval for ordinary integration. origin-doc-update's edits are
+Do not request approval for ordinary integration. own-doc-update's edits are
 ordinary, reviewable file changes; surface them and let own-git-clean commit,
 push, and merge them after its checks pass. If destructive cleanup is needed,
 present only those deletion targets and obtain one confirmation before acting.
@@ -175,9 +175,9 @@ present only those deletion targets and obtain one confirmation before acting.
 
 - **No `docs/` governance** → skip Step 2, run Step 1 and Step 3 only.
 - **Nothing to document** (pure refactor with no behavior/API change, and
-  origin-doc-update concludes "guide impact: none") → record that conclusion, then
+  own-doc-update concludes "guide impact: none") → record that conclusion, then
   Step 3.
-- **Already on a clean main with nothing to merge** → origin-doc-update may still have
+- **Already on a clean main with nothing to merge** → own-doc-update may still have
   index/workstream updates; otherwise own-session-close is a no-op beyond confirming the
   clean state. Say so rather than inventing work.
 

@@ -9,12 +9,12 @@ Restructure ONE oversized {KIND} at {REPO}/{DOC}. Work ONLY inside {REPO}. Do NO
 do NOT run the validator or docs_hygiene, do NOT edit docs/00_index.md (the orchestrator integrates). Other agents
 are working on {OTHERS} in the same tree — do not touch those files or their new siblings.
 
-Governing rule (~/.agents/skills/origin-doc-update/SKILL.md, "Write for the next session"): a guide is CURRENT
+Governing rule (~/.agents/skills/own-doc-update/SKILL.md, "Write for the next session"): a guide is CURRENT
 TRUTH (what the system does now, how to use it, constraints, verification, known limitations); a spec is CURRENT
 POLICY. Chronology — dated sections, review cycles, measurement diaries, superseded approaches, "訂正" trails — is
 history: move it VERBATIM to docs/log/<slug>-history.md (front matter `---\nupdated_at: <today>\nkind: {KIND}-history\n---`,
 heading levels may be demoted by one). Hard-to-reverse decisions with rationale become ADRs
-(`python3 ~/.agents/skills/origin-doc-update/scripts/create_adr.py <slug> --scope development --status accepted --repo {REPO}`;
+(`python3 ~/.agents/skills/own-doc-update/scripts/create_adr.py <slug> --scope development --status accepted --repo {REPO}`;
 front matter lists in block style, one `  - item` per line, never `[a, b]`); reuse an existing ADR when one covers
 the decision.
 

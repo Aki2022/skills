@@ -9,7 +9,6 @@
 # 実行は WS-20260919-skill-naming-own-prefix-migration。参照の少ない順に1本ずつ。
 
 # --- グローバル正典 ~/.agents/skills/ (26) → own-<対象>-<動作> 3語 ---
-origin-doc-update
 
 # --- リポジトリ固有 <repo>/.agents/skills/ (9) → own-<repo>-<対象>-<動作> 4語 ---
 # 注: 以下の trade / yorisoi 分は worktree でコミット済みだが、他セッションが実チェックアウトを

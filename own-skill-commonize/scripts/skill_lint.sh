@@ -80,7 +80,7 @@ for root in "${roots[@]}"; do
   for dir in "$root"/*/; do
     [ -d "$dir" ] || continue
     name=$(basename "$dir")
-    # skill ではない管理ディレクトリを除外（docs/ は origin-doc-update の scaffold）
+    # skill ではない管理ディレクトリを除外（docs/ は own-doc-update の scaffold）
     # synced/ は Claude Code のスキル同期バケット（UUID ディレクトリと manifest.json）で、
     # skill ではなくアプリ管理のインフラ。正典 root 直下に現れるが S1 の対象ではない。
     case "$name" in docs|node_modules|synced|.git) continue ;; esac

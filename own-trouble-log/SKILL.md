@@ -271,7 +271,7 @@ rm -f "$triaged"
 | 形式化の実行: skill 新設・改訂                | `own-skill-commonize` へ委譲             |
 | 形式化の実行: hook / settings.json            | settings.json を扱う skill へ委譲           |
 | 形式化の実行: permission リスト（allow/deny） | settings.json を扱う skill へ委譲           |
-| 形式化の実行: リポジトリ固有の guide / issue  | 当該リポジトリの `origin-doc-update` へ委譲 |
+| 形式化の実行: リポジトリ固有の guide / issue  | 当該リポジトリの `own-doc-update` へ委譲 |
 
 **受け渡しの境界を明示する。** 「skill の記述が現実とズレていた」型のトラブルは、
 **集めるのがこの skill・直すのが `own-skill-commonize`**。境界を書かないと

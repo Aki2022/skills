@@ -30,4 +30,4 @@ Audit only access granted by the current session or a resumed session whose hist
 
 Return a concise per-grant report containing: grant identity, temporary/standing classification, action taken, verification result, and any human gate or exact command. Report "no session-granted elevated access" when none exists.
 
-Pass this report to `origin-doc-update` through the caller. That skill decides whether an operational guide or ADR needs updating. Do not create a second permission-history document here. `own-session-close` invokes this skill before documentation and git cleanup when the audit applies.
+Pass this report to `own-doc-update` through the caller. That skill decides whether an operational guide or ADR needs updating. Do not create a second permission-history document here. `own-session-close` invokes this skill before documentation and git cleanup when the audit applies.

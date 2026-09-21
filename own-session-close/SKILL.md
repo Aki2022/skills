@@ -107,6 +107,19 @@ or the index is still over its ceiling, run `--sweep` and present the resulting
 ticked rows with `--apply-sweep` before Step 3 so the closure lands in the same
 commit.
 
+Then invoke **own-docs-maintain** for the repository: it takes the hygiene report's
+candidates (closure, demotion, oversized or history-laden guides/specs), has subagents
+decide them on primary evidence, applies the decisions within a fixed budget (one judge,
+at most two splits or condensations per close-session), and commits docs/ with the record
+of every decision. Nothing waits for a human tick; the review re-lists what the budget
+left for the next close-session. Skip it only for a deliberately shaped fixture repository.
+
+Before leaving this step, check three lines in every work unit this session touched —
+they are what the next session resumes from, and the validator warns when they are
+missing: `## Current Status` opens with `as of <today> — <one sentence>`; `## Next
+Actions` names the very next step; `## Log` has a dated bullet for today's change.
+Summaries of what happened go there, not into the index and not into a guide.
+
 Skip this step only when the repo has no `docs/` governance (`docs/00_index.md`
 absent). Say so, then go straight to Step 3.
 

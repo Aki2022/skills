@@ -1,6 +1,6 @@
 ---
 name: own-design-route
-description: デザインの検査・レビューの入口。何かのデザイン品質を確認したいとき、個別の skill 名を思い出せなくても、これを呼べば対象（LP / プロダクト UI / 資料）を判定し、カバレッジ表に沿って必要な検査 skill を正しい順序で連鎖させる。「デザインをチェックして」「デザインをレビューして」「デザイン品質を見て」「UI を確認して」「見た目を検査して」「まとめてデザイン検査」「design check」で必ず使う。デザイン系 skill が複数あってどれを使うか迷う場面でも、個別 skill を直接選ばずまずこれを使う。使わない場面: デザインの新規生成（web は own-web-design、スライドは own-pptx-build）、対象が LP だと明確で LP 評価だけを回したい場合（own-lp-review を直接）、コンプライアンス単体の監査（own-website-audit を直接）、選んだ検査を合格ラインまで直して再評価するループ自体（own-output-eval が持つ。受付はどの検査を並べるかを決めるだけ）。
+description: デザインの検査・レビューの入口。何かのデザイン品質を確認したいとき、個別の skill 名を思い出せなくても、これを呼べば対象（LP / プロダクト UI / 資料）を判定し、カバレッジ表に沿って必要な検査 skill を正しい順序で連鎖させる。「デザインをチェックして」「デザインをレビューして」「デザイン品質を見て」「UI を確認して」「見た目を検査して」「まとめてデザイン検査」「design check」で必ず使う。デザイン系 skill が複数あってどれを使うか迷う場面でも、個別 skill を直接選ばずまずこれを使う。使わない場面: デザインの新規生成（web は own-web-design、スライドは own-pptx-build）、対象が LP だと明確で LP 評価だけを回したい場合（own-website-audit を直接）、コンプライアンス単体の監査（own-website-audit を直接）、選んだ検査を合格ラインまで直して再評価するループ自体（own-output-eval が持つ。受付はどの検査を並べるかを決めるだけ）。
 ---
 
 # Design Check Routing
@@ -36,8 +36,8 @@ description: デザインの検査・レビューの入口。何かのデザイ�
 
 | 観点                             | LP                                            | プロダクト UI                                                        | 資料                                                       |
 | -------------------------------- | --------------------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------- |
-| 審美・レイアウト実測（決定論）   | `own-lp-review` の `measure_lp.mjs`        | 同スクリプト流用可。ただし `fold-cta` 等 LP 前提の検査は解釈を添える | `own-web-design` の validator（自己点検が主・弱い） |
-| マーケ定性（独立レビュアー採点） | `own-lp-review` の rubric                  | **欠落**                                                             | **欠落**                                                   |
+| 審美・レイアウト実測（決定論）   | `own-website-audit` の `measure_lp.mjs`        | 同スクリプト流用可。ただし `fold-cta` 等 LP 前提の検査は解釈を添える | `own-web-design` の validator（自己点検が主・弱い） |
+| マーケ定性（独立レビュアー採点） | `own-website-audit` の rubric                  | **欠落**                                                             | **欠落**                                                   |
 | 広告審査・法務・SEO・計測        | `own-website-audit`                        | `own-website-audit`（該当節のみ）                                 | 対象外                                                     |
 | UI ガイドライン準拠              | `web-design-guidelines`                       | `web-design-guidelines`                                              | 対象外                                                     |
 | アクセシビリティ修正             | `fixing-accessibility`                        | `fixing-accessibility`                                               | **欠落**（validator の自己点検のみ）                       |
@@ -47,15 +47,15 @@ description: デザインの検査・レビューの入口。何かのデザイ�
 
 補足:
 
-- `own-lp-review` は LP の「審美実測 + マーケ定性 + ゲート」を 1 つで持つ。
-  LP のときは個別に並べず、まず `own-lp-review` を呼ぶ。
+- `own-website-audit` は LP の「審美実測 + マーケ定性 + ゲート」を 1 つで持つ。
+  LP のときは個別に並べず、まず `own-website-audit` を呼ぶ。
 - 重複 skill が既知: `baseline-ui` と `source-command-baseline-ui`、
   `fixing-accessibility` と `source-command-fixing-accessibility`（内容に差分あり）。
   ルーターは **`source-command-` 無し側**を使う。統合は `own-skill-commonize` の管轄。
 
 ### 3. 実行順序 — 決定論が緑になるまで非決定論へ進まない
 
-`own-lp-review` のゲート原則をルーター全体に適用する:
+`own-website-audit` のゲート原則をルーター全体に適用する:
 
 ```
 決定論（実測・機械検査） → 失格が残る間は直して再実測 → 非決定論（独立レビュアー・自己点検） → 委譲（audit）

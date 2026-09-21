@@ -1,6 +1,6 @@
 ---
 name: own-website-audit
-description: Comprehensive audit for landing pages and websites across advertising and legal compliance, SEO, marketing conversion quality, design/UX, accessibility, technical health, and analytics/measurement. Use when asked to review, audit, evaluate, QA, or preflight a website, LP, service site, corporate site, article site, recruiting site, or form-based conversion flow before or after launch.
+description: Comprehensive audit for landing pages and websites across advertising and legal compliance, SEO, marketing conversion quality, design/UX, accessibility, technical health, and analytics/measurement. Use when asked to review, audit, evaluate, QA, or preflight a website, LP, service site, corporate site, article site, recruiting site, or form-based conversion flow before or after launch. 「LPを評価して」「このコピーは刺さるか」「LPを公開前に見て」「リデザインの良し悪しを判定して」でも使う（LP 評価の専用 skill を 2026-09-21 に本 skill へ統合した）。審美とレイアウトは `scripts/measure_lp.mjs` で**決定論的に実測**し、**それが緑になるまで独立レビュアーへ進まない**。使わない場面: デザインの新規生成（web は own-web-design、スライドは own-pptx-build）、検査の振り分け（own-design-route）、合格まで直して再評価するループ（own-output-eval）。**決定論の実測だけを回したい場合**は本 skill を経由せず `scripts/measure_lp.mjs` を直接叩く。
 ---
 
 # Website Audit
@@ -31,9 +31,29 @@ If context is missing, continue with generic website best practices and mark ass
 1. Identify the site type, primary audience, main conversion goal, traffic sources, and target pages.
 2. Inspect the rendered experience when a URL is available. Test mobile, tablet, desktop, and wide desktop where practical.
 3. Read source files only as needed to validate findings or propose concrete fixes.
-4. Evaluate every required category below.
-5. Report findings by severity with evidence, impact, recommended fix, and verification method.
-6. Separate confirmed issues from assumptions or items needing human/legal review.
+4. **決定論を先に実測する（LP・単一ページのとき必須）。**
+
+   ```bash
+   node <skill>/scripts/measure_lp.mjs <url> --viewports 375,1280 --schemes dark,light --json /tmp/lp.json
+   ```
+
+   合格閾値は `references/aesthetic-thresholds.md`。溢れ・重なり・切れ・コントラスト・
+   不安定な余白は、人が見る前に機械で落とす。
+
+5. **ゲート — 決定論が緑になるまで、非決定論へ進まない。**
+
+   **失格が 1 件でも残っているうちは、独立レビュアーを走らせない。**
+   理由は費用と信頼性の両方にある。レビュアーは 1 人あたり数万トークンを使う一方、
+   表示が壊れたページを採点しても出てくるのは表示不良の指摘だけで、
+   **本来見たかったコピーと訴求の評価は汚染される**。
+
+6. **マーケティング定性は独立レビュアーの項目別スコアで採点する。**
+   `references/marketing-rubric.md` の 10 項目を、**そのページを作っていない**
+   レビュアーに採点させる。作った本人の自己採点は甘くなる。
+
+7. Evaluate every required category below.
+8. Report findings by severity with evidence, impact, recommended fix, and verification method.
+9. Separate confirmed issues from assumptions or items needing human/legal review.
 
 ## Required Audit Categories
 

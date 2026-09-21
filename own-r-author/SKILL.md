@@ -7,7 +7,11 @@ description: >-
   R functions, {targets} pipelines, or geospatial data code (sf / GeoParquet
   / DuckDB / duckplyr), or when naming functions/variables and choosing which
   libraries and loop constructs to use. Also use when porting legacy
-  camelCase R code to the current standard. Do not use for Python-only work
+  camelCase R code to the current standard. **R のコードをレビューするときも本 skill を使う** — 汎用の `/code-review` は
+  正しさ・簡素化・効率を見るが、この系統の R 規約（`func_` 接頭辞・snake_case・
+  tidyverse + targets・ライブラリ選定・ループの書き方）は持たない。両方が要るなら
+  本 skill の規約で見てから `/code-review` を重ねる。
+  Do not use for Python-only work
   (use uv-based rules) or non-code docs.
 ---
 

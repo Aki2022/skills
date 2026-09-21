@@ -17,20 +17,20 @@ superseded_by: ""
 ## Context
 
 The skill-usage scheduler has four human decisions that must remain visible before a commit or
-push. Placing those reminders in `origin-trouble-log` would mix a standing procedure with
+push. Placing those reminders in `own-trouble-log` would mix a standing procedure with
 append-only incident evidence. That skill also intentionally has no automatic reminder or scheduler.
 
 ## Decision
 
 Keep the current review checklist in `GUIDE-skill-usage-metrics.md`, where operator-visible
 behavior and approval boundaries already live. Add a generic closeout pointer in
-`origin-close-session` so the related guide's `承認前レビュー` section is read before Git
-integration. Leave `origin-trouble-log` unchanged; record there only an actual omission, false
+`own-session-close` so the related guide's `承認前レビュー` section is read before Git
+integration. Leave `own-trouble-log` unchanged; record there only an actual omission, false
 completion, or other observed friction.
 
 ## Alternatives Considered
 
-- Add the checklist to `origin-trouble-log`: rejected because evidence and standing policy would
+- Add the checklist to `own-trouble-log`: rejected because evidence and standing policy would
   be mixed, and the skill's no-automatic-trigger contract would not prevent forgetting.
 - Create a second permanent review ledger: rejected because it duplicates the guide and creates a
   new synchronization surface.

@@ -18,34 +18,34 @@ guide_impact_reason: "The review handoff becomes an operator-visible part of the
 
 Keep the four human decisions needed before committing the skill-usage scheduler in the current
 guide, and make the closeout workflow point to that checklist. Do not add operational reminders or
-non-incident records to `origin-trouble-log`.
+non-incident records to `own-trouble-log`.
 
 ## Acceptance
 
-- verify: machine — python3 origin-doc-update/scripts/validate_repo_docs.py ~/.agents/skills && bash origin-skill-commonize/scripts/skill_lint.sh ~/.agents/skills; both exit 0
+- verify: machine — python3 origin-doc-update/scripts/validate_repo_docs.py ~/.agents/skills && bash own-skill-commonize/scripts/skill_lint.sh ~/.agents/skills; both exit 0
   <!-- `machine — <command and expected result>`, or `human-review — <who reviews what>` -->
 
 ## Current Status
 
 The proposed ownership boundary is accepted: the guide owns the current review checklist,
-`origin-close-session` owns the closeout pointer, and `origin-trouble-log` remains evidence-only.
+`own-session-close` owns the closeout pointer, and `own-trouble-log` remains evidence-only.
 The checklist and pointer are now implemented, and the guide records this issue as a source.
 
 ## Next Actions
 
 Continue using the guide checklist for operator-visible changes. If a future omission occurs,
-record that observed friction in `origin-trouble-log`; do not turn this checklist into an incident
+record that observed friction in `own-trouble-log`; do not turn this checklist into an incident
 entry. No scheduler, alias, account-state, or existing trouble-log entry changes are needed.
 
 ## Guide Impact
 
 - Decision: required
-- Target or reason: `GUIDE-skill-usage-metrics` records the review checklist and `origin-close-session` points to it.
+- Target or reason: `GUIDE-skill-usage-metrics` records the review checklist and `own-session-close` points to it.
 
 ## Notes
 
 - This is a loop-machinery improvement, not a new scheduler feature.
-- A review concern without an actual omission is not an `origin-trouble-log` incident.
+- A review concern without an actual omission is not an `own-trouble-log` incident.
 - ADR: `docs/adrs/ADR-20260910-review-handoff-not-trouble-log.md`.
 
 ## Completion

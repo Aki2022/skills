@@ -23,7 +23,7 @@ account state into a shared report.
 
 ## Decision
 
-Add a read-only collector under `origin-skill-commonize/scripts/` with explicit Claude-project and
+Add a read-only collector under `own-skill-commonize/scripts/` with explicit Claude-project and
 Codex-session roots. It normalizes only actual user messages, counts canonical skill tokens per
 account and window, derives dependency-only status from canonical cross-skill references, and
 labels no-evidence rows as `unknown`. JSON/JSONL output contains counts, coverage metadata, and

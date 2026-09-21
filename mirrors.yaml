@@ -1,5 +1,5 @@
-# 第三者 skill のミラー台帳。規約は origin-skill-commonize/SKILL.md「skill の供給源は正典のみ」。
-# 検査は origin-skill-commonize/scripts/check_mirrors.sh（同値: local_copy とのハッシュ比較 / 鮮度: fetched_at）。
+# 第三者 skill のミラー台帳。規約は own-skill-commonize/SKILL.md「skill の供給源は正典のみ」。
+# 検査は own-skill-commonize/scripts/check_mirrors.sh（同値: local_copy とのハッシュ比較 / 鮮度: fetched_at）。
 mirrors:
   - dir: frontend-design
     upstream: anthropics/skills

@@ -12,7 +12,7 @@ Turn an ambiguous development direction into an approved `docs/specs/` source of
 1. Locate the repository root and read its agent instructions.
 2. Read `docs/00_index.md` first when it exists.
 3. Read only the relevant specs, guides, active workstream or issue, and code needed to understand the request.
-4. If the docs scaffold is absent, use `origin-doc-update` to initialize `docs/00_index.md`, `docs/specs/`, `docs/workstreams/`, `docs/issues/`, and `docs/guides/` before grilling.
+4. If the docs scaffold is absent, use `own-doc-update` to initialize `docs/00_index.md`, `docs/specs/`, `docs/workstreams/`, `docs/issues/`, and `docs/guides/` before grilling.
 5. Determine the mode:
    - **Greenfield**: shape a new spec from an undeveloped idea.
    - **Revision**: update one existing spec while preserving unrelated settled intent.
@@ -104,9 +104,9 @@ If the user says no, continue the grill. If the user approves:
 1. Set `status: active` and remove `Next Question`.
 2. Remove resolved items from `Open Questions`.
 3. Update the spec and `docs/00_index.md` descriptions as current intent.
-4. Run the repository docs validator from `origin-doc-update` when available.
+4. Run the repository docs validator from `own-doc-update` when available.
 5. Report affected guides and workstreams without changing their implementation state.
-6. Hand off any implementation planning or workstream creation to `origin-doc-update`, which must establish its own human authorization boundary.
+6. Hand off any implementation planning or workstream creation to `own-doc-update`, which must establish its own human authorization boundary.
 
 ## Stop safely
 

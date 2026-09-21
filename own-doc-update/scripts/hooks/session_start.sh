@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# origin-doc-update :: SessionStart hook (Claude Code / Codex shared shim)
+# own-doc-update :: SessionStart hook (Claude Code / Codex shared shim)
 #
 # Injects a routing digest of docs/00_index.md into the agent context when the
 # current repository uses the doc-governance system. Graceful no-op for every
@@ -40,7 +40,7 @@ hook_dir="$(cd "$(dirname "$0")" 2>/dev/null && pwd || true)"
 digest_script=""
 for candidate in \
   "${hook_dir:-.}/../index_digest.py" \
-  "${HOME}/.agents/skills/origin-doc-update/scripts/index_digest.py"; do
+  "${HOME}/.agents/skills/own-doc-update/scripts/index_digest.py"; do
   if [ -f "${candidate}" ]; then
     digest_script="${candidate}"
     break
@@ -58,7 +58,7 @@ fi
 review_note=""
 newest="$(ls "${cwd%/}/docs/log/" 2>/dev/null | sed -n 's/^review-\([0-9]\{8\}\)\.md$/\1/p' | sort | tail -1)"
 if [ -z "${newest}" ]; then
-  review_note="docs review: never run (python3 ~/.agents/skills/origin-doc-update/scripts/docs_hygiene.py <repo> --review)"
+  review_note="docs review: never run (python3 ~/.agents/skills/own-doc-update/scripts/docs_hygiene.py <repo> --review)"
 else
   now_days=$(( $(date +%s) / 86400 ))
   then_days=$(( $(date -j -f %Y%m%d "${newest}" +%s 2>/dev/null || date -d "${newest}" +%s 2>/dev/null || echo 0) / 86400 ))

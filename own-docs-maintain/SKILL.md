@@ -5,9 +5,9 @@ description: >-
   判断が要る整理 — 閉じる候補の判定と archive、参照されない guide/spec の降格、32KB 超や履歴混在の
   guide/spec の分割・圧縮 — を subagent が一次証拠で判定して適用し、判断の記録を repo に残す。人間の tick を
   待たない。予算（1 回の close で判定 1 本＋分割/圧縮 2 本まで）で token 消費を有界にする。
-  必ず使うこと: own-session-close の Step 2（origin-doc-update）の直後、docs/00_index.md を持つ repo で。
+  必ず使うこと: own-session-close の Step 2（own-doc-update）の直後、docs/00_index.md を持つ repo で。
   「docs を整理して」「docs を圧縮して」「index が膨れている」「guide が大きすぎる」「docs を自動で維持」
-  と言われた時。使わない場面: 規約・テンプレート・validator・hygiene の機械修正そのもの（origin-doc-update
+  と言われた時。使わない場面: 規約・テンプレート・validator・hygiene の機械修正そのもの（own-doc-update
   が持つ）、コード変更に伴う guide の更新（各 issue の slice が持つ）、fixture repo（ws-loop-fixture 等）。
 ---
 
@@ -15,7 +15,7 @@ description: >-
 
 docs/ は次のセッションが最初に読むコンテキストで、放っておくと三つの経路で膨れる:
 閉じない（完了した issue が active に残る）、書き足す（index や guide に経緯が積まれる）、
-大きい guide を丸ごと参照する。origin-doc-update の `docs_hygiene.py` はこのうち機械で決まる
+大きい guide を丸ごと参照する。own-doc-update の `docs_hygiene.py` はこのうち機械で決まる
 部分を直し、決まらない部分を候補として数える。この skill はその候補を **subagent が一次証拠で
 判定して適用する**。人間は判断を求められず、判断の記録（sweep / review ファイルへの刻印）を
 後から読める。
@@ -43,7 +43,7 @@ docs/ は次のセッションが最初に読むコンテキストで、放っ�
 
 ## 手順
 
-1. **機械修正**: `python3 ~/.agents/skills/origin-doc-update/scripts/docs_hygiene.py <repo> --fix --report --json`
+1. **機械修正**: `python3 ~/.agents/skills/own-doc-update/scripts/docs_hygiene.py <repo> --fix --report --json`
    を実行し、JSON を保存する（R1〜R9 の件数、sweep 候補、review の split/demote 候補）。
 2. **計画**: `python3 ~/.agents/skills/own-docs-maintain/scripts/plan.py <repo> <hygiene.json>` が、
    予算内で今回やる作業を JSON で出す: `judge`（sweep 候補があれば 1）、`docs`（分割/圧縮の対象、

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Cross-check origin-doc-update active issues against real git branch/worktree state.
+"""Cross-check own-doc-update active issues against real git branch/worktree state.
 
 Read-only. Never mutates git or docs. Bridges own-git-clean (owns git state) with
-origin-doc-update (owns issue front matter) so branch classification in own-git-clean's
+own-doc-update (owns issue front matter) so branch classification in own-git-clean's
 Stage 2 can be driven by actual active-issue references instead of name
 guessing, and so resuming an issue can detect a branch that went missing.
 """
@@ -15,7 +15,7 @@ from typing import Optional
 
 
 def parse_front_matter(path: str) -> Optional[dict]:
-    """Parse top-level scalar YAML front matter fields. Mirrors origin-doc-update's
+    """Parse top-level scalar YAML front matter fields. Mirrors own-doc-update's
     validate_repo_docs.py parser: only reads unindented `key: value` lines,
     so inline lists like `related_specs: []` are captured as their raw
     string value and multi-line list items are ignored (not needed here)."""
@@ -67,7 +67,7 @@ def main() -> None:
     issues_dir = os.path.join(repo, "docs", "issues")
 
     if not os.path.isdir(issues_dir):
-        print("(skipped: no docs/issues/ found — origin-doc-update not in use here)")
+        print("(skipped: no docs/issues/ found — own-doc-update not in use here)")
         return
 
     is_git_repo = subprocess.run(

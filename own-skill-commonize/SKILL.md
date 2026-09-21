@@ -112,7 +112,7 @@ repo トークンは `trade` / `yorisoi` / `bizops` / `iscore` / `marketing`。
 `-cleanup` `-maintenance` `-routing` `-warehouse` 等）と、`動作-対象` の逆順。
 
 **skill 名は description と並んで発火条件そのもの**で、動作の無い名前は「何をする skill か」を
-名前から読めなくする。実害があった — `origin-design-runtime` と `own-design-route` の
+名前から読めなくする。実害があった — `origin-design-runtime`（当時の名前。現 `own-web-design`） と `own-design-route` の
 役割が名前から区別できず、人間が指摘して初めて分かった。名詞末尾が機能を隠していた実例は
 ほかにも4件あり、いずれも description を読むと名前と実体が違っていた
 （`-policy` の実体は振り分け、`-access` の実体は質問への回答、`-report` の実体は実装）。
@@ -504,7 +504,7 @@ python3 scripts/sync_per_skill_aliases.py \
 ```
 
 実行タイミング: スキルの新規作成・編集・移動・削除の直後（この Skill の作業の一部として）。
-サードパーティ由来スキル（ミラー）の FAIL は**中身を手で直さず、上流から再取得して同期する**（ミラー規約: バイト同一）。同値・鮮度は `scripts/check_mirrors.sh` で確認する。第三者本文を手で直さず、修正対象は origin-* など自前スキルのみとする。
+サードパーティ由来スキル（ミラー）の FAIL は**中身を手で直さず、上流から再取得して同期する**（ミラー規約: バイト同一）。同値・鮮度は `scripts/check_mirrors.sh` で確認する。第三者本文を手で直さず、修正対象は own-* の自前スキルのみとする。
 
 使用実績を定量化するときは `scripts/measure_skill_usage.py` を使う。Claude/Codex の履歴 root と
 正典 root を明示して、実ユーザーメッセージに残る `$skill` / `/skill` だけを account 別に集計する。

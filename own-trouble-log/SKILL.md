@@ -9,7 +9,7 @@ description: >-
   質問・空振りの検査に気づいた時、「トラブルを記録」「今のを記録して」「摩擦を記録」
   「溜まりを分析」「トリアージして」「記録を棚卸し」と言われた時。skill を使っていない
   場面のトラブルも対象で、skill 名は任意。使用しない場面: リポジトリ固有の技術的バグの
-  起票（各リポジトリの issue が持つ）、skill 本文の改訂そのもの（origin-skill-commonize
+  起票（各リポジトリの issue が持つ）、skill 本文の改訂そのもの（own-skill-commonize
   が所有）、hook や settings.json の作成（settings を扱う skill が所有）。
 ---
 
@@ -268,13 +268,13 @@ rm -f "$triaged"
 | --------------------------------------------- | ------------------------------------------- |
 | 1 件の追記（7 節テンプレートの提供を含む）    | この skill                                  |
 | トリアージ（人間が起動）                      | この skill                                  |
-| 形式化の実行: skill 新設・改訂                | `origin-skill-commonize` へ委譲             |
+| 形式化の実行: skill 新設・改訂                | `own-skill-commonize` へ委譲             |
 | 形式化の実行: hook / settings.json            | settings.json を扱う skill へ委譲           |
 | 形式化の実行: permission リスト（allow/deny） | settings.json を扱う skill へ委譲           |
 | 形式化の実行: リポジトリ固有の guide / issue  | 当該リポジトリの `origin-doc-update` へ委譲 |
 
 **受け渡しの境界を明示する。** 「skill の記述が現実とズレていた」型のトラブルは、
-**集めるのがこの skill・直すのが `origin-skill-commonize`**。境界を書かないと
+**集めるのがこの skill・直すのが `own-skill-commonize`**。境界を書かないと
 どちらも動かないケースが生じる。
 
 **人間ゲートは形式化の直前に置く。** `~/.agents/` は全リポジトリ・全セッションに効く

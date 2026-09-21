@@ -53,4 +53,4 @@ Every browser session you open is yours to close. Orphaned automation browsers l
 
 ## Repo-specific detail
 
-Repos with their own established browser workflow take precedence over this default — check for a project doc/skill first (e.g. biz_ops's `docs/guides/browser-automation-policy.md`, referenced from the `origin-bizops-daily-mail` skill). This Skill only fills the gap when no repo-specific policy exists.
+Repos with their own established browser workflow take precedence over this default — check for a project doc/skill first (e.g. biz_ops's `docs/guides/browser-automation-policy.md`, referenced from the `own-bizops-mail-triage` skill). This Skill only fills the gap when no repo-specific policy exists.

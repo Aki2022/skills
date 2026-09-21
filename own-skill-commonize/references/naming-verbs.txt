@@ -1,6 +1,7 @@
-# origin-* skill 名の末尾に置ける動詞（ADR-20260915-unify-skill-naming-to-object-action）
+# 自前 skill 名の末尾に置ける動詞（ADR-20260915-unify-skill-naming-to-object-action）
 #
-# 規則: origin-<対象>-<動作>。末尾は必ずこのリストの語。
+# 規則: own-<対象>-<動作>（3語=グローバル正典 / own-<repo>-<対象>-<動作> 4語=リポジトリ固有）。
+# 末尾は必ずこのリストの語。
 # これは allowlist であって denylist ではない。新しい動詞が要るときは
 # 「落ちてから足す」— 知らない語を黙って通すより、止まって人間が判断する側に倒す。
 # 幅広い動詞（handle / work / manage / process 等）は足さない。情報を持たない動詞は

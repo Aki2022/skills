@@ -470,3 +470,188 @@ class ReportPrivacyTest(HygieneFixture):
         self.assertNotIn(str(Path.home()), text)
         self.assertNotIn(root.name, text)
         self.assertIn("mode: dry run", text)
+
+
+class GitIgnoredLargeInputTest(HygieneFixture):
+    def test_many_probes_do_not_hang(self):
+        root = self.make_repo()
+        (root / ".gitignore").write_text("_output/\n")
+        refs = [f"src/dir{n}/file{n}.ts" for n in range(400)] + ["_output/index.html"]
+        import time
+        t = time.time()
+        ignored = MODULE.gitignored(root, refs)
+        self.assertLess(time.time() - t, 20)
+        self.assertEqual(ignored, {"_output/index.html"})
+
+
+class HandoffFixTest(HygieneFixture):
+    def test_updated_at_behind_git_is_synced(self):
+        root = self.make_repo()
+        path = self.add_issue(root, "ISSUE-20260901-lag", "active", "2026-08-01")
+        git(root, "add", ".")
+        git(root, "commit", "-q", "-m", "touch", when="2026-09-10T00:00:00")
+        report = MODULE.run(root, fix=True, report=False, today=date(2026, 9, 19))
+        self.assertEqual(report["fixes"]["A5_updated_at_synced"]["count"], 1)
+        self.assertIn("updated_at: 2026-09-10", path.read_text())
+        again = MODULE.run(root, fix=True, report=False, today=date(2026, 9, 19))
+        self.assertEqual(again["fixes"]["A5_updated_at_synced"]["count"], 0)
+
+    def test_finish_language_on_active_issue_is_reported(self):
+        root = self.make_repo()
+        p = self.add_issue(root, "ISSUE-20260901-said-done", "active", "2026-09-01")
+        p.write_text(p.read_text().replace("## Acceptance", "## Current Status\n\n✅ 完了した。残作業なし。\n\n## Acceptance"))
+        self.add_issue(root, "ISSUE-20260901-live", "active", "2026-09-01")
+        index = root / "docs/00_index.md"
+        index.write_text(index.read_text().replace(
+            "- [ISSUE-20260901-live](issues/ISSUE-20260901-live.md) — one line",
+            "- [ISSUE-20260901-live](issues/ISSUE-20260901-live.md) — 実装済み、あとは merge のみ"))
+        report = MODULE.run(root, fix=False, report=False, today=date(2026, 9, 19))
+        items = {i["file"]: i["where"] for i in report["report"]["R7_says_done_but_active"]["items"]}
+        self.assertEqual(set(items), {"docs/issues/ISSUE-20260901-said-done.md", "docs/issues/ISSUE-20260901-live.md"})
+        self.assertEqual(items["docs/issues/ISSUE-20260901-said-done.md"], "Current Status")
+        self.assertEqual(items["docs/issues/ISSUE-20260901-live.md"], "index row")
+
+
+class SweepTest(HygieneFixture):
+    def test_sweep_writes_checklist_and_apply_archives_only_ticked(self):
+        root = self.make_repo()
+        old = (date(2026, 9, 19) - timedelta(days=45)).isoformat()
+        self.add_issue(root, "ISSUE-20260701-gone", "in_progress", old, branch="feat/gone")
+        keep = self.add_issue(root, "ISSUE-20260702-keep", "active", old, branch="feat/keep")
+        git(root, "add", ".")
+        git(root, "commit", "-q", "-m", "more", when="2026-06-01T00:00:00")
+        sweep = MODULE.write_sweep(root, today=date(2026, 9, 19))
+        text = sweep.read_text()
+        self.assertEqual(sweep.name, "sweep-20260919.md")
+        self.assertIn("- [ ] archive `docs/issues/ISSUE-20260701-gone.md`", text)
+        self.assertIn("- [ ] archive `docs/issues/ISSUE-20260702-keep.md`", text)
+        # human ticks one, writes a reason on the other
+        text = text.replace("- [ ] archive `docs/issues/ISSUE-20260701-gone.md`",
+                            "- [x] archive `docs/issues/ISSUE-20260701-gone.md`")
+        text = text.replace("- [ ] archive `docs/issues/ISSUE-20260702-keep.md`",
+                            "- [ ] archive `docs/issues/ISSUE-20260702-keep.md` — keep: still waiting on vendor")
+        sweep.write_text(text)
+        result = MODULE.apply_sweep(root, sweep, today=date(2026, 9, 19))
+        self.assertEqual(result["archived"], ["docs/issues/ISSUE-20260701-gone.md"])
+        self.assertEqual(result["kept"], ["docs/issues/ISSUE-20260702-keep.md"])
+        self.assertTrue((root / "docs/issues/archive/ISSUE-20260701-gone.md").exists())
+        self.assertTrue(keep.exists())
+        self.assertIn("status: active", keep.read_text())
+        # the decision is recorded in the sweep file itself
+        self.assertIn("applied 2026-09-19", sweep.read_text())
+
+
+class ReviewTest(HygieneFixture):
+    """--review re-weights the current-truth layers by how the living docs use them."""
+
+    def build(self, root: Path) -> None:
+        g = root / "docs/guides"; s = root / "docs/specs"
+        (g / "hot.md").write_text("---\nupdated_at: 2026-09-01\n---\n# Hot\n\nbody\n")
+        (g / "cold.md").write_text("---\nupdated_at: 2026-03-01\n---\n# Cold\n\nbody\n")
+        (g / "orphan-big.md").write_text(
+            "---\nupdated_at: 2026-03-01\n---\n# Big\n\n" +
+            "".join(f"## Part {n}\n\n" + "x" * 7000 + "\n\n" for n in range(10)))
+        (s / "policy.md").write_text("---\nid: SPEC-policy\nstatus: active\ncreated_at: 2026-01-01\nupdated_at: 2026-01-01\n---\n# P\n")
+        self.add_issue(root, "ISSUE-20260901-work", "active", "2026-09-01")
+        p = root / "docs/issues/ISSUE-20260901-work.md"
+        p.write_text(p.read_text() + "\nSee [hot](../guides/hot.md).\n")
+        (s / "cited.md").write_text("---\nid: SPEC-cited\nstatus: active\ncreated_at: 2026-01-01\nupdated_at: 2026-01-01\n---\n# C\n")
+        (g / "bare.md").write_text("---\nupdated_at: 2026-03-01\n---\n# Bare\n")
+        p.write_text(p.read_text() + "Policy per SPEC-cited.\n")
+        index = root / "docs/00_index.md"
+        index.write_text(index.read_text() + "\n## Guides\n\n- [hot](guides/hot.md) — x\n- [cold](guides/cold.md) — y\n- docs/guides/bare.md — bare path form\n")
+        git(root, "add", ".")
+        git(root, "commit", "-q", "-m", "docs", when="2026-03-01T00:00:00")
+
+    def test_review_tiers_and_split_candidates(self):
+        root = self.make_repo()
+        self.build(root)
+        review = MODULE.build_review(root, today=date(2026, 9, 19))
+        tiers = {r["file"]: r["tier"] for r in review["docs"]}
+        self.assertEqual(tiers["docs/guides/hot.md"], "hot")       # linked from active work
+        self.assertEqual(tiers["docs/guides/cold.md"], "warm")     # only the index links it
+        self.assertEqual(tiers["docs/guides/orphan-big.md"], "cold")  # no inbound link, old
+        self.assertEqual(tiers["docs/specs/policy.md"], "cold")
+        self.assertEqual(tiers["docs/specs/cited.md"], "hot")    # cited by id from active work
+        self.assertEqual(tiers["docs/guides/bare.md"], "warm")   # bare-path index row
+        demote = {d["file"] for d in review["demote_candidates"]}
+        self.assertEqual(demote, {"docs/guides/orphan-big.md", "docs/specs/policy.md"})
+        split = {d["file"]: d for d in review["split_candidates"]}
+        self.assertIn("docs/guides/orphan-big.md", split)
+        self.assertEqual(len(split["docs/guides/orphan-big.md"]["sections"]), 10)
+
+    def test_review_file_is_a_checklist_and_records_the_review_date(self):
+        root = self.make_repo()
+        self.build(root)
+        path = MODULE.write_review(root, today=date(2026, 9, 19))
+        text = path.read_text()
+        self.assertEqual(path.name, "review-20260919.md")
+        self.assertIn("- [ ] archive `docs/guides/orphan-big.md`", text)
+        self.assertIn("- [ ] split `docs/guides/orphan-big.md`", text)
+        self.assertIn("hot: 2", text)
+        self.assertEqual(MODULE.last_review_date(root), date(2026, 9, 19))
+        # apply_sweep understands the same archive rows
+        self.assertIsNone(MODULE.last_review_date(self.make_repo()))
+
+    def test_review_due_is_reported_by_hygiene(self):
+        root = self.make_repo()
+        self.build(root)
+        report = MODULE.run(root, fix=False, report=False, today=date(2026, 9, 19))
+        self.assertEqual(report["report"]["R8_review_overdue"]["count"], 1)
+        MODULE.write_review(root, today=date(2026, 9, 19))
+        report = MODULE.run(root, fix=False, report=False, today=date(2026, 9, 19))
+        self.assertEqual(report["report"]["R8_review_overdue"]["count"], 0)
+
+
+class ContextBudgetTest(HygieneFixture):
+    def test_report_runs_review_and_counts_context_budget(self):
+        root = self.make_repo()
+        (root / "docs/guides/big.md").write_text("---\nupdated_at: 2026-09-01\n---\n# B\n\n" + "x" * 40000 + "\n")
+        self.add_issue(root, "ISSUE-20260901-w", "active", "2026-09-01", index=False)
+        p = root / "docs/issues/ISSUE-20260901-w.md"
+        p.write_text(p.read_text() + "\nSee [big](../guides/big.md).\n")
+        report = MODULE.run(root, fix=False, report=True, today=date(2026, 9, 19))
+        r9 = report["report"]["R9_context_budget"]
+        self.assertEqual(r9["items"][0]["oversized_docs"], 1)
+        self.assertEqual(r9["items"][0]["hot_docs_kb"], 39)
+        self.assertEqual(r9["items"][0]["digest_dropped_entries"], 0)
+        self.assertTrue((root / "docs/log/review-20260919.md").exists())
+        self.assertEqual(report["review_path"], "docs/log/review-20260919.md")
+        self.assertEqual(report["report"]["R8_review_overdue"]["count"], 0)
+
+
+class KeepCooldownTest(HygieneFixture):
+    def test_recently_kept_candidates_are_not_re_listed(self):
+        root = self.make_repo()
+        old = (date(2026, 9, 19) - timedelta(days=45)).isoformat()
+        self.add_issue(root, "ISSUE-20260701-gone", "in_progress", old, branch="feat/gone")
+        self.add_issue(root, "ISSUE-20260702-also", "in_progress", old, branch="feat/also")
+        git(root, "add", "."); git(root, "commit", "-q", "-m", "m", when="2026-06-01T00:00:00")
+        first = MODULE.write_sweep(root, today=date(2026, 9, 19))
+        first.write_text(first.read_text().replace(
+            "- [ ] archive `docs/issues/ISSUE-20260701-gone.md`",
+            "- [ ] archive `docs/issues/ISSUE-20260701-gone.md` — keep: vendor waiting"))
+        # the second one was judged with a sub-bullet, the way the first judge wrote it
+        first.write_text(first.read_text().replace(
+            "- [ ] archive `docs/issues/ISSUE-20260702-also.md`\n",
+            "- [ ] archive `docs/issues/ISSUE-20260702-also.md`\n  - keep: still live\n"))
+        second = MODULE.write_sweep(root, today=date(2026, 9, 25))
+        text = second.read_text()
+        self.assertNotIn("ISSUE-20260701-gone", text)
+        self.assertNotIn("ISSUE-20260702-also", text)
+        self.assertIn("skipped: 2", text)
+        later = MODULE.write_sweep(root, today=date(2026, 11, 1))
+        self.assertIn("ISSUE-20260701-gone", later.read_text())
+
+
+class UpdatedAtNoDriftTest(HygieneFixture):
+    def test_a_commit_that_only_bumped_updated_at_does_not_move_it_again(self):
+        root = self.make_repo()
+        path = self.add_issue(root, "ISSUE-20260901-lag", "active", "2026-08-01")
+        git(root, "add", "."); git(root, "commit", "-q", "-m", "content", when="2026-09-10T00:00:00")
+        MODULE.run(root, fix=True, report=False, today=date(2026, 9, 19))
+        self.assertIn("updated_at: 2026-09-10", path.read_text())
+        git(root, "add", "."); git(root, "commit", "-q", "-m", "docs(hygiene): sync", when="2026-09-19T00:00:00")
+        again = MODULE.run(root, fix=True, report=False, today=date(2026, 9, 25))
+        self.assertEqual(again["fixes"]["A5_updated_at_synced"]["count"], 0)
+        self.assertIn("updated_at: 2026-09-10", path.read_text())

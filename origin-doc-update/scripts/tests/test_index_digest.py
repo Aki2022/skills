@@ -191,6 +191,33 @@ class FrontMatterAndPolicyTest(unittest.TestCase):
         self.assertIn("完了した行は消さない", digest)
 
 
+class OnlyCompressWhenItHasToTest(unittest.TestCase):
+    """A small index arrives as itself; compressing it would lose fidelity for nothing."""
+
+    def test_an_index_that_fits_is_passed_through_unchanged(self):
+        text = index("updated_at: 2026-09-20\n",
+                     "## Read Policy\n\nRead this file first.\n\n"
+                     "## Specs\n\n- [s](specs/s.md) — **bold** description with `code`\n")
+
+        block = MODULE.render_injection(text)
+
+        self.assertIn(text, block)
+        self.assertIn("**bold**", block)
+        self.assertNotIn("routing digest", block)
+
+    def test_an_index_that_does_not_fit_arrives_as_a_marked_digest(self):
+        rows = "".join(
+            f"- [ISSUE-{n:03d}](issues/ISSUE-{n:03d}.md) — " + "説明" * 120 + "\n"
+            for n in range(60)
+        )
+        block = MODULE.render_injection(index("updated_at: 2026-09-20\n",
+                                              "## Active Issues\n\n" + rows))
+
+        self.assertIn("routing digest", block)
+        self.assertLessEqual(len(block), MODULE.DIGEST_MAX_CHARS)
+        self.assertIn("issues/ISSUE-059.md", block)
+
+
 class NeverErrorsTest(unittest.TestCase):
     def test_an_empty_index_produces_something_short_and_valid(self):
         digest = MODULE.build_digest("")

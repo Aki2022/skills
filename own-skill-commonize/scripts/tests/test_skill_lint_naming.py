@@ -66,6 +66,7 @@ class NamingRuleTests(unittest.TestCase):
     def _global(self, home: Path) -> Path:
         r = home / ".agents" / "skills"
         r.mkdir(parents=True, exist_ok=True)
+        (r / "mirrors.yaml").write_text("mirrors: []\n")  # 正典の内在的な印
         return r
 
     def test_verb_ending_passes(self):
@@ -161,3 +162,42 @@ class NamingDataTests(unittest.TestCase):
                 malformed.append(name)
         self.assertEqual(migrated, [], f"移行済みなのに猶予リストに残っている: {migrated}")
         self.assertEqual(malformed, [], f"自前 skill の名前ではない行: {malformed}")
+
+
+class CanonDetectionTests(unittest.TestCase):
+    """所属の判定が「正典そのもののパス」に依存しないことを確かめる。
+
+    欠陥（2026-09-21 実測）: 判定が $HOME/.agents/skills との**パス一致**だったため、
+    正典を別チェックアウト（worktree / CI / レビュアーの作業コピー）で lint すると
+    全 skill が「リポジトリ固有＝4語」と誤判定され **25件 FAIL** した。
+
+    ws-loop は独立レビュアーに `git worktree add --detach` で品質ゲートを走らせろと
+    定めているので、この欠陥はレビュー工程を直撃する（レビュアーが必ず赤になる）。
+
+    正典は `mirrors.yaml` を持つ（第三者 skill のミラー台帳）。リポジトリ固有の
+    .agents/skills は5リポジトリのいずれも持たない。この内在的な印で判定する。
+    """
+
+    def test_canon_detected_outside_home_path(self):
+        """陽性対照。HOME の外にある正典でも3語が通ること。"""
+        with TemporaryDirectory() as d:
+            home = Path(d) / "elsewhere"
+            root = home / "checkout" / "skills"   # $HOME/.agents/skills ではない
+            root.mkdir(parents=True)
+            (root / "mirrors.yaml").write_text("mirrors: []\n")   # 正典の印
+            _write_skill(root, "own-thing-update")
+            r = _lint_home(root, home)
+            self.assertEqual(
+                r.returncode, 0,
+                f"正典の印を持つ root は、パスが違っても3語で通るべき\n{r.stdout}{r.stderr}")
+
+    def test_repo_local_still_requires_four_words(self):
+        """陰性対照。印が無ければ従来どおりリポジトリ固有として4語を要求する。"""
+        with TemporaryDirectory() as d:
+            home = Path(d)
+            root = home / "repo" / ".agents" / "skills"
+            root.mkdir(parents=True)
+            _write_skill(root, "own-thing-update")   # 3語
+            r = _lint_home(root, home)
+            self.assertNotEqual(r.returncode, 0, f"印が無ければ3語は落ちるべき\n{r.stdout}{r.stderr}")
+            self.assertIn("S9", r.stdout + r.stderr)

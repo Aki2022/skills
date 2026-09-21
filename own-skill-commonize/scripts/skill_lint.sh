@@ -60,16 +60,17 @@ if [ ! -f "$naming_verbs_file" ]; then
 fi
 naming_verbs=" $(grep -v '^[[:space:]]*#' "$naming_verbs_file" | tr -s '[:space:]' ' ') "
 naming_exceptions=" "
-naming_home_root=$(cd "$HOME/.agents/skills" 2>/dev/null && pwd -P || echo "")
 [ -f "$naming_exceptions_file" ] && \
   naming_exceptions=" $(grep -v '^[[:space:]]*#' "$naming_exceptions_file" | tr -s '[:space:]' ' ') "
 
 root_index=0
 for root in "${roots[@]}"; do
   [ -d "$root" ] || { note "skip (not a directory): $root"; continue; }
-  # S9: この root がグローバル正典か、リポジトリ固有かで期待語数が変わる
-  naming_root_real=$(cd "$root" 2>/dev/null && pwd -P || echo "$root")
-  if [ -n "$naming_home_root" ] && [ "$naming_root_real" = "$naming_home_root" ]; then
+  # S9: この root がグローバル正典か、リポジトリ固有かで期待語数が変わる。
+  # 判定は**内在的な印**で行う — mirrors.yaml（第三者 skill のミラー台帳）は正典だけが持つ。
+  # パス一致（$HOME/.agents/skills）で判定すると、正典を別チェックアウト（worktree・CI・
+  # レビュアーの作業コピー）で lint したとき全 skill が誤判定されて赤くなる。実測 25件。
+  if [ -f "$root/mirrors.yaml" ]; then
     naming_want=3; naming_where="グローバル正典"
   else
     naming_want=4; naming_where="リポジトリ固有"

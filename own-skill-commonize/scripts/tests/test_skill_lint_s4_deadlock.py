@@ -53,6 +53,11 @@ def _bash5() -> str | None:
 
 
 def _build(root: Path, name: str, n: int) -> None:
+    root.mkdir(parents=True, exist_ok=True)
+    # S9 は mirrors.yaml の有無で正典/リポジトリ固有を判定する。
+    # 印が無いとリポジトリ固有（4語）と見なされ、3語の fixture が S9 で落ちて
+    # デッドロックの検査にならない。
+    (root / "mirrors.yaml").write_text("mirrors: []\n")
     d = root / name
     (d / "references").mkdir(parents=True, exist_ok=True)
     body = ["---", f"name: {name}", "description: many references", "---"]

@@ -25,6 +25,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 from datetime import date
 from pathlib import Path
 from typing import Optional
@@ -612,7 +613,229 @@ def fill_front_matter(root: Path, fix: bool, today: date, result: dict) -> None:
     result["A4_front_matter_added"] = {"count": len(items), "items": items}
 
 
-# ------------------------------------------------------------------- R1..R6
+# ----------------------------------------------------------- A5 updated_at sync
+
+def last_content_commit_date(root: Path, path: Path, limit: int = 8) -> Optional[str]:
+    """Date of the newest commit that changed something other than `updated_at:`.
+
+    Without this, A5 chases its own tail: a hygiene commit that only bumped
+    `updated_at` becomes the file's newest commit, so the next run bumps
+    `updated_at` again to that commit's date, forever (seen 2026-09-21).
+    """
+    relpath = str(path.relative_to(root))
+    out = git(root, "log", f"-{limit}", "--format=%H %cs", "--", relpath)
+    if not out:
+        return None
+    for line in out.strip().splitlines():
+        sha, when = line.split()
+        diff = git(root, "show", "--format=", "--unified=0", sha, "--", relpath) or ""
+        changed = [
+            l for l in diff.splitlines()
+            if (l.startswith("+") or l.startswith("-"))
+            and not l.startswith(("+++", "---"))
+            and not re.match(r"^[+-]updated_at:", l)
+        ]
+        if changed or diff.strip() == "":
+            # a commit with no textual diff here (rename/mode) still counts as content
+            return when
+    return None
+
+
+def sync_updated_at(root: Path, fix: bool, result: dict) -> None:
+    """`updated_at` older than the file's last *content* commit is a lie the
+    staleness checks would believe; git knows better, so the field follows git."""
+    items = []
+    for path in docs_files(root, "issues", "workstreams", "guides", "specs"):
+        fm = parse_front_matter(path)
+        if not fm or "updated_at" not in fm:
+            continue
+        current = as_text(fm.get("updated_at", ""))[:10]
+        last = last_content_commit_date(root, path)
+        if not last or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", current) or current >= last:
+            continue
+        items.append({"file": rel(root, path), "from": current, "to": last})
+        if fix:
+            path.write_text(set_scalar(path.read_text(), "updated_at", last))
+    result["A5_updated_at_synced"] = {"count": len(items), "items": items}
+
+
+# ------------------------------------------------------------------- R1..R7
+
+FINISH_RE = re.compile(r"✅|完了|済み|解消済|対応済|\bdone\b|\bshipped\b|\bmerged\b", re.IGNORECASE)
+
+
+def section_text(body: str, heading: str) -> str:
+    match = re.search(rf"^##[ \t]+{re.escape(heading)}[ \t]*$", body, re.MULTILINE)
+    if not match:
+        return ""
+    rest = body[match.end():]
+    nxt = re.search(r"^##[ \t]", rest, re.MULTILINE)
+    return rest[: nxt.start()] if nxt else rest
+
+
+def report_says_done(root: Path, report: dict) -> None:
+    """An open issue whose own status line or index row already says it is finished."""
+    index = (root / "docs/00_index.md").read_text()
+    items = []
+    for path in docs_files(root, "issues"):
+        fm = parse_front_matter(path) or {}
+        status = as_text(fm.get("status", "")).strip().lower()
+        if STATUS_ALIASES.get(status, status) == "complete":
+            continue
+        body = path.read_text()
+        where = None
+        current = section_text(body, "Current Status")
+        first_line = next((l for l in current.splitlines() if l.strip()), "")
+        if FINISH_RE.search(first_line):
+            where = "Current Status"
+        else:
+            for line in index.splitlines():
+                if f"{path.stem}.md" in line and FINISH_RE.search(line.split("](", 1)[-1]):
+                    where = "index row"
+                    break
+        if where:
+            items.append({"file": rel(root, path), "status": status, "where": where})
+    report["R7_says_done_but_active"] = {
+        "count": len(items), "items": items,
+        "rule": "not complete, but the first line of Current Status or the index row carries "
+                "finish language (✅/完了/済み/done/merged) — flip status to complete or fix the text",
+    }
+
+
+# ---------------------------------------------------------------------- sweep
+
+SWEEP_LINE = re.compile(r"^- \[( |x|X)\] archive `([^`]+)`(.*)$")
+
+
+KEEP_COOLDOWN_DAYS = 30
+def kept_files_in(text: str) -> set[str]:
+    """Files marked keep in a sweep/review: `— keep:` on the row, or a `- keep:`
+    sub-bullet under it (the first judge wrote it that way; both count)."""
+    kept: set[str] = set()
+    current: Optional[str] = None
+    for line in text.splitlines():
+        m = re.match(r"^- \[ \] (?:archive|split) `([^`]+)`(.*)$", line)
+        if m:
+            current = m.group(1)
+            if "keep:" in m.group(2):
+                kept.add(current)
+            continue
+        if line.startswith("- ["):
+            current = None
+            continue
+        if current and re.match(r"^\s+- (?:keep|— keep):", line):
+            kept.add(current)
+    return kept
+
+
+def recently_kept(root: Path, today: date) -> set[str]:
+    """Files a sweep or review judged `keep` within KEEP_COOLDOWN_DAYS.
+
+    Re-judging them every close-session would spend a subagent on the same
+    evidence; the review keeps listing them, so nothing is forgotten.
+    """
+    kept: set[str] = set()
+    log_dir = root / "docs/log"
+    if not log_dir.is_dir():
+        return kept
+    for path in list(log_dir.glob("sweep-*.md")) + list(log_dir.glob("review-*.md")):
+        m = re.search(r"(\d{4})(\d{2})(\d{2})\.md$", path.name)
+        if not m:
+            continue
+        try:
+            when = date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except ValueError:
+            continue
+        if (today - when).days <= KEEP_COOLDOWN_DAYS:
+            kept.update(kept_files_in(path.read_text()))
+    return kept
+
+
+def sweep_candidates(result: dict, exclude: Optional[set[str]] = None) -> list[dict]:
+    seen: dict[str, dict] = {}
+    exclude = exclude or set()
+    for key in ("R1_stale_branch_gone", "R7_says_done_but_active", "R2_untouched_60d"):
+        for item in result["report"].get(key, {}).get("items", []):
+            if item["file"] in exclude:
+                continue
+            entry = seen.setdefault(item["file"], {"file": item["file"], "evidence": []})
+            entry["evidence"].append(key.split("_", 1)[0] + ": " + ", ".join(
+                f"{k}={v}" for k, v in item.items() if k != "file"))
+    return list(seen.values())
+
+
+def write_sweep(root: Path, today: Optional[date] = None) -> Path:
+    """Write docs/log/sweep-YYYYMMDD.md: one checkbox per closure candidate.
+
+    The human (or the agent, when the evidence is mechanical) ticks `[x]` to
+    archive, or leaves `[ ]` and appends `— keep: <reason>`. `apply_sweep`
+    then archives exactly the ticked rows and stamps the file, so the decision
+    lives in the repository next to the work it closed.
+    """
+    today = today or date.today()
+    result = run(root, fix=False, report=False, today=today)
+    kept = recently_kept(root, today)
+    candidates = sweep_candidates(result, exclude=kept)
+    lines = [
+        "---", f"updated_at: {today.isoformat()}", "kind: sweep", "---", "",
+        f"# docs sweep {today.isoformat()}",
+        "",
+        "閉じる候補。`[x]` で archive、残すなら `[ ]` のまま末尾に `— keep: <理由>` を書く。",
+        "適用: `python3 docs_hygiene.py <repo> --apply-sweep docs/log/sweep-"
+        f"{today.strftime('%Y%m%d')}.md`（tick 行だけ status を complete にして archive する）。",
+        "",
+        f"candidates: {len(candidates)}  (judged keep within {KEEP_COOLDOWN_DAYS} days and skipped: "
+        f"{len(kept)})",
+        "",
+    ]
+    for c in candidates:
+        lines.append(f"- [ ] archive `{c['file']}`")
+        for e in c["evidence"]:
+            lines.append(f"  - {e}")
+    lines.append("")
+    log_dir = root / "docs/log"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    path = log_dir / f"sweep-{today.strftime('%Y%m%d')}.md"
+    path.write_text("\n".join(lines))
+    return path
+
+
+def apply_sweep(root: Path, sweep_path: Path, today: Optional[date] = None) -> dict:
+    today = today or date.today()
+    text = sweep_path.read_text()
+    archived, kept, failed = [], [], []
+    for line in text.splitlines():
+        m = SWEEP_LINE.match(line)
+        if not m:
+            continue
+        ticked, relpath = m.group(1).lower() == "x", m.group(2)
+        path = root / relpath
+        if not ticked:
+            kept.append(relpath)
+            continue
+        if not path.is_file():
+            failed.append({"file": relpath, "reason": "not found (already archived?)"})
+            continue
+        content = set_scalar(path.read_text(), "status", "complete")
+        content = set_scalar(content, "updated_at", today.isoformat())
+        content = re.sub(r"^([ \t]*[-*+][ \t]+\[)[ \t]*(\])", r"\g<1>x\g<2>", content, flags=re.MULTILINE)
+        path.write_text(content)
+        script = "archive_workstream.py" if relpath.startswith("docs/workstreams/") else "archive_issue.py"
+        proc = subprocess.run(
+            [sys.executable, str(SCRIPTS_DIR / script), str(path), "--repo", str(root)],
+            capture_output=True, text=True, check=False,
+        )
+        if proc.returncode == 0 and not path.exists():
+            archived.append(relpath)
+        else:
+            failed.append({"file": relpath, "reason": " / ".join((proc.stderr or proc.stdout).strip().splitlines()[:3])})
+    stamp = (f"\n\n---\napplied {today.isoformat()}: archived {len(archived)}, kept {len(kept)}, "
+             f"failed {len(failed)}\n")
+    if "\napplied " not in text:
+        sweep_path.write_text(text.rstrip("\n") + stamp)
+    return {"archived": archived, "kept": kept, "failed": failed, "sweep": rel(root, sweep_path)}
+
+
 
 def report_issues(root: Path, today: date, report: dict) -> None:
     branches = git_branches(root)
@@ -703,12 +926,24 @@ def gitignored(root: Path, refs: list[str]) -> set[str]:
     if not refs:
         return set()
     probes = [r for ref in refs for r in (ref, ref + "/")]
+    # Feed the probes from a file, not a pipe: with ~770 lines piped in from
+    # Python, `git check-ignore --stdin` never returned (measured 2026-09-20 on
+    # yorisoi_kaigo, three runs, 10-25 min each), while the same list redirected
+    # from a file finished in 0.02 s. A timeout guards the remaining unknown; on
+    # expiry nothing is filtered, which only over-reports.
     try:
-        out = subprocess.run(
-            ["git", "check-ignore", "--stdin"], cwd=root, input="\n".join(probes),
-            capture_output=True, text=True, check=False,
-        )
-    except (OSError, ValueError):
+        with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as fh:
+            fh.write("\n".join(probes) + "\n")
+            probe_file = fh.name
+        try:
+            with open(probe_file) as stdin:
+                out = subprocess.run(
+                    ["git", "check-ignore", "--stdin"], cwd=root, stdin=stdin,
+                    capture_output=True, text=True, check=False, timeout=60,
+                )
+        finally:
+            os.unlink(probe_file)
+    except (OSError, ValueError, subprocess.TimeoutExpired):
         return set()
     # exit 0 = some ignored, 1 = none ignored, 128 = not a repo / git error
     if out.returncode not in (0, 1):
@@ -803,6 +1038,226 @@ def report_baselines(root: Path, report: dict) -> None:
                                   "rule": "entries still exempt; the list may only shrink"}
 
 
+
+# --------------------------------------------------------------------- review
+
+REVIEW_EVERY_DAYS = 14
+COLD_DAYS = 90
+# A guide or spec is opened whole; past this it costs more than a session's index budget.
+DOC_SOFT_MAX_BYTES = 32 * 1024
+SPLIT_BYTES = DOC_SOFT_MAX_BYTES
+ANY_LINK_RE = re.compile(r"\]\(([^)\s#]+\.md)")
+BARE_DOC_RE = re.compile(r"(?<![\w./(])(docs/(?:guides|specs|adrs)/[\w.-]+\.md)")
+ID_RE = re.compile(r"\b((?:ADR|SPEC|GUIDE)-[A-Za-z0-9][\w-]*)")
+
+
+def last_review_date(root: Path) -> Optional[date]:
+    """Date of the newest docs/log/review-YYYYMMDD.md, or None when never reviewed."""
+    log_dir = root / "docs/log"
+    if not log_dir.is_dir():
+        return None
+    dates = []
+    for path in log_dir.glob("review-*.md"):
+        m = re.fullmatch(r"review-(\d{4})(\d{2})(\d{2})\.md", path.name)
+        if m:
+            try:
+                dates.append(date(int(m.group(1)), int(m.group(2)), int(m.group(3))))
+            except ValueError:
+                continue
+    return max(dates) if dates else None
+
+
+def inbound_links(root: Path) -> dict[str, dict[str, set[str]]]:
+    """For every doc: which *living* documents link to it, grouped by source kind.
+
+    Sources are the index, active issues/workstreams, guides, specs and ADRs.
+    archive/ and log/ are history and do not count as use.
+    """
+    root = root.resolve()  # macOS: /var vs /private/var would break relative_to
+    docs = root / "docs"
+    inbound: dict[str, dict[str, set[str]]] = {}
+    ids_to_paths: dict[str, set[str]] = {}
+    for path in docs_files(root, "guides", "specs", "adrs"):
+        fm = parse_front_matter(path) or {}
+        doc_id = as_text(fm.get("id", "")).strip()
+        if doc_id:
+            ids_to_paths.setdefault(doc_id, set()).add(rel(root, path))
+    sources = [docs / "00_index.md"] + docs_files(root, "issues", "workstreams", "guides", "specs", "adrs")
+    for src in sources:
+        if not src.is_file():
+            continue
+        kind = "index" if src.name == "00_index.md" else src.parent.name
+        text = src.read_text()
+        targets: set[str] = set()
+        for target in ANY_LINK_RE.findall(text):
+            if target.startswith(("http://", "https://")):
+                continue
+            resolved = (src.parent / target).resolve()
+            try:
+                targets.add(resolved.relative_to(root).as_posix())
+            except ValueError:
+                continue
+        # The index template links by bare path (`- docs/guides/x.md — ...`), and
+        # issues cite ADRs/specs by id; both are use, not decoration.
+        targets.update(BARE_DOC_RE.findall(text))
+        for doc_id in ID_RE.findall(text):
+            for candidate in ids_to_paths.get(doc_id, ()):
+                targets.add(candidate)
+        for key in targets:
+            inbound.setdefault(key, {}).setdefault(kind, set()).add(rel(root, src))
+    return inbound
+
+
+def build_review(root: Path, today: Optional[date] = None) -> dict:
+    """Re-weight the current-truth layers (guides, specs, ADRs) by actual use.
+
+    hot  = linked from active work (issue/workstream) or another guide/spec;
+    warm = linked only from the index;
+    cold = no inbound link from any living document, or only from itself.
+    A cold document older than COLD_DAYS is a demotion candidate (archive, or
+    merge into the guide that superseded it). A guide/spec over SPLIT_BYTES or
+    with many dated headings is a split candidate, listed with its H2 sections
+    so the split is a mechanical cut rather than a rewrite.
+    """
+    today = today or date.today()
+    root = Path(root).resolve()
+    inbound = inbound_links(root)
+    rows = []
+    demote = []
+    split = []
+    for path in docs_files(root, "guides", "specs", "adrs"):
+        key = rel(root, path)
+        text = path.read_text()
+        size = len(text.encode())
+        _first, last = git_dates(root, path)
+        fm = parse_front_matter(path) or {}
+        age = days_since(last or as_text(fm.get("updated_at", "")), today)
+        sources = {k: {s for s in v if s != key} for k, v in inbound.get(key, {}).items()}
+        sources = {k: v for k, v in sources.items() if v}
+        if any(k in sources for k in ("issues", "workstreams", "guides", "specs", "adrs")):
+            tier = "hot"
+        elif "index" in sources:
+            tier = "warm"
+        else:
+            tier = "cold"
+        dated = len(DATED_HEADING_RE.findall(text))
+        row = {"file": key, "tier": tier, "bytes": size, "last_commit": last, "days": age,
+               "inbound": {k: sorted(v) for k, v in sources.items()}, "dated_headings": dated}
+        rows.append(row)
+        if tier == "cold" and (age is None or age > COLD_DAYS):
+            demote.append({"file": key, "days": age, "bytes": size,
+                           "reason": "no living document links here" + (f", last commit {age}d ago" if age else "")})
+        if size > SPLIT_BYTES or dated > HISTORY_HEADINGS_MAX:
+            sections = []
+            parts = re.split(r"(?m)^(?=## )", text)
+            for part in parts:
+                m = re.match(r"^## (.+)$", part, re.MULTILINE)
+                if m:
+                    sections.append({"heading": m.group(1).strip()[:80], "bytes": len(part.encode())})
+            split.append({"file": key, "bytes": size, "dated_headings": dated, "sections": sections})
+    tiers = {"hot": 0, "warm": 0, "cold": 0}
+    for r in rows:
+        tiers[r["tier"]] += 1
+    return {"today": today.isoformat(), "docs": rows, "tiers": tiers,
+            "demote_candidates": demote, "split_candidates": split,
+            "last_review": (last_review_date(root) or "never") if isinstance(last_review_date(root), str) else
+                           (last_review_date(root).isoformat() if last_review_date(root) else "never")}
+
+
+def write_review(root: Path, today: Optional[date] = None) -> Path:
+    today = today or date.today()
+    root = Path(root).resolve()
+    review = build_review(root, today)
+    t = review["tiers"]
+    lines = [
+        "---", f"updated_at: {today.isoformat()}", "kind: review", "---", "",
+        f"# docs review {today.isoformat()}",
+        "",
+        "現在の真実の層（guides / specs / adrs）を、生きている文書からの参照で重み付けした点検。",
+        "hot = active な issue/workstream か他の guide/spec が参照、warm = index だけが参照、cold = どこからも参照されない。",
+        f"cold で {COLD_DAYS} 日以上動いていないものは降格候補、{SPLIT_BYTES // 1024}KB 超か日付見出し {HISTORY_HEADINGS_MAX} 超は分割候補。",
+        "`[x]` を付けて `docs_hygiene.py <repo> --apply-sweep docs/log/review-"
+        f"{today.strftime('%Y%m%d')}.md` で archive 行だけ適用できる。split 行は手で行う（H2 ごとの大きさを付けた）。",
+        "",
+        f"tiers — hot: {t['hot']}, warm: {t['warm']}, cold: {t['cold']}  (previous review: {review['last_review']})",
+        "",
+        "## Demote candidates",
+        "",
+    ]
+    if not review["demote_candidates"]:
+        lines.append("- none")
+    for d in review["demote_candidates"]:
+        lines.append(f"- [ ] archive `{d['file']}`")
+        lines.append(f"  - {d['reason']}, {d['bytes']} bytes")
+    lines += ["", "## Split candidates", ""]
+    if not review["split_candidates"]:
+        lines.append("- none")
+    for d in review["split_candidates"]:
+        lines.append(f"- [ ] split `{d['file']}` — {d['bytes'] // 1024}KB, dated headings {d['dated_headings']}")
+        for sct in d["sections"][:40]:
+            lines.append(f"  - {sct['bytes'] // 1024}KB  {sct['heading']}")
+    lines += ["", "## All current-truth documents", "", "| tier | file | KB | last commit | linked from |", "|---|---|---|---|---|"]
+    for r in sorted(review["docs"], key=lambda r: ({"cold": 0, "warm": 1, "hot": 2}[r["tier"]], r["file"])):
+        linked = ", ".join(f"{k}×{len(v)}" for k, v in sorted(r["inbound"].items())) or "—"
+        lines.append(f"| {r['tier']} | `{r['file']}` | {r['bytes'] // 1024} | {r['last_commit'] or '?'} | {linked} |")
+    lines.append("")
+    log_dir = root / "docs/log"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    path = log_dir / f"review-{today.strftime('%Y%m%d')}.md"
+    path.write_text("\n".join(lines))
+    return path
+
+
+def report_context_budget(root: Path, report: dict) -> None:
+    """What a session actually pays to read this repository's docs.
+
+    digest_dropped: index entries the SessionStart digest could not deliver;
+    oversized: guides/specs over DOC_SOFT_MAX_BYTES (opened whole, so each one
+    costs more than the whole index budget); hot_bytes: total size of guides and
+    specs linked from active issues/workstreams — the set a working session opens.
+    """
+    items = []
+    dropped = None
+    try:
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        import index_digest  # type: ignore
+        rendered = index_digest.render_injection((root / "docs/00_index.md").read_text())
+        m = re.search(r"ほか (\d+) 件を省略", rendered)
+        dropped = int(m.group(1)) if m else 0
+    except Exception:  # digest is best-effort; absence must not hide the rest
+        dropped = None
+    oversized = []
+    for path in docs_files(root, "guides", "specs"):
+        size = path.stat().st_size
+        if size > DOC_SOFT_MAX_BYTES:
+            oversized.append({"file": rel(root, path), "kb": size // 1024})
+    inbound = inbound_links(root)
+    hot = 0
+    for key, sources in inbound.items():
+        if key.startswith(("docs/guides/", "docs/specs/")) and (sources.get("issues") or sources.get("workstreams")):
+            f = root / key
+            if f.is_file():
+                hot += f.stat().st_size
+    items.append({"digest_dropped_entries": dropped, "oversized_docs": len(oversized), "hot_docs_kb": hot // 1024})
+    count = (dropped or 0) + len(oversized)
+    report["R9_context_budget"] = {
+        "count": count, "items": items + oversized,
+        "rule": f"digest must drop 0 entries; no guide/spec over {DOC_SOFT_MAX_BYTES // 1024}KB "
+                "(it is read whole); hot_docs_kb is what an active session opens",
+    }
+
+
+def report_review_due(root: Path, today: date, report: dict) -> None:
+    last = last_review_date(root)
+    overdue = last is None or (today - last).days > REVIEW_EVERY_DAYS
+    report["R8_review_overdue"] = {
+        "count": 1 if overdue else 0,
+        "items": [{"last_review": last.isoformat() if last else "never",
+                   "days": (today - last).days if last else None}] if overdue else [],
+        "rule": f"docs/log/review-YYYYMMDD.md newer than {REVIEW_EVERY_DAYS} days must exist — run --review",
+    }
+
+
 # ----------------------------------------------------------------- rendering
 
 def render_report(result: dict) -> str:
@@ -879,7 +1334,7 @@ def run(repo: str | Path, fix: bool, report: bool, today: Optional[date] = None)
         raise FileNotFoundError(f"{root}: docs/00_index.md not found — not a governed repository")
     result: dict = {
         "repo": str(root), "today": today.isoformat(), "fix": fix,
-        "fixes": {}, "report": {}, "report_path": None,
+        "fixes": {}, "report": {}, "report_path": None, "review_path": None,
     }
     fixes = result["fixes"]
     # Order matters: envelopes first so statuses can be read, aliases next so
@@ -887,15 +1342,26 @@ def run(repo: str | Path, fix: bool, report: bool, today: Optional[date] = None)
     # rows the archive pass removed are not first copied into the log.
     fill_front_matter(root, fix, today, fixes)
     normalize_statuses(root, fix, today, fixes)
+    sync_updated_at(root, fix, fixes)
     archive_complete(root, fix, fixes)
     move_index_narrative(root, fix, today, fixes)
 
     rep = result["report"]
     report_issues(root, today, rep)
+    report_says_done(root, rep)
     report_dead_references(root, rep)
     report_history_in_docs(root, rep)
     report_layout(root, rep)
     report_baselines(root, rep)
+    report_context_budget(root, rep)
+
+    if report:
+        # The review is deterministic and takes seconds, so it runs with every
+        # report (every close-session); the 14-day check below is the backstop
+        # for repositories no session closes (user decision 2026-09-21: 90 was too long).
+        review_path = write_review(root, today)
+        result["review_path"] = rel(root, review_path)
+    report_review_due(root, today, rep)
 
     if report:
         log_dir = root / "docs/log"
@@ -913,8 +1379,30 @@ def main() -> None:
     parser.add_argument("--report", action="store_true",
                         help="write docs/log/hygiene-YYYYMMDD.md with judgment candidates")
     parser.add_argument("--json", action="store_true", help="print the full result as JSON")
+    parser.add_argument("--sweep", action="store_true",
+                        help="write docs/log/sweep-YYYYMMDD.md: a checklist of closure candidates")
+    parser.add_argument("--apply-sweep", metavar="FILE",
+                        help="archive the `[x]` rows of a sweep or review file and stamp it")
+    parser.add_argument("--review", action="store_true",
+                        help="write docs/log/review-YYYYMMDD.md: guides/specs/ADRs re-weighted by use")
     args = parser.parse_args()
     try:
+        if args.review:
+            path = write_review(Path(args.repo).resolve())
+            print(f"review written: {path}")
+            sys.exit(0)
+        if args.apply_sweep:
+            outcome = apply_sweep(Path(args.repo).resolve(), Path(args.apply_sweep).resolve())
+            print(json.dumps(outcome, ensure_ascii=False, indent=2) if args.json else
+                  f"sweep applied: archived={len(outcome['archived'])} kept={len(outcome['kept'])} "
+                  f"failed={len(outcome['failed'])} ({outcome['sweep']})")
+            for f in outcome["failed"]:
+                print(f"  failed {f['file']}: {f['reason']}")
+            sys.exit(1 if outcome["failed"] else 0)
+        if args.sweep:
+            path = write_sweep(Path(args.repo).resolve())
+            print(f"sweep written: {path}")
+            sys.exit(0)
         result = run(args.repo, fix=args.fix, report=args.report)
     except FileNotFoundError as error:
         print(f"docs_hygiene: {error}", file=sys.stderr)

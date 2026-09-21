@@ -29,6 +29,7 @@ FrontMatter = dict[str, object]
 INDEX_MAX_BYTES = 32 * 1024
 INDEX_MAX_LINE_CHARS = 500
 INDEX_MAX_PROSE_RATIO = 0.5
+DOC_SOFT_MAX_BYTES = 32 * 1024
 
 # The issue template ships `status: active`, so `active` is canonical for a
 # standalone issue even though embedded workstream blocks use the four-value set.
@@ -232,8 +233,8 @@ def extract_section(content: str, heading: str) -> str | None:
     return match.group(1) if match else None
 
 
-# origin-ws-loop treats a missing runnability record as `gated` and stops the
-# whole run; origin-goal refuses to start on an unrecorded envelope and cannot
+# own-ws-drain treats a missing runnability record as `gated` and stops the
+# whole run; own-goal-run refuses to start on an unrecorded envelope and cannot
 # verify an empty acceptance. These checks keep those safe defaults from firing
 # where no human ever set a gate.
 RUNNABILITY_RE = re.compile(r"^(ready|gated on \S.*)$")
@@ -608,6 +609,31 @@ def parse_issue_queue_table_ids(content: str) -> set[str]:
 
 
 INDEX_LINK_RE = re.compile(r"\]\([^)\s]+\.md(?:#[^)\s]*)?\)|^[ \t]*[-*+][ \t]+docs/")
+# Words that state progress in a routing row; the frontmatter `status` owns that.
+INDEX_STATUS_WORD_RE = re.compile(r"✅|完了|済み|未着手|着手済|進行中|blocked|in_progress|\bdone\b|\bWIP\b")
+
+
+def section_body(body: str, heading: str) -> str:
+    """Text of `## <heading>` up to the next `## `, comments stripped ('' when absent)."""
+    match = re.search(rf"^##[ \t]+{re.escape(heading)}[ \t]*$", body, re.MULTILINE)
+    if not match:
+        return ""
+    rest = body[match.end():]
+    nxt = re.search(r"^##[ \t]", rest, re.MULTILINE)
+    section = rest[: nxt.start()] if nxt else rest
+    return re.sub(r"<!--.*?-->", "", section, flags=re.DOTALL)
+
+
+def section_is_empty(body: str, heading: str) -> bool:
+    """True when `## <heading>` exists and holds only blanks/comments up to the next `## `."""
+    match = re.search(rf"^##[ \t]+{re.escape(heading)}[ \t]*$", body, re.MULTILINE)
+    if not match:
+        return False
+    rest = body[match.end():]
+    nxt = re.search(r"^##[ \t]", rest, re.MULTILINE)
+    section = rest[: nxt.start()] if nxt else rest
+    section = re.sub(r"<!--.*?-->", "", section, flags=re.DOTALL)
+    return not section.strip()
 
 
 def validate_index_size(index_path: Path, errors: list[str], warnings: list[str]) -> None:
@@ -646,6 +672,17 @@ def validate_index_size(index_path: Path, errors: list[str], warnings: list[str]
         if line.strip() and not re.match(r"^[ \t]{0,3}#{1,6}[ \t]+", line)
         and not re.match(r"^[ \t]*\|?[ \t]*:?-{3,}", line)
     ]
+    status_rows = [
+        n for n, line in enumerate(content.splitlines(), 1)
+        if INDEX_LINK_RE.search(line) and INDEX_STATUS_WORD_RE.search(line.split("](", 1)[-1])
+    ]
+    if status_rows:
+        shown = ", ".join(str(n) for n in status_rows[:5])
+        warnings.append(
+            f"docs/00_index.md: {len(status_rows)} row(s) carry status words (lines {shown}"
+            f"{', …' if len(status_rows) > 5 else ''}) — the frontmatter status is the only status; "
+            "an index row is a link and one line of routing"
+        )
     if len(text_lines) >= 10:
         routing = sum(1 for line in text_lines if INDEX_LINK_RE.search(line))
         ratio = 1 - routing / len(text_lines)
@@ -654,6 +691,41 @@ def validate_index_size(index_path: Path, errors: list[str], warnings: list[str]
                 f"docs/00_index.md: {ratio:.0%} of body lines carry no routing link — "
                 "the index is turning into a dashboard; keep prose in docs/log/"
             )
+
+
+REVIEW_EVERY_DAYS = 14
+
+
+def validate_review_recency(root: Path, warnings: list[str]) -> None:
+    """A repository must have been reviewed (docs_hygiene.py --review) within 14 days.
+
+    Closing work keeps the execution layer honest; nothing else re-weights the
+    current-truth layer as the repository grows. A warning, not an error: the
+    review is a judgment the validator cannot perform, only demand.
+    """
+    import datetime as _dt
+    log_dir = root / "docs/log"
+    newest = None
+    if log_dir.is_dir():
+        for path in log_dir.glob("review-*.md"):
+            m = re.fullmatch(r"review-(\d{8})\.md", path.name)
+            if m:
+                try:
+                    d = _dt.datetime.strptime(m.group(1), "%Y%m%d").date()
+                except ValueError:
+                    continue
+                newest = d if newest is None or d > newest else newest
+    today = _dt.date.today()
+    if newest is None:
+        warnings.append(
+            "docs review: never run — python3 docs_hygiene.py <repo> --review re-weights "
+            "guides/specs/ADRs by use and lists demote/split candidates"
+        )
+    elif (today - newest).days > REVIEW_EVERY_DAYS:
+        warnings.append(
+            f"docs review: last {newest.isoformat()} ({(today - newest).days} days ago) — "
+            f"run docs_hygiene.py --review (every {REVIEW_EVERY_DAYS} days)"
+        )
 
 
 def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
@@ -838,6 +910,34 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
                         "(or docs_hygiene.py --fix)"
                     )
             route_baselined(rel, baseline, deferred, errors, _status_checks)
+            created = as_text(fm.get("created_at", ""))[:10]
+            updated = as_text(fm.get("updated_at", ""))[:10]
+            if status in ISSUE_STATUSES and status != "complete" and updated != created:
+                # The next session resumes from `## Next Actions`; an empty one
+                # hands it nothing and it rescans the repository instead. A file
+                # created today and not yet worked (updated_at == created_at) is
+                # exempt, so create_issue.py output validates without a dummy step.
+                body_text = path.read_text()
+                route_baselined(
+                    rel, baseline, deferred, errors,
+                    lambda sink, _rel=rel, _b=body_text: sink.append(
+                        f"{_rel}: '## Next Actions' is empty — an open issue must name the "
+                        "very next step (or what unblocks it) so the next session can resume"
+                    ) if section_is_empty(_b, "Next Actions") else None,
+                )
+            if status in ISSUE_STATUSES and status != "complete" and updated != created:
+                # The snapshot contract: a resuming session reads the first line of
+                # Current Status as "as of <date> — <state>". Prose without a date
+                # cannot be told apart from last month's prose.
+                first = next(
+                    (l.strip() for l in section_body(path.read_text(), "Current Status").splitlines() if l.strip()),
+                    "",
+                )
+                if first and not re.match(r"^(as of|As of)\s+\d{4}-\d{2}-\d{2}", first):
+                    warnings.append(
+                        f"{rel}: Current Status should open with 'as of YYYY-MM-DD — <one sentence>' "
+                        "so the next session knows how fresh the snapshot is"
+                    )
             branch = as_text(fm.get("branch", "")).strip()
             if not branch:
                 warnings.append(f"{rel}: missing branch (no branch recorded to resume/clean up)")
@@ -892,7 +992,7 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
             if as_text(fm.get("schema_version", "")) != "2":
                 # Skipping quietly made the whole contract below opt-in by the
                 # document under test: a workstream with no envelope, no gates
-                # and no issue blocks passed clean, so origin-goal's rule that
+                # and no issue blocks passed clean, so own-goal-run's rule that
                 # the envelope must be recorded before starting had no
                 # mechanical check left.
                 errors.append(f"{rel}: schema_version must be 2")
@@ -961,6 +1061,19 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
                         errors,
                     )
 
+    # A guide or spec is opened whole by the session that needs it, so one file
+    # over the index ceiling costs more than the entire routing budget.
+    for sub in ("guides", "specs"):
+        directory = root / "docs" / sub
+        if directory.is_dir():
+            for path in sorted(directory.glob("*.md")):
+                size = path.stat().st_size
+                if size > DOC_SOFT_MAX_BYTES:
+                    warnings.append(
+                        f"{path.relative_to(root)}: {size // 1024} KB — a guide/spec is read whole; "
+                        f"over {DOC_SOFT_MAX_BYTES // 1024} KB split it by task (docs_hygiene.py --review lists sections)"
+                    )
+
     guides_dir = root / "docs/guides"
     if guides_dir.is_dir():
         for path in sorted(guides_dir.glob("*.md")):
@@ -987,6 +1100,7 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
 
     validate_relative_links(root, errors, warnings)
     validate_baseline_freshness(root, baseline, deferred, errors, warnings)
+    validate_review_recency(root, warnings)
 
     return errors, warnings
 

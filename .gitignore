@@ -1,7 +1,10 @@
 .DS_Store
-origin-obsidian-research/vault_path.local
-origin-obsidian-research/code_path.local
+own-obsidian-research/vault_path.local
+own-obsidian-research/code_path.local
 
 # Python bytecode（生成物。インタプリタのバージョンごとに増えるため追跡しない）
 __pycache__/
 *.pyc
+
+# Claude Code が ~/.claude/skills alias 経由で書き込む account 同期キャッシュ（UUID 名）。account state であり正典ではない
+/synced/

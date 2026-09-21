@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Optional
 
 from archive_workstream import UNCHECKED_BOX
+from archive_links import plan_link_updates, repoint
 from archive_transaction import apply_archive, cleanup_staged, stage_text
 from index_entries import find_index_entry_lines, normalize_entry_id, remove_index_entry
 from validate_repo_docs import validate_repo
@@ -35,9 +36,24 @@ def read_front_matter_field(content: str, field: str) -> str:
 
 
 def prepare_index_update(
-    index_path: str, issue_id: str, today: Optional[str] = None
-) -> Optional[tuple[str, str, list[tuple[int, str]]]]:
-    """Prepare an index update without writing it or changing the issue."""
+    index_path: str, issue_id: str, today: Optional[str] = None, keep_row: bool = False
+) -> Optional[tuple[str, str, list[tuple[int, str]], int]]:
+    """Prepare an index update without writing it or changing the issue.
+
+    Two shapes of index entry exist and both must survive the move:
+
+    - a row the matcher recognizes (bullet or table) is removed, because the
+      index routes to current work -- or, with `keep_row`, repointed in place
+      for an index whose policy keeps completed rows;
+    - anything else that links the issue (prose, a nested bullet, a sentence in
+      the Read Policy) is repointed at the archive path. Before 2026-09-19 it
+      was left untouched: the script moved the file, excluded the index from
+      link rewriting, and reported success over a link it had just broken.
+
+    Bare paths written as plain text (the template's `- docs/issues/X.md` form)
+    are only handled by the row matcher; repointing rewrites link destinations,
+    which is what the validator resolves.
+    """
     if not os.path.exists(index_path):
         return None
     if not os.path.isfile(index_path):
@@ -47,18 +63,35 @@ def prepare_index_update(
         content = f.read()
 
     target_lines = find_index_entry_lines(content, "docs/issues", issue_id)
-    new_content, removed = remove_index_entry(content, "docs/issues", issue_id)
+    if keep_row:
+        new_content, removed = content, 0
+        target_lines = []
+    else:
+        new_content, removed = remove_index_entry(content, "docs/issues", issue_id)
+        if removed != len(target_lines):
+            raise ValueError(
+                f"index target count mismatch: removed={removed}, reported={len(target_lines)}"
+            )
 
-    if not removed and not target_lines:
+    # Whatever the row matcher did not take now gets repointed, so the move can
+    # never leave a link to the old path behind.
+    before_repoint = new_content
+    new_content = repoint(
+        new_content,
+        referrer_dir="docs",
+        old_path=f"docs/issues/{issue_id}.md",
+        new_path=f"docs/issues/archive/{issue_id}.md",
+    )
+    repointed = sum(
+        1 for old, new in zip(before_repoint.splitlines(), new_content.splitlines()) if old != new
+    )
+
+    if not removed and not target_lines and not repointed:
         return None
-    if removed != len(target_lines):
-        raise ValueError(
-            f"index target count mismatch: removed={removed}, reported={len(target_lines)}"
-        )
 
     today = today or date.today().isoformat()
     new_content = re.sub(r"(updated_at:[ \t]*)[\d-]+", f"\\g<1>{today}", new_content)
-    return content, new_content, target_lines
+    return content, new_content, target_lines, repointed
 
 
 def remove_issue_from_index(index_path: str, issue_id: str) -> tuple[bool, list[tuple[int, str]]]:
@@ -67,7 +100,7 @@ def remove_issue_from_index(index_path: str, issue_id: str) -> tuple[bool, list[
     if plan is None:
         return False, []
 
-    _original, new_content, target_lines = plan
+    _original, new_content, target_lines, _repointed = plan
     path = Path(index_path)
     staged = stage_text(path, new_content, path)
     try:
@@ -81,6 +114,12 @@ def main():
     parser = argparse.ArgumentParser(description="Archive a completed issue.")
     parser.add_argument("issue", help="Issue filename or path (e.g. ISSUE-20260612-foo.md or the full path)")
     parser.add_argument("--repo", default=".", help="Repository root (default: cwd)")
+    parser.add_argument(
+        "--keep-row",
+        action="store_true",
+        help="repoint the index row at the archive instead of removing it "
+        "(for an index whose policy keeps completed rows)",
+    )
     args = parser.parse_args()
 
     repo = os.path.abspath(args.repo)
@@ -150,7 +189,12 @@ def main():
 
     errors, _warnings = validate_repo(repo)
     target = os.path.relpath(src, repo)
-    target_errors = [error for error in errors if error.startswith(target)]
+    # "complete but not archived" is the very defect this script clears, so it
+    # must not gate the move (same self-reference as the archive checkbox).
+    target_errors = [
+        error for error in errors
+        if error.startswith(target) and "complete but not archived" not in error
+    ]
     if target_errors:
         print("Error: resolve issue documentation errors before archiving", file=sys.stderr)
         for error in target_errors:
@@ -174,7 +218,11 @@ def main():
     index_plan = None
     staged_paths = []
     try:
-        index_plan = prepare_index_update(index_path, issue_id, today)
+        index_plan = prepare_index_update(index_path, issue_id, today, keep_row=args.keep_row)
+        old_rel = os.path.relpath(src, repo).replace(os.sep, "/")
+        new_rel = os.path.relpath(dest, repo).replace(os.sep, "/")
+        content, link_updates = plan_link_updates(repo, old_rel, new_rel, content, exclude={"docs/00_index.md"})
+
         staged_destination = stage_text(Path(dest), content, Path(src))
         staged_paths.append(staged_destination)
         staged_source_restore = stage_text(Path(src), original_content, Path(src))
@@ -183,12 +231,21 @@ def main():
         staged_index = None
         staged_index_restore = None
         if index_plan is not None:
-            original_index, new_index, _target_lines = index_plan
+            original_index, new_index, _target_lines, _repointed = index_plan
             index_file = Path(index_path)
             staged_index = stage_text(index_file, new_index, index_file)
             staged_paths.append(staged_index)
             staged_index_restore = stage_text(index_file, original_index, index_file)
             staged_paths.append(staged_index_restore)
+
+        extra = []
+        for path, original, rewritten in link_updates:
+            referrer = Path(path)
+            staged_new = stage_text(referrer, rewritten, referrer)
+            staged_paths.append(staged_new)
+            staged_restore = stage_text(referrer, original, referrer)
+            staged_paths.append(staged_restore)
+            extra.append((referrer, staged_new, staged_restore))
 
         apply_archive(
             Path(src),
@@ -198,6 +255,7 @@ def main():
             Path(index_path) if index_plan is not None else None,
             staged_index,
             staged_index_restore,
+            extra=extra,
         )
     except (OSError, RuntimeError, ValueError) as error:
         print(f"Error: {error}", file=sys.stderr)
@@ -206,14 +264,21 @@ def main():
         cleanup_staged(staged_paths)
 
     print(f"Archived: {fname} -> docs/issues/archive/{fname}")
+    if link_updates:
+        print(f"Rewrote relative links in {len(link_updates)} referring document(s):")
+        for path, _original, _rewritten in link_updates:
+            print(f"  {os.path.relpath(path, repo)}")
     if branch:
         print(f"Note: this issue's branch was '{branch}'.")
-        print(f"  If it still exists, run origin-git-cleanup to check/remove it.")
+        print(f"  If it still exists, run own-git-clean to check/remove it.")
     if index_plan is not None:
-        target_lines = index_plan[2]
-        print(f"Updated: docs/00_index.md (removed {len(target_lines)} active reference(s))")
-        for line_number, line in target_lines:
-            print(f"  line {line_number}: {line}")
+        target_lines, repointed = index_plan[2], index_plan[3]
+        if target_lines:
+            print(f"Updated: docs/00_index.md (removed {len(target_lines)} active reference(s))")
+            for line_number, line in target_lines:
+                print(f"  line {line_number}: {line}")
+        if repointed:
+            print(f"Updated: docs/00_index.md (repointed {repointed} line(s) at the archive)")
     else:
         print(f"Note: {issue_id} not found in docs/00_index.md Active Issues (check manually if needed)")
 

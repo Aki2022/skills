@@ -236,6 +236,30 @@ echo ok
         self.assertEqual(rows[self.entry_a]["response_status"], "recurred")
         self.assertEqual(rows[self.entry_a]["response_ids"], "known-response")
 
+    def test_apply_can_replace_links_and_retire_a_redundant_pattern(self):
+        first = self.run_cli("apply", "--input", str(self.write_payload(self.valid_payload())))
+        self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+        payload = self.valid_payload()
+        payload["report_name"] = "2026-09-22-legacy-mining.md"
+        payload["report_content"] = "# Pattern merge\n\nMerged duplicate runtime context pattern.\n"
+        payload["replace_entries"] = [self.entry_a, self.entry_b]
+        payload["replace_patterns"] = ["unclassified"]
+        payload["retire_patterns"] = ["report-value-loss"]
+        payload["patterns"] = [payload["patterns"][1]]
+        payload["patterns"][0]["title"] = "統合後の材料不足"
+        payload["patterns"][0]["basis"] = "統合後の根拠を更新する"
+        payload["links"][0]["pattern_id"] = "unclassified"
+        payload["links"][0]["response_id"] = ""
+        second = self.run_cli("apply", "--input", str(self.write_payload(payload)))
+        self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
+        with (self.root / "triage/entry-pattern-links.tsv").open(encoding="utf-8", newline="") as handle:
+            rows = list(csv.DictReader(handle, delimiter="\t"))
+        self.assertEqual(len(rows), 2)
+        self.assertEqual({row["pattern_id"] for row in rows}, {"unclassified"})
+        with (self.root / "triage/patterns.tsv").open(encoding="utf-8", newline="") as handle:
+            patterns = list(csv.DictReader(handle, delimiter="\t"))
+        self.assertEqual([row["pattern_id"] for row in patterns], ["unclassified"])
+
     def test_validate_rejects_all_guardrail_violations(self):
         result = self.run_cli("apply", "--input", str(self.write_payload(self.valid_payload())))
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

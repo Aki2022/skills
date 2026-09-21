@@ -27,12 +27,12 @@ guide_impact_reason: "現行挙動は own-trouble-log/SKILL.md と references/st
 
 ## Current Status
 
-as of 2026-09-21 — 226件の索引化・実データ適用・全検証が完了し、branch統合待ち。
+as of 2026-09-22 — 226件の索引化・実データ適用・重複pattern統合・全検証が完了し、branch統合待ち。
 
 ## Next Actions
 
 - `codex/historical-trouble-mining` の変更をreviewして統合する。
-- 30件の新規形式化候補は、人間承認後に所有先ごとの別issueで実装する。
+- 29件の新規形式化候補は、人間承認後に所有先ごとの別issueで実装する。
 
 ## Guide Impact
 
@@ -55,6 +55,7 @@ as of 2026-09-21 — 226件の索引化・実データ適用・全検証が完�
 - 2026-09-21 — 12件pilotが12/12件でschema合格。75・75・76件を3 agentで各1回digestし、再試行0回。
 - 2026-09-21 — 生pattern 79件を重複統合して71件へ整理。226/226件、欠落0件で保管ルートへ適用。
 - 2026-09-21 — entry本文226件の不変、historical index validate、status ledger validate、docs validator、全skill lintを確認。
+- 2026-09-22 — `runtime-context-mismatch` が既存 `verification-target-mismatch` と重複すると人間承認され、11 linkを統合。pattern 71→70、link 226、status遷移0を確認。
 
 ## Completion
 

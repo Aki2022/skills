@@ -115,6 +115,8 @@ new entry
 `mechanism` と `thematic` は候補検索専用で、ledger の `response_ids` や status を更新しない。
 status を変更できるのは同じ entry と response に対応する `direct` 行があり、状態固有の一次証拠も
 説明できる場合だけである。索引へ載せたこと自体は、実装・再発・有効性の証拠ではない。
+重複patternを統合する場合も、旧patternを削除して既存responseへ寄せるだけならstatus遷移ではない。
+統合前後のlink集合と、退役pattern・新しいpattern定義は、別の日付付きhistory reportで追跡する。
 
 ## Next triage procedure
 

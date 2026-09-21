@@ -249,6 +249,17 @@ def _normalize_rows(raw: object, fields: tuple[str, ...], label: str) -> list[di
     return rows
 
 
+def _name_set(payload: dict[str, object], key: str) -> tuple[set[str], list[str]]:
+    raw = payload.get(key, [])
+    if raw is None:
+        raw = []
+    if not isinstance(raw, list) or not all(isinstance(item, str) for item in raw):
+        return set(), [f"{key} must be an array of names"]
+    if len(raw) != len(set(raw)):
+        return set(raw), [f"duplicate {key} name"]
+    return set(raw), []
+
+
 def _validate_status_updates(
     updates: object,
     *,
@@ -386,14 +397,32 @@ def apply_payload(root: Path, input_path: Path) -> int:
             f"snapshot mismatch: missing={len(legacy - snapshot_set)} extra={len(snapshot_set - legacy)}"
         )
 
+    replace_entries, replace_entry_errors = _name_set(payload, "replace_entries")
+    replace_patterns, replace_pattern_errors = _name_set(payload, "replace_patterns")
+    retire_patterns, retire_pattern_errors = _name_set(payload, "retire_patterns")
+    errors.extend(replace_entry_errors + replace_pattern_errors + retire_pattern_errors)
+    existing_pattern_ids = {row["pattern_id"] for row in existing_patterns}
+    if not replace_entries <= snapshot_set:
+        errors.append(f"replace_entries outside snapshot: {len(replace_entries - snapshot_set)}")
+    if not replace_patterns <= existing_pattern_ids:
+        errors.append(f"replace_patterns unknown: {len(replace_patterns - existing_pattern_ids)}")
+    if not retire_patterns <= existing_pattern_ids:
+        errors.append(f"retire_patterns unknown: {len(retire_patterns - existing_pattern_ids)}")
+    if replace_patterns & retire_patterns:
+        errors.append("replace_patterns and retire_patterns overlap")
+
     by_pattern = {row["pattern_id"]: row for row in existing_patterns}
     for row in new_patterns:
         old = by_pattern.get(row["pattern_id"])
-        if old is not None and old != row:
+        if old is not None and old != row and row["pattern_id"] not in replace_patterns:
             errors.append(f"pattern conflicts with existing definition: {row['pattern_id']}")
         by_pattern[row["pattern_id"]] = row
+    merged_links = [row for row in existing_links if row["entry"] not in replace_entries] + new_links
+    if retire_patterns & {row["pattern_id"] for row in new_patterns}:
+        errors.append("retire_patterns contains a newly supplied pattern")
+    for pattern_id in retire_patterns:
+        by_pattern.pop(pattern_id, None)
     merged_patterns = [by_pattern[key] for key in sorted(by_pattern)]
-    merged_links = existing_links + new_links
 
     errors.extend(_validate_pattern_rows(merged_patterns))
     errors.extend(
@@ -404,13 +433,16 @@ def apply_payload(root: Path, input_path: Path) -> int:
             responses=set(registry),
         )
     )
+    target_entries = replace_entries or snapshot_set
     covered = {row["entry"] for row in new_links}
-    missing_coverage = snapshot_set - covered
+    missing_coverage = target_entries - covered
     if missing_coverage:
-        errors.append(f"snapshot entries without links: {len(missing_coverage)}")
-    extra_coverage = covered - snapshot_set
+        label = "replacement entries" if replace_entries else "snapshot entries"
+        errors.append(f"{label} without links: {len(missing_coverage)}")
+    extra_coverage = covered - target_entries
     if extra_coverage:
-        errors.append(f"links outside snapshot: {len(extra_coverage)}")
+        label = "replacement target" if replace_entries else "snapshot"
+        errors.append(f"links outside {label}: {len(extra_coverage)}")
 
     direct_links = {
         (row["entry"], row["response_id"])

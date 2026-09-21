@@ -188,6 +188,10 @@ python3 ~/.agents/skills/own-trouble-log/scripts/historical_index.py --root "$RO
 `apply` は snapshot の全件に少なくとも1リンクがあることを要求し、未知ID・重複リンク・
 不正確度・空の根拠・個人名を含む絶対パスを、どのファイルも更新する前に拒否する。
 status 更新を同じ payload に含める場合も、同じ entry と response の `direct` 行が必須である。
+既存の分類を統合・訂正するときは、同じ全件snapshotと新しい日付付き履歴レポートを使い、
+`replace_entries` で対象entryの既存linkを置換する。pattern定義の更新は
+`replace_patterns`、不要になったpatternの除去は `retire_patterns` で明示する。
+退役patternにlinkが残るpayloadは拒否され、候補の統合だけではstatusを変更しない。
 対策存在後の同型再発は `recurred`、実装と局所テストの直接証拠は
 `implemented_unverified`、人手判断またはリポジトリ固有と直接判定できるものは
 `manual_only` / `repo_specific_pending` とする。未発生だけを根拠に

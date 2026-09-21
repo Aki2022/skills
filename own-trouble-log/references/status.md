@@ -31,7 +31,7 @@ ID は一致させる。ID は短い小文字 kebab-case にし、日付や一�
 | `response_status` | 意味 | 次回の扱い |
 | --- | --- | --- |
 | `unknown` | 未トリアージ、または対策との関係が未確認 | 対象を読み、対応する response を決める |
-| `legacy_unrecorded` | 過去レポートにはあるが、当時は status/evidence 欄が無かった | 過去文を一次証拠として確認する。再実装しない |
+| `legacy_unrecorded` | 過去レポートにはあるが、当時は status/evidence 欄が無かった履歴枠 | 現役 backlog に数えない。再発または新しい一次証拠が出た場合だけ response へ紐付ける |
 | `none` | 対策を採らないと決めた | 決定理由と再発監視だけ残す |
 | `proposed` | 候補を提示したが、人間承認または実装が未完了 | 承認待ち。実装済みとは報告しない |
 | `implemented_unverified` | 対策の実装と局所テストは確認したが、運用上の有効性をまだ測っていない | 同型の発生率・見逃し・誤警告を測る。再実装しない |
@@ -69,13 +69,18 @@ new entry
 1. 全 entry を列挙し、全過去レポートの `## 対象 entry 一覧` の和集合だけで
    `triage_status` を決める。本文中の参照名は使わない。
 2. 過去レポートに列挙済みで、実装・有効性の一次証拠が無い行は
-   `triaged / legacy_unrecorded` とする。`effective` や `implemented` を推測しない。
+   `triaged / legacy_unrecorded` とする。`effective` や `implemented` を推測せず、
+   一括した遡及評価の backlog にもしない。
 3. 既存対策の稼働と検知漏れがレポートに明記された場合だけ `recurred` とし、該当する
    response ID と引用可能な根拠を付ける。
 4. snapshot 後に増えた entry は `untriaged / unknown` とする。現在のレポートに入れず、
    次回対象へ残す。
 5. バックフィルの判定日・件数・保守的な未確定理由は、新規のバックフィルレポートへ書く。
    過去レポートと entry 本体は書き換えない。
+
+`status_ledger.py summary` は `legacy_unrecorded` を `historical_unlinked_entries` として
+表示し、`evaluation_pending_entries` には `implemented_unverified` だけを数える。
+過去の証拠本文は削除せず、存在しない evidence を後付けしない。
 
 ## Next triage procedure
 

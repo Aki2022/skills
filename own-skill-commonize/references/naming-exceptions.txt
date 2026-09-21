@@ -10,15 +10,12 @@
 
 # --- グローバル正典 ~/.agents/skills/ (26) → own-<対象>-<動作> 3語 ---
 origin-doc-update
-origin-skill-commonize
 
 # --- リポジトリ固有 <repo>/.agents/skills/ (9) → own-<repo>-<対象>-<動作> 4語 ---
+# 注: 以下の trade / yorisoi 分は worktree でコミット済みだが、他セッションが実チェックアウトを
+# 占有しているため **まだ実体が旧名のまま**。merge されるまで猶予に残す。
 origin-trial-driven-development
 origin-trade-trial-batch
 origin-trade-data-access
 origin-trade-cycle-manager
 origin-yorisoi-engagement-monitoring
-origin-bizops-daily-mail
-origin-gcp-auth
-origin-stale-approval-report
-origin-consumer-capability-feedback

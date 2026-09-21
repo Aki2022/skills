@@ -22,7 +22,7 @@ transcripts, and make the job safe to disable or rerun without touching aliases 
 
 ## Acceptance
 
-- verify: machine — python3 -m pytest -q origin-skill-commonize/scripts/tests/test_skill_usage_schedule.py && python3 origin-skill-commonize/scripts/install_skill_usage_launchd.py --check; both exit 0
+- verify: machine — python3 -m pytest -q own-skill-commonize/scripts/tests/test_skill_usage_schedule.py && python3 own-skill-commonize/scripts/install_skill_usage_launchd.py --check; both exit 0
   <!-- `machine — <command and expected result>`, or `human-review — <who reviews what>` -->
 
 ## Current Status

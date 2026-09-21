@@ -51,7 +51,7 @@ description: デザインの検査・レビューの入口。何かのデザイ�
   LP のときは個別に並べず、まず `own-lp-review` を呼ぶ。
 - 重複 skill が既知: `baseline-ui` と `source-command-baseline-ui`、
   `fixing-accessibility` と `source-command-fixing-accessibility`（内容に差分あり）。
-  ルーターは **`source-command-` 無し側**を使う。統合は `origin-skill-commonize` の管轄。
+  ルーターは **`source-command-` 無し側**を使う。統合は `own-skill-commonize` の管轄。
 
 ### 3. 実行順序 — 決定論が緑になるまで非決定論へ進まない
 
@@ -81,5 +81,5 @@ description: デザインの検査・レビューの入口。何かのデザイ�
 - 新しい検査 skill を導入・作成したら、この表に行か列を足す。
   表に載っていない skill はルーターから呼ばれず、再び沈黙に戻る。
 - 空欄を埋めた（欠落を解消した）ときは、その skill 名で空欄を置き換える。
-- 表の変更はこのファイルの編集で完結する（`origin-skill-commonize` の
+- 表の変更はこのファイルの編集で完結する（`own-skill-commonize` の
   symlink 規約に従い、どの別名から編集しても正典が更新される）。

@@ -10,7 +10,7 @@ related_specs: []
 
 ## What It Does
 
-`origin-skill-commonize/scripts/measure_skill_usage.py` は、Claude Code と Codex の
+`own-skill-commonize/scripts/measure_skill_usage.py` は、Claude Code と Codex の
 アカウント別 JSONL 履歴を同じ形式に正規化し、指定期間の明示的な skill 呼び出しを数える。
 対象は正典 root にある `SKILL.md` の名前だけで、実行実績がない skill は削除候補にせず
 `unknown` として残す。正典 skill 間の `/skill/references/...` 参照は依存専用の判定に使う。
@@ -21,7 +21,7 @@ related_specs: []
 agent の複数 account は `--claude` / `--codex` を繰り返して指定する。
 
 ```bash
-python3 ~/.agents/skills/origin-skill-commonize/scripts/measure_skill_usage.py \
+python3 ~/.agents/skills/own-skill-commonize/scripts/measure_skill_usage.py \
   --canonical ~/.agents/skills \
   --claude seat1=~/.claude/projects \
   --claude seat2=~/.claude-seat2/projects \
@@ -50,15 +50,15 @@ python3 ~/.agents/skills/origin-skill-commonize/scripts/measure_skill_usage.py \
 停止手順を実行してから人間が内容を確認する。
 
 ```bash
-python3 ~/.agents/skills/origin-skill-commonize/scripts/install_skill_usage_launchd.py --check
-python3 ~/.agents/skills/origin-skill-commonize/scripts/install_skill_usage_launchd.py --install --bootstrap
+python3 ~/.agents/skills/own-skill-commonize/scripts/install_skill_usage_launchd.py --check
+python3 ~/.agents/skills/own-skill-commonize/scripts/install_skill_usage_launchd.py --install --bootstrap
 ```
 
 登録直後に一度だけ実行結果を確認する場合は、`--kickstart` を追加する。これは四つの
 履歴 root を走査して一つの集計行を保存するため、履歴量に応じて時間がかかる。
 
 ```bash
-python3 ~/.agents/skills/origin-skill-commonize/scripts/install_skill_usage_launchd.py \
+python3 ~/.agents/skills/own-skill-commonize/scripts/install_skill_usage_launchd.py \
   --install --bootstrap --kickstart
 ```
 
@@ -84,7 +84,7 @@ commit または push の前に、次の4項目を人間ゲートとして確認
 plist_exact=true loaded=true`、`launchctl print` の直近終了コードが `0` であることを確認する。
 
 ```bash
-python3 ~/.agents/skills/origin-skill-commonize/scripts/install_skill_usage_launchd.py --check
+python3 ~/.agents/skills/own-skill-commonize/scripts/install_skill_usage_launchd.py --check
 launchctl print "gui/$(id -u)/com.origin.skill-usage-metrics"
 ```
 
@@ -101,12 +101,12 @@ launchctl print "gui/$(id -u)/com.origin.skill-usage-metrics"
 ## Maintenance Notes
 
 Claude/Codex の JSONL schema が変わったら、実物を本文を表示しない形で調査し、
-`origin-skill-commonize/scripts/tests/test_measure_skill_usage.py` に正常系と誤検出防止の
+`own-skill-commonize/scripts/tests/test_measure_skill_usage.py` に正常系と誤検出防止の
 fixture を先に追加する。その後、次を実行する。
 
 ```bash
-python3 -m pytest -q origin-skill-commonize/scripts/tests/test_measure_skill_usage.py
-bash origin-skill-commonize/scripts/skill_lint.sh ~/.agents/skills
+python3 -m pytest -q own-skill-commonize/scripts/tests/test_measure_skill_usage.py
+bash own-skill-commonize/scripts/skill_lint.sh ~/.agents/skills
 ```
 
 集計結果は Git 管理の台帳へ自動転記しない。削除・無効化・mirror の変更は、完全な履歴と

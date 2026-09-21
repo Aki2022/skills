@@ -1,5 +1,5 @@
 ---
-name: origin-skill-commonize
+name: own-skill-commonize
 description: >-
   複数のコーディングエージェント（Claude Code / Codex CLI / Antigravity・Gemini CLI 等）の
   設定ファイル、スキル、commands、非秘密のMCP設定を symlink で単一ソースに統一する規約と手順。正典は `.agents/`
@@ -417,9 +417,9 @@ native modeは通常形（正規ファイルの`AGENTS.md`、`CLAUDE.md`なし�
 `CLAUDE.md`、壊れたlink、`AGENTS.override.md`、`CLAUDE.local.md`はFAILとする。
 
 ```bash
-python3 ~/.agents/skills/origin-skill-commonize/scripts/check_repo_instruction_topology.py \
+python3 ~/.agents/skills/own-skill-commonize/scripts/check_repo_instruction_topology.py \
   --repo <repo-root> --mode native
-python3 ~/.agents/skills/origin-skill-commonize/scripts/check_repo_instruction_topology.py \
+python3 ~/.agents/skills/own-skill-commonize/scripts/check_repo_instruction_topology.py \
   --repo <compat-repo-root> --mode compat
 ```
 
@@ -465,7 +465,7 @@ name とディレクトリ名の不一致は自前・第三者を問わず
 `SKILL_LINT_SKIP_PYTEST=1` を設定した場合は S8 を skip するが、その旨を必ず出力する。
 
 ```bash
-bash ~/.agents/skills/origin-skill-commonize/scripts/skill_lint.sh
+bash ~/.agents/skills/own-skill-commonize/scripts/skill_lint.sh
 ```
 
 グローバル alias の形状は `scripts/check_global_topology.py` で別に検査する。
@@ -477,7 +477,7 @@ Codex-only adapted skill は `--codex-adapted` で明示する。未登録の実
 link、root 全体の symlink化は `FAIL` とする。
 
 ```bash
-python3 ~/.agents/skills/origin-skill-commonize/scripts/check_global_topology.py \
+python3 ~/.agents/skills/own-skill-commonize/scripts/check_global_topology.py \
   --canonical <global-skills-root> \
   --claude <claude-skills-root> --codex <codex-skills-root> \
   --gemini <gemini-skills-root> --antigravity <antigravity-skills-root> \

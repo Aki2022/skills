@@ -522,7 +522,7 @@ filing itself.
   the preflight approval as its confirmed boundary — and joins the tail of
   the queue. Everything else (including every loop-process improvement) stays
   an issue for human triage; loop-process changes are applied later by a
-  human through `origin-skill-commonize`.
+  human through `own-skill-commonize`.
 
 ## Scheduled runs
 

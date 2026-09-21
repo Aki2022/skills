@@ -16,7 +16,7 @@
     <array>
         <string>/bin/sh</string>
         <string>-c</string>
-        <string>umask 077; exec /usr/bin/python3 "$HOME/.agents/skills/origin-skill-commonize/scripts/run_skill_usage_metrics.py" &gt;&gt; "$HOME/.local/state/origin-skill-usage/launchd.stdout.log" 2&gt;&gt; "$HOME/.local/state/origin-skill-usage/launchd.stderr.log"</string>
+        <string>umask 077; exec /usr/bin/python3 "$HOME/.agents/skills/own-skill-commonize/scripts/run_skill_usage_metrics.py" &gt;&gt; "$HOME/.local/state/origin-skill-usage/launchd.stdout.log" 2&gt;&gt; "$HOME/.local/state/origin-skill-usage/launchd.stderr.log"</string>
     </array>
 
     <key>StartCalendarInterval</key>

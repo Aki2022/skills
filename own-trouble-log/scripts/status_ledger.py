@@ -69,7 +69,7 @@ def resolve_root(value: str | None) -> Path:
         if env_root:
             root = Path(env_root).expanduser()
         else:
-            pointer = Path.home() / ".config/own-trouble-log/root"
+            pointer = Path.home() / ".config/origin-trouble-log/root"
             try:
                 root = Path(pointer.read_text(encoding="utf-8").strip()).expanduser()
             except OSError as exc:

@@ -95,13 +95,13 @@ affected_workstreams: []
 4. `references/pipeline.md` の④検分・VLM比較に「seen（実写の書き出し）を判定前に必須出力とし、書き出しなしの ok は無効」が明記されている
 5. `references/image_gen.md` にバッチ生成規律（旧成果物の事前退避・回収失敗の exit 反映・開始前スモーク1枚）が明記され、`scripts/run_mockups.sh`（正典ランナー雛形）が存在する
 6. `SKILL.md` の①に「ダイジェスト提示（キーメッセージ一覧＋各枚1行要約）で人間確定を取る」と content-eval への参照があり、パイプライン表が更新されている
-7. `origin-skill-commonize/scripts/skill_lint.sh` が FAIL ゼロで通る
+7. `own-skill-commonize/scripts/skill_lint.sh` が FAIL ゼロで通る
 8. 実装コミットは人間確認後に push（public リポ）
 
 ## Impact on Existing System
 
 - `own-pptx-build/SKILL.md`（①手順・パイプライン表）、`references/persona-eval.md`、`references/pipeline.md`（④検分）、`references/image_gen.md`（バッチ）、`style-guide/skill-config.json`（モデル割当）
-- 実装は origin-skill-commonize の規約（in-place 編集・lint）に従う
+- 実装は own-skill-commonize の規約（in-place 編集・lint）に従う
 
 ## Deferred Decisions
 

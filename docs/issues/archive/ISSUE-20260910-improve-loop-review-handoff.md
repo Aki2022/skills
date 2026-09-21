@@ -22,7 +22,7 @@ non-incident records to `own-trouble-log`.
 
 ## Acceptance
 
-- verify: machine — python3 origin-doc-update/scripts/validate_repo_docs.py ~/.agents/skills && bash origin-skill-commonize/scripts/skill_lint.sh ~/.agents/skills; both exit 0
+- verify: machine — python3 origin-doc-update/scripts/validate_repo_docs.py ~/.agents/skills && bash own-skill-commonize/scripts/skill_lint.sh ~/.agents/skills; both exit 0
   <!-- `machine — <command and expected result>`, or `human-review — <who reviews what>` -->
 
 ## Current Status

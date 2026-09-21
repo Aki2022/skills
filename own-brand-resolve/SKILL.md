@@ -69,7 +69,7 @@ source:
 ```
 
 上流は流動的で定期的に変わる。**ズレは検出される側に回す** — 値を手で追い続けるのではなく、
-鮮度と同値を検査で見る（`origin-skill-commonize` の `check_mirrors` と同じ姿勢）。
+鮮度と同値を検査で見る（`own-skill-commonize` の `check_mirrors` と同じ姿勢）。
 
 ## ライセンスゲート（この skill が守る）
 

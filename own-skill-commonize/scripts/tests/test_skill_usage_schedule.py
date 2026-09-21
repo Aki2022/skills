@@ -176,8 +176,8 @@ class RunnerTests(unittest.TestCase):
                 0,
             )
 
-            snapshot = home / ".local/state/origin-skill-usage/skill-usage.jsonl"
-            lock = home / ".local/state/origin-skill-usage/collector.lock"
+            snapshot = home / ".local/state/own-skill-usage/skill-usage.jsonl"
+            lock = home / ".local/state/own-skill-usage/collector.lock"
             self.assertEqual(len(snapshot.read_text(encoding="utf-8").splitlines()), 1)
             self.assertEqual(snapshot.stat().st_mode & 0o777, 0o600)
             self.assertEqual(lock.stat().st_mode & 0o777, 0o600)
@@ -188,7 +188,7 @@ class RunnerTests(unittest.TestCase):
             runner, "_collector_module"
         ) as load:
             home = Path(tmp)
-            state = home / ".local/state/origin-skill-usage"
+            state = home / ".local/state/own-skill-usage"
             state.mkdir(parents=True)
             lock = state / "collector.lock"
             with lock.open("a+", encoding="utf-8") as handle:
@@ -231,7 +231,7 @@ class InstallerTests(unittest.TestCase):
             self.assertEqual(destination.read_bytes(), installer.template_bytes())
             self.assertEqual(destination.stat().st_mode & 0o777, 0o600)
             self.assertEqual(
-                (home / ".local/state/origin-skill-usage").stat().st_mode & 0o777,
+                (home / ".local/state/own-skill-usage").stat().st_mode & 0o777,
                 0o700,
             )
 

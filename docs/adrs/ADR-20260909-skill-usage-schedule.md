@@ -23,7 +23,7 @@ wake-from-sleep retry or manual run cannot interleave writes.
 
 ## Decision
 
-Install a per-user macOS LaunchAgent with label `com.origin.skill-usage-metrics`, scheduled daily at
+Install a per-user macOS LaunchAgent with label `com.own.skill-usage-metrics`, scheduled daily at
 03:30 local time and not run at load. It invokes the canonical runner, which scans the four explicit
 Claude/Codex roots over a 30-day window, appends one aggregate JSON object to a local JSONL snapshot,
 and atomically prunes entries older than 180 days. The runner uses an exclusive local lock and

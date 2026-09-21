@@ -82,6 +82,40 @@ new entry
 表示し、`evaluation_pending_entries` には `implemented_unverified` だけを数える。
 過去の証拠本文は削除せず、存在しない evidence を後付けしない。
 
+## Historical analysis index
+
+`legacy_unrecorded` を横断分析するときは、status ledger を検索索引の代用にしない。
+`triage/patterns.tsv` と `triage/entry-pattern-links.tsv` に分析結果を置き、実行時 snapshot と
+判断は `triage/history/YYYY-MM-DD-legacy-mining.md` に新規作成する。entry 本体と既存レポートは
+書き換えない。
+
+`patterns.tsv` の列:
+
+| 列 | 意味 |
+| --- | --- |
+| `pattern_id` | 小文字 kebab-case の安定ID |
+| `title` | 人間向けの短い名称 |
+| `failure_shape` | 観測可能な失敗形 |
+| `detection_mode` | `syntax` / `runtime_state` / `manual_review` / `repo_specific` |
+| `owner` | 形式化する場合の所有先 |
+| `formalization_state` | `existing_response` / `candidate` / `manual_only` / `repo_specific` |
+| `basis` | パターンを分離した根拠 |
+
+`entry-pattern-links.tsv` の列:
+
+| 列 | 意味 |
+| --- | --- |
+| `entry` | entry basename |
+| `pattern_id` | 登録済み pattern ID |
+| `response_id` | 候補 response。無ければ空欄 |
+| `confidence` | `direct` / `mechanism` / `thematic` / `unclassified` |
+| `basis` | その確度を選んだ根拠。`unclassified` では不足証拠 |
+| `analyzed_at` | 分析日 |
+
+`mechanism` と `thematic` は候補検索専用で、ledger の `response_ids` や status を更新しない。
+status を変更できるのは同じ entry と response に対応する `direct` 行があり、状態固有の一次証拠も
+説明できる場合だけである。索引へ載せたこと自体は、実装・再発・有効性の証拠ではない。
+
 ## Next triage procedure
 
 対象集合と status は別々に扱う。
@@ -112,6 +146,8 @@ python3 ~/.agents/skills/own-trouble-log/scripts/status_ledger.py \
 python3 ~/.agents/skills/own-trouble-log/scripts/status_ledger.py \
   --root "$ROOT" summary
 python3 ~/.agents/skills/own-trouble-log/scripts/status_ledger.py \
+  --root "$ROOT" validate
+python3 ~/.agents/skills/own-trouble-log/scripts/historical_index.py \
   --root "$ROOT" validate
 python3 ~/.agents/skills/own-trouble-log/scripts/status_ledger.py \
   --root "$ROOT" update --entry 2026-08-28-example.md \

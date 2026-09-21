@@ -649,8 +649,8 @@ updated_at: 2026-07-29
 class RecordCompletenessTest(ValidateRepoDocsV2Test):
     """The executors treat a missing record as a gate and stop.
 
-    origin-ws-loop reads runnability per issue and treats a missing record as
-    `gated`; origin-goal refuses to start on an unrecorded envelope and cannot
+    own-ws-drain reads runnability per issue and treats a missing record as
+    `gated`; own-goal-run refuses to start on an unrecorded envelope and cannot
     verify empty acceptance. None of that used to be validated, so a workstream
     could pass clean and still stop every autonomous run at a gate nobody set.
     """
@@ -1545,3 +1545,178 @@ class LinkBaselineTest(_LinkRepoMixin, unittest.TestCase):
         )
         errors, _warnings = MODULE.validate_repo(root)
         self.assertTrue(any("no longer broken" in e for e in errors), errors)
+
+
+class HygieneChecksTest(ValidateRepoDocsV2Test):
+    """Accumulation is red: a bloated index, an unarchived complete, a bad status."""
+
+    def issue(self, root: Path, id_: str, status: str) -> Path:
+        path = root / "docs/issues" / f"{id_}.md"
+        path.write_text(
+            f"""---
+schema_version: 2
+id: {id_}
+status: {status}
+created_at: 2026-07-19
+updated_at: 2026-07-19
+branch: {id_}
+guide_impact: none
+guide_impact_reason: docs only
+related_guides: []
+---
+
+# {id_}
+
+## Acceptance
+
+- verify: machine — true
+"""
+        )
+        return path
+
+    def test_index_over_size_ceiling_is_an_error(self):
+        root = self.make_repo()
+        index = root / "docs/00_index.md"
+        filler = "".join(f"- [i{n}](issues/i{n}.md) — x\n" for n in range(2000))
+        index.write_text(index.read_text() + filler)
+        self.assertGreater(index.stat().st_size, MODULE.INDEX_MAX_BYTES)
+        errors, _ = MODULE.validate_repo(root)
+        self.assertTrue(any("00_index.md" in e and "KB" in e for e in errors), errors)
+
+    def test_index_at_ceiling_passes(self):
+        root = self.make_repo()
+        index = root / "docs/00_index.md"
+        base = index.read_text()
+        pad = "- [a](issues/a.md) — " + "x" * 100 + "\n"
+        content = base
+        while len((content + pad).encode()) <= MODULE.INDEX_MAX_BYTES:
+            content += pad
+        index.write_text(content)
+        errors, _ = MODULE.validate_repo(root)
+        self.assertFalse(any("KB" in e for e in errors), errors)
+
+    def test_index_long_line_is_an_error_and_prose_ratio_is_a_warning(self):
+        root = self.make_repo()
+        index = root / "docs/00_index.md"
+        index.write_text(index.read_text() + "\n## Active Issues\n\n- [a](issues/a.md) — " + "y" * 600 + "\n"
+                         + "".join(f"prose {n}\n" for n in range(10)))
+        errors, warnings = MODULE.validate_repo(root)
+        self.assertTrue(any("00_index.md" in e and "chars" in e for e in errors), errors)
+        self.assertTrue(any("00_index.md" in w and "routing" in w for w in warnings), warnings)
+
+    def test_index_checks_can_be_baselined(self):
+        root = self.make_repo()
+        index = root / "docs/00_index.md"
+        index.write_text(index.read_text() + "- [a](issues/a.md) — " + "y" * 600 + "\n")
+        (root / "docs/validator-baseline.txt").write_text("docs/00_index.md\n")
+        errors, warnings = MODULE.validate_repo(root)
+        self.assertFalse(any("chars" in e for e in errors), errors)
+        self.assertTrue(any("still exempt" in w for w in warnings), warnings)
+
+    def test_standalone_issue_status_enum(self):
+        root = self.make_repo()
+        self.issue(root, "ISSUE-20260719-ok", "active")
+        self.issue(root, "ISSUE-20260719-bad", "resolved")
+        errors, _ = MODULE.validate_repo(root)
+        bad = [e for e in errors if "status must be" in e]
+        self.assertEqual(len(bad), 1, errors)
+        self.assertIn("ISSUE-20260719-bad", bad[0])
+
+    def test_complete_issue_outside_archive_is_an_error(self):
+        root = self.make_repo()
+        self.issue(root, "ISSUE-20260719-done", "complete")
+        errors, _ = MODULE.validate_repo(root)
+        self.assertTrue(any("complete but not archived" in e for e in errors), errors)
+
+    def test_guide_without_front_matter_is_an_error(self):
+        root = self.make_repo()
+        (root / "docs/guides/bare.md").write_text("# Bare\n")
+        errors, _ = MODULE.validate_repo(root)
+        self.assertTrue(any("guides/bare.md" in e and "front matter" in e for e in errors), errors)
+
+
+class HandoffChecksTest(HygieneChecksTest):
+    def worked(self, path: Path) -> None:
+        path.write_text(path.read_text().replace("updated_at: 2026-07-19", "updated_at: 2026-07-25"))
+
+    def test_fresh_issue_without_next_actions_is_exempt(self):
+        root = self.make_repo()
+        path = self.issue(root, "ISSUE-20260719-fresh", "active")
+        path.write_text(path.read_text() + "\n## Next Actions\n\n## Notes\n")
+        errors, _ = MODULE.validate_repo(root)
+        self.assertFalse(any("Next Actions" in e for e in errors), errors)
+
+    def test_active_issue_with_empty_next_actions_is_an_error(self):
+        root = self.make_repo()
+        path = self.issue(root, "ISSUE-20260719-blank", "active")
+        path.write_text(path.read_text() + "\n## Current Status\n\nworking\n\n## Next Actions\n\n## Notes\n")
+        self.worked(path)
+        errors, _ = MODULE.validate_repo(root)
+        self.assertTrue(any("Next Actions" in e and "blank" in e for e in errors), errors)
+
+    def test_active_issue_with_next_actions_passes(self):
+        root = self.make_repo()
+        path = self.issue(root, "ISSUE-20260719-ok", "active")
+        path.write_text(path.read_text() + "\n## Next Actions\n\n- run the thing\n")
+        errors, _ = MODULE.validate_repo(root)
+        self.assertFalse(any("Next Actions" in e for e in errors), errors)
+
+    def test_blocked_issue_without_next_actions_is_fine_but_complete_is_not_checked(self):
+        root = self.make_repo()
+        path = self.issue(root, "ISSUE-20260719-blk", "blocked")
+        path.write_text(path.read_text() + "\n## Next Actions\n\n## Notes\n")
+        self.worked(path)
+        errors, _ = MODULE.validate_repo(root)
+        self.assertTrue(any("Next Actions" in e for e in errors), errors)
+
+
+class ReviewOverdueTest(ValidateRepoDocsV2Test):
+    def test_never_reviewed_repo_gets_a_warning_and_a_recent_review_silences_it(self):
+        root = self.make_repo()
+        _errors, warnings = MODULE.validate_repo(root)
+        self.assertTrue(any("docs review" in w for w in warnings), warnings)
+        (root / "docs/log").mkdir()
+        import datetime
+        recent = datetime.date.today().strftime("%Y%m%d")
+        (root / "docs/log" / f"review-{recent}.md").write_text("---\nupdated_at: x\nkind: review\n---\n# r\n")
+        _errors, warnings = MODULE.validate_repo(root)
+        self.assertFalse(any("docs review" in w for w in warnings), warnings)
+
+    def test_review_older_than_fourteen_days_warns_and_thirteen_does_not(self):
+        import datetime
+        self.assertEqual(MODULE.REVIEW_EVERY_DAYS, 14)
+        for days, expect in ((15, True), (13, False)):
+            root = self.make_repo()
+            (root / "docs/log").mkdir(exist_ok=True)
+            stamp = (datetime.date.today() - datetime.timedelta(days=days)).strftime("%Y%m%d")
+            (root / "docs/log" / f"review-{stamp}.md").write_text("---\nupdated_at: x\nkind: review\n---\n# r\n")
+            _e, warnings = MODULE.validate_repo(root)
+            self.assertEqual(any("docs review" in w for w in warnings), expect, (days, warnings))
+
+
+class SnapshotAndStatusWordTest(HygieneChecksTest):
+    def test_current_status_without_as_of_warns_and_with_it_does_not(self):
+        root = self.make_repo()
+        path = self.issue(root, "ISSUE-20260719-snap", "active")
+        path.write_text(path.read_text().replace("updated_at: 2026-07-19", "updated_at: 2026-07-25")
+                        + "\n## Current Status\n\nworking on it\n\n## Next Actions\n\n- next\n")
+        _e, warnings = MODULE.validate_repo(root)
+        self.assertTrue(any("as of YYYY-MM-DD" in w and "snap" in w for w in warnings), warnings)
+        path.write_text(path.read_text().replace("working on it", "as of 2026-07-25 — half done"))
+        _e, warnings = MODULE.validate_repo(root)
+        self.assertFalse(any("as of YYYY-MM-DD" in w for w in warnings), warnings)
+
+    def test_index_row_with_status_word_warns(self):
+        root = self.make_repo()
+        index = root / "docs/00_index.md"
+        index.write_text(index.read_text() + "\n## Active Issues\n\n- [a](issues/a.md) — 実装済み、残りは merge\n")
+        _e, warnings = MODULE.validate_repo(root)
+        self.assertTrue(any("status words" in w for w in warnings), warnings)
+
+
+class OversizedDocWarningTest(ValidateRepoDocsV2Test):
+    def test_guide_over_soft_max_warns(self):
+        root = self.make_repo()
+        (root / "docs/guides/big.md").write_text("---\nupdated_at: 2026-09-01\n---\n# B\n" + "y" * 40000)
+        _e, warnings = MODULE.validate_repo(root)
+        self.assertTrue(any("read whole" in w and "big.md" in w for w in warnings), warnings)

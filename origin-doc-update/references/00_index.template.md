@@ -38,3 +38,7 @@ Read this file first. Do not scan all docs unless needed. Read the active workst
 ## Archive Policy
 
 Completed workstreams and issues are stored in their respective archive directories. Archive files are historical context, not current truth.
+
+## Index Policy
+
+This file stays under 32 KB and no line exceeds 500 characters (`validate_repo_docs.py` enforces both). One link and one line of routing per entry, under 200 characters after the link, with no status words (the frontmatter `status` is the only status). Current Focus holds at most five entries. Progress narrative goes to the work unit or `docs/log/`. `docs_hygiene.py --fix` moves violations out.

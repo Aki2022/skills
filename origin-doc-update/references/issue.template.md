@@ -23,7 +23,11 @@ guide_impact_reason: ""
 
 ## Current Status
 
+<!-- Snapshot for the next session, overwritten each time: first line `as of YYYY-MM-DD — <state in one sentence>`. History goes to ## Log, not here. -->
+
 ## Next Actions
+
+<!-- First bullet = the very next command or step (or what unblocks a blocked issue). Required once work starts; the validator rejects an empty section. -->
 
 ## Guide Impact
 
@@ -31,6 +35,10 @@ guide_impact_reason: ""
 - Target or reason:
 
 ## Notes
+
+## Log
+
+<!-- Append-only, dated: `- YYYY-MM-DD — what changed / what was learned`. The only place chronology belongs. -->
 
 ## Completion
 

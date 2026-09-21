@@ -16,6 +16,7 @@ Treat `docs/` as persistent AI context. Keep each fact in one layer only.
 | `docs/guides/`      | Current implemented behavior; source of truth                                  |
 | `docs/adrs/`        | Decision rationale, alternatives, and consequences; historical decision record |
 | `*/archive/`        | Historical work context, not current truth                                     |
+| `docs/log/`         | Narrative moved out of the index and hygiene reports; history, never current truth |
 
 Do not copy implementation history into guides or current behavior into workstreams. Keep decision rationale in an ADR and link to it from the relevant spec, workstream/issue, or guide.
 
@@ -47,13 +48,13 @@ Do not create the file immediately when the user asks for a workstream. First es
    - test and quality gates;
    - merge policy: continuous delivery is the default — a PR whose recorded quality gates pass (CI when present, otherwise the recorded local gates) is merged autonomously. Record a human merge gate only as a named exception with its reason (e.g. live/production impact, spend, new dependencies); an unexplained merge gate silently kills autonomous runs downstream. The template's `- Merge policy:` line in the Authorization Envelope carries the choice;
    - the next human checkpoint and early stop conditions.
-5. Classify runnability for every planned issue and fill its block's `runnability:` field: `ready` (completable with only current permissions and currently available information) or `gated on <the human decision, missing input, or new permission>`. Surface every gated point as a question now, during creation — a question asked here costs one interview turn, while the same question discovered mid-execution stops an entire autonomous run. As part of the same pass, judge whether each issue's acceptance is machine-verifiable (counts, thresholds, passing tests) or needs human review, and fill the `- verify:` line under its `#### Acceptance`: `machine — <command and expected result>` or `human-review — <who reviews what>`. Push subjective acceptance toward a quantifiable restatement; where human judgment is genuinely required, `human-review` records that the issue ends at a review gate — an agent cannot self-verify a subjective goal and will either stall or overclaim. These fields are not optional prose: `validate_repo_docs.py` rejects a missing or malformed value, because executors (`origin-goal`, `origin-ws-loop`) treat an unrecorded runnability as `gated` and stop the whole run at a gate nobody set.
+5. Classify runnability for every planned issue and fill its block's `runnability:` field: `ready` (completable with only current permissions and currently available information) or `gated on <the human decision, missing input, or new permission>`. Surface every gated point as a question now, during creation — a question asked here costs one interview turn, while the same question discovered mid-execution stops an entire autonomous run. As part of the same pass, judge whether each issue's acceptance is machine-verifiable (counts, thresholds, passing tests) or needs human review, and fill the `- verify:` line under its `#### Acceptance`: `machine — <command and expected result>` or `human-review — <who reviews what>`. Push subjective acceptance toward a quantifiable restatement; where human judgment is genuinely required, `human-review` records that the issue ends at a review gate — an agent cannot self-verify a subjective goal and will either stall or overclaim. These fields are not optional prose: `validate_repo_docs.py` rejects a missing or malformed value, because executors (`own-goal-run`, `own-ws-drain`) treat an unrecorded runnability as `gated` and stop the whole run at a gate nobody set.
 6. State that `origin-doc-update` is pausing creation until these boundaries are confirmed.
 7. After confirmation, create from `references/workstream.template.md` or run `create_workstream.py` with the confirmed boundary fields.
 
 Record only decisions that are hard to reverse or surprising without context. Do not create ADRs for routine implementation choices, temporary investigation notes, or ordinary history already captured by the workstream/issue.
 
-Do not audit or revoke IAM roles, API scopes, bucket bindings, or other session-granted access here. `origin-permission-audit` owns that lifecycle; `origin-close-session` invokes it before this skill when applicable and passes the verified outcome into the documentation slice.
+Do not audit or revoke IAM roles, API scopes, bucket bindings, or other session-granted access here. `own-permission-audit` owns that lifecycle; `own-session-close` invokes it before this skill when applicable and passes the verified outcome into the documentation slice.
 
 ## Record an ADR
 
@@ -68,9 +69,9 @@ An ADR must state the context/problem, the decision, alternatives considered, co
 
 ## Improvement issues
 
-An improvement issue is a standalone issue in `docs/issues/` that records a friction observation from development work — a stuck point, a repeated manual step, an inefficiency worth fixing later — rather than a requested change. Name it `ISSUE-YYYYMMDD-improve-<slug>` when the improvement targets the repository itself, and `ISSUE-YYYYMMDD-improve-loop-<slug>` when it targets the development-loop machinery (skills canonical under `~/.agents/skills/`). The two scopes have different owners and approval paths, so the name must reveal the scope at a glance. Autonomous runs (e.g. `origin-ws-loop`) file observations here instead of interrupting their work; humans triage them later. Create with `create_issue.py` as usual.
+An improvement issue is a standalone issue in `docs/issues/` that records a friction observation from development work — a stuck point, a repeated manual step, an inefficiency worth fixing later — rather than a requested change. Name it `ISSUE-YYYYMMDD-improve-<slug>` when the improvement targets the repository itself, and `ISSUE-YYYYMMDD-improve-loop-<slug>` when it targets the development-loop machinery (skills canonical under `~/.agents/skills/`). The two scopes have different owners and approval paths, so the name must reveal the scope at a glance. Autonomous runs (e.g. `own-ws-drain`) file observations here instead of interrupting their work; humans triage them later. Create with `create_issue.py` as usual.
 
-Boundary with `origin-trouble-log`: an improvement issue is an actionable change request against this repository or the loop machinery. An observation about how the agent itself worked wrong — a silent no-op, a false completion report, a vacuous check, guidance friction — must ALSO be recorded as one `origin-trouble-log` entry, and when it is only an observation (no concrete change to implement yet) it goes ONLY there; a repo issue filed instead of a trouble entry is invisible to the cross-repo triage and was measured to get lost (2026-08-10 observation-filed-to-wrong-corpus).
+Boundary with `own-trouble-log`: an improvement issue is an actionable change request against this repository or the loop machinery. An observation about how the agent itself worked wrong — a silent no-op, a false completion report, a vacuous check, guidance friction — must ALSO be recorded as one `own-trouble-log` entry, and when it is only an observation (no concrete change to implement yet) it goes ONLY there; a repo issue filed instead of a trouble entry is invisible to the cross-repo triage and was measured to get lost (2026-08-10 observation-filed-to-wrong-corpus).
 
 ## Implement a workstream or issue
 
@@ -111,6 +112,90 @@ Write guides as current truth, not as a changelog. Include what the system does,
 - When that change follows a qualifying decision, update the related spec with the current policy and link the ADR; do not duplicate the full rationale in the spec.
 - Keep chronological investigation and abandoned approaches in the active work unit, then archive it.
 - Keep `docs/00_index.md` as links plus one-line routing descriptions. Do not add a second progress dashboard unless ordering across many workstreams cannot fit in the index.
+- The index must stay **under 32 KB with no line over 500 characters**; `validate_repo_docs.py` rejects both. The SessionStart hook injects a routing digest of it (see Hooks), so the file itself is what a session opens next. Progress narrative, postmortems, and metrics belong in the work unit or in `docs/log/`, never in the index. `docs_hygiene.py --fix` moves them there and shortens over-long rows; when the ceiling still cannot be met the row count is the problem and only closing work fixes it (see Cleanup cadence).
+
+## Write for the next session
+
+Every document is read by a session that remembers nothing. Measured 2026-09-18 across
+four repositories, the failures that cost the most were all writing habits, not missing
+information: a 291 KB index of progress prose that the hook could not deliver, 81 of 166
+"active" rows that said 完了, and guides that had become dated decision logs. The rules
+below are the shape that survives handoff; the parenthesis names what enforces each.
+
+- **Index row = one link + one line of routing, no status.** Under 200 characters after
+  the link; the frontmatter `status` is the only status. Current Focus holds at most five
+  entries. What happened goes to the work unit; how it happened goes to `docs/log/`.
+  (validator: line length, size; hygiene A2 moves and shortens.)
+- **Work unit = snapshot + next step + log.** `## Current Status` is overwritten, first
+  line `as of YYYY-MM-DD — <one sentence>`. `## Next Actions` names the very next command
+  or step, or what unblocks a blocked issue; it is never empty once work has started.
+  Chronology goes under `## Log` as dated append-only bullets. (validator: empty Next
+  Actions on an open issue is an error once `updated_at` differs from `created_at`.)
+- **Say it with status, not prose.** The moment acceptance's `verify:` passes, set
+  `status: complete` in the same commit; archive follows at close-session. Writing
+  完了 / ✅ / done in an open issue's status line or its index row is the defect that
+  produced the 81 rows. (hygiene R7 reports it.)
+- **Guide = current truth, spec = current policy.** No dated headings, no "2026-09-05
+  revision" sections: a decision becomes an ADR, a superseded paragraph is deleted, the
+  narrative of getting there goes to the work unit or `docs/log/`. A guide over 60 KB or
+  with more than five dated headings is a split or a cleanup waiting to happen.
+  (hygiene R4 reports it.)
+- **Dates are maintained by git, not by memory.** `updated_at` older than the file's last
+  commit is corrected from git. (hygiene A5.)
+- **Paths named in a guide must exist.** Write the path a reader can open; a generated
+  artifact that is absent by design is gitignored so the check can tell. (hygiene R3.)
+
+## Cleanup cadence
+
+Cleanup has three layers, and none of them is a calendar: work that is not closed in the
+session that finished it is the only source of accumulation, so the cadence is tied to
+sessions.
+
+1. **Every session start** — the hook delivers a routing digest bounded to what arrives
+   inline. Nothing to do; if the digest says it dropped entries, the index is oversized.
+2. **Every close-session** — `docs_hygiene.py <repo> --fix --report`. Mechanical repairs
+   land in the same commit as the session's docs; the report names what needs a decision.
+   Decide the items that belong to the session's own work right there.
+3. **Sweep when the report says so** — when R1 + R2 + R7 exceeds ten, or the index is over
+   its ceiling after `--fix`, write `docs_hygiene.py <repo> --sweep`. It produces
+   `docs/log/sweep-YYYYMMDD.md`: one checkbox per closure candidate with its evidence.
+   Tick `[x]` to archive; leave `[ ]` and append `— keep: <reason>` to keep. The agent may
+   tick rows whose evidence is mechanical (branch merged and deleted, Current Status says
+   done); everything else waits for the human. `--apply-sweep <file>` archives exactly the
+   ticked rows and stamps the file, so the decision is recorded next to the work it closed
+   and the next session does not re-ask it. The ticking is done by `own-docs-maintain`'s
+   judge subagent on primary evidence (Completion boxes, artifacts that exist, commits on
+   main); a human reads the file afterwards instead of being asked twenty questions.
+
+4. **Review at every close-session; 14 days is the backstop.** Closing work keeps
+   the execution layer honest, but nothing above re-weights the current-truth layer: a
+   guide every issue once linked becomes one nobody reads, a spec stays `active` after the
+   work that needed it is archived, and a 170 KB guide is still "one guide". `--report`
+   therefore also writes `docs/log/review-YYYYMMDD.md` (deterministic, seconds): every
+   guide/spec/ADR tiered by who links to it (hot = active work or another guide/spec, warm
+   = index only, cold = nothing living), demotion candidates (cold and older than 90 days)
+   as `[x]`-able archive rows, and split candidates (over 32 KB or more than five dated
+   headings) with their H2 sections sized so the cut is mechanical. Decide demotions in the
+   review file and apply the archive rows with `--apply-sweep`; splits go one guide per task,
+   keeping the old path as a pointer with its original front matter. **Who decides:**
+   `own-docs-maintain` — a judge subagent ticks the sweep and review rows on primary
+   evidence and split/condense subagents restructure at most two documents per
+   close-session; humans read the recorded decisions, they are not asked for them
+   (ADR-20260921-autonomous-docs-curation, biz_ops). The validator
+   warns and the SessionStart hook says one line when the newest review is older than 14
+   days — that fires for a repository no session has closed in two weeks.
+
+**Context budget.** docs/ is context, so its cost is measured, not guessed. Hygiene's R9
+reports three numbers every close-session: index entries the digest had to drop (must be
+0 — each dropped entry is work the next session cannot find), guides/specs over 32 KB
+(a guide is read whole, so one such file costs more than the whole routing budget; the
+validator warns on each), and the total size of guides/specs linked from active work (what
+a working session actually opens). When dropped > 0 the fix is closing or archiving
+rows; when a guide is over 32 KB the fix is the split candidate in the review; when the
+hot set is large the fix is fewer, smaller guides per active issue.
+
+Never run `--fix` or `--apply-sweep` in a repository with uncommitted docs/ changes that
+are not yours, and never against a deliberately shaped fixture repository.
 
 ## Complete work
 
@@ -122,16 +207,28 @@ Before archive:
 4. Verify qualifying decisions have an ADR in `docs/adrs/`, with a settled status or an explicit proposed human gate, and that related specs/guides/work units link to it.
 5. Update specs if direction changed.
 6. Reach the recorded human gate or record why the workstream stopped.
-7. Run `validate_repo_docs.py <repo path>`. Name the repository rather than
+7. Run `docs_hygiene.py <repo path> --fix --report`, then read the report it
+   names. The fixes are mechanical (archive what says `complete`, move index
+   narrative to `docs/log/`, normalize status aliases, add missing front matter
+   from git dates); the report lists what needs a decision — issues whose
+   branch is gone, untouched work, dead references, history mixed into guides —
+   and every count is printed, zero included. Decide the reported items that
+   belong to this session's work; leave the rest in the report. When the report's
+   R1 + R2 + R7 exceeds ten or the index is still over its ceiling, write a sweep
+   (`--sweep`) and hand the checklist to the human as this session's one question.
+8. Run `validate_repo_docs.py <repo path>`. Name the repository rather than
    relying on the current directory: reached through an orchestrator, the current
    directory is a different repository, whose docs would validate clean and be
    reported as this one's result. Check the `validated:` line it prints.
-8. Archive the work unit and update `docs/00_index.md`. The archive scripts accept an issue/
+9. Archive the work unit and update `docs/00_index.md`. The archive scripts accept an issue/
    workstream id, `.md` filename, or path, stage the document/index changes before applying them,
    and roll back both files if a later replacement fails. They print the removal count plus the
    exact index lines they changed. Treat a zero or unexpected count as a stop condition and
-   inspect the diff before continuing.
-9. Hand merged branch cleanup to `origin-git-cleanup`.
+   inspect the diff before continuing. An entry the row matcher does not recognize (prose, a
+   nested bullet) is repointed at the archive path instead of being left pointing at the file
+   that just moved; pass `--keep-row` when the index's own policy keeps completed rows, and the
+   row is repointed in place rather than removed.
+10. Hand merged branch cleanup to `own-git-clean`.
 
 ## Resume and onboard
 
@@ -143,8 +240,19 @@ When onboarding scattered docs, initialize the scaffold, classify each file by t
 
 Keep hooks best-effort and non-blocking:
 
-- `session_start.sh` may inject only `docs/00_index.md`.
-- `stop_nudge.sh` may emit one short reminder when non-doc changes lack docs changes.
+- `session_start.sh` injects a routing digest of `docs/00_index.md` built by
+  `index_digest.py`, never the file itself. A hook's output reaches the agent inline
+  only up to about 10,000 characters (measured 2026-09-19: largest delivered 8,957,
+  smallest spilled 10,019); past that it is written to a file and the agent receives
+  a 2 KB preview, so a whole-file injection is read by nobody and nothing reports it.
+  The digest keeps every active entry with one line of routing, counts what it
+  dropped, and names the full file.
+- `stop_nudge.sh` emits one short message at turn end: a reminder when non-doc
+  changes lack docs changes, and — when docs/ changed this session — the validator's
+  error count with the first five errors. It must be registered under `Stop` in
+  `~/.claude/settings.json` (measured 2026-09-21: it had existed for weeks and was
+  registered nowhere, so "the hook checks" was nominal). Warn-only, capped output,
+  20-second timeout; never blocks.
 - Do not force-load this full skill from a hook and do not block commits or task completion from a semantic guess.
 
 Use template fields and `validate_repo_docs.py` for deterministic enforcement. Hooks cannot reliably infer whether behavior changed and hard enforcement creates false positives and repeated token cost.
@@ -178,6 +286,24 @@ Scripts in `scripts/`:
 - `archive_workstream.py <workstream> [--repo <repo>]`
 - `archive_issue.py <issue> [--repo <repo>]`
 - `archive_transaction.py`: stage and atomically roll back archive/index file updates
+- `docs_hygiene.py <repo> [--fix] [--report] [--json]`: `--fix` applies the
+  mechanical repairs above; `--report` writes `docs/log/hygiene-YYYYMMDD.md` with
+  the judgment candidates (R1 stale + branch gone, R2 untouched 60 days, R3 dead
+  `npm run`/workflow/path references, R4 history in guides or specs, R5
+  non-canonical directories and duplicate basenames, R6 baseline debt, R7 open
+  issues whose Current Status or index row already says done). `--fix` also syncs
+  `updated_at` from git (A5). `--sweep` writes `docs/log/sweep-YYYYMMDD.md`, the
+  checklist of closure candidates; `--apply-sweep <file>` archives its `[x]` rows
+  and stamps the file (a review file's archive rows work the same way). `--review`
+  writes `docs/log/review-YYYYMMDD.md`, the re-weighting of guides/specs/ADRs (due every 14 days)
+  (R8 reports when it is overdue); `--report` writes it too, so every close-session
+  reviews. R9 reports the context budget (digest drops, oversized docs, hot-set size).
+  Without `--fix` it is a dry run that counts. It uses git dates and never an LLM, so it
+  is safe to run across every governed repository. Exit 2 when the repository has
+  no `docs/00_index.md`. Do not run `--fix` against a deliberately shaped fixture
+  repository (e.g. `ws-loop-fixture`).
+- `index_digest.py <path to docs/00_index.md>`: the routing digest the SessionStart
+  hook injects, bounded in characters rather than bytes
 - `validate_repo_docs.py <repo>` (prints the repository it validated)
 
   It also resolves every relative link under `docs/**/*.md` and fails on any

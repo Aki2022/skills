@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import sys
 from datetime import date
 from pathlib import Path
 
+from archive_links import plan_link_updates, repoint
 from archive_transaction import apply_archive, cleanup_staged, stage_text
 from index_entries import find_index_entry_lines, remove_index_entry
 from validate_repo_docs import parse_workstream_issue_blocks, validate_repo
@@ -40,6 +42,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Archive a completed workstream.")
     parser.add_argument("workstream", help="Workstream filename, ID, or path")
     parser.add_argument("--repo", default=".")
+    parser.add_argument(
+        "--keep-row",
+        action="store_true",
+        help="repoint the index row at the archive instead of removing it "
+        "(for an index whose policy keeps completed rows)",
+    )
     args = parser.parse_args()
 
     repo = Path(args.repo).resolve()
@@ -107,7 +115,12 @@ def main() -> None:
 
     errors, _warnings = validate_repo(repo)
     target = str(source.relative_to(repo))
-    target_errors = [error for error in errors if error.startswith(target)]
+    # "complete but not archived" is the very defect this script clears, so it
+    # must not gate the move (same self-reference as the archive checkbox).
+    target_errors = [
+        error for error in errors
+        if error.startswith(target) and "complete but not archived" not in error
+    ]
     if target_errors:
         print("Error: resolve workstream documentation errors before archiving", file=sys.stderr)
         for error in target_errors:
@@ -147,19 +160,40 @@ def main() -> None:
             target_lines = find_index_entry_lines(
                 index_content, "docs/workstreams", workstream_id
             )
-            new_index, removed = remove_index_entry(
-                index_content, "docs/workstreams", workstream_id
-            )
-            if removed or target_lines:
+            if args.keep_row:
+                new_index, removed, target_lines = index_content, 0, []
+            else:
+                new_index, removed = remove_index_entry(
+                    index_content, "docs/workstreams", workstream_id
+                )
                 if removed != len(target_lines):
                     raise ValueError(
                         "index target count mismatch: "
                         f"removed={removed}, reported={len(target_lines)}"
                     )
+            # Anything the row matcher did not take still links the old path
+            # after the move; repoint it rather than leave the breakage behind
+            # (same defect as archive_issue.py, measured 2026-09-19).
+            before_repoint = new_index
+            new_index = repoint(
+                new_index,
+                referrer_dir="docs",
+                old_path=f"docs/workstreams/{workstream_id}.md",
+                new_path=f"docs/workstreams/archive/{workstream_id}.md",
+            )
+            repointed = sum(
+                1 for old, new in zip(before_repoint.splitlines(), new_index.splitlines())
+                if old != new
+            )
+            if removed or target_lines or repointed:
                 new_index = re.sub(
                     r"(updated_at:[ \t]*)[\d-]+", rf"\g<1>{today}", new_index, count=1
                 )
-                index_plan = (index_content, new_index, target_lines)
+                index_plan = (index_content, new_index, target_lines, repointed)
+
+        old_rel = os.path.relpath(source, repo).replace(os.sep, "/")
+        new_rel = os.path.relpath(destination, repo).replace(os.sep, "/")
+        content, link_updates = plan_link_updates(str(repo), old_rel, new_rel, content, exclude={"docs/00_index.md"})
 
         staged_destination = stage_text(destination, content, source)
         staged_paths.append(staged_destination)
@@ -169,11 +203,20 @@ def main() -> None:
         staged_index = None
         staged_index_restore = None
         if index_plan is not None:
-            original_index, new_index, _target_lines = index_plan
+            original_index, new_index, _target_lines, _repointed = index_plan
             staged_index = stage_text(index, new_index, index)
             staged_paths.append(staged_index)
             staged_index_restore = stage_text(index, original_index, index)
             staged_paths.append(staged_index_restore)
+
+        extra = []
+        for path, original, rewritten in link_updates:
+            referrer = Path(path)
+            staged_new = stage_text(referrer, rewritten, referrer)
+            staged_paths.append(staged_new)
+            staged_restore = stage_text(referrer, original, referrer)
+            staged_paths.append(staged_restore)
+            extra.append((referrer, staged_new, staged_restore))
 
         apply_archive(
             source,
@@ -183,6 +226,7 @@ def main() -> None:
             index if index_plan is not None else None,
             staged_index,
             staged_index_restore,
+            extra=extra,
         )
     except (OSError, RuntimeError, ValueError) as error:
         print(f"Error: {error}", file=sys.stderr)
@@ -191,12 +235,15 @@ def main() -> None:
         cleanup_staged(staged_paths)
 
     if index_plan is not None:
-        target_lines = index_plan[2]
-        print(
-            f"Updated: docs/00_index.md (removed {len(target_lines)} active reference(s))"
-        )
-        for line_number, line in target_lines:
-            print(f"  line {line_number}: {line}")
+        target_lines, repointed = index_plan[2], index_plan[3]
+        if target_lines:
+            print(
+                f"Updated: docs/00_index.md (removed {len(target_lines)} active reference(s))"
+            )
+            for line_number, line in target_lines:
+                print(f"  line {line_number}: {line}")
+        if repointed:
+            print(f"Updated: docs/00_index.md (repointed {repointed} line(s) at the archive)")
     else:
         print(
             f"Note: {workstream_id} not found in docs/00_index.md "
@@ -204,6 +251,10 @@ def main() -> None:
         )
 
     print(f"Archived: {source.name} -> docs/workstreams/archive/{source.name}")
+    if link_updates:
+        print(f"Rewrote relative links in {len(link_updates)} referring document(s):")
+        for path, _original, _rewritten in link_updates:
+            print(f"  {os.path.relpath(path, repo)}")
 
 
 if __name__ == "__main__":

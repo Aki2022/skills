@@ -1,0 +1,132 @@
+#!/usr/bin/env bash
+#
+# refresh_adc.sh — 複数リポジトリの per-repo ADC を一括再生成する横断ツール
+#
+# 背景:
+#   gcloud/bq CLI は .mise.toml の CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT を読むが、
+#   Node/Python の Google SDK は読まない。SDK は ADC
+#   (~/.config/gcloud/application_default_credentials.json) を見る。
+#   グローバル ADC は単一ファイルなので複数リポジトリで衝突する。
+#   そこでリポジトリごとに ADC ファイルを分離し、.mise.toml の
+#   GOOGLE_APPLICATION_CREDENTIALS で cd 時に切り替える。
+#
+# 仕組み (ブラウザ再ログイン不要・テンプレート生成方式):
+#   グローバル ADC に埋め込まれた source_credentials (authorized_user + refresh_token) を
+#   共有し、各リポジトリの SA を impersonate する per-repo ADC を生成する。
+#
+# 使い方:
+#   通常は各 repo から `mise run reauth`
+#   共通フローを直接呼ぶ場合のみ:
+#   bash ~/.agents/skills/own-gcp-provision/refresh_adc.sh
+#
+# 再認証が必要になったとき (refresh_token が失効した場合のみ):
+#   各 repo から `mise run reauth`
+#   もしくは `bash ~/.agents/skills/own-gcp-provision/re-auth.sh`
+#
+# active gcloud config に auth/impersonate_service_account が永続設定されている場合、
+# 上の素ログインでも impersonated_service_account ADC が作られることがある。
+# その場合は re-auth.sh を使うか、一時 CLOUDSDK_CONFIG を分離して authorized_user ADC を作る。
+#
+set -euo pipefail
+
+resolve_gcloud() {
+  if command -v gcloud >/dev/null 2>&1; then
+    command -v gcloud
+    return 0
+  fi
+  for candidate in \
+    /opt/homebrew/share/google-cloud-sdk/bin/gcloud \
+    /usr/local/share/google-cloud-sdk/bin/gcloud \
+    "$HOME/google-cloud-sdk/bin/gcloud"; do
+    if [ -x "$candidate" ]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+GCLOUD_DIR="${CLOUDSDK_CONFIG:-$HOME/.config/gcloud}"
+GLOBAL_ADC="${GCLOUD_DIR}/application_default_credentials.json"
+SOURCE_ADC="${SOURCE_ADC_PATH:-$GLOBAL_ADC}"
+CODE_DIR="${CODE_DIR:-$HOME/code}"
+GCLOUD_BIN="$(resolve_gcloud || true)"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PYTHON="$(command -v python3 || true)"
+[ -z "$PYTHON" ] && { echo "❌ python3 が見つからない"; exit 1; }
+[ -n "$GCLOUD_BIN" ] || {
+  echo "❌ gcloud が見つかりません"
+  echo "   PATH を確認するか、Google Cloud SDK の bin ディレクトリを追加してください。"
+  exit 1
+}
+export PATH="$(dirname "$GCLOUD_BIN"):$PATH"
+[ -f "$SOURCE_ADC" ] || { echo "❌ source ADC が無い: $SOURCE_ADC"; echo "   先に: gcloud auth application-default login"; exit 1; }
+
+echo "=== source_credentials を抽出中 ==="
+# グローバル ADC から authorized_user の source を取り出す。
+# 既に impersonated_service_account なら .source_credentials を、
+# 素の authorized_user ならトップレベルを source として使う。
+SOURCE_JSON="$("$PYTHON" "${SCRIPT_DIR}/scripts/adc_source.py" "$SOURCE_ADC")"
+echo "  ✅ authorized_user source を取得"
+
+# .mise.toml を走査して repo -> SA を収集
+echo ""
+echo "=== impersonation リポジトリを走査 (${CODE_DIR}/*/.mise.toml) ==="
+shopt -s nullglob
+GENERATED=""   # 改行区切りの "repo|sa|adc" レコード (bash 3.2 互換のため文字列で保持)
+for MISE in "${CODE_DIR}"/*/.mise.toml; do
+  REPO_PATH="$(dirname "$MISE")"
+  REPO_NAME="$(basename "$REPO_PATH")"
+  SA_LINE="$(grep -E '^[[:space:]]*CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT' "$MISE" 2>/dev/null | head -1 || true)"
+  SA_EMAIL="$(printf '%s' "$SA_LINE" | sed -E 's/.*=[[:space:]]*"?([^"]+)"?.*/\1/' | tr -d '[:space:]')"
+  [ -z "$SA_EMAIL" ] && continue
+
+  ADC_PATH="${GCLOUD_DIR}/${REPO_NAME}_adc.json"
+  IMP_URL="https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/${SA_EMAIL}:generateAccessToken"
+
+  echo "  • ${REPO_NAME}  ->  ${SA_EMAIL}"
+
+  # per-repo ADC を生成
+  SOURCE_JSON="$SOURCE_JSON" IMP_URL="$IMP_URL" "$PYTHON" "${SCRIPT_DIR}/scripts/write_repo_adc.py" "$ADC_PATH"
+  chmod 600 "$ADC_PATH"
+
+  # .mise.toml に GOOGLE_APPLICATION_CREDENTIALS が無ければ追記
+  if ! grep -qE '^[[:space:]]*GOOGLE_APPLICATION_CREDENTIALS' "$MISE"; then
+    # [env] セクション直下に挿入。無ければ末尾に追記。
+    if grep -qE '^\[env\]' "$MISE"; then
+      "$PYTHON" "${SCRIPT_DIR}/scripts/mise_insert_adc.py" "$MISE" "$ADC_PATH"
+    else
+      printf '\nGOOGLE_APPLICATION_CREDENTIALS = "%s"\n' "$ADC_PATH" >> "$MISE"
+    fi
+    echo "    ↳ .mise.toml に GOOGLE_APPLICATION_CREDENTIALS を追記"
+  fi
+
+  GENERATED="${GENERATED}${REPO_NAME}|${SA_EMAIL}|${ADC_PATH}"$'\n'
+done
+shopt -u nullglob
+
+[ -z "$GENERATED" ] && echo "  (impersonation リポジトリなし)"
+
+# グローバル ADC を素の authorized_user に戻す
+echo ""
+echo "=== グローバル ADC を素のユーザー認証へ戻す ==="
+SOURCE_JSON="$SOURCE_JSON" "$PYTHON" "${SCRIPT_DIR}/scripts/restore_global_adc.py" "$GLOBAL_ADC"
+chmod 600 "$GLOBAL_ADC"
+echo "  ✅ グローバル ADC = authorized_user (impersonate なし)"
+
+# 疎通確認
+echo ""
+echo "=== 疎通確認 (各 per-repo ADC で access token 取得) ==="
+printf '%s' "$GENERATED" | while IFS='|' read -r REPO_NAME SA_EMAIL ADC_PATH; do
+  [ -z "$REPO_NAME" ] && continue
+  if GOOGLE_APPLICATION_CREDENTIALS="$ADC_PATH" \
+     "$GCLOUD_BIN" auth application-default print-access-token >/dev/null 2>&1; then
+    echo "  ✅ ${REPO_NAME}: OK"
+  else
+    echo "  ⚠️  ${REPO_NAME}: トークン取得失敗 (IAM 反映待ち or TokenCreator 未付与)"
+  fi
+done
+
+echo ""
+echo "完了。各リポジトリで 'cd' すると mise が ADC を自動切替する。"

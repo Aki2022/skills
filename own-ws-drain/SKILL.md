@@ -12,9 +12,9 @@ description: >-
   を処理して", "キューを回して", "自律で進められるところまで進めて", "run the
   ws queue", "drain the backlog", "process all workstreams", or /own-ws-drain
   — typically right after mass-creating workstreams with own-spec-grill /
-  origin-doc-update. Requires docs governance (docs/00_index.md +
+  own-doc-update. Requires docs governance (docs/00_index.md +
   docs/workstreams/). Do NOT use for a single workstream (use own-goal-run
-  directly), for creating workstreams or specs (use origin-doc-update /
+  directly), for creating workstreams or specs (use own-doc-update /
   own-spec-grill), or for recurring scheduled tasks unrelated to workstreams
   (use /loop alone).
 ---
@@ -24,7 +24,7 @@ description: >-
 Drain the workstream queue; stop at the first human question. This skill is an
 orchestrator in the mold of `own-session-close`: it owns no destructive
 behavior of its own. Execution belongs to `own-goal-run`, closeout to
-`own-session-close`, and workstream/issue creation to `origin-doc-update` —
+`own-session-close`, and workstream/issue creation to `own-doc-update` —
 each keeps its own safety contract, and this skill must not replicate or
 shortcut their procedures. The only logic this skill owns is **selection**,
 **observation**, and the **journal**.
@@ -40,7 +40,7 @@ This skill consumes workstreams; it does not prepare them.
 
 - No docs governance (`docs/00_index.md` + `docs/workstreams/` absent): refuse
   to run. Explain that the queue must be stocked first via `own-spec-grill`
-  (specs) and `origin-doc-update` (workstreams), then stop. Do not initialize
+  (specs) and `own-doc-update` (workstreams), then stop. Do not initialize
   the scaffold or create workstreams on the user's behalf — those steps carry
   human decisions this skill must not absorb.
 
@@ -99,11 +99,11 @@ settings, lifting a recorded gate, or widening an envelope requires.
    drift; stale inventory poisons every later selection.
 
    **Classify record quality with the validator, not by reading.** Run
-   `origin-doc-update`'s `validate_repo_docs.py` against the repository; a
+   `own-doc-update`'s `validate_repo_docs.py` against the repository; a
    workstream whose envelope, `runnability:`, or acceptance `verify:` records
    error out is **deficient** — its gaps are gates nobody set, not gates. When
    a human is present, repair each deficient workstream now through
-   `origin-doc-update`'s human-boundary interview, writing the answers back
+   `own-doc-update`'s human-boundary interview, writing the answers back
    into the file — moving those questions into this one conversation is
    exactly what this preflight is for. When no human is there, do not invent
    the answers: exclude deficient workstreams from selection, run the healthy
@@ -487,7 +487,7 @@ summary line is a count; it is not evidence of coverage.
 
 While executing, notice friction: stuck points, repeated manual steps, the
 same helper being rebuilt across workstreams. Record these as standalone
-issues in `docs/issues/` (via `origin-doc-update`'s improvement-issue
+issues in `docs/issues/` (via `own-doc-update`'s improvement-issue
 convention) instead of interrupting the run. **File every observation as an
 issue before the digest is produced** — filing is a docs-only autonomous
 action; an observation that exists only in the digest text is lost the moment
@@ -518,7 +518,7 @@ filing itself.
   still open at the next preflight, report it as a leftover rather than shelving
   it.
 - **Auto-promotion.** A repo improvement meeting all preflight bounds may be
-  promoted to a workstream via `origin-doc-update` without a question — cite
+  promoted to a workstream via `own-doc-update` without a question — cite
   the preflight approval as its confirmed boundary — and joins the tail of
   the queue. Everything else (including every loop-process improvement) stays
   an issue for human triage; loop-process changes are applied later by a

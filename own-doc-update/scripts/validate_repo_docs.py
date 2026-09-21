@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the origin-doc-update repository structure and v2 lifecycle contracts."""
+"""Validate the own-doc-update repository structure and v2 lifecycle contracts."""
 from __future__ import annotations
 
 import argparse
@@ -103,7 +103,7 @@ def read_flow_continuation(lines: list[str], start: int) -> tuple[int, list[str]
 
 
 def parse_front_matter(path: str | Path) -> Optional[FrontMatter]:
-    """Parse the small YAML subset used by origin-doc-update templates."""
+    """Parse the small YAML subset used by own-doc-update templates."""
     try:
         content = Path(path).read_text()
     except OSError:
@@ -1106,7 +1106,7 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Validate origin-doc-update structure.")
+    parser = argparse.ArgumentParser(description="Validate own-doc-update structure.")
     parser.add_argument("repo", nargs="?", default=".", help="Repository root (default: cwd)")
     args = parser.parse_args()
 

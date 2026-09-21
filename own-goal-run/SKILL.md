@@ -30,8 +30,8 @@ responsible for authorization, integration, budgets, and completion.
    reason in one line instead of asking the user to pick it. Do not migrate history
    without approval.
 5. If no matching workstream exists, say so and ask first whether to create one
-   through `origin-doc-update`, proposing a workstream name and one-sentence scope.
-   After approval, invoke `origin-doc-update`, follow its human-boundary interview, and
+   through `own-doc-update`, proposing a workstream name and one-sentence scope.
+   After approval, invoke `own-doc-update`, follow its human-boundary interview, and
    create the workstream only after the complete boundary is confirmed. Do not
    ask downstream implementation questions before this create-or-select choice.
 6. Reuse the recorded branch or worktree, but verify it exists first
@@ -124,9 +124,9 @@ Authorization Envelope and Human Gates.
 
 **A missing record is repaired, not treated as a gate.** When the recorded
 envelope, per-issue `runnability:`, or acceptance `verify:` lines are missing or
-malformed — `origin-doc-update`'s `validate_repo_docs.py` detects all three —
+malformed — `own-doc-update`'s `validate_repo_docs.py` detects all three —
 do not silently downgrade the work to gated, and do not settle the gap in
-ad-hoc chat that evaporates with the session: run `origin-doc-update`'s
+ad-hoc chat that evaporates with the session: run `own-doc-update`'s
 human-boundary interview, write the confirmed answers back into the workstream
 file, and only then start execution. The interview's questions are this
 preflight's questions; the difference is that the answers land in the record,
@@ -222,7 +222,7 @@ question and current state in the workstream, then surface it to the user.
 
 Before declaring completion, verify every acceptance criterion, test gate,
 guide impact, resource constraint, and the runtime goal's stopping condition.
-Update the workstream and guides through `origin-doc-update`. Archive the workstream
+Update the workstream and guides through `own-doc-update`. Archive the workstream
 only when no required work remains and the recorded human gate permits closure.
 
 When stopping short of completion, leave only the durable facts needed to

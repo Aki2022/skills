@@ -1,9 +1,9 @@
 ---
-name: origin-doc-update
+name: own-doc-update
 description: Keep repository documentation aligned with implementation during development, including recording architectural and implementation decisions as ADRs. Use when starting or resuming features, bugs, refactors, API/schema/config/command changes, docs work, workstream or issue creation, unfinished work, docs reorganization, or a hard-to-reverse or surprising design/development decision. Trigger especially when the user asks to create a workstream, when implemented behavior may require docs/guides updates, when an ADR should be created or superseded, or when docs/00_index.md exists. Do not use for pure operational checks, log inspection, status reporting, or read-only explanations with no behavior or documentation change.
 ---
 
-# origin-doc-update
+# own-doc-update
 
 Treat `docs/` as persistent AI context. Keep each fact in one layer only.
 
@@ -49,7 +49,7 @@ Do not create the file immediately when the user asks for a workstream. First es
    - merge policy: continuous delivery is the default — a PR whose recorded quality gates pass (CI when present, otherwise the recorded local gates) is merged autonomously. Record a human merge gate only as a named exception with its reason (e.g. live/production impact, spend, new dependencies); an unexplained merge gate silently kills autonomous runs downstream. The template's `- Merge policy:` line in the Authorization Envelope carries the choice;
    - the next human checkpoint and early stop conditions.
 5. Classify runnability for every planned issue and fill its block's `runnability:` field: `ready` (completable with only current permissions and currently available information) or `gated on <the human decision, missing input, or new permission>`. Surface every gated point as a question now, during creation — a question asked here costs one interview turn, while the same question discovered mid-execution stops an entire autonomous run. As part of the same pass, judge whether each issue's acceptance is machine-verifiable (counts, thresholds, passing tests) or needs human review, and fill the `- verify:` line under its `#### Acceptance`: `machine — <command and expected result>` or `human-review — <who reviews what>`. Push subjective acceptance toward a quantifiable restatement; where human judgment is genuinely required, `human-review` records that the issue ends at a review gate — an agent cannot self-verify a subjective goal and will either stall or overclaim. These fields are not optional prose: `validate_repo_docs.py` rejects a missing or malformed value, because executors (`own-goal-run`, `own-ws-drain`) treat an unrecorded runnability as `gated` and stop the whole run at a gate nobody set.
-6. State that `origin-doc-update` is pausing creation until these boundaries are confirmed.
+6. State that `own-doc-update` is pausing creation until these boundaries are confirmed.
 7. After confirmation, create from `references/workstream.template.md` or run `create_workstream.py` with the confirmed boundary fields.
 
 Record only decisions that are hard to reverse or surprising without context. Do not create ADRs for routine implementation choices, temporary investigation notes, or ordinary history already captured by the workstream/issue.

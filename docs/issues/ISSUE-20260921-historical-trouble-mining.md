@@ -3,7 +3,7 @@ schema_version: 2
 id: ISSUE-20260921-historical-trouble-mining
 status: active
 created_at: 2026-09-21
-updated_at: 2026-09-21
+updated_at: 2026-09-22
 branch: codex/historical-trouble-mining
 pr: ""
 related_specs: []
@@ -32,7 +32,8 @@ as of 2026-09-22 — 226件の索引化・実データ適用・重複pattern統�
 ## Next Actions
 
 - `codex/historical-trouble-mining` の変更をreviewして統合する。
-- 29件の新規形式化候補は、人間承認後に所有先ごとの別issueで実装する。
+- 承認済み: `destructive-action-without-safe-check`（5件、`origin-git-cleanup` 所有、warn-only skill案）。実装は別issueで行う。
+- 残り28件の新規形式化候補は、人間承認後に所有先ごとの別issueで実装する。
 
 ## Guide Impact
 
@@ -44,6 +45,7 @@ as of 2026-09-22 — 226件の索引化・実データ適用・重複pattern統�
 - `legacy_unrecorded` は評価負債ではないが、分析入力として随時利用できる。
 - `mechanism` / `thematic` の候補対応では status を更新しない。
 - 新しいhook・skillは提案までとし、このissueでは実装しない。
+- `formalization_state=candidate` は候補の分類を示すため、承認済み候補もこの索引値を維持する。承認はこのissueのログで管理する。
 - 実行結果: mechanism 203、thematic 23、direct 0、unclassified 0。
 - response候補付きlinkは156件だが正式紐付けは0件で、status遷移も0件。
 - `legacy_unrecorded` 226件と `evaluation_pending_entries` 30件の分離を維持した。
@@ -56,6 +58,7 @@ as of 2026-09-22 — 226件の索引化・実データ適用・重複pattern統�
 - 2026-09-21 — 生pattern 79件を重複統合して71件へ整理。226/226件、欠落0件で保管ルートへ適用。
 - 2026-09-21 — entry本文226件の不変、historical index validate、status ledger validate、docs validator、全skill lintを確認。
 - 2026-09-22 — `runtime-context-mismatch` が既存 `verification-target-mismatch` と重複すると人間承認され、11 linkを統合。pattern 71→70、link 226、status遷移0を確認。
+- 2026-09-22 — `destructive-action-without-safe-check`（5件、origin-git-cleanup、warn-only skill案）を人間承認。実装・hook変更・status遷移はこのissueでは行わない。
 
 ## Completion
 

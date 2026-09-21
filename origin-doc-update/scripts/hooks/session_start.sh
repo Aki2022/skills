@@ -52,10 +52,27 @@ if [ -n "${digest_script}" ] && command -v python3 >/dev/null 2>&1; then
   digest="$(python3 "${digest_script}" "${index}" 2>/dev/null || true)"
 fi
 
-printf '%s\n' "Repository documentation index (read this first; do not scan all of docs/):"
+# Review reminder (2026-09-20): closing work keeps issues honest, but nothing
+# re-weights guides/specs as the repository grows. docs_hygiene.py --review does
+# that and leaves docs/log/review-YYYYMMDD.md; past 14 days, say so in one line.
+review_note=""
+newest="$(ls "${cwd%/}/docs/log/" 2>/dev/null | sed -n 's/^review-\([0-9]\{8\}\)\.md$/\1/p' | sort | tail -1)"
+if [ -z "${newest}" ]; then
+  review_note="docs review: never run (python3 ~/.agents/skills/origin-doc-update/scripts/docs_hygiene.py <repo> --review)"
+else
+  now_days=$(( $(date +%s) / 86400 ))
+  then_days=$(( $(date -j -f %Y%m%d "${newest}" +%s 2>/dev/null || date -d "${newest}" +%s 2>/dev/null || echo 0) / 86400 ))
+  if [ "${then_days}" -gt 0 ] && [ $(( now_days - then_days )) -gt 14 ]; then
+    review_note="docs review: last ${newest}, over 14 days — run docs_hygiene.py --review"
+  fi
+fi
 
+printf '%s\n' "Repository documentation index (read this first; do not scan all of docs/):"
+[ -n "${review_note}" ] && printf '%s\n' "NOTE: ${review_note}"
+
+# index_digest.py prints the marker line too: it decides whether the index fits
+# as written or has to be compressed, and says which one it sent.
 if [ -n "${digest}" ]; then
-  printf '%s\n' "----- docs/00_index.md (routing digest) -----"
   printf '%s\n' "${digest}"
   exit 0
 fi

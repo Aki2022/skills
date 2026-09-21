@@ -270,7 +270,7 @@ def main():
             print(f"  {os.path.relpath(path, repo)}")
     if branch:
         print(f"Note: this issue's branch was '{branch}'.")
-        print(f"  If it still exists, run origin-git-cleanup to check/remove it.")
+        print(f"  If it still exists, run own-git-clean to check/remove it.")
     if index_plan is not None:
         target_lines, repointed = index_plan[2], index_plan[3]
         if target_lines:

@@ -31,9 +31,35 @@ paths="$(printf '%s\n' "${status}" | sed 's/^...//' | sed 's/.* -> //')"
 nondocs="$(printf '%s\n' "${paths}" | grep -v '^docs/' || true)"
 docschanged="$(printf '%s\n' "${paths}" | grep '^docs/' || true)"
 
+msg=""
 if [ -n "${nondocs}" ] && [ -z "${docschanged}" ]; then
-  # Emit JSON systemMessage: surfaced as a non-blocking UI warning (Codex).
+  msg="origin-doc-update nudge: non-doc files changed. Update the active workstream/issue, classify guide impact as required or none, and update docs/guides/ in the same slice when behavior changed."
+fi
+
+# 2026-09-21: when docs/ changed this session, run the validator and say what is
+# red. The validator was only a close-session step, so a session that never
+# reached close-session left red docs that nobody saw. Syntactic checks only, so
+# warn-only is the right strength (ADR-20260816); never blocks, capped output.
+if [ -n "${docschanged}" ] && command -v python3 >/dev/null 2>&1; then
+  validator=""
+  for candidate in \
+    "$(cd "$(dirname "$0")" 2>/dev/null && pwd)/../validate_repo_docs.py" \
+    "${HOME}/.agents/skills/origin-doc-update/scripts/validate_repo_docs.py"; do
+    [ -f "${candidate}" ] && { validator="${candidate}"; break; }
+  done
+  if [ -n "${validator}" ]; then
+    out="$(timeout 20 python3 "${validator}" "${cwd}" 2>/dev/null || true)"
+    errs="$(printf '%s\n' "${out}" | grep -c '✗' || true)"
+    if [ "${errs:-0}" -gt 0 ]; then
+      first="$(printf '%s\n' "${out}" | grep '✗' | head -5 | sed 's/^[[:space:]]*✗ //' | tr '\n' ' ' | cut -c1-600)"
+      msg="${msg}${msg:+ | }docs validator: ${errs} error(s) after this session's docs changes — ${first}"
+    fi
+  fi
+fi
+
+if [ -n "${msg}" ]; then
+  # Emit JSON systemMessage: surfaced as a non-blocking UI warning.
   # No "continue":false, so the turn still ends normally — never blocks.
-  printf '%s\n' '{"systemMessage":"origin-doc-update nudge: non-doc files changed. Update the active workstream/issue, classify guide impact as required or none, and update docs/guides/ in the same slice when behavior changed."}'
+  python3 -c 'import json,sys; print(json.dumps({"systemMessage": sys.argv[1]}, ensure_ascii=False))' "${msg}"
 fi
 exit 0

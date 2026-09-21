@@ -73,6 +73,7 @@ HEADING_RE = re.compile(r"^[ \t]{0,3}#{1,6}[ \t]+(.*?)[ \t]*$")
 FENCE_RE = re.compile(r"^[ \t]{0,3}(`{3,}|~{3,})")
 BARE_ROW_RE = re.compile(r"^[ \t]*[-*+][ \t]+(docs/[\w./-]+\.md)")
 
+DIGEST_MARKER = "----- docs/00_index.md (routing digest) -----"
 HEADER = "Repository documentation index — routing digest. Full file: docs/00_index.md"
 PATHS_NOTE = "Paths below are relative to docs/."
 
@@ -248,6 +249,21 @@ def build_digest(text: str, max_chars: int = DIGEST_MAX_CHARS) -> str:
     return rendered[: max_chars - 1].rstrip() + "…"
 
 
+def render_injection(text: str, max_chars: int = DIGEST_MAX_CHARS) -> str:
+    """The whole block the hook injects, marker line included.
+
+    An index that already fits is passed through as written: compressing it
+    would drop its prose and its markup for no gain. Only an index that cannot
+    arrive whole is replaced by a digest, and the marker says which one this is.
+    """
+    text = text or ""
+    whole = f"----- docs/00_index.md -----\n{text}"
+    if len(whole) <= max_chars:
+        return whole
+    digest = build_digest(text, max_chars - len(DIGEST_MARKER) - 1)
+    return f"{DIGEST_MARKER}\n{digest}"
+
+
 def main() -> int:
     if len(sys.argv) != 2:
         print("usage: index_digest.py <path to docs/00_index.md>", file=sys.stderr)
@@ -257,7 +273,7 @@ def main() -> int:
     except OSError as error:
         print(f"index_digest: {error}", file=sys.stderr)
         return 1
-    sys.stdout.write(build_digest(text))
+    sys.stdout.write(render_injection(text))
     return 0
 
 

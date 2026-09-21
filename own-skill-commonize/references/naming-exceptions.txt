@@ -18,4 +18,3 @@ origin-trial-driven-development
 origin-trade-trial-batch
 origin-trade-data-access
 origin-trade-cycle-manager
-origin-yorisoi-engagement-monitoring

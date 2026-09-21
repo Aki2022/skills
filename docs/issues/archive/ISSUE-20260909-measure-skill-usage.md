@@ -23,12 +23,12 @@ account state.
 
 ## Acceptance
 
-- verify: machine — python3 -m pytest -q origin-skill-commonize/scripts/tests/test_measure_skill_usage.py && bash origin-skill-commonize/scripts/skill_lint.sh; both exit 0
+- verify: machine — python3 -m pytest -q own-skill-commonize/scripts/tests/test_measure_skill_usage.py && bash own-skill-commonize/scripts/skill_lint.sh; both exit 0
   <!-- `machine — <command and expected result>`, or `human-review — <who reviews what>` -->
 
 ## Current Status
 
-Implemented `origin-skill-commonize/scripts/measure_skill_usage.py` and ten fixture/CLI tests.
+Implemented `own-skill-commonize/scripts/measure_skill_usage.py` and ten fixture/CLI tests.
 The collector accepts explicit Claude/Codex roots, counts only identifiable user messages, keeps
 ambiguous Codex messages fail-closed, derives dependency-only status from the canonical reference
 parser, and writes no snapshot unless explicitly requested.

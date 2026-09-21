@@ -157,7 +157,7 @@ def _blank_row(
             else "対象欄に未列挙。次回トリアージ対象"
         ),
         "next_action": (
-            "過去文を参照して対策の実装・有効性を評価する。再実装しない"
+            "履歴として保管する。再発または新しい一次証拠が出た場合だけresponseへ紐付ける"
             if triaged
             else "次回トリアージで読み、既存responseとの再発か新規形かを判定する"
         ),
@@ -306,13 +306,13 @@ def summary(root: Path) -> int:
     registry = read_registry(root / "triage/responses.tsv")
     counts = Counter(row["triage_status"] for row in rows.values())
     response_counts = Counter(row["response_status"] for row in rows.values())
-    pending_evaluation = sum(
-        response_counts[state] for state in ("legacy_unrecorded", "implemented_unverified")
-    )
+    historical_unlinked = response_counts["legacy_unrecorded"]
+    pending_evaluation = response_counts["implemented_unverified"]
     registry_counts = Counter(row["state"] for row in registry.values())
     print(f"ledger_rows={len(rows)}")
     print("triage_status=" + ",".join(f"{key}:{counts[key]}" for key in sorted(counts)))
     print("response_status=" + ",".join(f"{key}:{response_counts[key]}" for key in sorted(response_counts)))
+    print(f"historical_unlinked_entries={historical_unlinked}")
     print(f"evaluation_pending_entries={pending_evaluation}")
     print(f"response_registry={len(registry)}")
     if registry_counts:

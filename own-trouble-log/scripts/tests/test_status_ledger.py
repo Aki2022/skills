@@ -139,6 +139,22 @@ class StatusLedgerTests(unittest.TestCase):
         rows = status_ledger.read_ledger(ledger)
         self.assertEqual(rows[self.entry_a]["status_updated_at"], "2026-08-16")
 
+    def test_summary_separates_archived_legacy_from_active_evaluation(self):
+        self.assertEqual(self.run_cli("sync").returncode, 0)
+        ledger = self.root / "triage/status.tsv"
+        rows = status_ledger.read_ledger(ledger)
+        rows[self.entry_a]["triage_status"] = "triaged"
+        rows[self.entry_a]["response_status"] = "legacy_unrecorded"
+        rows[self.entry_b]["triage_status"] = "triaged"
+        rows[self.entry_b]["response_status"] = "implemented_unverified"
+        status_ledger.write_ledger(ledger, rows)
+
+        result = self.run_cli("summary")
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("historical_unlinked_entries=1", result.stdout)
+        self.assertIn("evaluation_pending_entries=1", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

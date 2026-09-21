@@ -151,7 +151,9 @@ status は「トリアージ済みか」と「対策が効いたか」を分け�
 
 1. 新規 entry は `untriaged / unknown` で始める。
 2. 過去レポートに列挙済みだが outcome の証拠が無い entry は、backfill で
-   `triaged / legacy_unrecorded` とする。実装済み・有効とは推測しない。
+   `triaged / legacy_unrecorded` とする。実装済み・有効とは推測せず、履歴枠として保管する。
+   全件を遡及評価する backlog にはせず、再発または新しい一次証拠が出た entry だけを
+   response に紐付けて別 status へ進める。
 3. 実装と局所テストを確認しただけなら `implemented_unverified`。運用上の再発・見逃し・
    誤警告を定義した期間で測っていない限り、`effective_provisional` に進めない。
 4. 対策が存在する状態で同型が出たら `recurred` とし、同じ修正をもう一度適用するのではなく、
@@ -239,9 +241,9 @@ python3 ~/.agents/skills/own-trouble-log/scripts/status_ledger.py --root "$ROOT"
    （並行セッションで競合しない）設計を崩すため。結論はレポート側が持つ。
 8. 実施日を `triage/last-triage.txt` に記録する。
 
-**この skill の起動時（記録時・トリアージ時とも）に未トリアージ件数と、未評価の
-entry / response 件数を必ず報告する。** 起動が人間に依存するため、忘れている状態と、同じ対策を
-再実行せず評価へ回すべき状態が見えるようにする。
+**この skill の起動時（記録時・トリアージ時とも）に未トリアージ件数、履歴未紐付け件数、
+現役の未評価 entry / response 件数を分けて必ず報告する。** 起動が人間に依存するため、
+忘れている状態と、同じ対策を再実行せず評価へ回すべき状態が見えるようにする。
 算出は「全過去レポートの対象欄の和集合」と `entries/` の現在一覧の差分で行う。対象欄以外の
 本文は絶対に入力に含めない:
 
@@ -259,8 +261,10 @@ rm -f "$triaged"
 ```
 
 件数の status 集計は上記の `status_ledger.py summary` を使う。`untriaged` は新規対象、
-`legacy_unrecorded` と `implemented_unverified` は過去文と対策の一次証拠を評価する対象であり、
-実装を繰り返す件数ではない。
+`historical_unlinked_entries` は監査用の履歴（現役 backlog ではない）、
+`evaluation_pending_entries` は `implemented_unverified` の現役評価対象である。
+`legacy_unrecorded` は一括して記録を補わず、同型の再発または新しい一次証拠が出たときだけ
+response へ紐付ける。
 
 ## 形式化は所有しない
 

@@ -2,7 +2,7 @@
 id: SPEC-pptx-content-eval-loop
 status: active # draft | active | superseded
 created_at: 2026-08-31
-updated_at: 2026-08-31
+updated_at: 2026-09-21
 related_guides: []
 affected_workstreams: []
 ---

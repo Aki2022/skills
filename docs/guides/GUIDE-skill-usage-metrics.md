@@ -1,6 +1,6 @@
 ---
 id: GUIDE-skill-usage-metrics
-updated_at: 2026-09-09
+updated_at: 2026-09-21
 source_issues: [ISSUE-20260909-measure-skill-usage, ISSUE-20260909-skill-usage-schedule, ISSUE-20260910-improve-loop-review-handoff]
 source_workstreams: []
 related_specs: []

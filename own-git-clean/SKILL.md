@@ -22,7 +22,7 @@ description: >-
 > **Wrapping up a whole chunk of work?** If the repo uses `docs/` governance,
 > prefer the **own-session-close** skill instead of calling own-git-clean
 > directly — it runs
-> origin-doc-update first so documentation and git are closed out together and the doc
+> own-doc-update first so documentation and git are closed out together and the doc
 > edits land in the same commit. Use own-git-clean directly for git-only
 > housekeeping (no docs to update).
 
@@ -146,8 +146,8 @@ If the script isn't available, gather the same picture manually with
 `git stash list`, `git log --graph --oneline -15`,
 `git branch --merged main` / `--no-merged main`, and `gh pr status`.
 
-If the repo has `docs/issues/` (origin-doc-update in use), also run this — it
-cross-checks origin-doc-update's issue `branch` fields against real git state so
+If the repo has `docs/issues/` (own-doc-update in use), also run this — it
+cross-checks own-doc-update's issue `branch` fields against real git state so
 Stage 2 doesn't have to guess by name alone:
 
 ```bash
@@ -158,7 +158,7 @@ It reports which active issues' recorded branch is missing (a signal that
 resuming the issue needs a fresh branch, or that the branch was cleaned up
 without archiving the issue), and which `ISSUE-*`-shaped branches have no
 active issue referencing them (orphan candidates). It no-ops cleanly if
-`docs/issues/` doesn't exist or the repo isn't using origin-doc-update.
+`docs/issues/` doesn't exist or the repo isn't using own-doc-update.
 
 ## Stage 2 — Classify and decide
 
@@ -398,12 +398,12 @@ If a step errors, stop and report — don't push past failures.
 
 If a deleted/merged branch matched an active issue's `branch` field, add a
 line to the final report suggesting the issue be archived — don't archive it
-yourself; whether specs/guides/index updates are complete is origin-doc-update's
+yourself; whether specs/guides/index updates are complete is own-doc-update's
 call, not this skill's:
 
 ```
 - Branch <name> deleted (issue <id>) — if the work is complete, archive it:
-  python3 ~/.agents/skills/origin-doc-update/scripts/archive_issue.py <id>
+  python3 ~/.agents/skills/own-doc-update/scripts/archive_issue.py <id>
 ```
 
 ## Stage 5 — Verify

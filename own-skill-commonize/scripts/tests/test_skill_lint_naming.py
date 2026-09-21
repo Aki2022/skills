@@ -146,7 +146,7 @@ class NamingDataTests(unittest.TestCase):
 
         own- で始まる名前が残っていたら、その skill は既に移行済みなのに
         リストから消し忘れている＝検査が抑止されたままになる。
-        （末尾が動詞かどうかでは判定できない。origin-doc-update は動詞末尾だが
+        （末尾が動詞かどうかでは判定できない。own-doc-update は動詞末尾だが
         接頭辞が違うので依然として移行対象。）
         """
         if not EXCEPTIONS.is_file():

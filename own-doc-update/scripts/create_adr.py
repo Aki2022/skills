@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create a repository ADR from the origin-doc-update template."""
+"""Create a repository ADR from the own-doc-update template."""
 from __future__ import annotations
 
 import argparse

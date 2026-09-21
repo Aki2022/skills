@@ -48,7 +48,7 @@ as of 2026-09-22 — 226件の索引化・実データ適用・重複pattern統�
 - `formalization_state=candidate` は候補の分類を示すため、承認済み候補もこの索引値を維持する。承認はこのissueのログで管理する。
 - 実行結果: mechanism 203、thematic 23、direct 0、unclassified 0。
 - response候補付きlinkは156件だが正式紐付けは0件で、status遷移も0件。
-- `legacy_unrecorded` 226件と `evaluation_pending_entries` 30件の分離を維持した。
+- 初回実行時は `legacy_unrecorded` 226件と `evaluation_pending_entries` 30件の分離を維持した。後続の別セッション更新後の現在値は31件で、今回の統合によるstatus変更ではない。
 
 ## Log
 

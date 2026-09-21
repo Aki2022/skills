@@ -33,7 +33,8 @@ as of 2026-09-22 — 226件の索引化・実データ適用・重複pattern統�
 
 - `codex/historical-trouble-mining` の変更をreviewして統合する。
 - 承認済み: `destructive-action-without-safe-check`（5件、`origin-git-cleanup` 所有、warn-only skill案）。実装は別issueで行う。
-- 残り28件の新規形式化候補は、人間承認後に所有先ごとの別issueで実装する。
+- 承認済み: `nondeterministic-or-invalid-measurement`（4件、`own-trouble-log` 所有、warn-only/manual-review案）。実装は別issueで行う。
+- 残り27件の新規形式化候補は、人間承認後に所有先ごとの別issueで実装する。
 
 ## Guide Impact
 
@@ -59,6 +60,7 @@ as of 2026-09-22 — 226件の索引化・実データ適用・重複pattern統�
 - 2026-09-21 — entry本文226件の不変、historical index validate、status ledger validate、docs validator、全skill lintを確認。
 - 2026-09-22 — `runtime-context-mismatch` が既存 `verification-target-mismatch` と重複すると人間承認され、11 linkを統合。pattern 71→70、link 226、status遷移0を確認。
 - 2026-09-22 — `destructive-action-without-safe-check`（5件、origin-git-cleanup、warn-only skill案）を人間承認。実装・hook変更・status遷移はこのissueでは行わない。
+- 2026-09-22 — `nondeterministic-or-invalid-measurement`（4件、own-trouble-log、warn-only/manual-review案）を人間承認。実装・hook変更・status遷移はこのissueでは行わない。
 
 ## Completion
 

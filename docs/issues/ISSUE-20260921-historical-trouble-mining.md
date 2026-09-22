@@ -38,8 +38,9 @@ as of 2026-09-22 — 226件の索引化・実データ適用・3件の重複patt
 - 承認済み: `decision-history-not-read`（3件、`own-trouble-log` 所有、履歴確認skill案）。実装は別issueで行う。
 - 承認済み: `idempotence-postcondition-gap`（3件、`origin-doc-update` 所有、warn-only案）。実装は別issueで行う。
 - 承認済み: `archive-parser-shape-collision`（2件、`own-doc-update` 所有、parser回帰テスト案）。実装は別issueで行う。
+- 承認済み: `artifact-state-not-recorded`（2件、`origin-doc-update` 所有、docs更新後readback案）。実装は別issueで行う。
 - `completion-race-stale-run`（3件）は既存 `verification-target-mismatch` へ統合済み。`silent-write-noop`（3件）は既存 `doc-hygiene-postconditions` へ統合済み。
-- 残り21件の新規形式化候補は、人間承認後に所有先ごとの別issueで実装する。
+- 残り20件の新規形式化候補は、人間承認後に所有先ごとの別issueで実装する。
 - 全pattern・候補を再照合し、追加の明確な重複がないことを確認した。response名だけが一致する候補は失敗機構が異なるため統合していない。
 - 全skill lintのown-doc-update 2件失敗は、グローバルdocs-validator hookがfixtureの意図的な不正docsをcommit拒否する既存環境問題。hookを無効化せず、別作業として解消するまでmergeしない。
 
@@ -75,6 +76,7 @@ as of 2026-09-22 — 226件の索引化・実データ適用・3件の重複patt
 - 2026-09-22 — `silent-write-noop` の3 linkを既存 `doc-hygiene-postconditions` へ統合。pattern 69→68、link 226、status遷移0を確認。同日3件目のためsuffix付き不変history reportを作成。
 - 2026-09-22 — 全68 pattern・残候補を再照合。`archive-parser-shape-collision`、`formatter-mutation-bypass`、`permission-preflight` はresponse名の一致だけで失敗機構が異なるため、重複統合の対象外と判定。
 - 2026-09-22 — `archive-parser-shape-collision`（2件、own-doc-update、parser回帰テスト案）を人間承認。実装・hook変更・status遷移はこのissueでは行わない。
+- 2026-09-22 — `artifact-state-not-recorded`（2件、origin-doc-update、docs更新後readback案）を人間承認。実装・hook変更・status遷移はこのissueでは行わない。
 - 2026-09-22 — 対象skill 44テスト、historical/status/docs validatorは合格。全skill lintはown-doc-updateのfixture commit拒否2件で停止し、hook回避なしでmerge保留。
 
 ## Completion

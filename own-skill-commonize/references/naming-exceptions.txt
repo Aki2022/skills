@@ -1,19 +1,13 @@
-# 命名規則 S9 の猶予リスト（ADR-20260915 時点で既に存在した自前 skill 35本）
+# 命名規則 S9 の猶予リスト（burn-down）
 #
-# **新規 skill をここに足してはいけない。** これは burn-down リストで、
-# own- へ改名した skill を1本ずつ消していく。空になったら S9 の猶予は終わる。
-# 常に赤い検査を残さないための暫定措置であって、規則の例外ではない。
+# **空である。** ADR-20260915 時点で存在した自前 skill 35本の改名は
+# WS-20260919-skill-naming-own-prefix-migration で完了した。
 #
-# 接頭辞が own- に変わったので、**逸脱24本だけでなく35本すべて**が改名対象。
-# 改名先は biz_ops の ISSUE-20260905-improve-loop-skill-naming-convention の表が正典。
-# 実行は WS-20260919-skill-naming-own-prefix-migration。参照の少ない順に1本ずつ。
-
-# --- グローバル正典 ~/.agents/skills/ (26) → own-<対象>-<動作> 3語 ---
-
-# --- リポジトリ固有 <repo>/.agents/skills/ (9) → own-<repo>-<対象>-<動作> 4語 ---
-# 注: 以下の trade / yorisoi 分は worktree でコミット済みだが、他セッションが実チェックアウトを
-# 占有しているため **まだ実体が旧名のまま**。merge されるまで猶予に残す。
-origin-trial-driven-development
-origin-trade-trial-batch
-origin-trade-data-access
-origin-trade-cycle-manager
+# **新規 skill をここに足してはいけない。** これは規則の例外リストではなく、
+# 改名が終わるまで検査が常に赤くなるのを避けるための暫定措置だった。
+# 空になった以上、S9 は全面適用される。
+#
+# ここに名前を足したくなったら、それは「改名が終わっていない」という意味である。
+# 足す前に改名できないかを先に検討すること。足す場合は
+# **いつ誰が消すか**を issue として起票し、その id をコメントで併記すること。
+# 期限の無い猶予は例外と同じで、検査を黙って無力にする。

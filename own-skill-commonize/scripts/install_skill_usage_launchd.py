@@ -19,9 +19,9 @@ from pathlib import Path
 from typing import Sequence
 
 
-LABEL = "com.origin.skill-usage-metrics"
+LABEL = "com.own.skill-usage-metrics"
 SCRIPT_DIR = Path(__file__).resolve().parent
-TEMPLATE_PATH = SCRIPT_DIR.parent / "references/com.origin.skill-usage-metrics.plist"
+TEMPLATE_PATH = SCRIPT_DIR.parent / "references/com.own.skill-usage-metrics.plist"
 
 
 def _home_path(home: str | Path | None = None) -> Path:
@@ -38,7 +38,7 @@ def installed_path(home: str | Path | None = None) -> Path:
 
 
 def state_path(home: str | Path | None = None) -> Path:
-    return _home_path(home) / ".local/state/origin-skill-usage"
+    return _home_path(home) / ".local/state/own-skill-usage"
 
 
 def template_bytes() -> bytes:

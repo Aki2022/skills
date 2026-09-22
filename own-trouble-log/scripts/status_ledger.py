@@ -65,11 +65,15 @@ def resolve_root(value: str | None) -> Path:
     if value:
         root = Path(value).expanduser()
     else:
-        env_root = os.environ.get("ORIGIN_TROUBLE_LOG_ROOT", "").strip()
+        env_root = (os.environ.get("OWN_TROUBLE_LOG_ROOT")
+                    or os.environ.get("ORIGIN_TROUBLE_LOG_ROOT")  # 移行期
+                    or "").strip()
         if env_root:
             root = Path(env_root).expanduser()
         else:
-            pointer = Path.home() / ".config/origin-trouble-log/root"
+            pointer = Path.home() / ".config/own-trouble-log/root"
+            if not pointer.exists():  # 移行期: 旧パスも読む
+                pointer = Path.home() / ".config/origin-trouble-log/root"
             try:
                 root = Path(pointer.read_text(encoding="utf-8").strip()).expanduser()
             except OSError as exc:

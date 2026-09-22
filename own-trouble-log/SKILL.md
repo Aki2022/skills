@@ -188,6 +188,8 @@ python3 ~/.agents/skills/own-trouble-log/scripts/historical_index.py --root "$RO
 `apply` は snapshot の全件に少なくとも1リンクがあることを要求し、未知ID・重複リンク・
 不正確度・空の根拠・個人名を含む絶対パスを、どのファイルも更新する前に拒否する。
 status 更新を同じ payload に含める場合も、同じ entry と response の `direct` 行が必須である。
+履歴レポート名は通常 `YYYY-MM-DD-legacy-mining.md` とし、同じ日に追加の不変レポートを作る場合だけ
+`YYYY-MM-DD-legacy-mining-<lowercase-slug>.md` の一意なsuffixを付ける。既存レポートは上書きしない。
 既存の分類を統合・訂正するときは、同じ全件snapshotと新しい日付付き履歴レポートを使い、
 `replace_entries` で対象entryの既存linkを置換する。pattern定義の更新は
 `replace_patterns`、不要になったpatternの除去は `retire_patterns` で明示する。

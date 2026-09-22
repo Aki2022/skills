@@ -457,7 +457,10 @@ def apply_payload(root: Path, input_path: Path) -> int:
 
     report_name = str(payload.get("report_name", ""))
     report_content = str(payload.get("report_content", ""))
-    if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}-legacy-mining\.md", report_name):
+    if not re.fullmatch(
+        r"[0-9]{4}-[0-9]{2}-[0-9]{2}-legacy-mining(?:-[a-z0-9-]+)?\.md",
+        report_name,
+    ):
         errors.append(f"invalid report_name: {report_name}")
     if not report_content.strip():
         errors.append("empty report_content")

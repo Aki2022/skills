@@ -240,7 +240,7 @@ echo ok
         first = self.run_cli("apply", "--input", str(self.write_payload(self.valid_payload())))
         self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
         payload = self.valid_payload()
-        payload["report_name"] = "2026-09-22-legacy-mining.md"
+        payload["report_name"] = "2026-09-22-legacy-mining-merge.md"
         payload["report_content"] = "# Pattern merge\n\nMerged duplicate runtime context pattern.\n"
         payload["replace_entries"] = [self.entry_a, self.entry_b]
         payload["replace_patterns"] = ["unclassified"]

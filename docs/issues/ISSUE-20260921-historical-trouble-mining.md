@@ -46,6 +46,7 @@ as of 2026-09-22 — 226件の索引化・実データ適用・3件の重複patt
 - 承認済み: `permission-preflight`（2件、`own-trouble-log` 所有、permission preflight案）。実装は別issueで行う。
 - 保留: `command-shape-permission-friction`（1件、`settings-hook-owner` 所有、warn-only案）。許可境界の実測後に再判断する。
 - 保留: `premature-completion-state`（1件、`origin-doc-update` 所有、完了前readback案）。追加の直接証拠後に再判断する。
+- 保留: `safe-operation-alternative`（1件、`own-trouble-log` 所有、warn-only案）。追加の直接証拠後に再判断する。
 - 保留: `hook-signal-quality`（1件、`settings-hook-owner` 所有、warn-only再評価案）。真陽性・誤警告の測定後に再判断する。
 - 保留: `patch-context-staleness`（1件、`own-trouble-log` 所有、patch直前readback案）。再現性の追加証拠後に再判断する。
 - 保留: `dependency-usage-not-checked`（2件、`origin-doc-update` 所有、usage search手順案）。利用実態の追加証拠後に再判断する。
@@ -94,6 +95,7 @@ as of 2026-09-22 — 226件の索引化・実データ適用・3件の重複patt
 - 2026-09-22 — `git-history-reachability-gap`（1件、origin-git-cleanup、warn-only案）を人間承認。実装・hook変更・status遷移はこのissueでは行わない。
 - 2026-09-22 — `permission-preflight`（2件、own-trouble-log、permission preflight案）を人間承認。実装・hook変更・status遷移はこのissueでは行わない。
 - 2026-09-22 — `premature-completion-state`（1件、origin-doc-update、完了前readback案）を保留。追加の直接証拠なしに形式化へ進めない。
+- 2026-09-22 — `safe-operation-alternative`（1件、own-trouble-log、warn-only案）を保留。追加の直接証拠なしに形式化へ進めない。
 - 2026-09-22 — `hook-signal-quality`（1件、settings-hook-owner、warn-only再評価案）を保留。真陽性・誤警告の測定なしに形式化へ進めない。
 - 2026-09-22 — `patch-context-staleness`（1件、own-trouble-log、patch直前readback案）を保留。再現性の追加証拠なしに形式化へ進めない。
 - 2026-09-22 — `command-shape-permission-friction`（1件、settings-hook-owner、warn-only案）を保留。許可境界の実測なしに形式化へ進めない。

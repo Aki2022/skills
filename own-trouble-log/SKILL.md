@@ -161,6 +161,48 @@ status は「トリアージ済みか」と「対策が効いたか」を分け�
 5. 各 status 変更は、次回レポートの `## 過去対策の評価` に根拠・再発数・見逃し/誤警告数・
    次の測定を書く。過去 entry と過去レポートは書き換えない。
 
+### 履歴を横断分析する（historical mining）
+
+`legacy_unrecorded` は現役の評価 backlog ではないが、**捨てた記録でもない**。人間が明示的に
+依頼したときは、再発を待たずに全件または選択集合を読み、検索・比較可能な知識へ変換してよい。
+この分析は候補対応と正式な status 判定を分離する。
+
+- パターン正典: `triage/patterns.tsv`
+- entry とパターン・候補 response の多対多索引: `triage/entry-pattern-links.tsv`
+- 実行時 snapshot と判断の不変レポート: `triage/history/YYYY-MM-DD-legacy-mining.md`
+
+索引の確度は `direct` / `mechanism` / `thematic` / `unclassified` の4段階とする。
+`direct` は entry 本文または過去レポートに当該 response との直接証拠がある場合だけ使う。
+観測可能な失敗機構だけが一致する `mechanism` と、テーマだけが近い `thematic` は検索候補であり、
+`status.tsv` を変えない。材料不足は黙って落とさず `unclassified` とし、不足証拠を `basis` に書く。
+
+```bash
+python3 ~/.agents/skills/own-trouble-log/scripts/historical_index.py \
+  --root "$ROOT" snapshot --output /tmp/trouble-history-snapshot.jsonl
+python3 ~/.agents/skills/own-trouble-log/scripts/historical_index.py \
+  --root "$ROOT" apply --input /tmp/trouble-history-analysis.json
+python3 ~/.agents/skills/own-trouble-log/scripts/historical_index.py --root "$ROOT" validate
+python3 ~/.agents/skills/own-trouble-log/scripts/historical_index.py --root "$ROOT" summary
+```
+
+`apply` は snapshot の全件に少なくとも1リンクがあることを要求し、未知ID・重複リンク・
+不正確度・空の根拠・個人名を含む絶対パスを、どのファイルも更新する前に拒否する。
+status 更新を同じ payload に含める場合も、同じ entry と response の `direct` 行が必須である。
+履歴レポート名は通常 `YYYY-MM-DD-legacy-mining.md` とし、同じ日に追加の不変レポートを作る場合だけ
+`YYYY-MM-DD-legacy-mining-<lowercase-slug>.md` の一意なsuffixを付ける。既存レポートは上書きしない。
+既存の分類を統合・訂正するときは、同じ全件snapshotと新しい日付付き履歴レポートを使い、
+`replace_entries` で対象entryの既存linkを置換する。pattern定義の更新は
+`replace_patterns`、不要になったpatternの除去は `retire_patterns` で明示する。
+退役patternにlinkが残るpayloadは拒否され、候補の統合だけではstatusを変更しない。
+対策存在後の同型再発は `recurred`、実装と局所テストの直接証拠は
+`implemented_unverified`、人手判断またはリポジトリ固有と直接判定できるものは
+`manual_only` / `repo_specific_pending` とする。未発生だけを根拠に
+`effective_provisional` へ進めない。
+
+形式化候補には、検知条件、誤警告境界、証拠件数、既存 response との重複、所有先、
+hook / skill / permission / manual の推奨を書く。historical mining は候補を具体化するまでで、
+hook・skill・permission の実装はそれぞれの所有者と人間承認へ渡す。
+
 起動時・トリアージ開始時には次を実行し、過去分の取りこぼしを確認する。
 
 ```bash

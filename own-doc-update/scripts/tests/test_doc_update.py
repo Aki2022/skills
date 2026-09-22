@@ -516,6 +516,8 @@ class GeneratedFilesValidateTest(ValidateRepoDocsV2Test):
         root = self.make_repo()
         self.run_script(
             "create_issue.py",
+            "--next-action",
+            "着手する",
             "example-generated-issue",
             "--no-guide-reason",
             "internal refactor with unchanged behavior",
@@ -589,6 +591,8 @@ updated_at: 2026-07-29
         root = self.make_repo()
         self.run_script(
             "create_issue.py",
+            "--next-action",
+            "着手する",
             "example-guide-bound-issue",
             "--guide",
             "GUIDE-example",
@@ -1639,12 +1643,19 @@ class HandoffChecksTest(HygieneChecksTest):
     def worked(self, path: Path) -> None:
         path.write_text(path.read_text().replace("updated_at: 2026-07-19", "updated_at: 2026-07-25"))
 
-    def test_fresh_issue_without_next_actions_is_exempt(self):
+    def test_fresh_issue_without_next_actions_is_no_longer_exempt(self):
+        """作りたてでも Next Actions 空なら赤。免除は 2026-09-21 に廃止した。
+
+        免除の条件 `updated_at == created_at` は人手で書き換える値で、更新を
+        忘れた作業単位は着手済みでも永久に免除され続けた（実測: 477 件中 56 件・
+        13 リポジトリ・2 週間以上）。create_issue.py が --next-action を必須に
+        したので、生成物は最初から次の一手を持ち、免除が要らなくなった。
+        """
         root = self.make_repo()
         path = self.issue(root, "ISSUE-20260719-fresh", "active")
         path.write_text(path.read_text() + "\n## Next Actions\n\n## Notes\n")
         errors, _ = MODULE.validate_repo(root)
-        self.assertFalse(any("Next Actions" in e for e in errors), errors)
+        self.assertTrue(any("Next Actions" in e for e in errors), errors)
 
     def test_active_issue_with_empty_next_actions_is_an_error(self):
         root = self.make_repo()
@@ -1720,3 +1731,183 @@ class OversizedDocWarningTest(ValidateRepoDocsV2Test):
         (root / "docs/guides/big.md").write_text("---\nupdated_at: 2026-09-01\n---\n# B\n" + "y" * 40000)
         _e, warnings = MODULE.validate_repo(root)
         self.assertTrue(any("read whole" in w and "big.md" in w for w in warnings), warnings)
+
+
+class SpecPlacementTest(ValidateRepoDocsV2Test):
+    """spec の見出しが work unit の持ち分を持っていないか（ADR-20260922・seedion）。
+
+    判定基準は「何が起きたらこの文が間違いになるか」。作業が完了したら間違いになる文
+    （受入条件・人間ゲート・既存への影響・レビュー結果）は work unit の持ち分である。
+    """
+
+    def _spec(self, root: Path, body: str, name: str = "x.md") -> None:
+        (root / "docs/specs" / name).write_text(
+            "---\nid: SPEC-x\nstatus: active\nupdated_at: 2026-09-22\n---\n\n# S\n\n" + body
+        )
+
+    def _placement_errors(self, root: Path) -> list[str]:
+        errors, _warnings = MODULE.validate_repo(root)
+        return [e for e in errors if "spec に置けない見出し" in e]
+
+    def test_english_work_unit_heading_is_an_error(self):
+        root = self.make_repo()
+        self._spec(root, "## Acceptance Criteria\n\n- done\n")
+        self.assertEqual(len(self._placement_errors(root)), 1, self._placement_errors(root))
+
+    def test_japanese_synonym_is_an_error(self):
+        """英語だけを見る実装で 29KB のうち半分近くを見落とした。日本語を必ず見る。"""
+        root = self.make_repo()
+        self._spec(root, "## 受入条件\n\n1. テストがある\n")
+        self.assertEqual(len(self._placement_errors(root)), 1, self._placement_errors(root))
+
+    def test_implementation_status_in_heading_is_an_error(self):
+        root = self.make_repo()
+        self._spec(root, "## 処理パイプライン（実装完了）\n\n1. 保存\n")
+        self.assertEqual(len(self._placement_errors(root)), 1, self._placement_errors(root))
+
+    def test_ordinary_spec_heading_is_clean(self):
+        """常に赤い検査にしない——普通の spec が通ることを固定する。"""
+        root = self.make_repo()
+        self._spec(root, "## Requirements\n\n- 現在形の規則\n\n## Design Direction\n\n- 方向\n")
+        self.assertEqual(self._placement_errors(root), [])
+
+    def test_heading_inside_a_fenced_block_is_not_a_heading(self):
+        root = self.make_repo()
+        self._spec(root, "## Requirements\n\n```text\n## Acceptance Criteria\n```\n")
+        self.assertEqual(self._placement_errors(root), [])
+
+    def test_baseline_exempts_one_entry_only(self):
+        root = self.make_repo()
+        self._spec(root, "## Acceptance Criteria\n\n- a\n")
+        self._spec(root, "## レビュー結果\n\n- b\n", name="y.md")
+        (root / "docs/validator-placement-baseline.txt").write_text(
+            "docs/specs/x.md\tAcceptance Criteria\n"
+        )
+        remaining = self._placement_errors(root)
+        self.assertEqual(len(remaining), 1, remaining)
+        self.assertIn("y.md", remaining[0])
+
+    def test_baseline_entry_that_is_resolved_is_an_error(self):
+        """リストは縮むだけ。直したのに行を残すと別の赤になる。"""
+        root = self.make_repo()
+        self._spec(root, "## Requirements\n\n- ok\n")
+        (root / "docs/validator-placement-baseline.txt").write_text(
+            "docs/specs/x.md\tAcceptance Criteria\n"
+        )
+        errors, _warnings = MODULE.validate_repo(root)
+        self.assertTrue(
+            any("既に解決している" in e for e in errors), errors
+        )
+
+
+class CheckCoverageTest(ValidateRepoDocsV2Test):
+    """検査が『何件を検査し、何件を分岐で外したか』を常に報告することを固定する。
+
+    2026-09-20 の実測: validator は 477 件中 56 件の作業単位を条件式で飛ばしていたが、
+    飛ばしたことをどこにも出していなかった。バグは検出できなかったのではなく
+    報告されなかった。この 1 行があれば初日に見えていた。
+    根拠: SPEC-justified-nonconformance F4 / WS-20260921 ISSUE-03。
+    """
+
+    def _issue(self, root, id_, status, updated=None):
+        path = root / "docs/issues" / f"{id_}.md"
+        path.write_text(
+            f"---\nschema_version: 2\nid: {id_}\nstatus: {status}\n"
+            f"created_at: 2026-07-19\nupdated_at: {updated or '2026-07-19'}\n"
+            f"branch: {id_}\nguide_impact: none\nguide_impact_reason: docs only\n"
+            f"related_guides: []\n---\n\n# {id_}\n\n## Acceptance\n\n"
+            "- verify: machine — true\n\n## Current Status\n\n"
+            "as of 2026-07-19 — 未着手\n\n## Next Actions\n"
+        )
+        return path
+
+    def test_coverage_is_reported_for_the_next_actions_check(self):
+        root = self.make_repo()
+        self._issue(root, "ISSUE-20260719-one", "pending", updated="2026-07-25")
+        MODULE.validate_repo(root)
+        cov = getattr(MODULE, "LAST_COVERAGE", None)
+        self.assertIsNotNone(cov, "validate_repo がカバレッジを公開していない")
+        self.assertIn("next_actions", cov, cov)
+        # 対象 0 件を黙って合格にしない。
+        self.assertGreater(cov["next_actions"]["total"], 0, cov)
+
+    def test_no_work_unit_is_silently_skipped(self):
+        """分岐で検査から外れた作業単位が 1 件でもあれば赤。
+
+        いま赤い: updated_at == created_at の免除が生きているため。
+        ISSUE-04（免除の廃止）で緑になる。誰かが新しい分岐を足しても赤に戻る。
+        """
+        root = self.make_repo()
+        # 作りたて（updated_at == created_at）＝現行の免除に当たる形。
+        self._issue(root, "ISSUE-20260719-fresh", "pending")
+        MODULE.validate_repo(root)
+        cov = getattr(MODULE, "LAST_COVERAGE", {}).get("next_actions", {})
+        self.assertEqual(
+            cov.get("skipped"), 0,
+            f"分岐で検査から外れた作業単位がある: {cov}",
+        )
+
+
+class NextActionRequiredTest(ValidateRepoDocsV2Test):
+    """作業単位は生まれた時点で次の一手を持つ。
+
+    `Next Actions` 空の検査は `updated_at == created_at` を免除していたが、
+    その条件は人手で書き換える値なので、更新を忘れた作業単位は着手済みでも
+    永久に免除され続けた。実測 2026-09-20: 477 件中 56 件が該当し、13 リポジトリに
+    またがって 2 週間以上赤を出さずに残った。
+
+    免除に期限を付けるのではなく廃止する。生成物が必ず次の一手を持てば、
+    免除そのものが要らなくなり、時刻にも git にも依存しない。
+    根拠: SPEC-justified-nonconformance / WS-20260921 ISSUE-04。
+    """
+
+    def test_create_issue_refuses_without_a_next_action(self):
+        root = self.make_repo()
+        script = Path(__file__).resolve().parents[1] / "create_issue.py"
+        result = subprocess.run(
+            [sys.executable, str(script), "no-next-step",
+             "--guide", "GUIDE-example",
+             "--verify-machine", "true",
+             "--repo", str(root)],
+            capture_output=True, text=True,
+        )
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("--next-action", result.stderr)
+
+    def test_generated_issue_validates_without_a_dummy_step(self):
+        root = self.make_repo()
+        script = Path(__file__).resolve().parents[1] / "create_issue.py"
+        result = subprocess.run(
+            [sys.executable, str(script), "with-next-step",
+             "--guide", "GUIDE-example",
+             "--verify-machine", "true",
+             "--next-action", "実装先の scan_local_info_stream を読む",
+             "--repo", str(root), "--date", "20260921"],
+            capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        made = root / "docs/issues/ISSUE-20260921-with-next-step.md"
+        self.assertTrue(made.is_file())
+        self.assertIn("実装先の scan_local_info_stream を読む", made.read_text())
+        errors, _w = MODULE.validate_repo(root)
+        self.assertFalse(
+            [e for e in errors if "Next Actions" in e],
+            f"生成直後の issue が Next Actions の検査に落ちる: {errors}",
+        )
+
+    def test_the_exemption_is_gone(self):
+        """作りたて（updated_at == created_at）でも Next Actions 空なら赤。"""
+        root = self.make_repo()
+        path = root / "docs/issues/ISSUE-20260719-fresh-empty.md"
+        path.write_text(
+            "---\nschema_version: 2\nid: ISSUE-20260719-fresh-empty\nstatus: pending\n"
+            "created_at: 2026-07-19\nupdated_at: 2026-07-19\nbranch: b\n"
+            "guide_impact: none\nguide_impact_reason: docs only\nrelated_guides: []\n---\n\n"
+            "# fresh\n\n## Acceptance\n\n- verify: machine — true\n\n"
+            "## Current Status\n\nas of 2026-07-19 — 未着手\n\n## Next Actions\n"
+        )
+        errors, _w = MODULE.validate_repo(root)
+        self.assertTrue(
+            any("Next Actions" in e and "fresh-empty" in e for e in errors),
+            f"免除が残っている: {errors}",
+        )

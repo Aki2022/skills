@@ -36,6 +36,15 @@ def main():
         "--verify-human",
         help="Human-review acceptance: who reviews what",
     )
+    # 生まれた時点で次の一手を持たせる。これがあれば `Next Actions` 空の検査に
+    # 免除が要らなくなり、時刻にも git にも依存しなくなる。免除の条件だった
+    # `updated_at` は人手で書き換える値で、更新を忘れた作業単位は着手済みでも
+    # 永久に免除され続けた（実測 2026-09-20: 477 件中 56 件・13 リポジトリ）。
+    parser.add_argument(
+        "--next-action",
+        required=True,
+        help="The very next command or step (or what unblocks a blocked issue)",
+    )
     args = parser.parse_args()
 
     slug = args.slug.lower().replace(" ", "-")
@@ -87,6 +96,9 @@ def main():
             "- Decision: required | none", f"- Decision: {guide_impact}", 1
         )
         content = content.replace("- verify:", f"- verify: {verify_line}", 1)
+        content = content.replace(
+            "## Next Actions\n", f"## Next Actions\n\n1. {args.next_action}\n", 1
+        )
     except FileNotFoundError:
         content = (
             f"---\nid: {issue_id}\nstatus: active\n"

@@ -276,12 +276,19 @@ Scripts in `scripts/`:
   (`--autonomous`, `--confirm-first`), acceptance (`--verify-*`), and — when the
   initial issue is not immediately runnable — `--gated-on <reason>`. A file created
   without them validates red, and executors treat the missing record as a gate.
-- `create_issue.py <slug> (--verify-machine <text> | --verify-human <text>) (--guide <GUIDE-id> | --no-guide-reason <text>) [--title <title>] [--repo <repo>]`
+- `create_issue.py <slug> (--verify-machine <text> | --verify-human <text>) (--guide <GUIDE-id> | --no-guide-reason <text>) --next-action <text> [--title <title>] [--repo <repo>]`
   Pass a slug, not a full issue id — the `ISSUE-<date>-` prefix is added for you.
-  The guide decision and the acceptance decision are required, as they are for
-  `create_workstream.py`: name the guide this issue must update (or why not), and
-  state how acceptance is verified. Without them the generated file cannot pass
-  `validate_repo_docs.py`.
+  The guide decision, the acceptance decision and `--next-action` are required, as
+  the first two are for `create_workstream.py`: name the guide this issue must
+  update (or why not), state how acceptance is verified, and give the very next
+  step. Without them the generated file cannot pass `validate_repo_docs.py`.
+  `--next-action` replaced an exemption: the `## Next Actions` check used to skip a
+  file whose `updated_at` still equalled `created_at`, but that condition is a
+  hand-maintained value, so an issue whose `updated_at` was never touched stayed
+  exempt forever while being worked on (measured 2026-09-20: 56 of 477 open work
+  units across 13 repositories, unreported for over two weeks). The generator now
+  produces a real first step, so the check needs no exemption and depends on
+  neither the clock nor git.
 - `create_adr.py <slug> --scope <spec|development> [--status <proposed|accepted|rejected>] [--title <title>] [--repo <repo>]`
 - `archive_workstream.py <workstream> [--repo <repo>]`
 - `archive_issue.py <issue> [--repo <repo>]`
@@ -304,7 +311,11 @@ Scripts in `scripts/`:
   repository (e.g. `ws-loop-fixture`).
 - `index_digest.py <path to docs/00_index.md>`: the routing digest the SessionStart
   hook injects, bounded in characters rather than bytes
-- `validate_repo_docs.py <repo>` (prints the repository it validated)
+- `validate_repo_docs.py <repo>` (prints the repository it validated, and a
+  `coverage:` line saying how many open work units the `Next Actions` check
+  actually examined. Being green and having looked at everything are different
+  facts; without the count, a check that silently skips most of its population
+  is indistinguishable from one that passes.)
 
   It also resolves every relative link under `docs/**/*.md` and fails on any
   that does not exist — archiving moves a file one level deeper and leaves its

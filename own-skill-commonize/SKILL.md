@@ -43,14 +43,24 @@ skill の探索規則が一致しない。Claude Code v2.1.277 以降はリポ�
 | グローバル・ツール固有共有 | `~/.agents/<tool>/`配下。Claude例: `commands/`、非秘密の`mcp.json`。Codex例: `hooks.json`、`agents/`（`AGENTS.override.md` は**共有してはいけない** — 下記）      | primary/secondaryを含む各tool configuration directoryの対応path         |
 | リポジトリ単位             | `<repo>/AGENTS.md`、`<repo>/.agents/skills/`、必要なら`<repo>/.agents/<tool>/`                                                                                    | `.claude/skills` 等。`CLAUDE.md` は互換性が必要な場合だけ               |
 
-`.agents/` を正典にする理由: Codex CLI がユーザースキルとして `~/.agents/skills` を公式に読み、
-かつ `.agents` はツール非依存の中立な名前のため。
+`.agents/` を正典にする理由: `.agents` はツール非依存の中立な名前で、どの道具にも属さないため。
+
+**どの道具も正典を直接は読まない。** 各道具は自分の配布先だけを見る（2026-09-22 に実装で確認）。
+
+| 道具 | 読む場所 | 根拠 |
+| --- | --- | --- |
+| Claude Code | `~/.claude/skills` | 正典への root symlink 1本 |
+| Codex | `$CODEX_HOME/skills` | バイナリ内の記述 `Installs into $CODEX_HOME/skills/<skill-name> (defaults to ~/.codex/skills)`。3席は `shell.nix` が `CODEX_HOME` を切り替える |
+| Gemini | `~/.gemini/config/skills` | per-skill symlink |
+
+配布先の一覧は `references/alias-roots.txt` が持つ。**人の記憶に置かない** — 2026-09-22 まで
+一覧は規則の散文の中にしかなく、`~/.kiro/skills`（7件）は規則にも検査にも登場せず
+誰も検査していなかった。
 
 ## skill の供給源は正典のみ（第三者 skill のミラー規約）
 
 **skill を各エージェントへ供給する経路は正典 `~/.agents/skills/` の1本だけ**とする
-（`ADR-20260906-skill-supply-source-is-canon-only`・biz_ops）。根拠は実測: Codex CLI は
-`~/.agents/skills`（と `~/.agents/codex/skills`）しか読まず、Claude Code の plugin（`~/.claude/plugins/`）
+（`ADR-20260906-skill-supply-source-is-canon-only`・biz_ops）。根拠は実測: Codex CLI は `$CODEX_HOME/skills` しか読まず、Claude Code の plugin（`~/.claude/plugins/`）
 と CLI 同梱 built-in は **Claude 専用の供給路**である。plugin 由来の skill を使い続けると
 Claude と Codex・他 LLM の skill 群は必ずズレる（2026-09-05〜06 に frontend-design 3重・pdf 3重・
 plugin/built-in 2重6件を実測）。
@@ -175,6 +185,15 @@ grep で旧名が 0 件であることを別に確かめる。
 末尾が動詞か。第三者ミラー（`cloudflare-*` `google-*` 等）は対象外。
 
 規則の根拠と却下案は biz_ops の `ADR-20260915-unify-skill-naming-to-object-action`。
+
+`S10` は別名 root の板が正典と一致しているかを見る。検査自体は
+`check_global_topology.py` が前からあったが、**実運用で値を埋めて呼ぶ場所が 0 件**
+だった（呼び出しはテストと docs の説明文のみ）。skill を触るたびに走るのは lint だけなので
+ここから呼ぶ。root 一覧は `references/alias-roots.txt`。
+
+S10 は**検査した root の数を必ず出す**。渡し忘れた root について
+`check_global_topology.py` は何も言わない（実測: 渡さなければ `RESULT: OK`）ため、
+数だけが渡し忘れの手がかりになる。一覧から1行落とすと緑のまま数が減る。
 
 ## 共有設定とaccount stateの境界
 

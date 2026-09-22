@@ -1,0 +1,36 @@
+# skill の配布先（別名 root）の一覧。
+#
+# 形式: <役割><TAB><パス>
+#   役割は check_global_topology.py のオプション名に対応する:
+#     canonical / claude / codex / gemini / antigravity
+#   先頭が out: の行は「検査しないと決めた場所」。理由を必ず添える。
+#
+# **なぜファイルに置くか。** 2026-09-22 まで、この一覧は人の記憶と SKILL.md の
+# 散文の中にしかなかった。その結果 ~/.kiro/skills（7件）は規則にも検査にも
+# 一度も登場せず、誰も検査していなかった。規則が語っていたのは
+# Claude/Codex/Gemini/Antigravity の4つで、実在は Kiro を含む5つだった。
+#
+# **渡し忘れた root は黙って通る。** check_global_topology.py は渡された root しか
+# 見ず、渡されなかった root については何も言わない（実測: 渡さなければ RESULT: OK）。
+# だから一覧は人の記憶の外に置く必要がある。
+#
+# 新しい道具を入れたら、ここに1行足す。足さなければ検査されない。
+
+canonical	~/.agents/skills
+claude	~/.claude/skills
+codex	~/.codex/skills
+codex	~/.codex-private/skills
+codex	~/.codex-seat2/skills
+gemini	~/.gemini/config/skills
+
+# --- 検査しないと決めた場所 ---
+# 製品が同梱するもの。うちの持ち物ではなく、正典と一致する必要もない。
+out:	~/.gemini/antigravity-cli/builtin/skills	Antigravity 同梱（製品所有）
+out:	~/.codex/vendor_imports/skills	ベンダー取り込み（製品所有）
+out:	~/plugins/andrej-karpathy-skills/skills	第三者 plugin の同梱
+# nix 管理下のセキュリティ層。PRIVATE な reinstall から PUBLIC な正典へ
+# 手順を移さないため、置き場所を据え置くことを ADR-20260922 で決めた。
+out:	~/.agents/vibe-guard/skills	nix 管理・ADR-20260922 の既知の例外
+# 退役済み（2026-09-22）。Kiro アプリ自体が未インストールだった。
+# 復活させるなら out: ではなく役割つきの行として戻すこと。
+out:	~/.kiro/skills	2026-09-22 退役

@@ -1,0 +1,4 @@
+interface:
+  display_name: "August Luna Loop"
+  short_description: "Run temporary Luna leaf workers during August"
+  default_prompt: "Use $own-luna-run to run this bounded task with the temporary Luna worker bridge."

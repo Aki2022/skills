@@ -1,7 +1,7 @@
 ---
 schema_version: 2
 id: ISSUE-20260921-historical-trouble-mining
-status: active
+status: archived
 created_at: 2026-09-21
 updated_at: 2026-09-22
 branch: codex/historical-trouble-mining
@@ -27,11 +27,11 @@ guide_impact_reason: "現行挙動は own-trouble-log/SKILL.md と references/st
 
 ## Current Status
 
-as of 2026-09-22 — 226件の索引化・実データ適用・3件の重複pattern統合を実施し、fixture/hook境界の修正8097802を145e562としてPR branchへ取り込んだ。target branchの全skill lintが合格したため、PR #9は人間レビュー・merge待ちになっている。
+as of 2026-09-22 — 226件の索引化・実データ適用・3件の重複pattern統合を実施し、全skill lint合格後にPR #9をsquash merge（acdd97b）した。対象issueはarchive可能な状態になっている。
 
 ## Next Actions
 
-- PR #9を人間レビューし、承認後にmergeする。
+- 完了issueをarchiveし、00_index.mdのrouting行を更新する。
 - 承認済み: `destructive-action-without-safe-check`（5件、`origin-git-cleanup` 所有、warn-only skill案）。実装は別issueで行う。
 - 承認済み: `nondeterministic-or-invalid-measurement`（4件、`own-trouble-log` 所有、warn-only/manual-review案）。実装は別issueで行う。
 - 承認済み: `semantic-source-of-truth-drift`（4件、`origin-doc-update` 所有、warn-only/manual-review案）。実装は別issueで行う。
@@ -57,7 +57,7 @@ as of 2026-09-22 — 226件の索引化・実データ適用・3件の重複patt
 - `completion-race-stale-run`（3件）は既存 `verification-target-mismatch` へ統合済み。`silent-write-noop`（3件）は既存 `doc-hygiene-postconditions` へ統合済み。
 - 承認済み14件は所有先ごとの別issueで実装する。保留13件は証拠件数が増えるまで承認質問を再開しない。
 - 全pattern・候補を再照合し、追加の明確な重複がないことを確認した。response名だけが一致する候補は失敗機構が異なるため統合していない。
-- 全skill lintのown-doc-update 2件失敗は、グローバルdocs-validator hookがfixtureの意図的な不正docsをcommit拒否する既存環境問題。hookを無効化せず、別作業として解消するまでmergeしない。
+- 全skill lintのfixture/hook境界は8097802で解消し、target branch上の全対象テストが合格した。
 
 ## Guide Impact
 
@@ -111,7 +111,7 @@ as of 2026-09-22 — 226件の索引化・実データ適用・3件の重複patt
 - 2026-09-22 — 対象skill 44テスト、historical/status/docs validatorは合格。全skill lintはown-doc-updateのfixture commit拒否2件で停止し、hook回避なしでmerge保留。
 - 2026-09-22 — own-session-closeでdocs hygiene/reviewを記録し、commit 2c0bfa4をpushしてPR #9を作成。human-gatedのためmergeとbranch削除は行わない。
 - 2026-09-22 — 正典branchの8097802を読み取り検証。own-doc-update 37テスト、全skill lint（289件を含む全対象）が合格したが、正典worktreeの同一ファイル未コミット変更を保全するためPR branchへは未取り込み。
-- 2026-09-22 — 8097802を145e562としてPR branchへ取り込み、全skill lint（own-doc-update 255件を含む全対象）を実行して合格。human-gatedのmerge待ちへ移行。
+- 2026-09-22 — 8097802を145e562としてPR branchへ取り込み、全skill lint（own-doc-update 255件を含む全対象）を実行して合格。人間承認後にPR #9をsquash mergeし、merge commit acdd97bを確認。
 
 ## Completion
 
@@ -119,6 +119,6 @@ as of 2026-09-22 — 226件の索引化・実データ適用・3件の重複patt
 - [x] Specs updated if direction or requirements changed
 - [x] Guide impact classified before implementation
 - [x] Guides updated in the same slice if implemented behavior changed
-- [ ] Branch merged and cleaned up (or intentionally kept — note why)
+- [x] Branch merged and cleaned up (or intentionally kept — note why)
 - [x] 00_index.md updated
-- [ ] Moved to docs/issues/archive/ when complete
+- [x] Moved to docs/issues/archive/ when complete

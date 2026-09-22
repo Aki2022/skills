@@ -289,6 +289,33 @@ def validate_acceptance_verify(label: str, body: str, errors: list[str]) -> None
 # したがって既存分は「債務」として明示的に列挙して逃がし、新しい文書には最初から
 # 効かせる。逃がしたものは減る一方になるよう、リストが古びたら落ちる。
 LINK_BASELINE_RELPATH = "docs/validator-link-baseline.txt"
+PLACEMENT_BASELINE_RELPATH = "docs/validator-placement-baseline.txt"
+
+# `docs/specs/` に置くと持ち分を外れる見出し。spec は intent・requirements・design policy を
+# 持ち、work unit（受入条件・人間ゲート・既存への影響・レビュー結果）と実装状態は持たない。
+# 判定基準は「何が起きたらこの文が間違いになるか」——作業が完了したら間違いになる文は
+# work unit の持ち分である（ADR-20260922-doc-layer-ownership-and-placement-check、seedion）。
+#
+# **日本語の同義を必ず含める。** 最初の走査を英語だけで書いたとき、同じ形の見出しを
+# 半分近く見落とした（16KB と数えたものが実際は 29KB だった）。
+PLACEMENT_FORBIDDEN_IN_SPEC = (
+    "Acceptance Criteria",
+    "受入条件",
+    "受け入れ条件",
+    "Impact on Existing System",
+    "既存記述への影響",
+    "既存への影響",
+    "レビュー結果",
+    "Next Question",
+)
+# 見出しが実装の状態を名乗るなら、それは現況＝guide の持ち分である。
+PLACEMENT_STATUS_IN_HEADING = re.compile(r"実装(完了|済み?|中)|実装は段階")
+
+# 直近の validate_repo() が「何件を検査し、何件を分岐で外したか」。
+# 2026-09-20 の実測: validator は 477 件中 56 件の作業単位を条件式で飛ばしていたが、
+# 飛ばしたことをどこにも出していなかった。バグは検出できなかったのではなく
+# 報告されなかった。根拠: SPEC-justified-nonconformance F4。
+LAST_COVERAGE: dict[str, dict[str, int]] = {}
 
 # Only the `](` matters: the link text may contain brackets, or a whole nested
 # image, and anchoring on `[` would skip the outer destination entirely.
@@ -436,6 +463,86 @@ def load_link_baseline(root: Path) -> set[tuple[str, Optional[str]]]:
         parts = line.split("\t", 1) if "\t" in line else line.split(None, 1)
         entries.add((parts[0], parts[1].strip() if len(parts) == 2 else None))
     return entries
+
+
+
+def load_placement_baseline(root: Path) -> set[tuple[str, str]]:
+    """既知の誤配置を debt として記録したもの。`path<TAB>heading` の entry 単位。
+
+    file 単位の免除は用意しない——それを許すと、そのファイルに明日足された
+    誤配置も黙って通る。link baseline と同じ理由である。
+    """
+    path = root / PLACEMENT_BASELINE_RELPATH
+    if not path.is_file():
+        return set()
+    entries: set[tuple[str, str]] = set()
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.split("#", 1)[0].rstrip()
+        if not line.strip():
+            continue
+        if "\t" not in line:
+            continue
+        head, _, tail = line.partition("\t")
+        entries.add((head.strip(), tail.strip()))
+    return entries
+
+
+def validate_spec_placement(
+    root: Path, errors: list[str], warnings: list[str]
+) -> None:
+    """`docs/specs/` の見出しが spec の持ち分に収まっているか。
+
+    見つけたものは error。既知分は `docs/validator-placement-baseline.txt` に
+    `path<TAB>heading` で記録して免除できるが、**そのリストは縮むだけ**である
+    ——解決した行を残すと別の error になる。
+    """
+    specs_dir = root / "docs/specs"
+    if not specs_dir.is_dir():
+        return
+    baseline = load_placement_baseline(root)
+    seen: set[tuple[str, str]] = set()
+    for path in sorted(specs_dir.glob("*.md")):
+        rel = str(path.relative_to(root))
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except OSError as exc:  # pragma: no cover
+            errors.append(f"{rel}: unreadable while checking placement ({exc})")
+            continue
+        fenced = False
+        for line in lines:
+            if line.lstrip().startswith("```"):
+                fenced = not fenced
+                continue
+            if fenced:
+                continue
+            match = re.match(r"^#{2,6} (.+?)\s*$", line)
+            if not match:
+                continue
+            heading = match.group(1)
+            reason = None
+            if any(word in heading for word in PLACEMENT_FORBIDDEN_IN_SPEC):
+                reason = "work unit の持ち分（受入条件・ゲート・既存への影響・レビュー結果）"
+            elif PLACEMENT_STATUS_IN_HEADING.search(heading):
+                reason = "実装状態を名乗る見出しは現況＝guide の持ち分"
+            if reason is None:
+                continue
+            seen.add((rel, heading))
+            if (rel, heading) in baseline:
+                continue
+            errors.append(
+                f"{rel}: spec に置けない見出し: '{heading}' — {reason}。"
+                f"移すか見出しを改めるか、{PLACEMENT_BASELINE_RELPATH} へ "
+                f"'{rel}\t{heading}' を記録すること"
+            )
+    for rel, heading in sorted(baseline - seen):
+        errors.append(
+            f"{PLACEMENT_BASELINE_RELPATH}: '{rel}' -> '{heading}' は既に解決している — "
+            "行を消すこと（このリストは縮むだけ）"
+        )
+    if baseline:
+        warnings.append(
+            f"{PLACEMENT_BASELINE_RELPATH}: {len(baseline)} 件の誤配置がまだ免除されている"
+        )
 
 
 def validate_relative_links(
@@ -732,6 +839,9 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
     root = Path(repo).resolve()
     errors: list[str] = []
     warnings: list[str] = []
+    coverage = {"next_actions": {"total": 0, "checked": 0, "skipped": 0}}
+    LAST_COVERAGE.clear()
+    LAST_COVERAGE.update(coverage)
     baseline = load_baseline(root)
     deferred: dict[str, list[str]] = {}
 
@@ -912,11 +1022,22 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
             route_baselined(rel, baseline, deferred, errors, _status_checks)
             created = as_text(fm.get("created_at", ""))[:10]
             updated = as_text(fm.get("updated_at", ""))[:10]
-            if status in ISSUE_STATUSES and status != "complete" and updated != created:
+            _open_unit = status in ISSUE_STATUSES and status != "complete"
+            if _open_unit:
+                coverage["next_actions"]["total"] += 1
+                # 免除は廃止した。分岐で外れる作業単位は無い。
+                coverage["next_actions"]["checked"] += 1
+            if _open_unit:
                 # The next session resumes from `## Next Actions`; an empty one
-                # hands it nothing and it rescans the repository instead. A file
-                # created today and not yet worked (updated_at == created_at) is
-                # exempt, so create_issue.py output validates without a dummy step.
+                # hands it nothing and it rescans the repository instead.
+                #
+                # There is no exemption. `updated_at == created_at` used to exempt
+                # a fresh file, but that condition is a hand-maintained value: an
+                # issue whose updated_at was never touched stayed exempt forever
+                # even while being worked on (measured 2026-09-20: 56 of 477 open
+                # work units across 13 repositories, unreported for over two weeks).
+                # create_issue.py now requires --next-action instead, so its output
+                # validates without a dummy step and the exemption is not needed.
                 body_text = path.read_text()
                 route_baselined(
                     rel, baseline, deferred, errors,
@@ -1099,6 +1220,7 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
                     warnings.append(f"{rel}: {key} ref not found: {reference}")
 
     validate_relative_links(root, errors, warnings)
+    validate_spec_placement(root, errors, warnings)
     validate_baseline_freshness(root, baseline, deferred, errors, warnings)
     validate_review_recency(root, warnings)
 
@@ -1116,6 +1238,14 @@ def main() -> None:
     # target's result, with nothing to tell the two apart.
     print(f"validated: {Path(args.repo).resolve()}")
     errors, warnings = validate_repo(args.repo)
+
+    # 何件を検査し、何件を分岐で外したかを常に言う。緑であることと、
+    # 見るべきものを見たことは別物で、区別できないと「常に緑」に気づけない。
+    na = LAST_COVERAGE.get("next_actions", {})
+    if na.get("total"):
+        line = (f"coverage: Next Actions {na['checked']}/{na['total']} 件を検査"
+                f"（分岐で除外 {na['skipped']}）")
+        print(f"  ! {line}" if na["skipped"] else f"  {line}")
     if errors:
         print("ERRORS:")
         for error in errors:

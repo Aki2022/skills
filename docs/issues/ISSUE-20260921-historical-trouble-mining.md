@@ -27,7 +27,7 @@ guide_impact_reason: "現行挙動は own-trouble-log/SKILL.md と references/st
 
 ## Current Status
 
-as of 2026-09-22 — 226件の索引化・実データ適用・3件の重複pattern統合・対象skillの検証が完了した。全skill lintは別作業由来のown-doc-updateテスト2件が未解消のため、branch統合を停止している。
+as of 2026-09-22 — 226件の索引化・実データ適用・3件の重複pattern統合を実施し、対象skillの検証結果を確認した。全skill lintは別作業由来のown-doc-updateテスト2件が未解消のため、branch統合を停止している。
 
 ## Next Actions
 

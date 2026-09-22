@@ -5,7 +5,7 @@ status: active
 created_at: 2026-09-21
 updated_at: 2026-09-22
 branch: codex/historical-trouble-mining
-pr: ""
+pr: "https://github.com/Aki2022/skills/pull/9"
 related_specs: []
 related_guides: []
 guide_impact: none
@@ -27,11 +27,11 @@ guide_impact_reason: "現行挙動は own-trouble-log/SKILL.md と references/st
 
 ## Current Status
 
-as of 2026-09-22 — 226件の索引化・実データ適用・3件の重複pattern統合を実施し、対象skillの検証結果を確認した。全skill lintは別作業由来のown-doc-updateテスト2件が未解消のため、branch統合を停止している。
+as of 2026-09-22 — 226件の索引化・実データ適用・3件の重複pattern統合を実施し、対象skillの検証結果を確認した。commit 2c0bfa4をpushしてPR #9を作成したが、全skill lintは別作業由来のown-doc-updateテスト2件が未解消のため、mergeは人間ゲートで停止している。
 
 ## Next Actions
 
-- `codex/historical-trouble-mining` の変更をreviewして統合する。
+- PR #9の変更をreviewし、own-doc-updateのfixture/hook境界を解消して全skill lintが緑になった後にmergeする。
 - 承認済み: `destructive-action-without-safe-check`（5件、`origin-git-cleanup` 所有、warn-only skill案）。実装は別issueで行う。
 - 承認済み: `nondeterministic-or-invalid-measurement`（4件、`own-trouble-log` 所有、warn-only/manual-review案）。実装は別issueで行う。
 - 承認済み: `semantic-source-of-truth-drift`（4件、`origin-doc-update` 所有、warn-only/manual-review案）。実装は別issueで行う。
@@ -109,6 +109,7 @@ as of 2026-09-22 — 226件の索引化・実データ適用・3件の重複patt
 - 2026-09-22 — `dependency-usage-not-checked`（2件、origin-doc-update、usage search手順案）を保留。利用実態の追加証拠なしに形式化へ進めない。
 - 2026-09-22 — 低重要度・低件数の6候補（deploy-scope-mismatch、diagnostic-state-not-persisted、ephemeral-delivery-reference、guard-read-write-discrimination、operator-visible-completion-evidence、wrong-corpus-or-durable-location）を一括保留。件数増加まで承認質問を行わない。
 - 2026-09-22 — 対象skill 44テスト、historical/status/docs validatorは合格。全skill lintはown-doc-updateのfixture commit拒否2件で停止し、hook回避なしでmerge保留。
+- 2026-09-22 — own-session-closeでdocs hygiene/reviewを記録し、commit 2c0bfa4をpushしてPR #9を作成。human-gatedのためmergeとbranch削除は行わない。
 
 ## Completion
 

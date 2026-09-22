@@ -53,9 +53,15 @@ skill の探索規則が一致しない。Claude Code v2.1.277 以降はリポ�
 | Codex | `$CODEX_HOME/skills` | バイナリ内の記述 `Installs into $CODEX_HOME/skills/<skill-name> (defaults to ~/.codex/skills)`。3席は `shell.nix` が `CODEX_HOME` を切り替える |
 | Gemini | `~/.gemini/config/skills` | per-skill symlink |
 
-配布先の一覧は `references/alias-roots.txt` が持つ。**人の記憶に置かない** — 2026-09-22 まで
-一覧は規則の散文の中にしかなく、`~/.kiro/skills`（7件）は規則にも検査にも登場せず
-誰も検査していなかった。
+**配布先の一覧は持たない。** 配線は必ず正典への symlink なので、
+`scripts/audit_skill_wiring.py` が**正典を指す symlink を辿って**配線先を見つける。
+新しい道具を配線した瞬間から対象になり、一覧に足す作業が要らない。
+
+一覧を持たない理由は実測にある。2026-09-22 に配布先を `alias-roots.txt` に書き出したが、
+**人が書くものは書き落とす** — 一覧は6件で、正典を指す配線先は**13件**あった。
+落ちていたのは `~/.claude-private/skills`・`~/.claude-seat2/skills`・
+`~/.gemini/antigravity-cli/skills`（いずれも生きていた）と古いバックアップ4件。
+一覧方式は最初から半分しか見ていなかったので、2026-09-23 に撤去した。
 
 ## skill の供給源は正典のみ（第三者 skill のミラー規約）
 
@@ -186,14 +192,28 @@ grep で旧名が 0 件であることを別に確かめる。
 
 規則の根拠と却下案は biz_ops の `ADR-20260915-unify-skill-naming-to-object-action`。
 
-`S10` は別名 root の板が正典と一致しているかを見る。検査自体は
-`check_global_topology.py` が前からあったが、**実運用で値を埋めて呼ぶ場所が 0 件**
-だった（呼び出しはテストと docs の説明文のみ）。skill を触るたびに走るのは lint だけなので
-ここから呼ぶ。root 一覧は `references/alias-roots.txt`。
+配線の監査は `scripts/audit_skill_wiring.py` が持つ。lint とは別に走らせる
+（配線が壊れるのは skill を作る・直す・移す・消すときだけで、毎回は要らない）。
 
-S10 は**検査した root の数を必ず出す**。渡し忘れた root について
-`check_global_topology.py` は何も言わない（実測: 渡さなければ `RESULT: OK`）ため、
-数だけが渡し忘れの手がかりになる。一覧から1行落とすと緑のまま数が減る。
+```bash
+python3 ~/.agents/skills/own-skill-commonize/scripts/audit_skill_wiring.py
+```
+
+見るもの:
+
+1. **個数が同じか** — 正典 N 件に対して配線先も N 件か
+2. **不足が無いか** — 正典にあって配線先に無い名前
+3. **余分が無いか** — 配線先にあって正典に無い名前（改名の置き去りがこれ）
+4. **宙を指していないか**
+5. **個別対処した skill**（正典の外を指す symlink）が配線先でも解決するか
+
+**中身は照合しない。** 配線は正典の同じ実体を指すので原理的にズレない
+（72 skill × 5 root = 360 通りを realpath で照合し別実体 0 件・2026-09-22 実測）。
+
+退役マーカー（`_backup_` `_old_` `.bak_` `.orphaned_` `.disabled`）のついた配線先は
+対象にしない。古い中身のまま残っているので、見ると永久に赤い検査になる。
+
+**検査した配線先の数を常に出す。** 緑と「何も見ていない」を出力で区別するため。
 
 ## 共有設定とaccount stateの境界
 

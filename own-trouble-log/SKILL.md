@@ -30,11 +30,11 @@ skill を使っていない場面のトラブルを記録できなかった。20
 パスをこの skill に書かない（端末ごとに異なり、クラウド同期ディレクトリ名は
 記録に残せないため）。次の順で解決する。
 
-1. 環境変数 `ORIGIN_TROUBLE_LOG_ROOT`
-2. 無ければ `~/.config/origin-trouble-log/root`（ルートのパスを 1 行書いたファイル）
+1. 環境変数 `OWN_TROUBLE_LOG_ROOT`（旧 `ORIGIN_TROUBLE_LOG_ROOT` も移行期は読む）
+2. 無ければ `~/.config/own-trouble-log/root`（ルートのパスを 1 行書いたファイル）
 
 ```bash
-ROOT="${ORIGIN_TROUBLE_LOG_ROOT:-$(cat ~/.config/origin-trouble-log/root 2>/dev/null)}"
+ROOT="${OWN_TROUBLE_LOG_ROOT:-${ORIGIN_TROUBLE_LOG_ROOT:-$(cat ~/.config/own-trouble-log/root 2>/dev/null || cat ~/.config/origin-trouble-log/root 2>/dev/null)}}"
 [ -n "$ROOT" ] && [ -d "$ROOT" ] || { echo "保管ルート未設定"; exit 1; }
 ```
 

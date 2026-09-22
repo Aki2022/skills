@@ -55,7 +55,9 @@ ECHO_RECORDS = ("hook_additional_context", "hook_system_message")
 WRITE_TOOLS = ("Write", "Edit", "NotebookEdit")
 # A session that instruments the guard fires it deliberately. Those firings are
 # real but say nothing about behaviour, so they are counted and reported apart.
-SELF_REFERENTIAL = ("origin_warn_guards", "measure_hook_firings")
+# 旧名 origin_warn_guards も残す — 過去の transcript はその名前で記録されており、
+# 消すと過去分の自己参照が除外されず発火統計が汚染される。
+SELF_REFERENTIAL = ("origin_warn_guards", "own_warn_guards", "measure_hook_firings")
 
 DEFAULT_TRANSCRIPTS = Path.home() / ".claude/projects"
 DEFAULT_CACHE = Path.home() / ".local/share/origin-warn-guards/cache"

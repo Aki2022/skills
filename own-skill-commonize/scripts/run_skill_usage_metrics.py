@@ -26,7 +26,7 @@ from typing import Sequence
 UTC = _datetime.timezone.utc
 DEFAULT_WINDOW_DAYS = 30
 DEFAULT_RETENTION_DAYS = 180
-LABEL = "com.origin.skill-usage-metrics"
+LABEL = "com.own.skill-usage-metrics"
 SCRIPT_DIR = Path(__file__).resolve().parent
 COLLECTOR_PATH = SCRIPT_DIR / "measure_skill_usage.py"
 
@@ -289,7 +289,7 @@ def run_once(
     """Run one guarded collection; return zero when another run owns the lock."""
 
     home_path = Path(home).expanduser() if home is not None else Path.home()
-    state_dir = home_path / ".local/state/origin-skill-usage"
+    state_dir = home_path / ".local/state/own-skill-usage"
     snapshot_path = (
         Path(snapshot).expanduser()
         if snapshot is not None

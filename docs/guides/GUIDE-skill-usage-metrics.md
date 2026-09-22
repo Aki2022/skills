@@ -39,9 +39,9 @@ python3 ~/.agents/skills/own-skill-commonize/scripts/measure_skill_usage.py \
 ### macOS の定期収集
 
 `install_skill_usage_launchd.py` を使うと、現在のユーザーだけに
-`com.origin.skill-usage-metrics` を登録できる。既定値は毎日03:30（Macのローカル時刻）、
+`com.own.skill-usage-metrics` を登録できる。既定値は毎日03:30（Macのローカル時刻）、
 30日窓、180日保持で、`~/Library/LaunchAgents` と
-`~/.local/state/origin-skill-usage/` 以外へ書き込まない。state directory は `0700`、
+`~/.local/state/own-skill-usage/` 以外へ書き込まない。state directory は `0700`、
 スナップショット・lock・launchd ログは `0600` で作成し、集計形式でない既存行や privacy
 契約に反する行があれば追記・prune を停止する。インストーラは既存 plist が
 異なる場合に上書きせず停止する。`--check` は plist と launchd の登録状態を読み取り専用で
@@ -65,7 +65,7 @@ python3 ~/.agents/skills/own-skill-commonize/scripts/install_skill_usage_launchd
 停止するときは次を実行してから plist を削除する。スナップショットは別途保持・削除を判断する。
 
 ```bash
-launchctl bootout "gui/$(id -u)/com.origin.skill-usage-metrics"
+launchctl bootout "gui/$(id -u)/com.own.skill-usage-metrics"
 ```
 
 ## 承認前レビュー
@@ -74,7 +74,7 @@ commit または push の前に、次の4項目を人間ゲートとして確認
 `own-session-close` が完了時に案内するための現在の checklist である。
 
 1. **スケジュール** — 毎日03:30、30日窓、180日保持、`RunAtLoad=false` の設定を許可する。
-2. **保存データ** — `~/.local/state/origin-skill-usage/` への aggregate JSONL 保存を許可し、
+2. **保存データ** — `~/.local/state/own-skill-usage/` への aggregate JSONL 保存を許可し、
    raw prompt・履歴 path・session ID・credential を保存しない契約を確認する。
 3. **変更範囲** — collector・runner・LaunchAgent・docs だけが対象で、alias topology、
    Codex `.system`、plugin cache、認証・履歴は変更しないことを確認する。
@@ -85,7 +85,7 @@ plist_exact=true loaded=true`、`launchctl print` の直近終了コードが `0
 
 ```bash
 python3 ~/.agents/skills/own-skill-commonize/scripts/install_skill_usage_launchd.py --check
-launchctl print "gui/$(id -u)/com.origin.skill-usage-metrics"
+launchctl print "gui/$(id -u)/com.own.skill-usage-metrics"
 ```
 
 この checklist 自体は `own-trouble-log` の entry に複製しない。実際に確認を漏らした、

@@ -41,6 +41,7 @@ as of 2026-09-22 — 226件の索引化・実データ適用・3件の重複patt
 - 承認済み: `artifact-state-not-recorded`（2件、`origin-doc-update` 所有、docs更新後readback案）。実装は別issueで行う。
 - 保留: `command-shape-permission-friction`（1件、`settings-hook-owner` 所有、warn-only案）。許可境界の実測後に再判断する。
 - 保留: `dependency-usage-not-checked`（2件、`origin-doc-update` 所有、usage search手順案）。利用実態の追加証拠後に再判断する。
+- 件数1〜2かつ高リスク領域に該当しない次の候補は、証拠件数が増えるまで一括保留する: `deploy-scope-mismatch`、`diagnostic-state-not-persisted`、`ephemeral-delivery-reference`、`guard-read-write-discrimination`、`operator-visible-completion-evidence`、`wrong-corpus-or-durable-location`。
 - `completion-race-stale-run`（3件）は既存 `verification-target-mismatch` へ統合済み。`silent-write-noop`（3件）は既存 `doc-hygiene-postconditions` へ統合済み。
 - 残り20件の新規形式化候補は、人間承認後に所有先ごとの別issueで実装する。
 - 全pattern・候補を再照合し、追加の明確な重複がないことを確認した。response名だけが一致する候補は失敗機構が異なるため統合していない。
@@ -81,6 +82,7 @@ as of 2026-09-22 — 226件の索引化・実データ適用・3件の重複patt
 - 2026-09-22 — `artifact-state-not-recorded`（2件、origin-doc-update、docs更新後readback案）を人間承認。実装・hook変更・status遷移はこのissueでは行わない。
 - 2026-09-22 — `command-shape-permission-friction`（1件、settings-hook-owner、warn-only案）を保留。許可境界の実測なしに形式化へ進めない。
 - 2026-09-22 — `dependency-usage-not-checked`（2件、origin-doc-update、usage search手順案）を保留。利用実態の追加証拠なしに形式化へ進めない。
+- 2026-09-22 — 低重要度・低件数の6候補（deploy-scope-mismatch、diagnostic-state-not-persisted、ephemeral-delivery-reference、guard-read-write-discrimination、operator-visible-completion-evidence、wrong-corpus-or-durable-location）を一括保留。件数増加まで承認質問を行わない。
 - 2026-09-22 — 対象skill 44テスト、historical/status/docs validatorは合格。全skill lintはown-doc-updateのfixture commit拒否2件で停止し、hook回避なしでmerge保留。
 
 ## Completion

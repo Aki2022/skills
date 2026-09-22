@@ -52,6 +52,6 @@ superseded_by: ""
 
 ## Links
 
-- [ISSUE-20260921-historical-trouble-mining](../issues/ISSUE-20260921-historical-trouble-mining.md)
+- [ISSUE-20260921-historical-trouble-mining](../issues/archive/ISSUE-20260921-historical-trouble-mining.md)
 - `own-trouble-log/SKILL.md`
 - `own-trouble-log/references/status.md`

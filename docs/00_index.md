@@ -1,6 +1,6 @@
 ---
-updated_at: 2026-09-21
-current_focus: ISSUE-20260921-historical-trouble-mining
+updated_at: 2026-09-22
+current_focus: []
 ---
 
 # 00 Index
@@ -11,7 +11,6 @@ Read this file first. Do not scan all docs unless needed. Read the active workst
 
 ## Current Focus
 
-- [ISSUE-20260921-historical-trouble-mining](issues/ISSUE-20260921-historical-trouble-mining.md) — 履歴226件を検索可能な知識へ変換
 
 ## Active Workstreams
 
@@ -27,7 +26,6 @@ Read this file first. Do not scan all docs unless needed. Read the active workst
 
 ## Active Issues
 
-- [ISSUE-20260921-historical-trouble-mining](issues/ISSUE-20260921-historical-trouble-mining.md) — 12件pilot後に226件を全件digest
 
 
 ## Guides

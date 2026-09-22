@@ -49,12 +49,13 @@ as of 2026-09-22 — 226件の索引化・実データ適用・3件の重複patt
 - 保留: `safe-operation-alternative`（1件、`own-trouble-log` 所有、warn-only案）。追加の直接証拠後に再判断する。
 - 保留: `security-guard-boundary`（1件、`repository-security-hook` 所有、warn-only案）。意図的テストと実運用の判別証拠後に再判断する。
 - 承認済み: `security-placeholder-exposure`（1件、`repository-security-hook` 所有、security lint/skill review案）。実装は別issueで行う。
+- 承認済み: `sensitive-data-reuse`（2件、`repository-security-hook` 所有、redaction guardとmanual review案）。実装は別issueで行う。
 - 保留: `hook-signal-quality`（1件、`settings-hook-owner` 所有、warn-only再評価案）。真陽性・誤警告の測定後に再判断する。
 - 保留: `patch-context-staleness`（1件、`own-trouble-log` 所有、patch直前readback案）。再現性の追加証拠後に再判断する。
 - 保留: `dependency-usage-not-checked`（2件、`origin-doc-update` 所有、usage search手順案）。利用実態の追加証拠後に再判断する。
 - 件数1〜2かつ高リスク領域に該当しない次の候補は、証拠件数が増えるまで一括保留する: `deploy-scope-mismatch`、`diagnostic-state-not-persisted`、`ephemeral-delivery-reference`、`guard-read-write-discrimination`、`operator-visible-completion-evidence`、`wrong-corpus-or-durable-location`。
 - `completion-race-stale-run`（3件）は既存 `verification-target-mismatch` へ統合済み。`silent-write-noop`（3件）は既存 `doc-hygiene-postconditions` へ統合済み。
-- 残り14件の新規形式化候補は、人間承認後に所有先ごとの別issueで実装する。
+- 承認済み14件は所有先ごとの別issueで実装する。保留13件は証拠件数が増えるまで承認質問を再開しない。
 - 全pattern・候補を再照合し、追加の明確な重複がないことを確認した。response名だけが一致する候補は失敗機構が異なるため統合していない。
 - 全skill lintのown-doc-update 2件失敗は、グローバルdocs-validator hookがfixtureの意図的な不正docsをcommit拒否する既存環境問題。hookを無効化せず、別作業として解消するまでmergeしない。
 
@@ -100,6 +101,8 @@ as of 2026-09-22 — 226件の索引化・実データ適用・3件の重複patt
 - 2026-09-22 — `safe-operation-alternative`（1件、own-trouble-log、warn-only案）を保留。追加の直接証拠なしに形式化へ進めない。
 - 2026-09-22 — `security-guard-boundary`（1件、repository-security-hook、warn-only案）を保留。意図的テストと実運用を区別する証拠なしに形式化へ進めない。
 - 2026-09-22 — `security-placeholder-exposure`（1件、repository-security-hook、security lint/skill review案）を人間承認。実装・hook変更・status遷移はこのissueでは行わない。
+- 2026-09-22 — `sensitive-data-reuse`（2件、repository-security-hook、redaction guardとmanual review案）を人間承認。実装・hook変更・status遷移はこのissueでは行わない。
+- 2026-09-22 — 候補の最終整理: 重複統合3件、承認済み14件、保留13件。保留13件は証拠件数増加まで次の承認質問を行わない。
 - 2026-09-22 — `hook-signal-quality`（1件、settings-hook-owner、warn-only再評価案）を保留。真陽性・誤警告の測定なしに形式化へ進めない。
 - 2026-09-22 — `patch-context-staleness`（1件、own-trouble-log、patch直前readback案）を保留。再現性の追加証拠なしに形式化へ進めない。
 - 2026-09-22 — `command-shape-permission-friction`（1件、settings-hook-owner、warn-only案）を保留。許可境界の実測なしに形式化へ進めない。

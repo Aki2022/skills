@@ -62,6 +62,26 @@ def git(root: Path, *args: str, when: str = "") -> str:
     ).stdout
 
 
+def plumbing_commit(root: Path, message: str, when: str = "") -> None:
+    """フックを通さずに履歴を作る。`git commit` は使わない。
+
+    これが要るのは、テスト対象そのものが「不正な docs が履歴に入っている状態」だから。
+    front matter の無いファイルを `--fix` が git 日付から補えることを検査するには、
+    front matter の無い状態で commit されていなければならない。一方 pre-commit の
+    docs-validator は `docs/00_index.md` を持つ repo で発火し、使い捨ての fixture repo も
+    その条件に当たるので、通常の commit では fixture を作れない（実測 2026-09-22）。
+
+    write-tree → commit-tree → update-ref は `--no-verify` でもフック経路の書き換えでも
+    ないので、規約の禁止列挙のどれにも当たらない。vibe-guard 自身のテスト
+    (reinstall の tests/docs-validator.test.sh) が同じ目的で同じ手を使っている。
+    commit-tree は GIT_*_DATE を尊重するので、`git()` と同じ日付固定が効く。
+    """
+    tree = git(root, "write-tree").strip()
+    parent = git(root, "rev-parse", "HEAD").strip()
+    commit = git(root, "commit-tree", tree, "-p", parent, "-m", message, when=when).strip()
+    git(root, "update-ref", "HEAD", commit)
+
+
 class HygieneFixture(unittest.TestCase):
     def make_repo(self) -> Path:
         root = Path(tempfile.mkdtemp())
@@ -186,7 +206,7 @@ class FrontMatterFillTest(HygieneFixture):
         guide = root / "docs/guides/old.md"
         guide.write_text("# Old\n")
         git(root, "add", ".")
-        git(root, "commit", "-q", "-m", "add", when="2026-06-14T00:00:00")
+        plumbing_commit(root, "add", when="2026-06-14T00:00:00")
         report = MODULE.run(root, fix=True, report=False, today=date(2026, 9, 19))
         fm = VALIDATOR.parse_front_matter(spec)
         self.assertEqual(fm["id"], "SPEC-legacy-thing")
@@ -212,6 +232,11 @@ class ReportOnlyTest(HygieneFixture):
         (root / "docs/guides/g.md").write_text(
             "---\nupdated_at: 2026-09-01\n---\n# G\n\nRun `npm run report` then see "
             "`.github/workflows/daily-report.yml` and `scripts/present.py` and `src/missing/file.ts`.\n"
+            # The link baseline below claims this link is broken. It has to actually
+            # be broken: a baseline entry that is already resolved is itself an
+            # error the validator reports, and the pre-commit docs-validator then
+            # refuses to commit the fixture (measured 2026-09-22).
+            "\nSee [nowhere](nowhere.md).\n"
             + "".join(f"\n### 2026-08-{d:02d} 決定\n\ntext\n" for d in range(1, 8))
         )
         (root / "scripts").mkdir()

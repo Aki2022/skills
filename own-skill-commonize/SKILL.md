@@ -64,8 +64,18 @@ plugin/built-in 2重6件を実測）。
    正典側を上流に同期し、`scripts/check_mirrors.sh` の同値検査（ローカル上流コピーとのハッシュ比較）と
    鮮度検査（取得日からの経過）で**ズレを検出できる形**にする。Claude の一覧に同内容が2行載るのは
    「ズレ」ではなく「重複表示」で、本規約には反しない。
-4. **`~/.agents/<tool>/skills/` に第三者ミラーを置かない。** tool 固有正典は tool 固有 skill のための
-   もので、Claude/Codex の非対称を固定化する用途には使わない。
+4. **`~/.agents/<tool>/skills/` に skill を置かない（第三者ミラーも自前も）。**
+   ここは**第3の所属**になるが、命名規則は所属を2つ（3語＝グローバル / 4語＝repo 固有）しか
+   定義していない。置くと名前から所属が読めなくなり、`skill_lint.sh` の走査対象にも入らないため
+   **規則違反ではなく規則の対象外**になる。tool 専用性は**置き場所ではなく description** で表現する
+   （発火を決めるのは description であることを 2026-09-21 に実測済み）。
+   実例: `origin-august-luna-loop` は `~/.agents/codex/skills/` に居たため、2026-08-30 に退役させても
+   実体が git 未追跡のまま残り、実環境の再キャプチャで復活した。2026-09-22 に `own-luna-run` として
+   正典へ移し、この root を廃止した。
+   **既知の例外**: `~/.agents/vibe-guard/skills/own-vibeguard-harden` は nix 管理下（編集元は
+   nix-darwin flake repo の `home/agent-config/vibe-guard/skills/`）で、PRIVATE な repo から
+   PUBLIC な正典へセキュリティ設定手順を移さないため、置き場所は据え置く。3語だが正典に居ない
+   ので「語数＝所属」は破れたままで、検査を届かせる設計は別途決める。
 5. 上流の更新への追随は**人間が起動する**（鮮度検査が警告したら再取得）。自動追随はしない。
 
 `mirrors.yaml` の形式:
@@ -106,6 +116,7 @@ typechange が出続けて本物の変更が埋もれる。正典側の repo が
 ```
 
 4語なら必ずリポジトリ固有、3語なら必ずグローバル。**名前だけ見てどこを編集するか分かる。**
+**第3の所属は作らない** — `~/.agents/<tool>/skills/` に置くと名前から所属が読めなくなる（ミラー規約4）。
 repo トークンは `trade` / `yorisoi` / `bizops` / `iscore` / `marketing`。
 
 **禁止**: 動作でない名詞を末尾に置く形（`-runtime` `-loop` `-policy` `-style` `-setup`

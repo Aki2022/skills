@@ -12,7 +12,7 @@ Treat `docs/` as persistent AI context. Keep each fact in one layer only.
 | `docs/00_index.md`  | Small routing index; read first                                                |
 | `docs/specs/`       | Intent, requirements, and design policy                                        |
 | `docs/workstreams/` | Multi-issue autonomous work between human gates                                |
-| `docs/issues/`      | Standalone one-off work only                                                   |
+| `docs/issues/`      | Issue files; each declares `workstream: WS-…` (owned) or `workstream: none`     |
 | `docs/guides/`      | Current implemented behavior; source of truth                                  |
 | `docs/adrs/`        | Decision rationale, alternatives, and consequences; historical decision record |
 | `*/archive/`        | Historical work context, not current truth                                     |
@@ -32,6 +32,17 @@ Do not copy implementation history into guides or current behavior into workstre
 5. Reuse the recorded branch or worktree. Do not create a second branch for resumed work.
 
 Default to one workstream file with embedded issue blocks. Split it only when independent branches, parallel ownership, or file size makes one file materially harder to resume.
+
+## Issue ownership and routing
+
+Ownership is decided by whose authorization envelope and next human gate an issue runs under — not by whether it has its own file, branch, or PR (SPEC-doc-governance, biz_ops).
+
+- Every file in `docs/issues/` declares `workstream: WS-…` or `workstream: none`; that field is the only source of truth. An owned issue is routed from its workstream's `## Split Issues`; only `none` (standalone) issues are routed from the index's Active Issues.
+- Standalone issues and workstreams carry `priority: high|medium|low` and `due: YYYY-MM-DD` (or `due: none` when there is truly no deadline — never an invented date), set by the session that drafts them.
+- Lists between `own-doc-update:generated` markers are derived from front matter. Do not edit them; `create_issue.py`, `create_workstream.py`, `archive_issue.py` and `docs_hygiene.py --fix` rewrite them. The Active Workstreams row shows the earliest `due` of the workstream and its owned issues, with its source.
+- Orphans are prevented at the three operations that can create them: creation requires the ownership choice and writes the route row, issue archive drops the row from both the index and the owning workstream, and workstream archive refuses while an active issue still declares it. `docs_hygiene.py --fix` is the backstop: it repairs what front matter determines and lists the rest under Unassigned Issues without rewriting the declared owner.
+- Files created before `ownership.ROLLOUT_DATE` only warn when a field is missing and stay routed as standalone; adding `workstream:` to them is optional, and is what moves them out of Active Issues.
+- Validator errors name the file whose change caused them (the pre-commit hook blocks only errors on staged files). Overdue dates are not checked; humans read them in the index.
 
 ## Create a workstream
 
@@ -271,12 +282,13 @@ Templates in `references/`:
 Scripts in `scripts/`:
 
 - `init_repo_docs.py [repo]`
-- `create_workstream.py <slug> --issue <slug> --scope <text> --confirmed-at YYYY-MM-DD --next-human-gate <name> --autonomous <text> --confirm-first <text> (--verify-machine <text> | --verify-human <text>) (--guide <GUIDE-id> | --no-guide-reason <text>) [--merge-policy <text>] [--gated-on <text>] [--repo <repo>]`
+- `create_workstream.py <slug> --issue <slug> --scope <text> --confirmed-at YYYY-MM-DD --next-human-gate <name> --autonomous <text> --confirm-first <text> (--verify-machine <text> | --verify-human <text>) (--guide <GUIDE-id> | --no-guide-reason <text>) --priority <high|medium|low> --due <YYYY-MM-DD|none> [--merge-policy <text>] [--gated-on <text>] [--repo <repo>]`
+  Writes the generated Active Workstreams row in the same run.
   The interview's confirmed boundaries are required arguments: envelope
   (`--autonomous`, `--confirm-first`), acceptance (`--verify-*`), and — when the
   initial issue is not immediately runnable — `--gated-on <reason>`. A file created
   without them validates red, and executors treat the missing record as a gate.
-- `create_issue.py <slug> (--verify-machine <text> | --verify-human <text>) (--guide <GUIDE-id> | --no-guide-reason <text>) --next-action <text> [--title <title>] [--repo <repo>]`
+- `create_issue.py <slug> (--workstream <WS-id> | --standalone --priority <high|medium|low> --due <YYYY-MM-DD|none>) (--verify-machine <text> | --verify-human <text>) (--guide <GUIDE-id> | --no-guide-reason <text>) --next-action <text> [--title <title>] [--repo <repo>]`
   Pass a slug, not a full issue id — the `ISSUE-<date>-` prefix is added for you.
   The guide decision, the acceptance decision and `--next-action` are required, as
   the first two are for `create_workstream.py`: name the guide this issue must
@@ -288,7 +300,9 @@ Scripts in `scripts/`:
   exempt forever while being worked on (measured 2026-09-20: 56 of 477 open work
   units across 13 repositories, unreported for over two weeks). The generator now
   produces a real first step, so the check needs no exemption and depends on
-  neither the clock nor git.
+  neither the clock nor git. The ownership choice writes the route row in the same
+  run (the owning workstream's Split Issues, or the index's Active Issues); an
+  inactive workstream is refused and nothing is created.
 - `create_adr.py <slug> --scope <spec|development> [--status <proposed|accepted|rejected>] [--title <title>] [--repo <repo>]`
 - `archive_workstream.py <workstream> [--repo <repo>]`
 - `archive_issue.py <issue> [--repo <repo>]`
@@ -305,6 +319,9 @@ Scripts in `scripts/`:
   writes `docs/log/review-YYYYMMDD.md`, the re-weighting of guides/specs/ADRs (due every 14 days)
   (R8 reports when it is overdue); `--report` writes it too, so every close-session
   reviews. R9 reports the context budget (digest drops, oversized docs, hot-set size).
+  A6 regenerates the ownership lists from front matter and drops the hand-written rows
+  they replace; R10 counts where every active issue is routed from (orphans and
+  unassigned issues, zero included).
   Without `--fix` it is a dry run that counts. It uses git dates and never an LLM, so it
   is safe to run across every governed repository. Exit 2 when the repository has
   no `docs/00_index.md`. Do not run `--fix` against a deliberately shaped fixture

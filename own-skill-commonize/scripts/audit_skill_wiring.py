@@ -108,6 +108,17 @@ def audit(canon: Path, wiring: dict[Path, str]) -> tuple[list[str], list[str], d
         missing = sorted(base - names)
         extra = sorted(names - base)
         broken = sorted(n for n in names if not (root / n).exists())
+        # 名前だけを見ると、正典と同じ名前で実体を置かれたときに素通りする。
+        # Codex の $skill-installer は $CODEX_HOME/skills/<名前> へ実体を書き込むので、
+        # 正典にある名前を上書きされるとその skill だけ Codex 専用になり、
+        # Claude / Gemini とズレたまま「すべて一致」と報告される（2026-09-23 に実測）。
+        detached = sorted(n for n in names if not (root / n).is_symlink())
+        # 正典の外を指す symlink も同じ結果になる。
+        outside = sorted(
+            n for n in names
+            if (root / n).is_symlink()
+            and canon.resolve() not in Path(os.path.realpath(root / n)).parents
+        )
 
         if len(names) != len(base):
             failures.append(
@@ -118,7 +129,15 @@ def audit(canon: Path, wiring: dict[Path, str]) -> tuple[list[str], list[str], d
             failures.append(f"{shown}: 正典に無い名前: {n}")
         for n in broken:
             failures.append(f"{shown}: 宙を指している: {n}")
-        if not (missing or extra or broken) and len(names) == len(base):
+        for n in detached:
+            failures.append(
+                f"{shown}: symlink でない実体が置かれている"
+                f"（正典から切り離され、このツール専用になっている）: {n}")
+        for n in outside:
+            failures.append(
+                f"{shown}: 正典の外を指している: {n} → {os.readlink(root / n)}")
+        if not (missing or extra or broken or detached or outside) \
+                and len(names) == len(base):
             notes.append(f"OK  {shown}: 1冊ずつ {len(names)} 件すべて一致")
 
     return failures, notes, coverage

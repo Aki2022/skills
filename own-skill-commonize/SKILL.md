@@ -158,6 +158,26 @@ suite の相互参照）があれば落とさない。URL や規約の説明例�
 Claude plugin が配る skill は**実ファイルなので配線できる**。使うなら正典へミラーし、
 plugin は無効化する。使わないなら plugin ごと削除する（description が毎ターン載るため）。
 
+### 製品のカタログは触らない。塞ぐのはインストール先
+
+`~/.codex/vendor_imports/skills` は ChatGPT デスクトップアプリが持つ
+**「おすすめ skill」のカタログ**で、`openai/skills` の main を `blob:none` の
+partial clone として置き、一覧を `skills-curated-cache.json`（TTL 10 分）に
+キャッシュする。App Store の一覧に相当し、Codex が読む `$CODEX_HOME/skills` の外にある。
+**消してもアプリが作り直すので、消す意味は無い**（2026-09-23 に実測。39 本・5.7MB・
+context 費用 0・配線 0 本）。対象外として扱う。
+
+**塞ぐべきはインストール先。** `$skill-installer <名前>` は
+`$CODEX_HOME/skills/<名前>` へ**実体**を書き込む。そこは正典への per-skill symlink を
+並べる棚なので、実体を置いた瞬間その skill は Codex 専用になり、Claude / Gemini と
+分岐する（ADR-20260906「供給源は正典のみ」違反）。使いたい skill があれば
+`$skill-installer` を直接使わず、正典へミラーしてから全 root へ配線する。
+
+`audit_skill_wiring.py` は per-skill 配線先の各エントリが
+**正典の中を指す symlink であること**を検査する。名前の集合だけを見ていた頃は、
+正典にある名前を実体で上書きされると `RESULT: OK` / rc=0 で素通りしていた
+（2026-09-23 に陽性対照で確認し、そこで塞いだ）。
+
 ### 静的設定 27 件の編集手順（nix 管理下）
 
 1. nix-darwin flake repo の `home/agent-config/<相対パス>` を**直接編集する**（普通のファイル。

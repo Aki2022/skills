@@ -175,3 +175,54 @@ class LintIntegrationTests(unittest.TestCase):
             out = r.stdout + r.stderr
             self.assertIn("S10: skip", out, f"実正典でなければ skip すべき\n{out}")
             self.assertEqual(r.returncode, 0, f"skip で落ちてはいけない\n{out}")
+
+
+class DetachedEntryTests(unittest.TestCase):
+    """名前の一致だけでは、正典から切り離された実体を見逃す。
+
+    Codex の `$skill-installer` は `$CODEX_HOME/skills/<名前>` へ**実体**を書き込む。
+    正典に無い名前なら「正典に無い名前」で落ちるが、**正典にある名前を上書き**されると
+    名前の集合は一致したままで、その skill だけ Codex 専用になる。
+    2026-09-23 に実測したとき、この形は `RESULT: OK` / rc=0 で素通りしていた。
+    """
+
+    def test_real_directory_replacing_a_link_fails(self):
+        with TemporaryDirectory() as d:
+            tmp = Path(d)
+            canon = _canon(tmp, ["own-a-run", "own-b-run"])
+            search = tmp / "search"
+            root = search / "some-tool" / "skills"
+            _wire(root, canon, ["own-a-run"])
+            # 正典と同じ名前で実体を置く（skill-installer が上書きした状態）
+            impostor = root / "own-b-run"
+            impostor.mkdir()
+            (impostor / "SKILL.md").write_text(
+                "---\nname: own-b-run\ndescription: 別物。\n---\n")
+            self.assertEqual(
+                _run(canon, search), 1,
+                "名前は一致しても、symlink でない実体は正典から切り離されているので落ちるべき")
+
+    def test_link_pointing_outside_canon_fails(self):
+        with TemporaryDirectory() as d:
+            tmp = Path(d)
+            canon = _canon(tmp, ["own-a-run", "own-b-run"])
+            other = tmp / "elsewhere" / "own-b-run"
+            other.mkdir(parents=True)
+            (other / "SKILL.md").write_text(
+                "---\nname: own-b-run\ndescription: 別物。\n---\n")
+            search = tmp / "search"
+            root = search / "some-tool" / "skills"
+            _wire(root, canon, ["own-a-run"])
+            (root / "own-b-run").symlink_to(other)
+            self.assertEqual(
+                _run(canon, search), 1,
+                "正典の外を指す symlink も、中身がズレるので落ちるべき")
+
+    def test_correct_wiring_still_passes(self):
+        """陰性対照。正しい配線を赤くしない。"""
+        with TemporaryDirectory() as d:
+            tmp = Path(d)
+            canon = _canon(tmp, ["own-a-run", "own-b-run"])
+            search = tmp / "search"
+            _wire(search / "some-tool" / "skills", canon, ["own-a-run", "own-b-run"])
+            self.assertEqual(_run(canon, search), 0)

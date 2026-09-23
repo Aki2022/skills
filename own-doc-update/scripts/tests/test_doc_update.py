@@ -1613,6 +1613,34 @@ related_guides: []
         errors, _ = MODULE.validate_repo(root)
         self.assertFalse(any("KB" in e for e in errors), errors)
 
+    def test_index_near_ceiling_warns_before_it_turns_red(self):
+        # 2026-09-22: an index sat at 32,688 of 32,768 bytes and every check was
+        # silent, so the next row anyone added turned the default branch red.
+        # Being 80 bytes from the ceiling must be visible before that happens.
+        root = self.make_repo()
+        index = root / "docs/00_index.md"
+        pad = "- [a](issues/a.md) — " + "x" * 100 + "\n"
+        content = index.read_text()
+        while len((content + pad).encode()) <= MODULE.INDEX_TARGET_BYTES:
+            content += pad
+        while len((content + pad).encode()) <= MODULE.INDEX_MAX_BYTES:
+            content += pad
+        index.write_text(content)
+        size = index.stat().st_size
+        self.assertGreater(size, MODULE.INDEX_TARGET_BYTES)
+        self.assertLessEqual(size, MODULE.INDEX_MAX_BYTES)
+        errors, warnings = MODULE.validate_repo(root)
+        self.assertFalse(any("ceiling" in e for e in errors), errors)
+        self.assertTrue(
+            any("00_index.md" in w and "from the" in w and "ceiling" in w for w in warnings),
+            warnings,
+        )
+
+    def test_index_comfortably_under_target_is_silent(self):
+        root = self.make_repo()
+        errors, warnings = MODULE.validate_repo(root)
+        self.assertFalse(any("ceiling" in w for w in warnings), warnings)
+
     def test_index_long_line_is_an_error_and_prose_ratio_is_a_warning(self):
         root = self.make_repo()
         index = root / "docs/00_index.md"

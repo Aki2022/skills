@@ -1219,12 +1219,123 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
                         continue
                     warnings.append(f"{rel}: {key} ref not found: {reference}")
 
+    validate_ownership(root, errors, warnings)
     validate_relative_links(root, errors, warnings)
     validate_spec_placement(root, errors, warnings)
     validate_baseline_freshness(root, baseline, deferred, errors, warnings)
     validate_review_recency(root, warnings)
 
     return errors, warnings
+
+
+def validate_ownership(root: Path, errors: list[str], warnings: list[str]) -> None:
+    """Issue ownership and routing (SPEC-doc-governance, Workstream Model).
+
+    Every message starts with the path of the file whose change causes it, because the
+    pre-commit hook blocks only errors on staged files: a new issue without a route is the
+    issue's error, a hand-deleted split-list row is the workstream's, an owned issue left
+    in Active Issues is the index's. Files created before ownership.ROLLOUT_DATE only warn.
+    """
+    scripts_dir = str(Path(__file__).resolve().parent)
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+    import ownership as own
+    from index_entries import find_index_entry_lines
+
+    model = own.load_model(root, parse_front_matter)
+    index_rel = "docs/00_index.md"
+    index_path = root / index_rel
+    index_text = index_path.read_text() if index_path.is_file() else ""
+    active_span = own.heading_span(index_text, own.HEADINGS[own.ACTIVE_ISSUES])
+    active_text = index_text[active_span[0]:active_span[1]] if active_span else ""
+
+    def in_active_issues(issue_id: str) -> bool:
+        return bool(find_index_entry_lines(active_text, "docs/issues", issue_id))
+
+    def need(is_new: bool, message: str) -> None:
+        (errors if is_new else warnings).append(message)
+
+    for doc in model.issues.values():
+        new = own.is_post_rollout(doc.created)
+        rel = doc.rel
+        if doc.owner is None:
+            need(new, f"{rel}: workstream is not declared — set `workstream: WS-...` (owned) "
+                      "or `workstream: none` (standalone)")
+            if not new and not in_active_issues(doc.doc_id):
+                warnings.append(f"{rel}: not routed from Active Issues or any workstream")
+            continue
+        if doc.due and not own.valid_due(doc.due):
+            errors.append(f"{rel}: due must be YYYY-MM-DD or none, got '{doc.due}'")
+        if doc.owner != "none":
+            if doc.owner not in model.workstreams:
+                state = "archived" if doc.owner in model.archived_ws_ids else "missing"
+                errors.append(
+                    f"{rel}: workstream {doc.owner} is not an active workstream ({state}) — "
+                    "reassign it; docs_hygiene.py --fix lists it under Unassigned Issues"
+                )
+            continue
+        if not doc.priority:
+            need(new, f"{rel}: priority is required for a standalone issue (high|medium|low)")
+        elif doc.priority not in own.PRIORITIES:
+            errors.append(f"{rel}: priority must be high, medium or low, got '{doc.priority}'")
+        if not doc.due:
+            need(new, f"{rel}: due is required for a standalone issue (YYYY-MM-DD or none)")
+        if not in_active_issues(doc.doc_id):
+            errors.append(
+                f"{rel}: standalone issue is not routed from Active Issues in {index_rel} "
+                "(create_issue.py writes it; docs_hygiene.py --fix regenerates it)"
+            )
+
+    for ws in model.workstreams.values():
+        new = own.is_post_rollout(ws.created)
+        rel = ws.rel
+        if not ws.priority:
+            need(new, f"{rel}: priority is required for a workstream (high|medium|low)")
+        elif ws.priority not in own.PRIORITIES:
+            errors.append(f"{rel}: priority must be high, medium or low, got '{ws.priority}'")
+        if not ws.due:
+            need(new, f"{rel}: due is required for a workstream (YYYY-MM-DD or none)")
+        elif not own.valid_due(ws.due):
+            errors.append(f"{rel}: due must be YYYY-MM-DD or none, got '{ws.due}'")
+
+        owned = {d.doc_id for d in model.owned_by(ws.doc_id)}
+        block = own.read_block(ws.content, own.SPLIT)
+        if block is None:
+            if owned:
+                errors.append(
+                    f"{rel}: issues declaring this workstream have no Split Issues list: "
+                    f"{', '.join(sorted(owned))} (docs_hygiene.py --fix generates it)"
+                )
+            continue
+        listed = own.ids_in(block)
+        for issue_id in sorted(owned - listed):
+            errors.append(f"{rel}: {issue_id} declares this workstream but is missing from Split Issues")
+        for issue_id in sorted(listed - owned):
+            if issue_id in model.issues:
+                reason = f"declares {model.issues[issue_id].owner or 'no workstream'}"
+            elif issue_id in model.archived_issue_ids:
+                reason = "is archived"
+            else:
+                reason = "does not exist"
+            errors.append(f"{rel}: Split Issues lists {issue_id}, which {reason}")
+        if not (owned ^ listed) and block != own.split_rows(model, ws.doc_id):
+            warnings.append(f"{rel}: generated Split Issues list is stale — run docs_hygiene.py --fix")
+
+    for doc in model.issues.values():
+        if doc.owner in model.workstreams and in_active_issues(doc.doc_id):
+            errors.append(
+                f"{index_rel}: {doc.doc_id} belongs to {doc.owner} — route it from that "
+                "workstream's Split Issues, not Active Issues (docs_hygiene.py --fix removes the row)"
+            )
+
+    for name, rows in (
+        (own.ACTIVE_ISSUES, own.active_issue_rows(model)),
+        (own.UNASSIGNED, own.unassigned_rows(model)),
+        (own.ACTIVE_WORKSTREAMS, own.workstream_rows(model)),
+    ):
+        block = own.read_block(index_text, name)
+        if block is not None and block != rows:
+            warnings.append(f"{index_rel}: generated {name} list is stale — run docs_hygiene.py --fix")
 
 
 def main() -> None:

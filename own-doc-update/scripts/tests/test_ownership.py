@@ -311,5 +311,69 @@ class ArchiveScriptsTest(unittest.TestCase):
         self.assertEqual(allowed.returncode, 0, allowed.stderr + allowed.stdout)
 
 
+_HSPEC = importlib.util.spec_from_file_location("docs_hygiene", SCRIPTS / "docs_hygiene.py")
+HYGIENE = importlib.util.module_from_spec(_HSPEC)
+_HSPEC.loader.exec_module(HYGIENE)
+
+
+class HygieneRoutesTest(unittest.TestCase):
+    def build(self) -> Path:
+        root = make_repo()
+        write_ws(root, "WS-20000101-w", PRE, fm="priority: high\ndue: 2026-12-31\n")
+        write_issue(root, "ISSUE-20000101-a", PRE, fm="workstream: WS-20000101-w\ndue: 2026-10-01\n")
+        write_issue(root, "ISSUE-20000101-b", PRE, fm="workstream: WS-20000101-gone\n")
+        write_issue(root, "ISSUE-20000101-s", PRE, fm="workstream: none\npriority: low\ndue: none\n")
+        write_issue(root, "ISSUE-20000101-legacy", PRE)
+        write_index(
+            root,
+            "| ファイル | タイトル |\n| --- | --- |\n"
+            "| [ISSUE-20000101-a](issues/ISSUE-20000101-a.md) | a |\n"
+            "| [ISSUE-20000101-s](issues/ISSUE-20000101-s.md) | s |\n"
+            "| [ISSUE-20000101-legacy](issues/ISSUE-20000101-legacy.md) | legacy |",
+            "- [WS-20000101-w](workstreams/WS-20000101-w.md) — hand row",
+        )
+        return root
+
+    def test_fix_regenerates_routes_without_rewriting_ownership(self):
+        root = self.build()
+        result = HYGIENE.run(root, fix=True, report=False)
+        self.assertGreater(result["fixes"]["A6_routes_regenerated"]["count"], 0)
+
+        ws = (root / "docs/workstreams/WS-20000101-w.md").read_text()
+        self.assertIn("ISSUE-20000101-a", "\n".join(ownership.read_block(ws, ownership.SPLIT)))
+
+        index = (root / "docs/00_index.md").read_text()
+        find = HYGIENE_INDEX.find_index_entry_lines
+        self.assertEqual(find(index, "docs/issues", "ISSUE-20000101-a"), [])  # owned: routed by the WS only
+        self.assertEqual(len(find(index, "docs/issues", "ISSUE-20000101-s")), 1)  # generated row, hand row gone
+        self.assertEqual(len(find(index, "docs/issues", "ISSUE-20000101-legacy")), 1)  # legacy hand row kept
+        self.assertIn("ISSUE-20000101-b", "\n".join(ownership.read_block(index, ownership.UNASSIGNED)))
+        self.assertIn("workstream: WS-20000101-gone", (root / "docs/issues/ISSUE-20000101-b.md").read_text())
+
+        ws_rows = ownership.read_block(index, ownership.ACTIVE_WORKSTREAMS)
+        self.assertTrue(ws_rows and "due 2026-10-01 (ISSUE-20000101-a)" in ws_rows[0], ws_rows)
+        self.assertEqual(len(HYGIENE_INDEX.find_index_entry_lines(index, "docs/workstreams", "WS-20000101-w")), 1)
+
+        self.assertEqual(errors_for(root, "docs/workstreams/WS-20000101-w.md"), [])
+        self.assertEqual(errors_for(root, "docs/00_index.md"), [])
+        self.assertTrue(errors_for(root, "docs/issues/ISSUE-20000101-b.md"))
+
+        again = HYGIENE.run(root, fix=True, report=False)
+        self.assertEqual(again["fixes"]["A6_routes_regenerated"]["count"], 0)
+
+    def test_report_counts_reachability(self):
+        root = self.build()
+        write_issue(root, "ISSUE-20000101-orphan", PRE)  # legacy, routed from nowhere
+        result = HYGIENE.run(root, fix=False, report=False)
+        reach = result["report"]["R10_reachability"]
+        summary = reach["items"][0]
+        self.assertEqual(summary["unassigned"], 1)
+        self.assertEqual(summary["orphan"], 1)
+        self.assertEqual(reach["count"], 2)
+
+
+import index_entries as HYGIENE_INDEX  # noqa: E402
+
+
 if __name__ == "__main__":
     unittest.main()

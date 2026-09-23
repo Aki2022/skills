@@ -206,6 +206,48 @@ def archive_complete(root: Path, fix: bool, result: dict) -> None:
     result["A1_archive_blocked"] = {"count": len(blocked), "items": blocked}
 
 
+# ------------------------------------------------------------ A6 routes / R10 reachability
+
+def regenerate_routes(root: Path, fix: bool, result: dict) -> None:
+    """Regenerate Split Issues / Active Issues / Unassigned / Active Workstreams from front matter.
+
+    Runs after archiving (so archived issues are not listed again) and before the index budget
+    pass. Without --fix it counts the files that would change, using a scratch copy of docs/.
+    """
+    sys.path.insert(0, str(SCRIPTS_DIR))
+    import ownership  # type: ignore
+
+    if fix:
+        items = ownership.regenerate(root, parse_front_matter)
+    else:
+        import shutil
+        scratch = Path(tempfile.mkdtemp())
+        try:
+            shutil.copytree(root / "docs", scratch / "docs")
+            items = [dict(i, dry_run=True) for i in ownership.regenerate(scratch, parse_front_matter)]
+        finally:
+            shutil.rmtree(scratch, ignore_errors=True)
+    result["A6_routes_regenerated"] = {"count": len(items), "items": items}
+
+
+def report_reachability(root: Path, report: dict) -> None:
+    """Every active issue must be routed from the index or its workstream's Split Issues."""
+    sys.path.insert(0, str(SCRIPTS_DIR))
+    import ownership  # type: ignore
+
+    reach = ownership.reachability(root, parse_front_matter)
+    summary = reach["summary"]
+    items = [summary] + [{"file": f, "state": "orphan"} for f in reach["orphans"]] + [
+        {"id": i, "state": "unassigned"} for i in reach["unassigned"]
+    ]
+    report["R10_reachability"] = {
+        "count": summary["orphan"] + summary["unassigned"],
+        "items": items,
+        "rule": "an active issue routed from nowhere is an orphan; one whose workstream is not active "
+                "(or a new one that declares none) is unassigned — neither is rewritten automatically",
+    }
+
+
 # ------------------------------------------------------------ A2 index narrative
 
 def is_routing_line(line: str) -> bool:
@@ -1344,6 +1386,7 @@ def run(repo: str | Path, fix: bool, report: bool, today: Optional[date] = None)
     normalize_statuses(root, fix, today, fixes)
     sync_updated_at(root, fix, fixes)
     archive_complete(root, fix, fixes)
+    regenerate_routes(root, fix, fixes)
     move_index_narrative(root, fix, today, fixes)
 
     rep = result["report"]
@@ -1354,6 +1397,7 @@ def run(repo: str | Path, fix: bool, report: bool, today: Optional[date] = None)
     report_layout(root, rep)
     report_baselines(root, rep)
     report_context_budget(root, rep)
+    report_reachability(root, rep)
 
     if report:
         # The review is deterministic and takes seconds, so it runs with every

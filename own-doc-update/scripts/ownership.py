@@ -87,8 +87,13 @@ def heading_span(content: str, prefix: str) -> Optional[tuple[int, int]]:
     return match.start(), end
 
 
-def write_block(content: str, name: str, lines: list[str], heading: str) -> str:
-    """Replace the generated block, creating it under `## <heading>` (prefix match) if absent."""
+def write_block(content: str, name: str, lines: list[str], heading: str,
+                after_heading: Optional[str] = None) -> str:
+    """Replace the generated block, creating it under `## <heading>` (prefix match) if absent.
+
+    A missing heading is created at the end of the `after_heading` section when that exists,
+    otherwise at the end of the file.
+    """
     body = "\n".join(lines)
     block = f"{block_begin(name)}\n{body}\n{block_end(name)}" if lines else f"{block_begin(name)}\n{block_end(name)}"
     span = _block_span(content, name)
@@ -96,6 +101,10 @@ def write_block(content: str, name: str, lines: list[str], heading: str) -> str:
         return content[:span[0]] + block + content[span[1]:]
     section = heading_span(content, heading)
     if section is None:
+        anchor = heading_span(content, after_heading) if after_heading else None
+        if anchor is not None:
+            head, tail = content[:anchor[1]].rstrip("\n"), content[anchor[1]:]
+            return f"{head}\n\n## {heading}\n\n{block}\n\n{tail}"
         sep = "" if content.endswith("\n") else "\n"
         return f"{content}{sep}\n## {heading}\n\n{block}\n"
     heading_end = content.index("\n", section[0]) + 1 if "\n" in content[section[0]:] else len(content)
@@ -257,3 +266,107 @@ def ids_in(lines: list[str]) -> set[str]:
     for line in lines:
         found.update(ISSUE_ID_RE.findall(line))
     return found
+
+
+# ------------------------------------------------------------------ regeneration and reachability
+
+def _drop_hand_rows(content: str, heading: str, block_name: str, rel_dir: str, ids: list[str]) -> tuple[str, int]:
+    """Remove rows for `ids` from the `heading` section, outside its generated block."""
+    from index_entries import remove_index_entry
+
+    section = heading_span(content, heading)
+    if section is None or not ids:
+        return content, 0
+    text = content[section[0]:section[1]]
+    span = _block_span(text, block_name)
+    parts = [(text, True)] if span is None else [
+        (text[:span[0]], True), (text[span[0]:span[1]], False), (text[span[1]:], True)
+    ]
+    removed = 0
+    out = []
+    for part, editable in parts:
+        if editable:
+            for entry_id in ids:
+                part, count = remove_index_entry(part, rel_dir, entry_id)
+                removed += count
+        out.append(part)
+    return content[:section[0]] + "".join(out) + content[section[1]:], removed
+
+
+def regenerate(root: Path, parse_front_matter: Callable[[Path], Optional[dict]]) -> list[dict]:
+    """Rewrite every generated block from front matter and drop the hand rows they replace.
+
+    Ownership is never rewritten here: an issue whose route cannot be derived is listed under
+    Unassigned Issues with its declared owner left as it is. Returns one item per changed file.
+    """
+    model = load_model(root, parse_front_matter)
+    changes: list[dict] = []
+    for ws in model.workstreams.values():
+        if not model.owned_by(ws.doc_id) and read_block(ws.content, SPLIT) is None:
+            continue
+        updated = write_block(ws.content, SPLIT, split_rows(model, ws.doc_id), HEADINGS[SPLIT])
+        if updated != ws.content:
+            (root / ws.rel).write_text(updated)
+            changes.append({"file": ws.rel, "list": SPLIT})
+
+    index_path = root / "docs/00_index.md"
+    if not index_path.is_file():
+        return changes
+    original = index_path.read_text()
+    text = original
+    removed = 0
+    rows = active_issue_rows(model)
+    if rows or read_block(text, ACTIVE_ISSUES) is not None:
+        text = write_block(text, ACTIVE_ISSUES, rows, HEADINGS[ACTIVE_ISSUES])
+    declared = sorted(d.doc_id for d in model.issues.values() if d.owner is not None)
+    text, count = _drop_hand_rows(text, HEADINGS[ACTIVE_ISSUES], ACTIVE_ISSUES, "docs/issues", declared)
+    removed += count
+    rows = unassigned_rows(model)
+    if rows or read_block(text, UNASSIGNED) is not None:
+        text = write_block(text, UNASSIGNED, rows, HEADINGS[UNASSIGNED], after_heading=HEADINGS[ACTIVE_ISSUES])
+    rows = workstream_rows(model)
+    if rows or read_block(text, ACTIVE_WORKSTREAMS) is not None:
+        text = write_block(text, ACTIVE_WORKSTREAMS, rows, HEADINGS[ACTIVE_WORKSTREAMS])
+    text, count = _drop_hand_rows(
+        text, HEADINGS[ACTIVE_WORKSTREAMS], ACTIVE_WORKSTREAMS, "docs/workstreams", sorted(generated_ws_ids(model))
+    )
+    removed += count
+    if text != original:
+        index_path.write_text(text)
+        changes.append({"file": "docs/00_index.md", "hand_rows_removed": removed})
+    return changes
+
+
+def reachability(root: Path, parse_front_matter: Callable[[Path], Optional[dict]]) -> dict:
+    """Where every active issue is routed from; an orphan is routed from nowhere."""
+    from index_entries import find_index_entry_lines
+
+    model = load_model(root, parse_front_matter)
+    index_path = root / "docs/00_index.md"
+    index = index_path.read_text() if index_path.is_file() else ""
+    span = heading_span(index, HEADINGS[ACTIVE_ISSUES])
+    active_text = index[span[0]:span[1]] if span else ""
+    listed_by_ws = set()
+    for ws in model.workstreams.values():
+        listed_by_ws |= ids_in(read_block(ws.content, SPLIT) or [])
+    unassigned_ids = {d.doc_id for d in model.unassigned()}
+    shown_unassigned = ids_in(read_block(index, UNASSIGNED) or [])
+    summary = {"owned_listed": 0, "standalone_listed": 0, "legacy_listed": 0, "misrouted": 0,
+               "unassigned": 0, "orphan": 0}
+    orphans = []
+    for doc in model.issues.values():
+        in_index = bool(find_index_entry_lines(active_text, "docs/issues", doc.doc_id))
+        if doc.doc_id in unassigned_ids:
+            summary["unassigned"] += 1
+        elif doc.doc_id in listed_by_ws:
+            summary["owned_listed"] += 1
+        elif in_index and doc.owner == "none":
+            summary["standalone_listed"] += 1
+        elif in_index and doc.owner is None:
+            summary["legacy_listed"] += 1
+        elif in_index:
+            summary["misrouted"] += 1  # owned, but listed by the index instead of its workstream
+        elif doc.doc_id not in shown_unassigned:
+            summary["orphan"] += 1
+            orphans.append(doc.rel)
+    return {"summary": summary, "orphans": orphans, "unassigned": sorted(unassigned_ids)}

@@ -358,6 +358,71 @@ class BudgetAndReferenceTest(HygieneFixture):
             "[a](../x.md) [b](../../tests/t.cjs) [c](https://e.example/x) [d](#h) [e](/abs)",
         )
 
+    def test_index_just_under_ceiling_is_shortened_to_leave_headroom(self):
+        # 2026-09-22: --fix was a no-op on an index 80 bytes from the ceiling,
+        # because the budget pass returned early unless the file was already
+        # red. It must fire below the ceiling and leave real headroom behind.
+        root = self.make_repo()
+        index = root / "docs/00_index.md"
+        content = index.read_text()
+        n = 0
+        # grow to just past the target but still under the ceiling: the exact
+        # state that used to report "nothing to do"
+        while len(content.encode()) <= MODULE.INDEX_TARGET_BYTES:
+            content += f"- [ISSUE-{n:04d}](issues/ISSUE-{n:04d}.md) — " + "説明" * 60 + "\n"
+            n += 1
+        self.assertGreater(len(content.encode()), MODULE.INDEX_TARGET_BYTES)
+        self.assertLessEqual(len(content.encode()), MODULE.INDEX_MAX_BYTES)
+        index.write_text(content)
+        report = MODULE.run(root, fix=True, report=False, today=date(2026, 9, 19))
+        item = report["fixes"]["A2_index_lines_moved"]
+        self.assertGreater(item["count"], 0, "budget pass must fire below the ceiling")
+        self.assertTrue(item["headroom_target_met"])
+        self.assertGreaterEqual(item["headroom_bytes_after"], MODULE.INDEX_HEADROOM_BYTES)
+        self.assertLessEqual(index.stat().st_size, MODULE.INDEX_TARGET_BYTES)
+        # no row is lost and the full text is recoverable from the log
+        self.assertEqual(index.read_text().count("](issues/ISSUE-"), n)
+        self.assertIn("説明説明", (root / "docs/log/index-202609.md").read_text())
+
+    def test_shortening_never_drops_a_second_link_from_a_row(self):
+        # 2026-09-22, found by running --fix on a real 32,688-byte index: a row
+        # whose description pointed at the ADR that recorded its decision lost
+        # adrs/ADR-20260916-... when the description was cut. A repo that keeps
+        # completed rows (Read Policy) cannot lose a routing target this way.
+        line = ("- [ISSUE-x](issues/archive/ISSUE-x.md) — " + "説明" * 80
+                + " 人間判断を [ADR-y](adrs/ADR-y.md) に記録した")
+        for cap in MODULE.DESC_CAPS:
+            short = MODULE.shorten_routing_line(line, cap, "log/index-202609.md")
+            self.assertIn("(issues/archive/ISSUE-x.md)", short)
+            self.assertIn("(adrs/ADR-y.md)", short, f"second link lost at cap {cap}")
+        bullet = MODULE.shorten_bullet(line, "log/index-202609.md")
+        self.assertIn("(adrs/ADR-y.md)", bullet)
+
+    def test_real_index_keeps_every_link_through_the_budget_pass(self):
+        root = self.make_repo()
+        index = root / "docs/00_index.md"
+        content = index.read_text()
+        n = 0
+        while len(content.encode()) <= MODULE.INDEX_TARGET_BYTES:
+            content += (f"- [ISSUE-{n:04d}](issues/ISSUE-{n:04d}.md) — " + "説明" * 60
+                        + f" 判断は [ADR-{n:04d}](adrs/ADR-{n:04d}.md) に記録\n")
+            n += 1
+        index.write_text(content)
+        import re as _re
+        before = set(_re.findall(r"\]\(([^)\s]+\.md)\)", content))
+        MODULE.run(root, fix=True, report=False, today=date(2026, 9, 19))
+        after = set(_re.findall(r"\]\(([^)\s]+\.md)\)", index.read_text()))
+        self.assertEqual(before - after, set(), "budget pass dropped link targets")
+
+    def test_index_under_target_is_left_untouched(self):
+        root = self.make_repo()
+        index = root / "docs/00_index.md"
+        before = index.read_text() + "- [ISSUE-a](issues/ISSUE-a.md) — one line\n"
+        index.write_text(before)
+        report = MODULE.run(root, fix=True, report=False, today=date(2026, 9, 19))
+        self.assertEqual(report["fixes"]["A2_index_lines_moved"]["count"], 0)
+        self.assertEqual(index.read_text(), before)
+
     def test_unmeetable_ceiling_is_reported_not_destroyed(self):
         root = self.make_repo()
         index = root / "docs/00_index.md"

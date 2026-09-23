@@ -11,9 +11,9 @@ Turn an ambiguous development direction into an approved `docs/specs/` source of
 
 1. Locate the repository root and read its agent instructions.
 2. Read `docs/00_index.md` first when it exists.
-3. Read only the relevant specs, guides, active workstream or issue, and code needed to understand the request.
-4. If the docs scaffold is absent, use `own-doc-update` to initialize `docs/00_index.md`, `docs/specs/`, `docs/workstreams/`, `docs/issues/`, and `docs/guides/` before grilling.
-5. Determine the mode:
+4. Read only the relevant specs, guides, active workstream or issue, and code needed to understand the request.
+5. If the docs scaffold is absent, use `own-doc-update` to initialize `docs/00_index.md`, `docs/specs/`, `docs/workstreams/`, `docs/issues/`, and `docs/guides/` before grilling.
+6. Determine the mode:
    - **Greenfield**: shape a new spec from an undeveloped idea.
    - **Revision**: update one existing spec while preserving unrelated settled intent.
 
@@ -53,7 +53,7 @@ Start with upstream decisions because they reshape downstream questions:
 3. scope, non-goals, and observable behavior;
 4. concrete scenarios, edge cases, and failure behavior;
 5. constraints, compatibility, migration, and tradeoffs;
-6. design direction only where requirements or existing architecture constrain it;
+7. design direction only where requirements or existing architecture constrain it;
 7. acceptance criteria and explicitly deferred decisions.
 
 Adapt the tree to the answers. Do not recite this list as a questionnaire.
@@ -102,11 +102,17 @@ Then summarize the resulting decisions, stress-tested assumptions, and deferred 
 If the user says no, continue the grill. If the user approves:
 
 1. Set `status: active` and remove `Next Question`.
-2. Remove resolved items from `Open Questions`.
-3. Update the spec and `docs/00_index.md` descriptions as current intent.
-4. Run the repository docs validator from `own-doc-update` when available.
-5. Report affected guides and workstreams without changing their implementation state.
-6. Hand off any implementation planning or workstream creation to `own-doc-update`, which must establish its own human authorization boundary.
+2. Retire the interview scaffolding: split `Acceptance Criteria` — capabilities the product
+   must have become present-tense entries under `Requirements`; anything phrased as what a
+   delivery proves or measures goes to the work unit — then remove the section, and move
+   `Impact on Existing System` to the work unit that will reconcile it. Leaving either in an
+   active spec makes the spec state work-unit facts that expire: once the work completes, the
+   spec is telling readers about a gate or a mismatch that no longer exists.
+3. Remove resolved items from `Open Questions`.
+4. Update the spec and `docs/00_index.md` descriptions as current intent.
+5. Run the repository docs validator from `own-doc-update` when available.
+6. Report affected guides and workstreams without changing their implementation state.
+7. Hand off any implementation planning or workstream creation to `own-doc-update`, which must establish its own human authorization boundary.
 
 ## Stop safely
 

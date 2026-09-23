@@ -11,30 +11,48 @@ responsible for authorization, integration, budgets, and completion.
 
 ## 1. Establish the target workstream
 
-1. Read `docs/00_index.md` when present, then read only the relevant active
+1. **Fetch before you read.** Run `git fetch` and compare the checkout against its
+   upstream (`git log --oneline HEAD..<upstream>` and, for the docs,
+   `git diff --stat HEAD...<upstream> -- docs`) before reading anything. A clean
+   `git status` says nothing about this: it never consults the remote, so a checkout
+   that is dozens of commits behind looks identical to one that is current. Measured
+   2026-09-21: a session read only local docs, derived a conclusion another session
+   had already recorded upstream — with the opposite answer — filed an issue on a
+   premise the upstream docs disproved, and then could neither rebase nor cherry-pick
+   its work onto a branch 17 commits ahead.
+
+   When the target workstream, its issues, or its linked specs differ upstream, read
+   the upstream copy (`git show <upstream>:<path>`) **before** judging, and treat what
+   it says as the current record. Where upstream's text contradicts your own primary
+   evidence, do not silently overwrite it: leave the contradiction visible and record
+   the evidence beside it.
+
+   Reconciling a diverged checkout is separate work that can absorb other sessions'
+   commits, so surface it rather than resolving it unasked.
+2. Read `docs/00_index.md` when present, then read only the relevant active
    workstream, linked specs, guides, and necessary code.
-2. Discover the repository's own workstream convention before asking anything.
+3. Discover the repository's own workstream convention before asking anything.
    Layouts differ in practice: `docs/workstreams/`, `docs/specs/workstreams/active/`,
    an issue-based repository with no workstream directory, or `ISSUE-*` files used as
    the control unit. Find the actual convention from `docs/00_index.md` and the
    directory tree, then use it. Never assume `docs/workstreams/` exists, and never
    propose a parallel structure beside a working one.
-3. Make control-unit selection the first human interaction, but bring a decision
+4. Make control-unit selection the first human interaction, but bring a decision
    rather than an open question. If exactly one active unit matches, name it and ask
    whether to resume it. If several are plausible, recommend the best match.
-4. Choose the _kind_ of control unit yourself from observable facts; ask only when
+5. Choose the _kind_ of control unit yourself from observable facts; ask only when
    they conflict. Use a workstream when the work spans multiple slices, touches
    metered services, or needs a human gate. Use a standalone issue — or the
    repository's existing issue unit — for one bounded, reversible, non-metered
    change. Use docs-only when nothing is implemented. State the chosen unit and the
    reason in one line instead of asking the user to pick it. Do not migrate history
    without approval.
-5. If no matching workstream exists, say so and ask first whether to create one
+6. If no matching workstream exists, say so and ask first whether to create one
    through `own-doc-update`, proposing a workstream name and one-sentence scope.
    After approval, invoke `own-doc-update`, follow its human-boundary interview, and
    create the workstream only after the complete boundary is confirmed. Do not
    ask downstream implementation questions before this create-or-select choice.
-6. Reuse the recorded branch or worktree, but verify it exists first
+7. Reuse the recorded branch or worktree, but verify it exists first
    (`git branch -a`, `git worktree list`). **A recorded branch that is merged and
    deleted is stale bookkeeping, not missing work**: continue on the default branch
    or cut the next branch from it, and correct the record in the same slice. Do not

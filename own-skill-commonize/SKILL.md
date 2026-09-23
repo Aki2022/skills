@@ -178,6 +178,57 @@ context 費用 0・配線 0 本）。対象外として扱う。
 正典にある名前を実体で上書きされると `RESULT: OK` / rc=0 で素通りしていた
 （2026-09-23 に陽性対照で確認し、そこで塞いだ）。
 
+インストーラの挙動は実測済み（2026-09-23）。**正典にある名前は拒否される** —
+`_copy_skill` が `os.path.exists(dest)` を見ており、symlink は解決先が在るので真になり
+`InstallError: Destination already exists` で止まる。symlink も正典も無傷のまま。
+**危ないのは正典に無い名前だけ**で、そこだけ実体が出来る。
+
+### 第三者 skill を足す手順は script に閉じる
+
+`scripts/mirror_skill.sh` が「上流から複製 → `mirrors.yaml` へ登録 → per-skill 配線先
+4 つへ symlink → 監査」を通しで行う。**手で 4 回やらない** — 途中で止めると必ず壊れる。
+
+| 止まる場所 | 起きること |
+| --- | --- |
+| ミラーだけ | 配線されず Claude からしか見えない |
+| 台帳を忘れる | 第三者は git 追跡外なので、消えたら二度と戻せない |
+| 配線だけ | 実体が無く宙を指す |
+
+実測で `mirrors.yaml` は 45 本中 10 本しか登録されていなかった（2026-09-23）。
+忘れる余地を残さないために script にする。`own-` 接頭辞・既存名・frontmatter の
+`name` 不一致は script が拒否する。ライセンスだけは人が実物を読んで `--license` で渡す
+（再配布の可否を決める判断なので機械に委ねない）。
+
+### 逸脱の検出は hook、深い検査は lint
+
+3 つを役割で分ける。所要時間が置ける場所を決める。
+
+| 何を | どこ | 所要 | いつ走る |
+| --- | --- | --- | --- |
+| 配線先に実体が現れていないか | `scripts/check_wiring_fast.sh` を SessionStart hook | **0.02 秒** | 全セッション |
+| 配線の一致（個数・不足・余分・宙・実体・外向き） | `audit_skill_wiring.py` | 1.1 秒 | 呼べば |
+| skill 全体の静的検査（S1〜S10） | `skill_lint.sh` | 88 秒 | skill 編集時 |
+
+hook に置けるのは 1 条件だけ。`skill_lint` は 88 秒で hook には置けず、skill を
+編集しなければ走らないので、インストールしただけの逸脱は次の編集まで見つからない。
+高速検査は**逸脱が無ければ何も出力しない**（常に喋る検査は読まれなくなる）。
+
+`$skill-installer` を PreToolUse で止める案は**採らない**。Codex の `$skill-installer` が
+Bash tool 経由で走るかを確認できておらず、走らなければ hook は空振りのまま
+「守られている」と誤解させる。代理経路を証拠にしない。
+
+**hook の横展開は skill と違って自動ではない**（2026-09-23 実測）。
+
+| ツール | hook の置き場 | 統一 |
+| --- | --- | --- |
+| Codex 3 席 | `~/.agents/codex/hooks.json` へ 3 席とも symlink | 1 回書けば 3 席に効く |
+| Claude 2 席 | `~/.claude/settings.json` と `~/.claude-seat2/settings.json` が別実体 | **2 回書く** |
+| Gemini | `~/.gemini/config/hooks.json`（別スキーマ） | 別途 |
+
+Claude の `settings.json` は permission や environment という account 固有の可変 state を
+含むため、丸ごと symlink にはできない（不変条件 6）。hook を足したら 2 席とも直したか
+必ず確認する。実測で 2 席の内容は既に 123 行ぶん分岐していた。
+
 ### 静的設定 27 件の編集手順（nix 管理下）
 
 1. nix-darwin flake repo の `home/agent-config/<相対パス>` を**直接編集する**（普通のファイル。

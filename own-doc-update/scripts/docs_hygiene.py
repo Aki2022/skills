@@ -206,6 +206,48 @@ def archive_complete(root: Path, fix: bool, result: dict) -> None:
     result["A1_archive_blocked"] = {"count": len(blocked), "items": blocked}
 
 
+# ------------------------------------------------------------ A6 routes / R10 reachability
+
+def regenerate_routes(root: Path, fix: bool, result: dict) -> None:
+    """Regenerate Split Issues / Active Issues / Unassigned / Active Workstreams from front matter.
+
+    Runs after archiving (so archived issues are not listed again) and before the index budget
+    pass. Without --fix it counts the files that would change, using a scratch copy of docs/.
+    """
+    sys.path.insert(0, str(SCRIPTS_DIR))
+    import ownership  # type: ignore
+
+    if fix:
+        items = ownership.regenerate(root, parse_front_matter)
+    else:
+        import shutil
+        scratch = Path(tempfile.mkdtemp())
+        try:
+            shutil.copytree(root / "docs", scratch / "docs")
+            items = [dict(i, dry_run=True) for i in ownership.regenerate(scratch, parse_front_matter)]
+        finally:
+            shutil.rmtree(scratch, ignore_errors=True)
+    result["A6_routes_regenerated"] = {"count": len(items), "items": items}
+
+
+def report_reachability(root: Path, report: dict) -> None:
+    """Every active issue must be routed from the index or its workstream's Split Issues."""
+    sys.path.insert(0, str(SCRIPTS_DIR))
+    import ownership  # type: ignore
+
+    reach = ownership.reachability(root, parse_front_matter)
+    summary = reach["summary"]
+    items = [summary] + [{"file": f, "state": "orphan"} for f in reach["orphans"]] + [
+        {"id": i, "state": "unassigned"} for i in reach["unassigned"]
+    ]
+    report["R10_reachability"] = {
+        "count": summary["orphan"] + summary["unassigned"],
+        "items": items,
+        "rule": "an active issue routed from nowhere is an orphan; one whose workstream is not active "
+                "(or a new one that declares none) is unassigned — neither is rewritten automatically",
+    }
+
+
 # ------------------------------------------------------------ A2 index narrative
 
 def is_routing_line(line: str) -> bool:
@@ -461,19 +503,21 @@ def shorten_routing_line(line: str, cap: int, log_name: str) -> str:
     return head + cut.rstrip() + log_suffix(log_name)
 
 
-def fit_index_budget(content: str, log_name: str) -> tuple[str, list[str], Optional[int]]:
+def fit_index_budget(content: str, log_name: str, reserved: int = 0) -> tuple[str, list[str], Optional[int]]:
     """Progressively shorten routing descriptions until the index fits the ceiling.
 
     Returns (content, original lines that were shortened, cap used or None when
     the ceiling cannot be met — which means the row count itself is the problem
-    and only closing work will fix it).
+    and only closing work will fix it). `reserved` is bytes held out of `content`
+    (masked generated blocks) that still count against the ceiling.
     """
-    if len(content.encode()) <= INDEX_MAX_BYTES:
+    budget = INDEX_MAX_BYTES - reserved
+    if len(content.encode()) <= budget:
         return content, [], None
     # `[issues/X.md](issues/X.md)` says the path twice; the id alone routes the
     # same (index_entries matches on the target) and is what the template uses.
     content = SELF_LINK_RE.sub(lambda m: f"[{Path(m.group(1)).stem}]({m.group(1)})", content)
-    if len(content.encode()) <= INDEX_MAX_BYTES:
+    if len(content.encode()) <= budget:
         return content, [], None
     pristine = content.splitlines(keepends=True)
     lines = list(pristine)
@@ -490,17 +534,40 @@ def fit_index_budget(content: str, log_name: str) -> tuple[str, list[str], Optio
                 if not bare.endswith(log_suffix(log_name)):
                     originals.setdefault(i, bare)  # split-cut lines are already in the log in full
                 lines[i] = short + ("\n" if line.endswith("\n") else "")
-        if len("".join(lines).encode()) <= INDEX_MAX_BYTES:
+        if len("".join(lines).encode()) <= budget:
             return "".join(lines), [originals[i] for i in sorted(originals)], cap
     return "".join(lines), [originals[i] for i in sorted(originals)], None
+
+
+GENERATED_BLOCK_RE = re.compile(
+    r"<!-- own-doc-update:generated (\S+) begin -->.*?<!-- own-doc-update:generated \1 end -->", re.DOTALL
+)
+
+
+def mask_generated_blocks(content: str) -> tuple[str, list[tuple[str, str]]]:
+    """Replace each generated block with a one-line placeholder; returns (text, [(placeholder, block)])."""
+    blocks: list[tuple[str, str]] = []
+
+    def swap(match: re.Match) -> str:
+        placeholder = f"<!-- own-doc-update:masked {len(blocks)} -->"
+        blocks.append((placeholder, match.group(0)))
+        return placeholder
+
+    return GENERATED_BLOCK_RE.sub(swap, content), blocks
 
 
 def move_index_narrative(root: Path, fix: bool, today: date, result: dict) -> None:
     index = root / "docs/00_index.md"
     content = index.read_text()
     log_name = f"log/index-{today.strftime('%Y%m')}.md"
-    new_content, moved, count = split_index_narrative(content, log_name, today)
-    new_content, shortened, cap = fit_index_budget(new_content, log_name)
+    # Generated ownership lists are derived rows (A6): cutting or moving them here would be
+    # undone by the next A6 run, so they are masked out of both passes and put back after.
+    masked, blocks = mask_generated_blocks(content)
+    reserved = sum(len(b.encode()) - len(p.encode()) for p, b in blocks)
+    new_content, moved, count = split_index_narrative(masked, log_name, today)
+    new_content, shortened, cap = fit_index_budget(new_content, log_name, reserved)
+    for placeholder, block in blocks:
+        new_content = new_content.replace(placeholder, block, 1)
     if shortened:
         moved.append((f"行の短縮（説明を {cap or DESC_CAPS[-1]} 字に）", shortened))
         count += len(shortened)
@@ -1344,6 +1411,7 @@ def run(repo: str | Path, fix: bool, report: bool, today: Optional[date] = None)
     normalize_statuses(root, fix, today, fixes)
     sync_updated_at(root, fix, fixes)
     archive_complete(root, fix, fixes)
+    regenerate_routes(root, fix, fixes)
     move_index_narrative(root, fix, today, fixes)
 
     rep = result["report"]
@@ -1354,6 +1422,7 @@ def run(repo: str | Path, fix: bool, report: bool, today: Optional[date] = None)
     report_layout(root, rep)
     report_baselines(root, rep)
     report_context_budget(root, rep)
+    report_reachability(root, rep)
 
     if report:
         # The review is deterministic and takes seconds, so it runs with every

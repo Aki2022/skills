@@ -1893,6 +1893,7 @@ class NextActionRequiredTest(ValidateRepoDocsV2Test):
         script = Path(__file__).resolve().parents[1] / "create_issue.py"
         result = subprocess.run(
             [sys.executable, str(script), "with-next-step",
+             "--standalone", "--priority", "medium", "--due", "none",
              "--guide", "GUIDE-example",
              "--verify-machine", "true",
              "--next-action", "実装先の scan_local_info_stream を読む",

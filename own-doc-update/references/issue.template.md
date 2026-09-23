@@ -2,6 +2,7 @@
 schema_version: 2
 id: ISSUE-YYYYMMDD-short-slug
 status: active
+workstream: ""
 created_at: YYYY-MM-DD
 updated_at: YYYY-MM-DD
 branch: ISSUE-YYYYMMDD-short-slug

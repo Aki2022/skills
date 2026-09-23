@@ -175,8 +175,18 @@ def main(argv=None) -> int:
           f"（棚ごと {cov['whole']} / 1冊ずつ {cov['per_skill']}）"
           f" 正典 {len(canon_skills(canon))} 件 / 個別対処 {len(individual)} 件")
     if not wiring:
-        print("ERROR 配線先が1件も見つからない（探索範囲が違う可能性）", file=sys.stderr)
-        return 2
+        # 配線0件には2つの意味がある。区別しないと空振りを通す。
+        #   A まだ配線していない正典（新しい環境・差し替えた $HOME の fixture）→ 正常
+        #   B 探索範囲の指定を誤った                                            → 誤り
+        # 探索起点が1つも実在しなければ B。起点は実在するが配線が無ければ A。
+        missing = [p for p in search if not p.is_dir()]
+        if len(missing) == len(search):
+            print("ERROR 探索起点が1つも実在しない（--search の指定を確認する): "
+                  + ", ".join(str(p) for p in missing), file=sys.stderr)
+            return 2
+        print("NOTE 配線先が1件も見つからない（この正典はまだどこからも配線されていない）")
+        print("RESULT: SKIP")
+        return 0
 
     bad = len(failures) + sum(1 for l in individual if l.startswith("FAIL"))
     print("RESULT: OK" if bad == 0 else f"RESULT: FAIL ({bad})")

@@ -53,9 +53,15 @@ skill の探索規則が一致しない。Claude Code v2.1.277 以降はリポ�
 | Codex | `$CODEX_HOME/skills` | バイナリ内の記述 `Installs into $CODEX_HOME/skills/<skill-name> (defaults to ~/.codex/skills)`。3席は `shell.nix` が `CODEX_HOME` を切り替える |
 | Gemini | `~/.gemini/config/skills` | per-skill symlink |
 
-配布先の一覧は `references/alias-roots.txt` が持つ。**人の記憶に置かない** — 2026-09-22 まで
-一覧は規則の散文の中にしかなく、`~/.kiro/skills`（7件）は規則にも検査にも登場せず
-誰も検査していなかった。
+**配布先の一覧は持たない。** 配線は必ず正典への symlink なので、
+`scripts/audit_skill_wiring.py` が**正典を指す symlink を辿って**配線先を見つける。
+新しい道具を配線した瞬間から対象になり、一覧に足す作業が要らない。
+
+一覧を持たない理由は実測にある。2026-09-22 に配布先を `alias-roots.txt` に書き出したが、
+**人が書くものは書き落とす** — 一覧は6件で、正典を指す配線先は**13件**あった。
+落ちていたのは `~/.claude-private/skills`・`~/.claude-seat2/skills`・
+`~/.gemini/antigravity-cli/skills`（いずれも生きていた）と古いバックアップ4件。
+一覧方式は最初から半分しか見ていなかったので、2026-09-23 に撤去した。
 
 ## skill の供給源は正典のみ（第三者 skill のミラー規約）
 
@@ -82,10 +88,9 @@ plugin/built-in 2重6件を実測）。
    実例: `origin-august-luna-loop` は `~/.agents/codex/skills/` に居たため、2026-08-30 に退役させても
    実体が git 未追跡のまま残り、実環境の再キャプチャで復活した。2026-09-22 に `own-luna-run` として
    正典へ移し、この root を廃止した。
-   **既知の例外**: `~/.agents/vibe-guard/skills/own-vibeguard-harden` は nix 管理下（編集元は
-   nix-darwin flake repo の `home/agent-config/vibe-guard/skills/`）で、PRIVATE な repo から
-   PUBLIC な正典へセキュリティ設定手順を移さないため、置き場所は据え置く。3語だが正典に居ない
-   ので「語数＝所属」は破れたままで、検査を届かせる設計は別途決める。
+   `~/.agents/vibe-guard/skills/own-vibeguard-harden` は nix 管理下にも置かれているが、
+   **正典にも同名で存在し、3配線先すべてから見える**（2026-09-23 実測）。
+   したがって「語数＝所属」の例外ではない。nix 側は配布のための複製で、正典が本体。
 5. 上流の更新への追随は**人間が起動する**（鮮度検査が警告したら再取得）。自動追随はしない。
 
 `mirrors.yaml` の形式:
@@ -186,14 +191,41 @@ grep で旧名が 0 件であることを別に確かめる。
 
 規則の根拠と却下案は biz_ops の `ADR-20260915-unify-skill-naming-to-object-action`。
 
-`S10` は別名 root の板が正典と一致しているかを見る。検査自体は
-`check_global_topology.py` が前からあったが、**実運用で値を埋めて呼ぶ場所が 0 件**
-だった（呼び出しはテストと docs の説明文のみ）。skill を触るたびに走るのは lint だけなので
-ここから呼ぶ。root 一覧は `references/alias-roots.txt`。
+`S10` は配線の監査で、`scripts/audit_skill_wiring.py` を lint から呼ぶ。
+**孤立したスクリプトは誰も走らせない** — `check_global_topology.py` は実運用で値を埋めて
+呼ぶ場所が 0 件のまま存在していた。同じ形にしない。lint は skill を触るたびに走るので、
+「commonize を使うときに検査する」がそのまま実現する。
 
-S10 は**検査した root の数を必ず出す**。渡し忘れた root について
-`check_global_topology.py` は何も言わない（実測: 渡さなければ `RESULT: OK`）ため、
-数だけが渡し忘れの手がかりになる。一覧から1行落とすと緑のまま数が減る。
+**実正典を lint したときだけ走る。** 配線は git の外にあり、`main` を見ても状態は分からない。
+実際 2026-09-22 に `~/.gemini/config/skills` の配線が壊れていたとき、`main` は完全に正しかった
+（`own-doc-update` は存在し、配線だけが旧名を指していた）。**中身が正しいことと
+配線が正しいことは別々に確かめる必要がある。**
+
+逆に worktree には検査対象が無い。配線が壊れるのは正典が変わった後であって、
+worktree で編集している最中ではない。そこを指す symlink も存在しない。
+検査しない場合は `S10: skip（…）` と必ず言う — 黙って飛ばすと緑が何を意味するか読めない。
+
+単独でも走らせられる:
+
+```bash
+python3 ~/.agents/skills/own-skill-commonize/scripts/audit_skill_wiring.py
+```
+
+見るもの:
+
+1. **個数が同じか** — 正典 N 件に対して配線先も N 件か
+2. **不足が無いか** — 正典にあって配線先に無い名前
+3. **余分が無いか** — 配線先にあって正典に無い名前（改名の置き去りがこれ）
+4. **宙を指していないか**
+5. **個別対処した skill**（正典の外を指す symlink）が配線先でも解決するか
+
+**中身は照合しない。** 配線は正典の同じ実体を指すので原理的にズレない
+（72 skill × 5 root = 360 通りを realpath で照合し別実体 0 件・2026-09-22 実測）。
+
+退役マーカー（`_backup_` `_old_` `.bak_` `.orphaned_` `.disabled`）のついた配線先は
+対象にしない。古い中身のまま残っているので、見ると永久に赤い検査になる。
+
+**検査した配線先の数を常に出す。** 緑と「何も見ていない」を出力で区別するため。
 
 ## 共有設定とaccount stateの境界
 

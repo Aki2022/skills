@@ -503,19 +503,21 @@ def shorten_routing_line(line: str, cap: int, log_name: str) -> str:
     return head + cut.rstrip() + log_suffix(log_name)
 
 
-def fit_index_budget(content: str, log_name: str) -> tuple[str, list[str], Optional[int]]:
+def fit_index_budget(content: str, log_name: str, reserved: int = 0) -> tuple[str, list[str], Optional[int]]:
     """Progressively shorten routing descriptions until the index fits the ceiling.
 
     Returns (content, original lines that were shortened, cap used or None when
     the ceiling cannot be met — which means the row count itself is the problem
-    and only closing work will fix it).
+    and only closing work will fix it). `reserved` is bytes held out of `content`
+    (masked generated blocks) that still count against the ceiling.
     """
-    if len(content.encode()) <= INDEX_MAX_BYTES:
+    budget = INDEX_MAX_BYTES - reserved
+    if len(content.encode()) <= budget:
         return content, [], None
     # `[issues/X.md](issues/X.md)` says the path twice; the id alone routes the
     # same (index_entries matches on the target) and is what the template uses.
     content = SELF_LINK_RE.sub(lambda m: f"[{Path(m.group(1)).stem}]({m.group(1)})", content)
-    if len(content.encode()) <= INDEX_MAX_BYTES:
+    if len(content.encode()) <= budget:
         return content, [], None
     pristine = content.splitlines(keepends=True)
     lines = list(pristine)
@@ -532,17 +534,40 @@ def fit_index_budget(content: str, log_name: str) -> tuple[str, list[str], Optio
                 if not bare.endswith(log_suffix(log_name)):
                     originals.setdefault(i, bare)  # split-cut lines are already in the log in full
                 lines[i] = short + ("\n" if line.endswith("\n") else "")
-        if len("".join(lines).encode()) <= INDEX_MAX_BYTES:
+        if len("".join(lines).encode()) <= budget:
             return "".join(lines), [originals[i] for i in sorted(originals)], cap
     return "".join(lines), [originals[i] for i in sorted(originals)], None
+
+
+GENERATED_BLOCK_RE = re.compile(
+    r"<!-- own-doc-update:generated (\S+) begin -->.*?<!-- own-doc-update:generated \1 end -->", re.DOTALL
+)
+
+
+def mask_generated_blocks(content: str) -> tuple[str, list[tuple[str, str]]]:
+    """Replace each generated block with a one-line placeholder; returns (text, [(placeholder, block)])."""
+    blocks: list[tuple[str, str]] = []
+
+    def swap(match: re.Match) -> str:
+        placeholder = f"<!-- own-doc-update:masked {len(blocks)} -->"
+        blocks.append((placeholder, match.group(0)))
+        return placeholder
+
+    return GENERATED_BLOCK_RE.sub(swap, content), blocks
 
 
 def move_index_narrative(root: Path, fix: bool, today: date, result: dict) -> None:
     index = root / "docs/00_index.md"
     content = index.read_text()
     log_name = f"log/index-{today.strftime('%Y%m')}.md"
-    new_content, moved, count = split_index_narrative(content, log_name, today)
-    new_content, shortened, cap = fit_index_budget(new_content, log_name)
+    # Generated ownership lists are derived rows (A6): cutting or moving them here would be
+    # undone by the next A6 run, so they are masked out of both passes and put back after.
+    masked, blocks = mask_generated_blocks(content)
+    reserved = sum(len(b.encode()) - len(p.encode()) for p, b in blocks)
+    new_content, moved, count = split_index_narrative(masked, log_name, today)
+    new_content, shortened, cap = fit_index_budget(new_content, log_name, reserved)
+    for placeholder, block in blocks:
+        new_content = new_content.replace(placeholder, block, 1)
     if shortened:
         moved.append((f"行の短縮（説明を {cap or DESC_CAPS[-1]} 字に）", shortened))
         count += len(shortened)

@@ -192,8 +192,16 @@ grep で旧名が 0 件であることを別に確かめる。
 
 規則の根拠と却下案は biz_ops の `ADR-20260915-unify-skill-naming-to-object-action`。
 
-配線の監査は `scripts/audit_skill_wiring.py` が持つ。lint とは別に走らせる
-（配線が壊れるのは skill を作る・直す・移す・消すときだけで、毎回は要らない）。
+`S10` は配線の監査で、`scripts/audit_skill_wiring.py` を lint から呼ぶ。
+**孤立したスクリプトは誰も走らせない** — `check_global_topology.py` は実運用で値を埋めて
+呼ぶ場所が 0 件のまま存在していた。同じ形にしない。lint は skill を触るたびに走るので、
+「commonize を使うときに検査する」がそのまま実現する。
+
+**実正典を lint したときだけ走る。** worktree を指す symlink は存在しないので、
+そこで走らせると配線先0件になる。検査しない場合は `S10: skip（…）` と必ず言う —
+黙って飛ばすと緑が何を意味するか読めない。
+
+単独でも走らせられる:
 
 ```bash
 python3 ~/.agents/skills/own-skill-commonize/scripts/audit_skill_wiring.py

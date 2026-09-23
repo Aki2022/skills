@@ -14,7 +14,8 @@ from pathlib import Path
 from typing import Callable, Optional
 
 # Files created on/after this date must carry the new fields; older ones only warn
-# (SPEC: existing issues are never force-migrated). Set at the merge gate.
+# (SPEC: existing issues are never force-migrated). The day after the merge: anything
+# created up to the merge day came from a create_issue.py that had no ownership flags.
 ROLLOUT_DATE = "2026-09-24"
 
 PRIORITIES = ("high", "medium", "low")

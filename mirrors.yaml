@@ -10,20 +10,22 @@
 #
 # 中身は上流とバイト同一に保つ。改変が要るなら fork として own-<対象>-<動作> を作る。
 mirrors:
-  - dir: agents-sdk
-    upstream: cloudflare/skills
-    upstream_path: skills/agents-sdk
-    upstream_version: ba329ca
-    fetched_at: 2026-08-07
-    license: Apache-2.0 (repo root LICENSE)
-    reinstall: npx degit cloudflare/skills/skills/agents-sdk ~/.agents/skills/agents-sdk
-  - dir: cloudflare
-    upstream: cloudflare/skills
-    upstream_path: skills/cloudflare
-    upstream_version: 2b1ffd2
-    fetched_at: 2026-08-07
-    license: Apache-2.0 (repo root LICENSE)
-    reinstall: npx degit cloudflare/skills/skills/cloudflare ~/.agents/skills/cloudflare
+  - dir: agent-browser
+    upstream: vercel-labs/agent-browser
+    upstream_path: skills/agent-browser
+    upstream_version: unknown（取得時の版を記録していない）
+    fetched_at: 2026-08-01
+    license: 記載なし（明示の許諾なし＝既定では全権留保）
+    reinstall: npx degit vercel-labs/agent-browser/skills/agent-browser ~/.agents/skills/agent-browser
+    note: ローカルは上流より古い版
+  - dir: baseline-ui
+    upstream: ibelick/ui-skills
+    upstream_path: skills/baseline-ui
+    upstream_version: unknown
+    fetched_at: 2026-08-01
+    license: 記載なし（明示の許諾なし＝既定では全権留保）
+    reinstall: npx degit ibelick/ui-skills/skills/baseline-ui ~/.agents/skills/baseline-ui
+    note: 本文はバイト一致。description だけローカルで異なる
   - dir: cloudflare-email-service
     upstream: cloudflare/skills
     upstream_path: skills/cloudflare-email-service
@@ -31,98 +33,30 @@ mirrors:
     fetched_at: 2026-08-07
     license: Apache-2.0 (repo root LICENSE)
     reinstall: npx degit cloudflare/skills/skills/cloudflare-email-service ~/.agents/skills/cloudflare-email-service
-  - dir: cloudflare-one
-    upstream: cloudflare/skills
-    upstream_path: skills/cloudflare-one
-    upstream_version: e638d8c
-    fetched_at: 2026-08-07
-    license: Apache-2.0 (repo root LICENSE)
-    reinstall: npx degit cloudflare/skills/skills/cloudflare-one ~/.agents/skills/cloudflare-one
-  - dir: cloudflare-one-migrations
-    upstream: cloudflare/skills
-    upstream_path: skills/cloudflare-one-migrations
-    upstream_version: e638d8c
-    fetched_at: 2026-08-07
-    license: Apache-2.0 (repo root LICENSE)
-    reinstall: npx degit cloudflare/skills/skills/cloudflare-one-migrations ~/.agents/skills/cloudflare-one-migrations
-  - dir: durable-objects
-    upstream: cloudflare/skills
-    upstream_path: skills/durable-objects
-    upstream_version: d311303
-    fetched_at: 2026-08-07
-    license: Apache-2.0 (repo root LICENSE)
-    reinstall: npx degit cloudflare/skills/skills/durable-objects ~/.agents/skills/durable-objects
-  - dir: sandbox-sdk
-    upstream: cloudflare/skills
-    upstream_path: skills/sandbox-sdk
-    upstream_version: 30553f8
-    fetched_at: 2026-08-07
-    license: Apache-2.0 (repo root LICENSE)
-    reinstall: npx degit cloudflare/skills/skills/sandbox-sdk ~/.agents/skills/sandbox-sdk
-    note: 上流は 2026-08-07 の PR #92 で sandbox-next / sandbox-stable / sandbox-migrate-to-next に分割済み。同名での再取得は不可で、版を固定するか後継を取り直す
-  - dir: turnstile-spin
-    upstream: cloudflare/skills
-    upstream_path: skills/turnstile-spin
-    upstream_version: 30553f8
-    fetched_at: 2026-08-07
-    license: Apache-2.0 (repo root LICENSE)
-    reinstall: npx degit cloudflare/skills/skills/turnstile-spin ~/.agents/skills/turnstile-spin
-  - dir: web-perf
-    upstream: cloudflare/skills
-    upstream_path: skills/web-perf
-    upstream_version: 22a32f5
-    fetched_at: 2026-08-07
-    license: Apache-2.0 (repo root LICENSE)
-    reinstall: npx degit cloudflare/skills/skills/web-perf ~/.agents/skills/web-perf
-  - dir: workers-best-practices
-    upstream: cloudflare/skills
-    upstream_path: skills/workers-best-practices
-    upstream_version: 426c3b4
-    fetched_at: 2026-08-07
-    license: Apache-2.0 (repo root LICENSE)
-    reinstall: npx degit cloudflare/skills/skills/workers-best-practices ~/.agents/skills/workers-best-practices
-  - dir: wrangler
-    upstream: cloudflare/skills
-    upstream_path: skills/wrangler
-    upstream_version: 8c01b03
-    fetched_at: 2026-08-07
-    license: Apache-2.0 (repo root LICENSE)
-    reinstall: npx degit cloudflare/skills/skills/wrangler ~/.agents/skills/wrangler
-  - dir: alloydb-basics
-    upstream: google/skills
-    upstream_path: skills/cloud/alloydb-basics
-    upstream_version: 626910e00d
+  - dir: drawio
+    upstream: jgraph/drawio-mcp
+    upstream_path: plugins/claude-code/skills/drawio
+    upstream_version: unknown
+    fetched_at: 2026-07-29
+    license: 記載なし（明示の許諾なし＝既定では全権留保）
+    reinstall: npx degit jgraph/drawio-mcp/plugins/claude-code/skills/drawio ~/.agents/skills/drawio
+    note: ローカル 389 行・上流 442 行で古い
+  - dir: find-skills
+    upstream: vercel-labs/skills
+    upstream_path: skills/find-skills
+    upstream_version: unknown
     fetched_at: 2026-08-01
-    license: Apache-2.0 (repo root LICENSE)
-    reinstall: git clone https://github.com/google/skills && cp -r skills/skills/cloud/alloydb-basics ~/.agents/skills/alloydb-basics
-  - dir: bigquery-basics
-    upstream: google/skills
-    upstream_path: skills/cloud/bigquery-basics
-    upstream_version: 626910e00d
+    license: 記載なし（明示の許諾なし＝既定では全権留保）
+    reinstall: npx degit vercel-labs/skills/skills/find-skills ~/.agents/skills/find-skills
+    note: ローカルは --owner 追加前の版
+  - dir: fixing-accessibility
+    upstream: ibelick/ui-skills
+    upstream_path: skills/fixing-accessibility
+    upstream_version: unknown
     fetched_at: 2026-08-01
-    license: Apache-2.0 (repo root LICENSE)
-    reinstall: git clone https://github.com/google/skills && cp -r skills/skills/cloud/bigquery-basics ~/.agents/skills/bigquery-basics
-  - dir: cloud-run-basics
-    upstream: google/skills
-    upstream_path: skills/cloud/cloud-run-basics
-    upstream_version: 626910e00d
-    fetched_at: 2026-08-01
-    license: Apache-2.0 (repo root LICENSE)
-    reinstall: git clone https://github.com/google/skills && cp -r skills/skills/cloud/cloud-run-basics ~/.agents/skills/cloud-run-basics
-  - dir: cloud-sql-basics
-    upstream: google/skills
-    upstream_path: skills/cloud/cloud-sql-basics
-    upstream_version: 626910e00d
-    fetched_at: 2026-08-01
-    license: Apache-2.0 (repo root LICENSE)
-    reinstall: git clone https://github.com/google/skills && cp -r skills/skills/cloud/cloud-sql-basics ~/.agents/skills/cloud-sql-basics
-  - dir: firebase-basics
-    upstream: google/skills
-    upstream_path: skills/cloud/firebase-basics
-    upstream_version: 626910e00d
-    fetched_at: 2026-08-01
-    license: Apache-2.0 (repo root LICENSE)
-    reinstall: git clone https://github.com/google/skills && cp -r skills/skills/cloud/firebase-basics ~/.agents/skills/firebase-basics
+    license: 記載なし（明示の許諾なし＝既定では全権留保）
+    reinstall: npx degit ibelick/ui-skills/skills/fixing-accessibility ~/.agents/skills/fixing-accessibility
+    note: ローカルは古い版
   - dir: gemini-api
     upstream: google/skills
     upstream_path: skills/cloud/gemini-api
@@ -130,57 +64,6 @@ mirrors:
     fetched_at: 2026-08-01
     license: Apache-2.0 (repo root LICENSE)
     reinstall: git clone https://github.com/google/skills && cp -r skills/skills/cloud/gemini-api ~/.agents/skills/gemini-api
-  - dir: gke-basics
-    upstream: google/skills
-    upstream_path: skills/cloud/gke-basics
-    upstream_version: 626910e00d
-    fetched_at: 2026-08-01
-    license: Apache-2.0 (repo root LICENSE)
-    reinstall: git clone https://github.com/google/skills && cp -r skills/skills/cloud/gke-basics ~/.agents/skills/gke-basics
-    note: 上流は 2026-07 以降おおよそ30本へ分割済み。HEAD からの再取得は同じ内容にならない
-  - dir: google-cloud-recipe-auth
-    upstream: google/skills
-    upstream_path: skills/cloud/google-cloud-recipe-auth
-    upstream_version: 626910e00d
-    fetched_at: 2026-08-01
-    license: Apache-2.0 (repo root LICENSE)
-    reinstall: git clone https://github.com/google/skills && cp -r skills/skills/cloud/google-cloud-recipe-auth ~/.agents/skills/google-cloud-recipe-auth
-  - dir: google-cloud-recipe-networking-observability
-    upstream: google/skills
-    upstream_path: skills/cloud/google-cloud-networking-observability
-    upstream_version: 626910e00d
-    fetched_at: 2026-08-01
-    license: Apache-2.0 (repo root LICENSE)
-    reinstall: git clone https://github.com/google/skills && cp -r skills/skills/cloud/google-cloud-networking-observability ~/.agents/skills/google-cloud-recipe-networking-observability
-    note: ローカルのディレクトリ名は上流と異なる（上流に recipe は付かない）
-  - dir: google-cloud-recipe-onboarding
-    upstream: google/skills
-    upstream_path: skills/cloud/google-cloud-recipe-onboarding
-    upstream_version: 626910e00d
-    fetched_at: 2026-08-01
-    license: Apache-2.0 (repo root LICENSE)
-    reinstall: git clone https://github.com/google/skills && cp -r skills/skills/cloud/google-cloud-recipe-onboarding ~/.agents/skills/google-cloud-recipe-onboarding
-  - dir: google-cloud-waf-cost-optimization
-    upstream: google/skills
-    upstream_path: skills/cloud/google-cloud-waf-cost-optimization
-    upstream_version: 626910e00d
-    fetched_at: 2026-08-01
-    license: Apache-2.0 (repo root LICENSE)
-    reinstall: git clone https://github.com/google/skills && cp -r skills/skills/cloud/google-cloud-waf-cost-optimization ~/.agents/skills/google-cloud-waf-cost-optimization
-  - dir: google-cloud-waf-reliability
-    upstream: google/skills
-    upstream_path: skills/cloud/google-cloud-waf-reliability
-    upstream_version: 626910e00d
-    fetched_at: 2026-08-01
-    license: Apache-2.0 (repo root LICENSE)
-    reinstall: git clone https://github.com/google/skills && cp -r skills/skills/cloud/google-cloud-waf-reliability ~/.agents/skills/google-cloud-waf-reliability
-  - dir: google-cloud-waf-security
-    upstream: google/skills
-    upstream_path: skills/cloud/google-cloud-waf-security
-    upstream_version: 626910e00d
-    fetched_at: 2026-08-01
-    license: Apache-2.0 (repo root LICENSE)
-    reinstall: git clone https://github.com/google/skills && cp -r skills/skills/cloud/google-cloud-waf-security ~/.agents/skills/google-cloud-waf-security
   - dir: google-agents-cli-adk-code
     upstream: google/agents-cli
     upstream_path: skills/google-agents-cli-adk-code
@@ -238,61 +121,6 @@ mirrors:
     license: 記載なし（上流 repo のライセンスに従う）
     reinstall: npx degit microsoft/playwright-cli/skills/playwright-cli ~/.agents/skills/playwright-cli
     note: ローカルは 392 行・上流 HEAD は 542 行で古い。2026-09-23 に own-playwright-run への改名を誤って行い破棄した（自作ではない）
-  - dir: agent-browser
-    upstream: vercel-labs/agent-browser
-    upstream_path: skills/agent-browser
-    upstream_version: unknown（取得時の版を記録していない）
-    fetched_at: 2026-08-01
-    license: 記載なし（明示の許諾なし＝既定では全権留保）
-    reinstall: npx degit vercel-labs/agent-browser/skills/agent-browser ~/.agents/skills/agent-browser
-    note: ローカルは上流より古い版
-  - dir: baseline-ui
-    upstream: ibelick/ui-skills
-    upstream_path: skills/baseline-ui
-    upstream_version: unknown
-    fetched_at: 2026-08-01
-    license: 記載なし（明示の許諾なし＝既定では全権留保）
-    reinstall: npx degit ibelick/ui-skills/skills/baseline-ui ~/.agents/skills/baseline-ui
-    note: 本文はバイト一致。description だけローカルで異なる
-  - dir: drawio
-    upstream: jgraph/drawio-mcp
-    upstream_path: plugins/claude-code/skills/drawio
-    upstream_version: unknown
-    fetched_at: 2026-07-29
-    license: 記載なし（明示の許諾なし＝既定では全権留保）
-    reinstall: npx degit jgraph/drawio-mcp/plugins/claude-code/skills/drawio ~/.agents/skills/drawio
-    note: ローカル 389 行・上流 442 行で古い
-  - dir: find-skills
-    upstream: vercel-labs/skills
-    upstream_path: skills/find-skills
-    upstream_version: unknown
-    fetched_at: 2026-08-01
-    license: 記載なし（明示の許諾なし＝既定では全権留保）
-    reinstall: npx degit vercel-labs/skills/skills/find-skills ~/.agents/skills/find-skills
-    note: ローカルは --owner 追加前の版
-  - dir: fixing-accessibility
-    upstream: ibelick/ui-skills
-    upstream_path: skills/fixing-accessibility
-    upstream_version: unknown
-    fetched_at: 2026-08-01
-    license: 記載なし（明示の許諾なし＝既定では全権留保）
-    reinstall: npx degit ibelick/ui-skills/skills/fixing-accessibility ~/.agents/skills/fixing-accessibility
-    note: ローカルは古い版
-  - dir: frontend-design
-    upstream: anthropics/claude-plugins-official
-    upstream_path: plugins/frontend-design/skills/frontend-design
-    upstream_version: 2026-07-26 時点のスナップショット
-    fetched_at: 2026-09-07
-    license: Apache-2.0 (LICENSE.txt)
-    reinstall: Claude Code で /plugin marketplace add anthropics/claude-plugins-official → plugin frontend-design を導入し、その skills/frontend-design を複製
-    note: 上流 HEAD は以降書き換えられており同内容は取れない
-  - dir: migrate-to-codex
-    upstream: openai/skills
-    upstream_path: skills/.curated/migrate-to-codex
-    upstream_version: unknown
-    fetched_at: 2026-08-01
-    license: Apache-2.0 (LICENSE.txt)
-    reinstall: npx degit openai/skills/skills/.curated/migrate-to-codex ~/.agents/skills/migrate-to-codex
   - dir: quarto-authoring
     upstream: posit-dev/skills
     upstream_path: quarto/quarto-authoring
@@ -300,6 +128,13 @@ mirrors:
     fetched_at: 2026-08-01
     license: MIT (repo LICENSE + frontmatter)
     reinstall: npx degit posit-dev/skills/quarto/quarto-authoring ~/.agents/skills/quarto-authoring
+  - dir: turnstile-spin
+    upstream: cloudflare/skills
+    upstream_path: skills/turnstile-spin
+    upstream_version: 30553f8
+    fetched_at: 2026-08-07
+    license: Apache-2.0 (repo root LICENSE)
+    reinstall: npx degit cloudflare/skills/skills/turnstile-spin ~/.agents/skills/turnstile-spin
   - dir: typesafe-ai
     upstream: typesafe-ai/skills
     upstream_path: skills/typesafe-ai
@@ -307,14 +142,6 @@ mirrors:
     fetched_at: 2026-09-19
     license: MIT (LICENSE)
     reinstall: npx degit typesafe-ai/skills/skills/typesafe-ai ~/.agents/skills/typesafe-ai
-  - dir: vercel-composition-patterns
-    upstream: vercel-labs/agent-skills
-    upstream_path: skills/composition-patterns
-    upstream_version: 上流 HEAD とバイト一致（2026-09-23 時点）
-    fetched_at: 2026-08-01
-    license: MIT (frontmatter)
-    reinstall: npx degit vercel-labs/agent-skills/skills/composition-patterns ~/.agents/skills/vercel-composition-patterns
-    note: ローカルのディレクトリ名は上流と異なる
   - dir: vercel-react-best-practices
     upstream: vercel-labs/agent-skills
     upstream_path: skills/react-best-practices
@@ -330,6 +157,167 @@ mirrors:
     fetched_at: 2026-08-01
     license: 記載なし（明示の許諾なし＝既定では全権留保）
     reinstall: npx degit vercel-labs/agent-skills/skills/web-design-guidelines ~/.agents/skills/web-design-guidelines
+  - dir: web-perf
+    upstream: cloudflare/skills
+    upstream_path: skills/web-perf
+    upstream_version: 22a32f5
+    fetched_at: 2026-08-07
+    license: Apache-2.0 (repo root LICENSE)
+    reinstall: npx degit cloudflare/skills/skills/web-perf ~/.agents/skills/web-perf
+  - dir: wrangler
+    upstream: cloudflare/skills
+    upstream_path: skills/wrangler
+    upstream_version: 8c01b03
+    fetched_at: 2026-08-07
+    license: Apache-2.0 (repo root LICENSE)
+    reinstall: npx degit cloudflare/skills/skills/wrangler ~/.agents/skills/wrangler
+
+# 退役（2026-09-23）。141日間まったく発火せず、かつ他の skill から参照もされていないため
+# 正典から外し、一覧の description 予算を空けた。
+# 消したのではなく「棚から下ろした」だけで、reinstall 行1本で戻せる。
+#
+# 退役の判定に使用統計だけを使ってはいけない。統計は直接発火しか数えず、
+# 自作 skill の振り分け先として呼ばれるものは 0 回に見える。実際 2026-09-23 に
+# 34本を落として own-quarto-route / own-design-route / own-website-audit の
+# 振り分け先と google-agents-cli の suite 内参照を壊し、11本を戻した。
+# 落とす前に、残す skill 全部から退役候補名を grep すること。
+retired:
+  - dir: agents-sdk
+    upstream: cloudflare/skills
+    upstream_path: skills/agents-sdk
+    upstream_version: ba329ca
+    fetched_at: 2026-08-07
+    license: Apache-2.0 (repo root LICENSE)
+    reinstall: npx degit cloudflare/skills/skills/agents-sdk ~/.agents/skills/agents-sdk
+  - dir: alloydb-basics
+    upstream: google/skills
+    upstream_path: skills/cloud/alloydb-basics
+    upstream_version: 626910e00d
+    fetched_at: 2026-08-01
+    license: Apache-2.0 (repo root LICENSE)
+    reinstall: git clone https://github.com/google/skills && cp -r skills/skills/cloud/alloydb-basics ~/.agents/skills/alloydb-basics
+  - dir: bigquery-basics
+    upstream: google/skills
+    upstream_path: skills/cloud/bigquery-basics
+    upstream_version: 626910e00d
+    fetched_at: 2026-08-01
+    license: Apache-2.0 (repo root LICENSE)
+    reinstall: git clone https://github.com/google/skills && cp -r skills/skills/cloud/bigquery-basics ~/.agents/skills/bigquery-basics
+  - dir: cloud-run-basics
+    upstream: google/skills
+    upstream_path: skills/cloud/cloud-run-basics
+    upstream_version: 626910e00d
+    fetched_at: 2026-08-01
+    license: Apache-2.0 (repo root LICENSE)
+    reinstall: git clone https://github.com/google/skills && cp -r skills/skills/cloud/cloud-run-basics ~/.agents/skills/cloud-run-basics
+  - dir: cloud-sql-basics
+    upstream: google/skills
+    upstream_path: skills/cloud/cloud-sql-basics
+    upstream_version: 626910e00d
+    fetched_at: 2026-08-01
+    license: Apache-2.0 (repo root LICENSE)
+    reinstall: git clone https://github.com/google/skills && cp -r skills/skills/cloud/cloud-sql-basics ~/.agents/skills/cloud-sql-basics
+  - dir: cloudflare
+    upstream: cloudflare/skills
+    upstream_path: skills/cloudflare
+    upstream_version: 2b1ffd2
+    fetched_at: 2026-08-07
+    license: Apache-2.0 (repo root LICENSE)
+    reinstall: npx degit cloudflare/skills/skills/cloudflare ~/.agents/skills/cloudflare
+  - dir: cloudflare-one
+    upstream: cloudflare/skills
+    upstream_path: skills/cloudflare-one
+    upstream_version: e638d8c
+    fetched_at: 2026-08-07
+    license: Apache-2.0 (repo root LICENSE)
+    reinstall: npx degit cloudflare/skills/skills/cloudflare-one ~/.agents/skills/cloudflare-one
+  - dir: cloudflare-one-migrations
+    upstream: cloudflare/skills
+    upstream_path: skills/cloudflare-one-migrations
+    upstream_version: e638d8c
+    fetched_at: 2026-08-07
+    license: Apache-2.0 (repo root LICENSE)
+    reinstall: npx degit cloudflare/skills/skills/cloudflare-one-migrations ~/.agents/skills/cloudflare-one-migrations
+  - dir: durable-objects
+    upstream: cloudflare/skills
+    upstream_path: skills/durable-objects
+    upstream_version: d311303
+    fetched_at: 2026-08-07
+    license: Apache-2.0 (repo root LICENSE)
+    reinstall: npx degit cloudflare/skills/skills/durable-objects ~/.agents/skills/durable-objects
+  - dir: firebase-basics
+    upstream: google/skills
+    upstream_path: skills/cloud/firebase-basics
+    upstream_version: 626910e00d
+    fetched_at: 2026-08-01
+    license: Apache-2.0 (repo root LICENSE)
+    reinstall: git clone https://github.com/google/skills && cp -r skills/skills/cloud/firebase-basics ~/.agents/skills/firebase-basics
+  - dir: frontend-design
+    upstream: anthropics/claude-plugins-official
+    upstream_path: plugins/frontend-design/skills/frontend-design
+    upstream_version: 2026-07-26 時点のスナップショット
+    fetched_at: 2026-09-07
+    license: Apache-2.0 (LICENSE.txt)
+    reinstall: Claude Code で /plugin marketplace add anthropics/claude-plugins-official → plugin frontend-design を導入し、その skills/frontend-design を複製
+    note: 上流 HEAD は以降書き換えられており同内容は取れない
+  - dir: gke-basics
+    upstream: google/skills
+    upstream_path: skills/cloud/gke-basics
+    upstream_version: 626910e00d
+    fetched_at: 2026-08-01
+    license: Apache-2.0 (repo root LICENSE)
+    reinstall: git clone https://github.com/google/skills && cp -r skills/skills/cloud/gke-basics ~/.agents/skills/gke-basics
+    note: 上流は 2026-07 以降おおよそ30本へ分割済み。HEAD からの再取得は同じ内容にならない
+  - dir: google-cloud-recipe-auth
+    upstream: google/skills
+    upstream_path: skills/cloud/google-cloud-recipe-auth
+    upstream_version: 626910e00d
+    fetched_at: 2026-08-01
+    license: Apache-2.0 (repo root LICENSE)
+    reinstall: git clone https://github.com/google/skills && cp -r skills/skills/cloud/google-cloud-recipe-auth ~/.agents/skills/google-cloud-recipe-auth
+  - dir: google-cloud-recipe-networking-observability
+    upstream: google/skills
+    upstream_path: skills/cloud/google-cloud-networking-observability
+    upstream_version: 626910e00d
+    fetched_at: 2026-08-01
+    license: Apache-2.0 (repo root LICENSE)
+    reinstall: git clone https://github.com/google/skills && cp -r skills/skills/cloud/google-cloud-networking-observability ~/.agents/skills/google-cloud-recipe-networking-observability
+    note: ローカルのディレクトリ名は上流と異なる（上流に recipe は付かない）
+  - dir: google-cloud-recipe-onboarding
+    upstream: google/skills
+    upstream_path: skills/cloud/google-cloud-recipe-onboarding
+    upstream_version: 626910e00d
+    fetched_at: 2026-08-01
+    license: Apache-2.0 (repo root LICENSE)
+    reinstall: git clone https://github.com/google/skills && cp -r skills/skills/cloud/google-cloud-recipe-onboarding ~/.agents/skills/google-cloud-recipe-onboarding
+  - dir: google-cloud-waf-cost-optimization
+    upstream: google/skills
+    upstream_path: skills/cloud/google-cloud-waf-cost-optimization
+    upstream_version: 626910e00d
+    fetched_at: 2026-08-01
+    license: Apache-2.0 (repo root LICENSE)
+    reinstall: git clone https://github.com/google/skills && cp -r skills/skills/cloud/google-cloud-waf-cost-optimization ~/.agents/skills/google-cloud-waf-cost-optimization
+  - dir: google-cloud-waf-reliability
+    upstream: google/skills
+    upstream_path: skills/cloud/google-cloud-waf-reliability
+    upstream_version: 626910e00d
+    fetched_at: 2026-08-01
+    license: Apache-2.0 (repo root LICENSE)
+    reinstall: git clone https://github.com/google/skills && cp -r skills/skills/cloud/google-cloud-waf-reliability ~/.agents/skills/google-cloud-waf-reliability
+  - dir: google-cloud-waf-security
+    upstream: google/skills
+    upstream_path: skills/cloud/google-cloud-waf-security
+    upstream_version: 626910e00d
+    fetched_at: 2026-08-01
+    license: Apache-2.0 (repo root LICENSE)
+    reinstall: git clone https://github.com/google/skills && cp -r skills/skills/cloud/google-cloud-waf-security ~/.agents/skills/google-cloud-waf-security
+  - dir: migrate-to-codex
+    upstream: openai/skills
+    upstream_path: skills/.curated/migrate-to-codex
+    upstream_version: unknown
+    fetched_at: 2026-08-01
+    license: Apache-2.0 (LICENSE.txt)
+    reinstall: npx degit openai/skills/skills/.curated/migrate-to-codex ~/.agents/skills/migrate-to-codex
   - dir: pdf
     upstream: anthropics/skills
     upstream_path: skills/pdf
@@ -338,3 +326,26 @@ mirrors:
     license: Proprietary — LICENSE.txt が複製・再配布・派生物・Anthropic のサービス外での保持を明示的に禁じる
     reinstall: Claude Code で /plugin marketplace add anthropics/skills → plugin document-skills を導入する（正典へ複製しない）
     note: 正典へのミラー自体がライセンスと矛盾する。2026-08-01 から PUBLIC な正典 repo に入っており、履歴からの除去が必要
+  - dir: sandbox-sdk
+    upstream: cloudflare/skills
+    upstream_path: skills/sandbox-sdk
+    upstream_version: 30553f8
+    fetched_at: 2026-08-07
+    license: Apache-2.0 (repo root LICENSE)
+    reinstall: npx degit cloudflare/skills/skills/sandbox-sdk ~/.agents/skills/sandbox-sdk
+    note: 上流は 2026-08-07 の PR
+  - dir: vercel-composition-patterns
+    upstream: vercel-labs/agent-skills
+    upstream_path: skills/composition-patterns
+    upstream_version: 上流 HEAD とバイト一致（2026-09-23 時点）
+    fetched_at: 2026-08-01
+    license: MIT (frontmatter)
+    reinstall: npx degit vercel-labs/agent-skills/skills/composition-patterns ~/.agents/skills/vercel-composition-patterns
+    note: ローカルのディレクトリ名は上流と異なる
+  - dir: workers-best-practices
+    upstream: cloudflare/skills
+    upstream_path: skills/workers-best-practices
+    upstream_version: 426c3b4
+    fetched_at: 2026-08-07
+    license: Apache-2.0 (repo root LICENSE)
+    reinstall: npx degit cloudflare/skills/skills/workers-best-practices ~/.agents/skills/workers-best-practices

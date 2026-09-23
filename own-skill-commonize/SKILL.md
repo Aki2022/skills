@@ -102,9 +102,61 @@ mirrors:
     upstream_path: skills/frontend-design
     upstream_version: <commit sha> # 上流の版。取得時点で分かるもの
     fetched_at: 2026-09-06
+    license: Apache-2.0 (repo root LICENSE)  # 再配布の可否を決める。必ず実物から取る
+    reinstall: npx degit anthropics/skills/skills/frontend-design ~/.agents/skills/frontend-design
     local_copy: ~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/skills/frontend-design
     # local_copy が無い（built-in 等）場合は省略。同値検査は skip され鮮度検査のみ
+
+retired:
+  # 棚から下ろした skill。エントリの形は mirrors と同じで、reinstall 行1本で戻せる
 ```
+
+### PUBLIC に出すのは自作だけ（2026-09-23 決定）
+
+**正典ディレクトリは「全エージェント共通の配線ハブ」であって、git リポジトリと同一ではない。**
+追跡しなくても symlink 配線は機能し、Claude / Codex / Gemini から等しく見える。
+したがって PUBLIC な正典 repo に置くのは自作（`own-*`）だけとし、第三者は `.gitignore` する。
+
+**追跡を外す以上、第三者の復旧手段は `mirrors.yaml` の `reinstall` 行だけになる。**
+だから台帳は「あれば便利な記録」ではなく**唯一の復旧経路**であり、
+ミラーした第三者は例外なく登録する。登録の無い第三者 skill は消えたら戻せない。
+
+`license` も必ず実物から取って書く。2026-09-23 に `pdf` が Anthropic の Proprietary
+（複製・再配布・派生物・サービス外での保持を明示的に禁止）のまま PUBLIC な正典 repo に
+2026-08-01 から入っていたことが判明した。ライセンスを見ずにミラーすると気づけない。
+
+**GitHub の履歴書き換えは公開を止めない。** 同日に実測した: `filter-repo` + force-push で
+`main` から消し、マージ済みブランチ6本を削除しても、**`refs/pull/N/head` は永久に残り**、
+PR の head SHA から中身が読める。公開を確実に止める手段は repo の private 化か作り直し。
+
+### 棚卸し（退役）の判定
+
+一覧の description は context 予算を消費し、`skillListingBudgetFraction` を超えると
+切り捨てられて「名前だけで発火する」状態になる。使われていない skill を下ろす価値はある。
+
+**ただし使用統計だけで判定してはいけない。統計は直接発火しか数えない。**
+自作 skill の振り分け先として呼ばれる第三者は 0 回に見える。
+2026-09-23 に「141 日ゼロ」の 34 本を落とし、`own-quarto-route` の振り分け先
+`quarto-authoring`、`own-design-route` / `own-website-audit` のカバレッジ表が指す
+`web-design-guidelines` `fixing-accessibility` `web-perf` `baseline-ui`
+`vercel-react-best-practices`、`google-agents-cli-*` の suite 内参照を壊し、11 本を戻した。
+
+落とす前に**残す skill 全部から退役候補名を grep する**こと。機能参照（振り分け先・
+suite の相互参照）があれば落とさない。URL や規約の説明例は機能参照ではない。
+
+### 配線できないもの（対象外と明記する）
+
+配線は「正典のファイルを各ツールの読む場所へ symlink する」だけなので、
+**ファイルが存在しないものは原理的に配線できない**。黙って通さず対象外と書く。
+
+| 供給路 | 本数（2026-09-23 実測） | 理由 |
+| --- | --- | --- |
+| Claude Code 組込み | 16 | バイナリに埋め込まれており、ディスク上に `SKILL.md` が無い |
+| `anthropic-skills:*`（claude.ai sync） | 12 | 同上 |
+| Antigravity/Gemini の `builtin/skills` | 5 | 製品所有。`generative_ui` 等の製品機能 |
+
+Claude plugin が配る skill は**実ファイルなので配線できる**。使うなら正典へミラーし、
+plugin は無効化する。使わないなら plugin ごと削除する（description が毎ターン載るため）。
 
 ### 静的設定 27 件の編集手順（nix 管理下）
 

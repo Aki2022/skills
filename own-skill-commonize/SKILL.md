@@ -231,28 +231,30 @@ Claude の `settings.json` は permission や environment という account 固�
 
 **hook の script 実体は共通化されているが、参照は共通化されていない。** `~/.agents/hooks/`
 の3本は nix 管理の実体1つを全ツールが参照するが、「どの設定ファイルがそれを呼ぶか」は
-ツールごとに手で書く。この非対称が 2026-09-21 の `origin-` → `own-` 改名で実害を出した:
-`~/.claude/settings.json` は直したが `~/.claude-seat2/settings.json` を取りこぼし、
-**seat2 の guard hook と session_start hook が 2 日間死んでいた**（`rc=127 No such file`）。
-改名の grep 対象に **各ツールの設定ファイル**を必ず含める。検査は次で書ける。
+ツールごとに手で書く。`settings.json` は permission や environment という account 固有の
+可変 state を含み、丸ごと symlink にできないため（不変条件 6）、参照だけが手書きで残る。
 
-```bash
-python3 - <<'CHECK'
-import json, os, shlex
-for p in ['~/.claude/settings.json','~/.claude-seat2/settings.json','~/.agents/codex/hooks.json']:
-    f = os.path.expanduser(p)
-    if not os.path.exists(f):
-        continue
-    d = json.load(open(f))
-    for ev, groups in d.get('hooks', {}).items():
-        for g in groups:
-            for h in g.get('hooks', []):
-                cmd = h.get('command', '').replace('${HOME}', os.path.expanduser('~'))
-                for tok in shlex.split(cmd.replace('$HOME', os.path.expanduser('~'))):
-                    if '/' in tok and tok.endswith(('.sh', '.py')) and not os.path.exists(tok):
-                        print(f'壊れ {p} [{ev}]: {tok}')
-CHECK
-```
+この非対称は **2 度実害を出した**。どちらもどこにも赤が出ないまま動き続けた。
+
+| いつ | 何が起きたか |
+| --- | --- |
+| 2026-09-21 | `origin-` → `own-` 改名で `~/.claude` は直したが `~/.claude-seat2` を取りこぼし、guard hook と session_start hook が **2 日間死んでいた**（`rc=127 No such file`） |
+| 同上 | `stop_nudge.sh` は `~/.claude` と Codex にあるのに `~/.claude-seat2` だけ落ちていた |
+
+`scripts/check_hook_parity.py` が 2 点を機械で見る。
+
+1. **実在検査** — 設定に書かれた script が実在するか。死んだ hook は黙って無効になる。
+2. **一致検査** — 同じ製品の席どうしで、呼んでいる script の集合が同じか。
+
+**引数は比較しない。** `aiphetamine_hook.py --account-name main` と `--account-name alias` の
+ように account 識別子を引数で渡す hook は席ごとに違って正しい。script のパスだけを見れば、
+正当な差を誤検知せずに「片方にしか無い hook」を捕まえられる。製品をまたぐ比較もしない
+（Codex と Gemini はイベント名もスキーマも違い、揃っていないのが正常）。
+
+**hook のエントリは増やさない。** エントリを足すたびに 4 箇所（Claude 2 席・Codex・Gemini）
+へ手で書くことになり、それ自体が次の分岐の種になる。SessionStart の入口は
+`scripts/check_session_fast.sh` の 1 本だけにし、**検査を足すときはその中に足す**。
+現在の中身は配線検査と hook 一致検査の 2 つで、合わせて 0.09 秒。
 
 ### Antigravity / Gemini CLI の hook
 

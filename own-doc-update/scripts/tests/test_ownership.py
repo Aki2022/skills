@@ -203,5 +203,71 @@ class IssueOwnershipValidationTest(unittest.TestCase):
         self.assertTrue(any("priority" in w for w in warnings_for(root, "docs/workstreams/WS-20000101-old.md")))
 
 
+def run(script: str, *args: str) -> subprocess.CompletedProcess:
+    return subprocess.run([sys.executable, str(SCRIPTS / script), *args], capture_output=True, text=True)
+
+
+ISSUE_BASE = ("--no-guide-reason", "test", "--verify-machine", "true", "--next-action", "first step")
+WS_BASE = (
+    "--issue", "first", "--scope", "s", "--confirmed-at", "2026-09-23", "--next-human-gate", "g",
+    "--autonomous", "a", "--confirm-first", "c", "--verify-machine", "true", "--no-guide-reason", "r",
+)
+
+
+class CreateScriptsTest(unittest.TestCase):
+    def test_create_issue_requires_an_ownership_choice(self):
+        root = make_repo()
+        result = run("create_issue.py", "x", "--repo", str(root), *ISSUE_BASE)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(list((root / "docs/issues").glob("*.md")), [])
+
+    def test_create_issue_for_a_workstream_writes_owner_and_split_row(self):
+        root = make_repo()
+        write_ws(root, "WS-20000101-w", PRE)
+        result = run("create_issue.py", "x", "--date", "20260923", "--repo", str(root),
+                     "--workstream", "WS-20000101-w", *ISSUE_BASE)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        issue = (root / "docs/issues/ISSUE-20260923-x.md").read_text()
+        self.assertIn("workstream: WS-20000101-w", issue)
+        ws = (root / "docs/workstreams/WS-20000101-w.md").read_text()
+        self.assertIn("ISSUE-20260923-x", "\n".join(ownership.read_block(ws, ownership.SPLIT) or []))
+        self.assertEqual(errors_for(root, "docs/workstreams/WS-20000101-w.md"), [])
+        self.assertEqual(errors_for(root, "docs/00_index.md"), [])
+
+    def test_create_issue_refuses_an_inactive_workstream_and_leaves_nothing(self):
+        root = make_repo()
+        result = run("create_issue.py", "x", "--repo", str(root), "--workstream", "WS-20000101-nope", *ISSUE_BASE)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(list((root / "docs/issues").glob("*.md")), [])
+
+    def test_standalone_issue_requires_priority_and_due_and_is_routed_from_the_index(self):
+        root = make_repo()
+        missing = run("create_issue.py", "x", "--repo", str(root), "--standalone", *ISSUE_BASE)
+        self.assertNotEqual(missing.returncode, 0)
+        result = run("create_issue.py", "x", "--date", "20260923", "--repo", str(root), "--standalone",
+                     "--priority", "high", "--due", "2026-10-01", *ISSUE_BASE)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        issue = (root / "docs/issues/ISSUE-20260923-x.md").read_text()
+        for line in ("workstream: none", "priority: high", "due: 2026-10-01"):
+            self.assertIn(line, issue)
+        rows = ownership.read_block((root / "docs/00_index.md").read_text(), ownership.ACTIVE_ISSUES)
+        self.assertTrue(rows and "ISSUE-20260923-x" in rows[0] and "due 2026-10-01" in rows[0], rows)
+        self.assertEqual(errors_for(root, "docs/issues/ISSUE-20260923-x.md"), [])
+
+    def test_create_workstream_requires_priority_and_due_and_is_routed_from_the_index(self):
+        root = make_repo()
+        missing = run("create_workstream.py", "w", "--repo", str(root), *WS_BASE)
+        self.assertNotEqual(missing.returncode, 0)
+        result = run("create_workstream.py", "w", "--date", "20260923", "--repo", str(root),
+                     "--priority", "medium", "--due", "none", *WS_BASE)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        ws = (root / "docs/workstreams/WS-20260923-w.md").read_text()
+        self.assertIn("priority: medium", ws)
+        self.assertIn("due: none", ws)
+        self.assertIsNotNone(ownership.read_block(ws, ownership.SPLIT))
+        rows = ownership.read_block((root / "docs/00_index.md").read_text(), ownership.ACTIVE_WORKSTREAMS)
+        self.assertTrue(rows and "WS-20260923-w" in rows[0], rows)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -222,6 +222,36 @@ if [ -z "$pytest_skip_reason" ] && [ "$pytest_ran" -eq 0 ]; then
   note "S8: pytest を持つ skill が無い"
 fi
 
+# S10: 配線（正典を指す symlink）が正典と一致しているか。
+# audit_skill_wiring.py が正典の側から配線先を辿るので、配布先の一覧は要らない。
+#
+# **実正典を lint したときだけ走る。** worktree や別チェックアウトを指す symlink は
+# 存在しないので、そこで走らせると配線先0件になり常に赤くなる（実測 rc=2）。
+# 「検査しない」ことは note で必ず言う — 黙って飛ばすと、緑が何を意味するか読めない。
+s10_audit="$(cd "$(dirname "$0")" && pwd)/audit_skill_wiring.py"
+s10_live="$(cd "$HOME/.agents/skills" 2>/dev/null && pwd -P || true)"
+s10_ran=0
+for root in "${roots[@]}"; do
+  s10_here="$(cd "$root" 2>/dev/null && pwd -P || true)"
+  [ -n "$s10_live" ] && [ "$s10_here" = "$s10_live" ] || continue
+  s10_ran=1
+  if [ ! -f "$s10_audit" ]; then
+    fail "S10: audit_skill_wiring.py が無い: $s10_audit"
+  elif ! s10_report=$(python3 "$s10_audit" --canonical "$s10_live" 2>&1); then
+    # coverage: と RESULT: は判定ではなく報告なので note 側に出す
+    printf '%s\n' "$s10_report" | grep -vE '^(OK |coverage:|RESULT:)' | while IFS= read -r s10_line; do
+      [ -n "$s10_line" ] && fail "S10 $s10_line"
+    done
+    note "S10 $(printf '%s\n' "$s10_report" | grep '^coverage:' || true)"
+    FAIL=$((FAIL + 1))   # サブシェルの fail は親に伝わらない
+  else
+    note "S10 $(printf '%s\n' "$s10_report" | grep '^coverage:' || echo '配線を検査した')"
+  fi
+done
+if [ "$s10_ran" -eq 0 ]; then
+  note "S10: skip（実正典 $HOME/.agents/skills を lint していないため配線は検査しない）"
+fi
+
 if [ "$FAIL" -eq 0 ]; then
   note "OK: all skill checks passed"
 fi

@@ -4,6 +4,10 @@ import argparse
 import os
 import sys
 from datetime import date
+from pathlib import Path
+
+import ownership
+from validate_repo_docs import parse_front_matter
 
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TEMPLATE_DIR = os.path.join(SKILL_DIR, "references")
@@ -45,7 +49,20 @@ def main():
         required=True,
         help="The very next command or step (or what unblocks a blocked issue)",
     )
+    # Ownership decides the route (SPEC-doc-governance): an owned issue is listed by
+    # its workstream, a standalone one by the index. Declaring it here and writing the
+    # route row in the same run is what keeps a new issue from being born unrouted.
+    owner = parser.add_mutually_exclusive_group(required=True)
+    owner.add_argument("--workstream", help="Owning workstream id, e.g. WS-20260923-example")
+    owner.add_argument("--standalone", action="store_true", help="Not under any workstream's envelope")
+    parser.add_argument("--priority", choices=ownership.PRIORITIES, help="Required with --standalone")
+    parser.add_argument("--due", help="YYYY-MM-DD or none; required with --standalone")
     args = parser.parse_args()
+
+    if args.standalone and (not args.priority or not args.due):
+        parser.error("--standalone requires --priority and --due (use --due none when there is no deadline)")
+    if args.due and not ownership.valid_due(args.due):
+        parser.error("--due must be YYYY-MM-DD or none")
 
     slug = args.slug.lower().replace(" ", "-")
     if not re_slug_ok(slug):
@@ -69,6 +86,13 @@ def main():
     if os.path.exists(dest):
         print(f"Error: already exists: {dest}", file=sys.stderr)
         sys.exit(1)
+
+    ws_path = None
+    if args.workstream:
+        ws_path = Path(repo) / "docs/workstreams" / f"{args.workstream}.md"
+        if not ws_path.is_file():
+            print(f"Error: {args.workstream} is not an active workstream ({ws_path} not found)", file=sys.stderr)
+            sys.exit(1)
 
     today_iso = date.today().isoformat()
     title = args.title or slug.replace("-", " ").title()
@@ -119,15 +143,44 @@ def main():
             "- [ ] Moved to docs/issues/archive/ when complete\n"
         )
 
+    ownership_lines = f"workstream: {args.workstream or 'none'}\n"
+    if args.standalone:
+        ownership_lines += f"priority: {args.priority}\ndue: {args.due}\n"
+    content = content.replace('workstream: ""\n', "", 1)
+    content = content.replace("status: active\n", f"status: active\n{ownership_lines}", 1)
+
     with open(dest, "w") as f:
         f.write(content)
 
+    try:
+        route = write_route(Path(repo), ws_path)
+    except Exception as exc:  # the issue must not survive without its route row
+        os.remove(dest)
+        print(f"Error: could not write the route row, issue not created: {exc}", file=sys.stderr)
+        sys.exit(1)
+
     print(f"Created: {dest}")
-    print(f"\nAdd to docs/00_index.md Active Issues:")
-    print(f"  - docs/issues/{issue_id}.md — {title}")
+    print(f"Routed from: {route}")
     print(f"\nSuggested branch (convention: branch name = issue id):")
     print(f"  git checkout -b {issue_id}")
     print(f"  # or, for a separate worktree: git worktree add ../{issue_id} -b {issue_id}")
+
+
+def write_route(repo: Path, ws_path) -> str:
+    """Regenerate the one list this issue is routed from; returns its path."""
+    model = ownership.load_model(repo, parse_front_matter)
+    if ws_path is not None:
+        rows = ownership.split_rows(model, ws_path.stem)
+        ws_path.write_text(
+            ownership.write_block(ws_path.read_text(), ownership.SPLIT, rows, ownership.HEADINGS[ownership.SPLIT])
+        )
+        return str(ws_path.relative_to(repo))
+    index = repo / "docs/00_index.md"
+    rows = ownership.active_issue_rows(model)
+    index.write_text(
+        ownership.write_block(index.read_text(), ownership.ACTIVE_ISSUES, rows, ownership.HEADINGS[ownership.ACTIVE_ISSUES])
+    )
+    return "docs/00_index.md"
 
 
 def re_slug_ok(slug: str) -> bool:

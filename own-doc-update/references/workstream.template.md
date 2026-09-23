@@ -2,6 +2,8 @@
 schema_version: 2
 id: WS-YYYYMMDD-short-slug
 status: active
+priority: ""
+due: ""
 created_at: YYYY-MM-DD
 updated_at: YYYY-MM-DD
 branch: WS-YYYYMMDD-short-slug
@@ -60,6 +62,14 @@ related_guides: []
 #### Current Status
 
 #### Next Actions
+
+## Split Issues
+
+Issue files in docs/issues/ that declare `workstream: <this id>`. Generated from their front matter
+(create_issue.py, docs_hygiene.py --fix); do not edit between the markers.
+
+<!-- own-doc-update:generated split-issues begin -->
+<!-- own-doc-update:generated split-issues end -->
 
 ## Decisions
 

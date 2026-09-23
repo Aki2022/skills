@@ -8,6 +8,8 @@ import sys
 from datetime import date
 from pathlib import Path
 
+import ownership
+from validate_repo_docs import parse_front_matter
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
 TEMPLATE = SKILL_DIR / "references/workstream.template.md"
@@ -67,8 +69,13 @@ def main() -> None:
     impact = parser.add_mutually_exclusive_group(required=True)
     impact.add_argument("--guide", help="Guide ID updated by the initial issue")
     impact.add_argument("--no-guide-reason", help="Why the initial issue changes no implemented behavior")
+    # Set by the session that drafts the workstream; the index row is generated from them.
+    parser.add_argument("--priority", required=True, choices=ownership.PRIORITIES)
+    parser.add_argument("--due", required=True, help="YYYY-MM-DD, or none when there is truly no deadline")
     args = parser.parse_args()
 
+    if not ownership.valid_due(args.due):
+        parser.error("--due must be YYYY-MM-DD or none")
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", args.confirmed_at):
         parser.error("--confirmed-at must be YYYY-MM-DD")
     date_str = args.date or date.today().strftime("%Y%m%d")
@@ -116,14 +123,25 @@ def main() -> None:
         "- guide_impact: required": f"- guide_impact: {guide_impact}",
         "- related_guides: [GUIDE-short-slug]": f"- related_guides: {related_guides}",
         '- guide_impact_reason: ""': f'- guide_impact_reason: "{guide_reason}"',
+        'priority: ""': f"priority: {args.priority}",
+        'due: ""': f"due: {args.due}",
     }
     for old, new in replacements.items():
         content = content.replace(old, new)
     destination.write_text(content)
 
+    index = repo / "docs/00_index.md"
+    try:
+        rows = ownership.workstream_rows(ownership.load_model(repo, parse_front_matter))
+        heading = ownership.HEADINGS[ownership.ACTIVE_WORKSTREAMS]
+        index.write_text(ownership.write_block(index.read_text(), ownership.ACTIVE_WORKSTREAMS, rows, heading))
+    except Exception as exc:  # the workstream must not survive without its route row
+        destination.unlink()
+        print(f"Error: could not write the index row, workstream not created: {exc}", file=sys.stderr)
+        raise SystemExit(1)
+
     print(f"Created: {destination}")
-    print("Add to docs/00_index.md Active Workstreams:")
-    print(f"  - docs/workstreams/{workstream_id}.md — {title}")
+    print("Routed from: docs/00_index.md (Active Workstreams)")
     print("Suggested branch:")
     print(f"  git checkout -b {workstream_id}")
     if args.guide:

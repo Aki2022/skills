@@ -31,8 +31,10 @@ from pathlib import Path
 from typing import Optional
 
 from validate_repo_docs import (
+    INDEX_HEADROOM_BYTES,
     INDEX_MAX_BYTES,
     INDEX_MAX_LINE_CHARS,
+    INDEX_TARGET_BYTES,
     ISSUE_STATUSES,
     as_text,
     parse_front_matter,
@@ -72,6 +74,8 @@ STATUS_ALIASES = {
 }
 
 LINK_RE = re.compile(r"\]\(([^)\s]+\.md)(?:#[^)\s]*)?\)")
+# The whole `[text](target.md)`, used to carry links out of a cut description.
+LINK_FULL_RE = re.compile(r"\[[^\]]*\]\([^)\s]+\.md(?:#[^)\s]*)?\)")
 SELF_LINK_RE = re.compile(r"\[([^\]\s]+\.md)\]\(\1\)")
 BARE_PATH_RE = re.compile(r"^[ \t]*[-*+][ \t]+docs/")
 HEADING_RE = re.compile(r"^[ \t]{0,3}#{1,6}[ \t]+")
@@ -265,9 +269,22 @@ def shorten_table_row(line: str) -> str:
             last_open = cut.rfind("[")
             if last_open != -1 and cut.find("](", last_open) == -1:
                 cut = cut[:last_open]
-            stripped = cut.rstrip() + "…"
+            stripped = cut.rstrip() + "…" + keep_links_from(stripped[len(cut):])
         out.append(f" {stripped} " if stripped else cell)
     return "|".join(out).rstrip()
+
+
+def keep_links_from(dropped: str) -> str:
+    """Links that a cut discarded, so a shortened row keeps every routing target.
+
+    A row may carry more than one link — a completed issue pointing at the ADR
+    that recorded its decision, say. Cutting the description at a character cap
+    used to drop the later ones silently: measured 2026-09-22 on a real index,
+    shortening dropped `adrs/ADR-20260916-...` from such a row, which is exactly
+    what a repo whose Read Policy keeps completed rows cannot afford. The bytes
+    a link costs are not negotiable the way its description is.
+    """
+    return "".join(m.group(0) for m in LINK_FULL_RE.finditer(dropped))
 
 
 def shorten_bullet(line: str, log_name: str) -> Optional[str]:
@@ -281,7 +298,7 @@ def shorten_bullet(line: str, log_name: str) -> Optional[str]:
         space = cut.rfind(" ")
         if space > INDEX_DESC_KEEP // 2:
             cut = cut[:space]
-        tail = cut.rstrip() + f" …（全文: {log_name}）"
+        tail = cut.rstrip() + f" …（全文: {log_name}）" + keep_links_from(tail[len(cut):])
     short = head + tail
     if len(short) > INDEX_MAX_LINE_CHARS:
         short = short[: INDEX_MAX_LINE_CHARS - 1] + "…"
@@ -486,7 +503,7 @@ def shorten_routing_line(line: str, cap: int, log_name: str) -> str:
                 match = LINK_RE.search(stripped)
                 head, tail = stripped[: match.end()], stripped[match.end():]
                 if len(tail) > cap:
-                    tail = tail[:cap].rstrip() + "…"
+                    tail = tail[:cap].rstrip() + "…" + keep_links_from(tail[cap:])
                 stripped = head + tail
             out.append(f" {stripped} " if stripped else cell)
         return "|".join(out).rstrip()
@@ -500,18 +517,25 @@ def shorten_routing_line(line: str, cap: int, log_name: str) -> str:
     space = cut.rfind(" ")
     if space > cap // 2:
         cut = cut[:space]
-    return head + cut.rstrip() + log_suffix(log_name)
+    return head + cut.rstrip() + log_suffix(log_name) + keep_links_from(tail[len(cut):])
 
 
 def fit_index_budget(content: str, log_name: str, reserved: int = 0) -> tuple[str, list[str], Optional[int]]:
-    """Progressively shorten routing descriptions until the index fits the ceiling.
+    """Progressively shorten routing descriptions until the index fits the budget.
+
+    The budget is INDEX_TARGET_BYTES, not the ceiling. Aiming at the ceiling is
+    what made this pass useless in practice (measured 2026-09-22): it returned
+    early while an index sat 80 bytes from red, and when it did run it stopped
+    the moment the file slipped one byte under, so the file stabilized one row
+    below red and the next row added broke the branch. Aiming below the ceiling
+    leaves room for the rows a session adds before anyone runs --fix again.
 
     Returns (content, original lines that were shortened, cap used or None when
-    the ceiling cannot be met — which means the row count itself is the problem
+    the budget cannot be met — which means the row count itself is the problem
     and only closing work will fix it). `reserved` is bytes held out of `content`
-    (masked generated blocks) that still count against the ceiling.
+    (masked generated blocks) that still count against the budget.
     """
-    budget = INDEX_MAX_BYTES - reserved
+    budget = INDEX_TARGET_BYTES - reserved
     if len(content.encode()) <= budget:
         return content, [], None
     # `[issues/X.md](issues/X.md)` says the path twice; the id alone routes the
@@ -579,12 +603,20 @@ def move_index_narrative(root: Path, fix: bool, today: date, result: dict) -> No
         "log": f"docs/{log_name}",
         "description_cap": cap,
         "over_ceiling_after_fix": len(new_content.encode()) > INDEX_MAX_BYTES,
+        "headroom_bytes_after": INDEX_MAX_BYTES - len(new_content.encode()),
+        "headroom_target_met": len(new_content.encode()) <= INDEX_TARGET_BYTES,
     }
     if item["over_ceiling_after_fix"]:
         item["note"] = (
             "ceiling cannot be met by shortening: too many active rows — close or "
             "archive work (see R1/R2), or record docs/00_index.md in "
             "docs/validator-baseline.txt until then"
+        )
+    elif not item["headroom_target_met"]:
+        item["note"] = (
+            f"under the ceiling but short of the {INDEX_HEADROOM_BYTES // 1024} KB "
+            "headroom target even at the tightest description cap — the row count "
+            "itself is the pressure; close or archive work (see R1/R2)"
         )
     if fix and count:
         new_content = re.sub(r"(^updated_at:[ \t]*)[\d-]+", rf"\g<1>{today.isoformat()}",
@@ -1321,7 +1353,14 @@ def report_review_due(root: Path, today: date, report: dict) -> None:
         "count": 1 if overdue else 0,
         "items": [{"last_review": last.isoformat() if last else "never",
                    "days": (today - last).days if last else None}] if overdue else [],
-        "rule": f"docs/log/review-YYYYMMDD.md newer than {REVIEW_EVERY_DAYS} days must exist — run --review",
+        # The rule text lands verbatim in docs/log/hygiene-<date>.md, which is a
+        # docs file like any other. Spelling a placeholder filename here wrote an
+        # unresolvable path into the repository's own docs and turned a consumer's
+        # bare-path test red (measured 2026-09-22 on marketing-automation-core,
+        # already filed there as the second half of
+        # ISSUE-20260921-improve-loop-archive-script-deletes-index-rows). Name the
+        # directory, which resolves, and never a <date> filename, which cannot.
+        "rule": f"a dated review report under docs/log/ newer than {REVIEW_EVERY_DAYS} days must exist — run --review",
     }
 
 

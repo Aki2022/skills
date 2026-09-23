@@ -229,6 +229,53 @@ Claude の `settings.json` は permission や environment という account 固�
 含むため、丸ごと symlink にはできない（不変条件 6）。hook を足したら 2 席とも直したか
 必ず確認する。実測で 2 席の内容は既に 123 行ぶん分岐していた。
 
+**hook の script 実体は共通化されているが、参照は共通化されていない。** `~/.agents/hooks/`
+の3本は nix 管理の実体1つを全ツールが参照するが、「どの設定ファイルがそれを呼ぶか」は
+ツールごとに手で書く。この非対称が 2026-09-21 の `origin-` → `own-` 改名で実害を出した:
+`~/.claude/settings.json` は直したが `~/.claude-seat2/settings.json` を取りこぼし、
+**seat2 の guard hook と session_start hook が 2 日間死んでいた**（`rc=127 No such file`）。
+改名の grep 対象に **各ツールの設定ファイル**を必ず含める。検査は次で書ける。
+
+```bash
+python3 - <<'CHECK'
+import json, os, shlex
+for p in ['~/.claude/settings.json','~/.claude-seat2/settings.json','~/.agents/codex/hooks.json']:
+    f = os.path.expanduser(p)
+    if not os.path.exists(f):
+        continue
+    d = json.load(open(f))
+    for ev, groups in d.get('hooks', {}).items():
+        for g in groups:
+            for h in g.get('hooks', []):
+                cmd = h.get('command', '').replace('${HOME}', os.path.expanduser('~'))
+                for tok in shlex.split(cmd.replace('$HOME', os.path.expanduser('~'))):
+                    if '/' in tok and tok.endswith(('.sh', '.py')) and not os.path.exists(tok):
+                        print(f'壊れ {p} [{ev}]: {tok}')
+CHECK
+```
+
+### Antigravity / Gemini CLI の hook
+
+スキーマが Claude / Codex と違う。**トップレベルが名前付きグループ**で、`hooks` キーを持たない。
+
+```json
+{
+  "vibe-guard-bypass": { "PreToolUse": [ { "matcher": "run_command", "hooks": [ ... ] } ] },
+  "skill-wiring":      { "SessionStart": [ { "hooks": [ { "command": "bash ..." } ] } ] }
+}
+```
+
+`PreToolUse` は stdin の JSON を読み、stdout へ `{"decision":"allow|deny|ask","reason":"..."}`
+を返す契約。**`SessionStart` の戻り値スキーマは公開されていない**ので、agy 用のラッパーは
+stdin を読み捨て、**常に exit 0** とし、逸脱は stderr にだけ出す（agy が `cli.log` に落とす）。
+セッションを壊さないことを優先する。
+
+**発火の確認は `cli.log` でできる。** 起動時に
+`hooks_manager.go: loaded N named hooks from M hooks.json file(s)` が出るので、
+グループを足す前後で N が増えることを見る。`agy --version` では読み込まれないため、
+`agy --print "<短い文>"` で実セッションを 1 回起こして確かめる
+（2026-09-23 に 1 → 2 への増加と `session start hook` エラー 0 件を実測）。
+
 ### 静的設定 27 件の編集手順（nix 管理下）
 
 1. nix-darwin flake repo の `home/agent-config/<相対パス>` を**直接編集する**（普通のファイル。

@@ -12,7 +12,8 @@ from archive_workstream import UNCHECKED_BOX
 from archive_links import plan_link_updates, repoint
 from archive_transaction import apply_archive, cleanup_staged, stage_text
 from index_entries import find_index_entry_lines, normalize_entry_id, remove_index_entry
-from validate_repo_docs import validate_repo
+from validate_repo_docs import parse_front_matter, validate_repo
+import ownership
 
 
 def update_front_matter_field(content: str, field: str, value: str) -> str:
@@ -33,6 +34,33 @@ def read_front_matter_field(content: str, field: str) -> str:
     if not m:
         return ""
     return m.group(1).strip().strip('"').strip("'")
+
+
+def drop_from_owner_split_list(repo: str, issue_content: str, issue_id: str, link_updates: list):
+    """Regenerate the owning workstream's Split Issues without this issue.
+
+    Runs after link rewriting so prose links in the workstream still get repointed at the
+    archive; only the generated row is dropped. The workstream file joins the same staged
+    transaction, so a failed archive rolls it back with everything else.
+    """
+    owner = read_front_matter_field(issue_content, "workstream")
+    ws_path = Path(repo) / "docs/workstreams" / f"{owner}.md"
+    if not owner or owner == "none" or not ws_path.is_file():
+        return link_updates
+    model = ownership.load_model(Path(repo), parse_front_matter)
+    rows = ownership.split_rows(model, owner, exclude={issue_id})
+    heading = ownership.HEADINGS[ownership.SPLIT]
+    updated = []
+    found = False
+    for path, original, rewritten in link_updates:
+        if Path(path).resolve() == ws_path.resolve():
+            rewritten = ownership.write_block(rewritten, ownership.SPLIT, rows, heading)
+            found = True
+        updated.append((path, original, rewritten))
+    if not found:
+        original = ws_path.read_text()
+        updated.append((str(ws_path), original, ownership.write_block(original, ownership.SPLIT, rows, heading)))
+    return updated
 
 
 def prepare_index_update(
@@ -222,6 +250,7 @@ def main():
         old_rel = os.path.relpath(src, repo).replace(os.sep, "/")
         new_rel = os.path.relpath(dest, repo).replace(os.sep, "/")
         content, link_updates = plan_link_updates(repo, old_rel, new_rel, content, exclude={"docs/00_index.md"})
+        link_updates = drop_from_owner_split_list(repo, original_content, issue_id, link_updates)
 
         staged_destination = stage_text(Path(dest), content, Path(src))
         staged_paths.append(staged_destination)

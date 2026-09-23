@@ -372,6 +372,28 @@ class HygieneRoutesTest(unittest.TestCase):
         self.assertEqual(reach["count"], 2)
 
 
+class IndexBudgetLeavesGeneratedBlocksTest(unittest.TestCase):
+    """A2 shortens rows when the index is over its ceiling; it must not touch generated rows,
+    or A6 restores them on the next run and the two passes oscillate (seen on yorisoi_kaigo)."""
+
+    def test_budget_pass_keeps_generated_rows_and_markers(self):
+        root = make_repo()
+        write_issue(root, "ISSUE-20000101-s", PRE, fm="workstream: none\npriority: low\ndue: none\n",
+                    title="S " + "x" * 150)
+        long_rows = "\n".join(
+            f"| [ISSUE-2000010{i}-h{j}](issues/ISSUE-2000010{i}-h{j}.md) | " + "長い説明" * 60 + " |"
+            for i in range(1, 10) for j in range(12)
+        )
+        write_index(root, long_rows)
+        HYGIENE.run(root, fix=True, report=False)
+        index = (root / "docs/00_index.md").read_text()
+        model = ownership.load_model(root, VALIDATOR.parse_front_matter)
+        self.assertEqual(ownership.read_block(index, ownership.ACTIVE_ISSUES), ownership.active_issue_rows(model))
+        self.assertIn(ownership.block_end(ownership.ACTIVE_ISSUES), index)
+        _, warnings = VALIDATOR.validate_repo(root)
+        self.assertFalse([w for w in warnings if "stale" in w], warnings)
+
+
 import index_entries as HYGIENE_INDEX  # noqa: E402
 
 

@@ -12,7 +12,8 @@ from pathlib import Path
 from archive_links import plan_link_updates, repoint
 from archive_transaction import apply_archive, cleanup_staged, stage_text
 from index_entries import find_index_entry_lines, remove_index_entry
-from validate_repo_docs import parse_workstream_issue_blocks, validate_repo
+from validate_repo_docs import parse_front_matter, parse_workstream_issue_blocks, validate_repo
+import ownership
 
 
 # `- [ ] x` was the only spelling this matched, so `- [] x`, an indented
@@ -109,6 +110,17 @@ def main() -> None:
     if incomplete:
         print(
             f"Error: mark every embedded issue complete before archiving: {', '.join(incomplete)}",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+
+    # An active issue file that declares this workstream would lose its only route the
+    # moment the workstream moves to archive/ (SPEC-doc-governance: orphan prevention).
+    owned = [d.doc_id for d in ownership.load_model(repo, parse_front_matter).owned_by(source.stem)]
+    if owned:
+        print(
+            "Error: active issues still declare this workstream; archive or reassign them first: "
+            f"{', '.join(owned)}",
             file=sys.stderr,
         )
         raise SystemExit(1)

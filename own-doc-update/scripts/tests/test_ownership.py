@@ -269,5 +269,47 @@ class CreateScriptsTest(unittest.TestCase):
         self.assertTrue(rows and "WS-20260923-w" in rows[0], rows)
 
 
+def ready_to_archive(path: Path) -> None:
+    text = path.read_text().replace("- [ ]", "- [x]").replace("- status: pending", "- status: complete")
+    path.write_text(text.replace("status: active", "status: complete", 1))
+
+
+class ArchiveScriptsTest(unittest.TestCase):
+    def make_ws(self, root: Path, slug: str) -> Path:
+        result = run("create_workstream.py", slug, "--date", "20260923", "--repo", str(root),
+                     "--priority", "low", "--due", "none", *WS_BASE)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return root / f"docs/workstreams/WS-20260923-{slug}.md"
+
+    def test_archive_issue_removes_it_from_the_owning_workstream_list(self):
+        root = make_repo()
+        ws = self.make_ws(root, "w")
+        created = run("create_issue.py", "x", "--date", "20260923", "--repo", str(root),
+                      "--workstream", "WS-20260923-w", *ISSUE_BASE)
+        self.assertEqual(created.returncode, 0, created.stderr)
+        self.assertIn("ISSUE-20260923-x", "\n".join(ownership.read_block(ws.read_text(), ownership.SPLIT)))
+        ready_to_archive(root / "docs/issues/ISSUE-20260923-x.md")
+        result = run("archive_issue.py", "ISSUE-20260923-x", "--repo", str(root))
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        self.assertEqual(ownership.read_block(ws.read_text(), ownership.SPLIT), [])
+        self.assertEqual(errors_for(root, "docs/workstreams/WS-20260923-w.md"), [])
+
+    def test_archive_workstream_refuses_while_an_active_issue_declares_it(self):
+        root = make_repo()
+        owned = self.make_ws(root, "owned")
+        control = self.make_ws(root, "control")
+        created = run("create_issue.py", "x", "--date", "20260923", "--repo", str(root),
+                      "--workstream", "WS-20260923-owned", *ISSUE_BASE)
+        self.assertEqual(created.returncode, 0, created.stderr)
+        for ws in (owned, control):
+            ready_to_archive(ws)
+        refused = run("archive_workstream.py", "WS-20260923-owned", "--repo", str(root))
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertIn("ISSUE-20260923-x", refused.stderr)
+        self.assertTrue(owned.is_file())
+        allowed = run("archive_workstream.py", "WS-20260923-control", "--repo", str(root))
+        self.assertEqual(allowed.returncode, 0, allowed.stderr + allowed.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()

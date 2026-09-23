@@ -8,3 +8,55 @@ __pycache__/
 
 # Claude Code が ~/.claude/skills alias 経由で書き込む account 同期キャッシュ（UUID 名）。account state であり正典ではない
 /synced/
+
+# 第三者 skill は git で持たない（2026-09-23 決定）。
+# PUBLIC な Aki2022/skills に置くのは自作（own-*）だけとする。正典ディレクトリは
+# 「全エージェント共通の配線ハブ」であって git リポジトリと同一ではない — 追跡しなくても
+# symlink 配線は機能し、Claude / Codex / Gemini から等しく見える。
+# 復旧手段は mirrors.yaml の reinstall 行。台帳に無い第三者 skill は消えたら戻せないので、
+# 新しくミラーしたら必ずここと mirrors.yaml の両方に足す。
+/agent-browser/
+/agents-sdk/
+/alloydb-basics/
+/baseline-ui/
+/bigquery-basics/
+/cloud-run-basics/
+/cloud-sql-basics/
+/cloudflare/
+/cloudflare-email-service/
+/cloudflare-one/
+/cloudflare-one-migrations/
+/drawio/
+/durable-objects/
+/find-skills/
+/firebase-basics/
+/fixing-accessibility/
+/frontend-design/
+/gemini-api/
+/gke-basics/
+/google-agents-cli-adk-code/
+/google-agents-cli-deploy/
+/google-agents-cli-eval/
+/google-agents-cli-observability/
+/google-agents-cli-publish/
+/google-agents-cli-scaffold/
+/google-agents-cli-workflow/
+/google-cloud-recipe-auth/
+/google-cloud-recipe-networking-observability/
+/google-cloud-recipe-onboarding/
+/google-cloud-waf-cost-optimization/
+/google-cloud-waf-reliability/
+/google-cloud-waf-security/
+/migrate-to-codex/
+/pdf/
+/playwright-cli/
+/quarto-authoring/
+/sandbox-sdk/
+/turnstile-spin/
+/typesafe-ai/
+/vercel-composition-patterns/
+/vercel-react-best-practices/
+/web-design-guidelines/
+/web-perf/
+/workers-best-practices/
+/wrangler/

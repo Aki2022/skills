@@ -33,6 +33,13 @@ def parse_manifest(text: str) -> list[dict]:
         if line.strip() == "mirrors:":
             in_list = True
             continue
+        # トップレベルの別キー（retired: 等）で mirrors: の並びは終わる。
+        # 終端を見ていなかったため、2026-09-23 に retired: を足した時点で
+        # 退役済み 23 件を現役ミラーとして読み、「mirror dir missing」で赤くなった。
+        # 空振りではなく誤検知だが、原因が台帳の書式にあることは出力から読めなかった。
+        if in_list and line[:1] not in (" ", "\t") and line.rstrip().endswith(":"):
+            in_list = False
+            continue
         if not in_list:
             continue
         s = line.strip()

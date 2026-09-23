@@ -35,9 +35,10 @@ usage() {
 
 やること:
   1. npx degit で上流から正典へ複製
-  2. mirrors.yaml へ upstream / path / version / fetched_at / license / reinstall を追記
-  3. per-skill 配線先 4 つへ symlink（Claude 3席と Antigravity は棚ごと symlink なので自動）
-  4. audit_skill_wiring.py で検査
+  2. mirrors.yaml へ追記し、書けたことを再解析で確認する（報告だけで済ませない）
+  3. .gitignore へ追加（第三者は git で持たない。忘れると PUBLIC repo へ出る）
+  4. per-skill 配線先 4 つへ symlink（Claude 3席と Antigravity は棚ごと symlink なので自動）
+  5. audit_skill_wiring.py で検査
 
 やらないこと:
   - ライセンスの判断（--license は実物を読んで人が渡す。再配布の可否を決めるため）
@@ -98,23 +99,53 @@ lines = [f"  - dir: {name}",
 if note:
     lines.append(f"    note: {note}")
 raw = open(ledger).read()
-marker = "\nretired:"
 block = "\n".join(lines) + "\n"
-if marker in raw:                      # mirrors: の末尾（retired: の直前）へ入れる
+# mirrors: の並びの末尾＝ retired: の直前へ入れる。retired: の直前の行はコメントで
+# あることが多く、raw.index("\nretired:") の位置へそのまま連結するとコメント行の
+# 末尾に貼り付いて YAML から消える。2026-09-23 にそれで gh-fix-ci が台帳から消え、
+# 直前の wrangler のフィールドが上書きされた（check_mirrors.sh は緑のままだった）。
+# 必ず行頭から始まるように改行を挟む。
+marker = "\nretired:"
+if marker in raw:
     i = raw.index(marker)
-    raw = raw[:i] + block + raw[i:]
+    raw = raw[:i].rstrip("\n") + "\n\n" + block + raw[i:]
 else:
     raw = raw.rstrip("\n") + "\n" + block
 open(ledger, "w").write(raw)
-print(f"   登録: {name}")
+
+# 書けたことを再解析で確かめる。報告だけで済ませない。
+import yaml
+d = yaml.safe_load(open(ledger))
+dirs = [m["dir"] for m in d.get("mirrors", [])]
+if name not in dirs:
+    raise SystemExit(f"   ERROR 台帳へ書けていない: {name}（mirrors {len(dirs)} 件）")
+if len(dirs) != len(set(dirs)):
+    raise SystemExit("   ERROR 台帳に重複した dir がある")
+for m in d["mirrors"]:
+    if m["dir"] not in m.get("reinstall", ""):
+        raise SystemExit(f"   ERROR {m['dir']} の reinstall が別の skill を指している")
+print(f"   登録: {name}（mirrors {len(dirs)} 件・整合 OK）")
 PY
 
-echo "3. per-skill 配線先へ symlink"
+echo "3. .gitignore へ追加（第三者は git で持たない）"
+python3 - "$CANON/.gitignore" "$NAME" <<'GIPY'
+import sys
+gi, name = sys.argv[1], sys.argv[2]
+lines = open(gi).read().splitlines()
+if f"/{name}/" in lines:
+    print(f"   既にある: /{name}/")
+else:
+    lines.append(f"/{name}/")
+    open(gi, "w").write("\n".join(lines) + "\n")
+    print(f"   追加: /{name}/")
+GIPY
+
+echo "4. per-skill 配線先へ symlink"
 for root in "${PER_SKILL_ROOTS[@]}"; do
   [ -d "$root" ] || { echo "   skip（不在）: ${root/#$HOME/\~}"; continue; }
   ln -s "$CANON/$NAME" "$root/$NAME"
   echo "   ${root/#$HOME/\~}/$NAME"
 done
 
-echo "4. 検査"
+echo "5. 検査"
 python3 "$(cd "$(dirname "$0")" && pwd)/audit_skill_wiring.py"

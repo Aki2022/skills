@@ -180,7 +180,9 @@ mirrors:
 # 自作 skill の振り分け先として呼ばれるものは 0 回に見える。実際 2026-09-23 に
 # 34本を落として own-quarto-route / own-design-route / own-website-audit の
 # 振り分け先と google-agents-cli の suite 内参照を壊し、11本を戻した。
-# 落とす前に、残す skill 全部から退役候補名を grep すること。  - dir: gh-fix-ci
+# 落とす前に、残す skill 全部から退役候補名を grep すること。
+
+  - dir: gh-fix-ci
     upstream: openai/skills
     upstream_path: skills/.curated/gh-fix-ci
     upstream_version: 49f948f

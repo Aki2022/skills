@@ -27,6 +27,16 @@ FrontMatter = dict[str, object]
 # become a progress dashboard -- the same thing the line-length and prose-ratio
 # rules below measure. docs_hygiene.py moves narrative out to docs/log/ to meet it.
 INDEX_MAX_BYTES = 32 * 1024
+# Headroom the index must keep below the ceiling. Measured 2026-09-22: an index
+# sat at 32,688 of 32,768 bytes -- 80 bytes free -- and docs_hygiene.py --fix
+# reported nothing to do, because its budget pass both starts and stops at the
+# ceiling itself. So the file stabilizes one row below red: the next row anyone
+# adds turns the default branch red, that person shortens it back to just under,
+# and the cycle repeats (three observed rounds: 32,229 -> 33,036 -> 32,688).
+# Reserving headroom gives the fix pass somewhere to aim and turns "already red"
+# into "getting close", which is a state a session can act on without urgency.
+INDEX_HEADROOM_BYTES = 2 * 1024
+INDEX_TARGET_BYTES = INDEX_MAX_BYTES - INDEX_HEADROOM_BYTES
 INDEX_MAX_LINE_CHARS = 500
 INDEX_MAX_PROSE_RATIO = 0.5
 DOC_SOFT_MAX_BYTES = 32 * 1024
@@ -759,6 +769,13 @@ def validate_index_size(index_path: Path, errors: list[str], warnings: list[str]
         errors.append(
             f"docs/00_index.md: {size // 1024} KB exceeds the {INDEX_MAX_BYTES // 1024} KB "
             "ceiling — move narrative to docs/log/ (docs_hygiene.py --fix does this)"
+        )
+    elif size > INDEX_TARGET_BYTES:
+        warnings.append(
+            f"docs/00_index.md: {INDEX_MAX_BYTES - size} bytes from the "
+            f"{INDEX_MAX_BYTES // 1024} KB ceiling — the next row added turns the branch "
+            "red; run docs_hygiene.py --fix now (it shortens to "
+            f"{INDEX_TARGET_BYTES // 1024} KB), or close and archive active work"
         )
     long_lines = [
         n for n, line in enumerate(content.splitlines(), 1) if len(line) > INDEX_MAX_LINE_CHARS

@@ -51,7 +51,8 @@ skill の探索規則が一致しない。Claude Code v2.1.277 以降はリポ�
 | --- | --- | --- |
 | Claude Code | `~/.claude/skills` | 正典への root symlink 1本 |
 | Codex | `$CODEX_HOME/skills` | バイナリ内の記述 `Installs into $CODEX_HOME/skills/<skill-name> (defaults to ~/.codex/skills)`。3席は `shell.nix` が `CODEX_HOME` を切り替える |
-| Gemini | `~/.gemini/config/skills` | per-skill symlink |
+| AGY / Antigravity CLI | `~/.gemini/antigravity-cli/skills` | whole-root symlink directly to `~/.agents/skills/` |
+| Gemini CLI (separate provider, if used) | `~/.gemini/config/skills` | per-skill symlink |
 
 **配布先の一覧は持たない。** 配線は必ず正典への symlink なので、
 `scripts/audit_skill_wiring.py` が**正典を指す symlink を辿って**配線先を見つける。
@@ -183,10 +184,73 @@ context 費用 0・配線 0 本）。対象外として扱う。
 `InstallError: Destination already exists` で止まる。symlink も正典も無傷のまま。
 **危ないのは正典に無い名前だけ**で、そこだけ実体が出来る。
 
+### Plugin 経由も製品・account ごとに棚卸しする
+
+Plugin のインストール一覧と、ディスク上のキャッシュは別の状態である。次の一覧を使い、
+現行の製品コマンドが返す **installed + enabled** の user plugin だけを導入済みとして数える。
+
+```bash
+python3 ~/.agents/skills/own-skill-commonize/scripts/plugin_inventory.py \
+  --claude main="$HOME/.claude" \
+  --claude seat2="$HOME/.claude-seat2" \
+  --claude private="$HOME/.claude-private" \
+  --codex main="$HOME/.codex" \
+  --codex private="$HOME/.codex-private" \
+  --codex seat2="$HOME/.codex-seat2"
+```
+
+- Claude は `claude plugin list --json` を account ごとの `CLAUDE_CONFIG_DIR` で読み、
+  `scope=user` かつ `enabled=true` の行だけを数える。project scope は表示上の参考値であり、
+  グローバル共通化のために変更しない。
+- 同じ plugin ID が user と project の両方にあると、CLI の `enabled` は片方の設定に引かれて
+  両方の行で同じ値になる場合がある。user scope の `settings.json` の `enabledPlugins` と
+  照合し、project の有効状態を user の状態として数えない。
+- 同じ plugin ID を user scope で無効化した直後、project scope の一覧表示まで無効に見える
+  製品挙動を確認した。project scope はこの共通化の対象外なので、表示を戻すために
+  `claude plugin enable --scope project` を実行したり、repository に設定ファイルを新設したりしない。
+  user account の実設定と project の設定ファイルを読み分け、観測された連動は棚卸し記録に残す。
+- Codex は `codex plugin list --json` を account ごとの `CODEX_HOME` で読み、
+  `installed=true` かつ `enabled=true` の行だけを数える。`config.toml` の enabled 行だけで
+  installed record が無いものは `CONFIG-ONLY` と表示し、導入済みには数えない。
+  `CONFIG-ONLY` と config/CLI の enabled 状態が食い違う行は unresolved mismatch とし、
+  inventory を `RESULT: REVIEW` / exit 1 にする。account ごとに解決するまで整合済みと扱わない。
+- Codex の installed marketplace record は `source.path` を持たない場合がある。その場合は
+  `marketplaceName`・`pluginId`・`version` から同じ `CODEX_HOME/plugins/cache/<marketplace>/<name>/<version>`
+  を解決し、その plugin が installed + enabled の record を持つ場合に限って資産を読む。
+  正確な version の cache が見つからなければ `UNRESOLVED` / `RESULT: REVIEW` とする。
+- Plugin cache にフォルダがあっても、現行一覧に installed + enabled の記録が無ければ数えない。
+  無効な plugin も導入済み機能としては数えない。
+- 各 plugin を `skill-only` / `hybrid` / `integration` に分類し、skill 名、commands、agents、
+  hooks、MCP servers、LSP servers、apps、および読めたライセンスを出す。
+  個別ライセンスの skill 集合は skill ごとの内訳で報告する。manifest が無い場合も
+  installed plugin record を機能の導入根拠として残し、`manifest=missing` を併記する。
+- **skill-only** は必要な skill を正典へミラーし、同じ user scope の plugin を無効化する。
+  Claude は `claude plugin disable <id> --scope user`、Codex は該当する
+  `[plugins."<id>"]` の `enabled` を `false` にする。Codex の plugin remove は cache まで
+  消すため行わない。無効化前後に account を指定して一覧を読み戻す。
+- **hybrid** は command・hook・MCP・app 等を守るため plugin 自体を有効のままにする。
+  独立して読める skill は正典へ別途ミラーできるが、plugin 内 skill を個別停止できない場合は
+  重複を記録する。plugin 全体を止めて製品機能を失わせない。
+- **integration** は skill のファイル配線では同等化できない機能である。
+  account 認証を含む MCP、LSP、hook、app は各 account で有効のままにし、理由と代替可否を
+  棚卸し記録に残す。別製品の機能が似て見えるだけでは同等扱いしない。
+
+2026-09-26 に確認した plugin route と、共通化しない理由・代替可否は
+`references/plugin-commonization-2026-09-26.md` に記録した。これは日付付き snapshot なので、
+plugin state を変更する前に必ず CLI 一覧から採り直す。
+
+Codex の `$skill-installer` は `$CODEX_HOME/skills` に実体を入れるため、今後は直接使わない。
+Codex plugin やローカル取得元にある第三者 skill も `scripts/mirror_skill.sh --source-dir`
+から正典へ取り込み、台帳登録と全 per-skill root への symlink 配線を同時に行う。
+既存の直接インストールがある場合は、先に skill の出所・ライセンスを確認して一時退避し、
+そのコピーを `--source-dir` に渡してから、正典への symlink に置き換える。
+`~/.codex*/` の認証・セッション・history・plugin cache は移動も共有もしない。
+
 ### 第三者 skill を足す手順は script に閉じる
 
-`scripts/mirror_skill.sh` が「上流から複製 → `mirrors.yaml` へ登録 → per-skill 配線先
-4 つへ symlink → 監査」を通しで行う。**手で 4 回やらない** — 途中で止めると必ず壊れる。
+`scripts/mirror_skill.sh`（処理本体 `mirror_skill.py`）が「上流またはレビュー済みローカル source
+から複製 → `mirrors.yaml` へ登録 → per-skill 配線先4つへ symlink → 監査」を通しで行う。
+**手で4回やらない** — 途中で止めると必ず壊れる。
 
 | 止まる場所 | 起きること |
 | --- | --- |
@@ -198,6 +262,11 @@ context 費用 0・配線 0 本）。対象外として扱う。
 忘れる余地を残さないために script にする。`own-` 接頭辞・既存名・frontmatter の
 `name` 不一致は script が拒否する。ライセンスだけは人が実物を読んで `--license` で渡す
 （再配布の可否を決める判断なので機械に委ねない）。
+
+`mirrors:` に載る third-party と正典内の `own-*` だけが現役である。
+`retired:` に残る名前は回復用の記録で、sync・audit・topology のどれも配線対象にしない。
+退役 skill を戻す場合だけ `--reactivate-retired` を使う。物理 directory を消すときは、
+先に現役 skill からの機能参照、`git ls-files` の追跡状態、ライセンス制約を確認する。
 
 ### 逸脱の検出は hook、深い検査は lint
 

@@ -30,11 +30,11 @@ Claude・Codex・AGY のグローバル skill 供給を `~/.agents/skills` に�
 
 ## Current Status
 
-as of 2026-09-26 — the skill wiring, native canaries, and full lint pass. The live Codex inventory still reports one main-account `google-drive@openai-curated` config-only entry. An earlier snapshot documented that plugin as an active MCP/app integration; its current install record is absent, so the setting remains enabled and the inventory remains REVIEW pending an explicit restore-or-retire decision. Branch integration and issue archival also remain.
+as of 2026-09-26 — the latest three-account Codex inventory is `RESULT: OK` with zero enabled-config/install mismatches; main `google-drive@openai-curated` is installed and enabled, and the required tests and native canaries pass. Branch integration remains.
 
 ## Next Actions
 
-- Resolve the main `google-drive@openai-curated` installed-record mismatch without hiding the intended integration; then rerun inventory, integrate through own-git-clean, and archive after merge.
+- Push this branch, create or reuse its PR, merge after checks pass, then sync main and archive the completed issues.
 
 ## Guide Impact
 
@@ -45,16 +45,15 @@ as of 2026-09-26 — the skill wiring, native canaries, and full lint pass. The 
 
 - Before the settings fix, the live inventory surfaced 8 private and 1 seat2 enabled-config-only entries but incorrectly returned `RESULT: OK`; the regression test now makes this mismatch return REVIEW / exit 1.
 - The nine config flags were changed to `enabled = false`; the plugin integrations themselves were not newly installed. The provider-level ELI5 license discrepancy remains recorded as unresolved in the inventory reference.
-- The re-audit additionally found a Codex main `google-drive@openai-curated` enabled flag with no current installed record. An earlier snapshot documented it as a five-skill MCP/app integration. The enabled flag was restored after being changed briefly; current state remains `enabled = true` / no installed record, deliberately visible as `CONFIG-ONLY` until the integration is restored or explicitly retired. Codex seat2's separately installed `google-drive@openai-curated-remote` remains active.
+- An earlier re-audit found `google-drive@openai-curated` enabled in Codex main config without an installed record and returned `RESULT: REVIEW`. The latest native CLI listing now reports it installed and enabled; the three-account inventory returns `RESULT: OK` with zero mismatches. Current counts and limits are recorded in the dated plugin inventory reference.
 - The current provider is AGY / Antigravity CLI. Its live skills root `~/.gemini/antigravity-cli/skills` is a whole-root symlink directly to `~/.agents/skills`; the separate `~/.gemini/config/skills` path is the Gemini CLI per-skill alias and is not used as evidence for the AGY canary.
-- The current provider is AGY / Antigravity CLI. Its live skills root `~/.gemini/antigravity-cli/skills` is a whole-root symlink directly to `~/.agents/skills`; the separate `~/.gemini/config/skills` path is the Gemini CLI per-skill alias and is not used as evidence for the AGY canary.
-- Current inventory counts: Codex main 19 installed+enabled / 3 disabled / 1 config-only, private 12 / 2 / 0, seat2 26 / 3 / 0; the overall result is `REVIEW` because the main mismatch remains. These counts reflect the current CLI after marketplace plugin updates and supersede the earlier post-change count table as the live state.
 - Codex marketplace records without `source.path` were falsely reported unresolved by the first inventory implementation. The inventory now resolves the same-account cache using marketplace, plugin ID, and exact version; a regression fixture covers this shape.
 - `plugin_inventory.py` regression suite: 8 passed. Final `skill_lint.sh`: `OK: all skill checks passed`; this included 99 own-skill-commonize tests, 4 own-git-clean tests, 12 own-seat2-build tests, and the other enabled skill suites.
 
 ## Log
 
-- 2026-09-26 — Corrected sync and audit to use active `mirrors:` entries and exclude `retired:`; mirrored and wired ELI5; documented plugin skill/MCP/command/hook routes and license caveat; reconciled config-only Codex flags; verified current inventory, test suites, lint, and native canaries for Claude, Codex, and AGY.
+- 2026-09-26 — Corrected sync and audit to use active `mirrors:` entries and exclude `retired:`; mirrored and wired ELI5; documented plugin skill/MCP/command/hook routes and license caveat; reconciled config-only Codex flags; verified test suites, lint, and native canaries for Claude, Codex, and AGY.
+- 2026-09-26 — Re-read the live account-specific Codex plugin inventory after the main Drive record appeared; confirmed all three inventories return `RESULT: OK` with zero config/install mismatches and updated the dated reference.
 
 ## Completion
 

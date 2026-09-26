@@ -28,11 +28,11 @@ guide_impact_reason: "own-git-clean/SKILL.md と scripts/survey.sh が現行手�
 
 ## Current Status
 
-as of 2026-09-26 — the false-clean and missing-local-main conditions were reproduced before the change; complete porcelain output now drives dirty/clean checks, origin/main is selected as the comparison ref when needed, and an unavailable ref produces UNKNOWN. Four focused regression tests pass.
+as of 2026-09-26 — false-clean and missing-ref conditions are fixed and four focused regression tests pass; the implementation and docs are committed on the commonization branch, pending PR integration.
 
 ## Next Actions
 
-- Integrate this fix on the codex/global-skill-commonization-20260926 branch after the related `google-drive@openai-curated` inventory decision is resolved.
+- Push and merge `codex/global-skill-commonization-20260926` with the related commonization changes, then archive this issue.
 
 ## Guide Impact
 
@@ -49,6 +49,7 @@ as of 2026-09-26 — the false-clean and missing-local-main conditions were repr
 
 - 2026-09-26 — Replaced early-exit `grep -q` checks with complete status snapshots and added clean/dirty repository fixtures.
 - 2026-09-26 — Resolved remote-tracking integration refs when the local branch is absent, guarded classifications when no ref exists, and added missing-ref regression fixtures.
+- 2026-09-26 — Reconfirmed the issue's four-test acceptance result; branch integration remains.
 
 ## Completion
 

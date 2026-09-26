@@ -99,16 +99,14 @@ flags were later set to `enabled = false` after the user requested reconciliatio
 record exists. That did not install, remove, or reauthenticate any plugin. Spreadsheet plugin records
 remain installed and active where the CLI reports them.
 
-## Live re-audit after reconciliation — 2026-09-26
+## Earlier live re-audit before Drive record restoration — 2026-09-26 (historical snapshot)
 
-The current CLI inventory later surfaced one additional Codex main flag,
-`google-drive@openai-curated`, with no installed record. Its config remains `enabled = true` because
-the initial snapshot recorded an active MCP/app integration; no plugin was installed, removed, or
-reauthenticated. Codex seat2 still has an installed and enabled
-`google-drive@openai-curated-remote` plugin with five skills and the app integration, so that account's
-feature remains active. Codex main currently has no `google-drive` installed record, so the seat2
-integration is not evidence of a main-account connection. The mismatch is deliberately retained as
-`CONFIG-ONLY` / `RESULT: REVIEW` until the user authorizes a restore or confirms retirement.
+At that earlier snapshot, the CLI inventory surfaced `google-drive@openai-curated` in Codex main
+configuration without an installed record. The setting remained enabled because the initial snapshot
+recorded an active MCP/app integration. The then-current seat2 listing separately reported
+`google-drive@openai-curated-remote`; that account-local record did not establish a main-account
+installation. The main mismatch was carried forward as `CONFIG-ONLY` / `RESULT: REVIEW` pending a
+fresh account-specific inventory.
 
 The current non-Claude/Codex agent is AGY / Antigravity CLI. Its live skill root
 `~/.gemini/antigravity-cli/skills` is a whole-root symlink directly to
@@ -121,14 +119,37 @@ are not used as evidence for the AGY canary.
 | Codex private | 12 | 2 | 0 | 0 |
 | Codex seat2 | 26 | 3 | 0 | 0 |
 
-Current inventory result: `RESULT: REVIEW (1 unresolved inventory entries)`, exit 1, due to the main
-`google-drive` mismatch. The counts differ from the earlier post-change table
-because the current Codex CLI now lists additional marketplace plugins. For installed marketplace
+At that earlier snapshot the inventory returned `RESULT: REVIEW (1 unresolved inventory entries)`,
+exit 1, due to the main `google-drive` mismatch. The counts differ from the earlier post-change table
+because the Codex CLI had since listed additional marketplace plugins. For installed marketplace
 records that omit `source.path`, the inventory resolves only the exact-version cache under that same
 account's `plugins/cache/<marketplace>/<plugin>/<version>` directory. Cache presence by itself still
-does not count as an installation. A regression test covers this current CLI record shape.
+does not count as an installation. A regression test covers this marketplace record shape.
 
 The first re-audit classified 15 remote marketplace records as unresolved because their records used
 `marketplaceName` / `pluginId` / `version` rather than `source.path`. The exact-version resolver fixed
 that parser gap and the final inventory resolves the asset sources for all installed+enabled records.
-The only remaining unresolved entry is Codex main's config-only `google-drive` plugin.
+At that earlier snapshot, the only unresolved entry was Codex main's config-only `google-drive` plugin; the latest state is recorded below.
+
+
+## Latest live re-audit — 2026-09-26
+
+A fresh read-only Codex CLI listing now reports `google-drive@openai-curated` in Codex main as
+`installed=true`, `enabled=true`, version `33bd9529`, with an existing local source. The cached plugin
+contains `.codex-plugin/plugin.json`, `.mcp.json`, and `.app.json`; the inventory classifies it as a
+hybrid with five skills, one MCP server, and one app. No install or removal command was needed in this
+run. This proves the local installation and enabled configuration; the inventory does not inspect the
+account's external service session or share authentication state.
+
+The current Codex-only inventory returns `RESULT: OK`, exit 0, with no enabled configuration lacking an
+installed record and no enabled configuration pointing at a disabled installation:
+
+| Product account | Installed + enabled | Disabled installed | Enabled config without installed record | Enabled config with disabled record |
+| --- | ---: | ---: | ---: | ---: |
+| Codex main | 17 | 3 | 0 | 0 |
+| Codex private | 10 | 2 | 0 | 0 |
+| Codex seat2 | 16 | 3 | 0 | 0 |
+
+This current listing includes a Drive record only for Codex main. The earlier seat2
+`google-drive@openai-curated-remote` observation is historical and is not present in the latest
+installed-and-enabled inventory. Account-specific plugin and authentication state remain separate.

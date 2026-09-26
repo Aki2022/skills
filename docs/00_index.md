@@ -17,7 +17,7 @@ Read this file first. Do not scan all docs unless needed. Read the active workst
 
 ## Specs
 
-- [pptx-content-eval-loop](specs/pptx-content-eval-loop.md) — **active（2026-08-31 承認）** own-pptx-build コンテンツ評価ループの公式化——実装は own-pptx-build 本体（content-eval.md ほか）
+- [pptx-content-eval-loop](specs/pptx-content-eval-loop.md) — own-pptx-build の段階別コンテンツ評価における承認・評価者・対象・合格条件の方針
 
 
 ## ADRs

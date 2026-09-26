@@ -133,6 +133,10 @@ you meant before reading anything else.
 It reports: current branch, remote, root cleanliness, every worktree's branch /
 HEAD / dirty status, upstream ahead/behind, stashes, local and remote branches,
 branches merged vs not merged into main, recent history, and open PRs.
+For branch comparisons it resolves the local `main` (or `master`) first, then
+uses `origin/<branch>` when the local integration branch is absent. If neither
+ref exists, it reports the branch state as unknown and makes no merge or
+deletion classification.
 
 **Run it every time you reach this stage, and say so when you did not.** Reached
 once per iteration of a longer run, this survey is cheap next to what depends on

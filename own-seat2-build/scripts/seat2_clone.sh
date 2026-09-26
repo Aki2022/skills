@@ -31,6 +31,7 @@
 set -euo pipefail
 
 install_dir="${LAUNCHER_INSTALL_DIR:-/Applications}"
+script_dir="$(CDPATH= cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 
 # seat : source app : installed name : display name : bundle identifier
 SEATS=(
@@ -90,35 +91,7 @@ BODY
 # https are dropped so the seat never competes to be the default browser.
 patch_plist() {
   local plist="$1" display="$2" ident="$3"
-  DISPLAY_NAME="$display" BUNDLE_ID="$ident" /usr/bin/python3 - "$plist" <<'PY'
-import os, plistlib, sys
-
-path = sys.argv[1]
-with open(path, "rb") as fh:
-    info = plistlib.load(fh)
-
-info["CFBundleDisplayName"] = os.environ["DISPLAY_NAME"]
-info["CFBundleIdentifier"] = os.environ["BUNDLE_ID"]
-
-url_types = []
-for entry in info.get("CFBundleURLTypes", []):
-    schemes = []
-    for scheme in entry.get("CFBundleURLSchemes", []):
-        if scheme in ("http", "https"):
-            continue
-        schemes.append(scheme + (".seat2" if scheme.startswith("msauth.") else "-seat2"))
-    if not schemes:
-        continue
-    entry["CFBundleURLSchemes"] = schemes
-    url_types.append(entry)
-if url_types:
-    info["CFBundleURLTypes"] = url_types
-elif "CFBundleURLTypes" in info:
-    del info["CFBundleURLTypes"]
-
-with open(path, "wb") as fh:
-    plistlib.dump(info, fh)
-PY
+  /usr/bin/python3 "$script_dir/patch_plist.py" "$plist" "$display" "$ident"
 }
 
 # ps, not pgrep: pgrep did not report the app hosting the agent session that

@@ -19,6 +19,8 @@ import argparse
 import os
 import sys
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from skill_catalog import load_skill_catalog
 
 
 IGNORED_CANONICAL_DIRS = {".git", "docs", "node_modules"}
@@ -36,26 +38,20 @@ def resolved(path: Path) -> Path:
     return Path(os.path.realpath(path))
 
 
-def canonical_names(root: Path) -> tuple[set[str], list[str]]:
-    """Return skill names and non-skill directories that need lint attention."""
+def canonical_names(root: Path) -> tuple[set[str], list[str], list[str]]:
+    """Return active skill names plus catalog notes and errors."""
 
-    names: set[str] = set()
-    warnings: list[str] = []
     try:
-        children = sorted(root.iterdir(), key=lambda p: p.name)
+        catalog = load_skill_catalog(root)
     except OSError as exc:
-        return names, [f"cannot read canonical root: {exc}"]
-    for child in children:
-        if child.name in IGNORED_CANONICAL_DIRS or child.name.startswith("."):
-            continue
-        if child.is_dir() and (child / "SKILL.md").is_file():
-            names.add(child.name)
-        elif child.is_dir():
-            # The skill linter owns the detailed S1 failure.  Keeping this as
-            # a warning avoids duplicating its policy while making the scope
-            # visible in an audit.
-            warnings.append(f"canonical non-skill directory ignored: {child.name}")
-    return names, warnings
+        return set(), [], [f"cannot read canonical root: {exc.__class__.__name__}"]
+    notes = []
+    if catalog.retired_physical:
+        notes.append(
+            "retired physical directories excluded: "
+            + ", ".join(sorted(catalog.retired_physical))
+        )
+    return catalog.active, notes, catalog.errors
 
 
 def report_failure(failures: list[str], message: str) -> None:
@@ -207,7 +203,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR canonical root must be a regular directory: {canonical}")
         return 2
 
-    names, canonical_notes = canonical_names(canonical)
+    names, canonical_notes, canonical_errors = canonical_names(canonical)
+    failures: list[str] = []
+    for error in canonical_errors:
+        report_failure(failures, f"canonical catalog: {error}")
     if not names:
         print(f"ERROR canonical root has no skill directories: {canonical}")
         return 2
@@ -216,7 +215,6 @@ def main(argv: list[str] | None = None) -> int:
         print(f"WARN {note}")
 
     adapted_targets: dict[str, Path] = {}
-    failures: list[str] = []
     for raw in args.codex_adapted:
         path = lexical(raw)
         name = path.name

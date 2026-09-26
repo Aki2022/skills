@@ -119,6 +119,9 @@ class NamingRuleTests(unittest.TestCase):
             home = Path(d)
             root = self._global(home)
             _write_skill(root, "cloudflare-one-migrations")
+            (root / "mirrors.yaml").write_text(
+                "mirrors:\n  - dir: cloudflare-one-migrations\nretired: []\n"
+            )
             r = _lint_home(root, home)
             self.assertEqual(r.returncode, 0, f"第三者 skill は対象外\n{r.stdout}{r.stderr}")
 

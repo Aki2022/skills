@@ -91,6 +91,11 @@ bash ~/.agents/skills/own-seat2-build/scripts/seat2_clone.sh --install all
    黙って二重登録しないため）。`http` / `https` は落とす（seat2 が既定ブラウザを争わないため）。
 3. **ad-hoc の `--deep` 再署名**。
 
+Info.plist の変換処理は同じ `scripts/` の `patch_plist.py` に置き、`seat2_clone.sh` は
+そのPythonファイルを直接起動する。Pythonコードを Bash の here-document に埋め込まない。
+macOS ではパイプ容量がシステム状態で縮み、Bash が子プロセス起動前に here-document を
+書ききれず停止する場合がある。helper は同じ `scripts/` に保つ。
+
 ### `--deep` は必須
 
 バイナリを改名した時点でベンダー署名は無効になる。外側だけ署名して payload をベンダー署名の

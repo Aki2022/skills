@@ -86,6 +86,12 @@ class CheckMirrorsTest(unittest.TestCase):
             _, out = self._run(self._setup(tmp))
             self.assertIn("scope:", out)
 
+    def test_parser_decodes_quoted_metadata_with_spaces(self):
+        entries = MODULE.parse_manifest(
+            'mirrors:\n  - dir: foo\n    local_copy: "~/plugin cache/skill"\n'
+        )
+        self.assertEqual(entries[0]["local_copy"], "~/plugin cache/skill")
+
 
 if __name__ == "__main__":
     unittest.main()

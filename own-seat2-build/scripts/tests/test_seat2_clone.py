@@ -216,3 +216,34 @@ def test_rebuild_leaves_no_staging_or_previous(tmp_path, claude_src):
 def test_bad_target_is_rejected(tmp_path, claude_src):
     assert run(tmp_path, "--install", "nosuchseat").returncode == 64
     assert run(tmp_path, "--frobnicate", "claude").returncode == 64
+
+
+def test_patch_plist_helper_updates_identity_and_schemes(tmp_path):
+    plist = tmp_path / "Info.plist"
+    original = {
+        "CFBundleDisplayName": "Vendor App",
+        "CFBundleIdentifier": "com.vendor.app",
+        "CFBundleURLTypes": [
+            {"CFBundleURLSchemes": ["vendor", "http", "https", "msauth.vendor"]}
+        ],
+    }
+    with open(plist, "wb") as fh:
+        plistlib.dump(original, fh)
+
+    helper = SCRIPT.with_name("patch_plist.py")
+    result = subprocess.run(
+        [sys.executable, str(helper), str(plist), "Vendor Seat2", "local.vendor.seat2"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert result.returncode == 0, result.stderr
+
+    with open(plist, "rb") as fh:
+        patched = plistlib.load(fh)
+    assert patched["CFBundleDisplayName"] == "Vendor Seat2"
+    assert patched["CFBundleIdentifier"] == "local.vendor.seat2"
+    assert patched["CFBundleURLTypes"][0]["CFBundleURLSchemes"] == [
+        "vendor-seat2",
+        "msauth.vendor.seat2",
+    ]

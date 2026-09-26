@@ -7,6 +7,8 @@ import argparse
 import os
 import sys
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from skill_catalog import load_skill_catalog
 
 
 IGNORED_CANONICAL_DIRS = {".git", "docs", "node_modules"}
@@ -21,14 +23,10 @@ def resolved(path: Path) -> Path:
 
 
 def canonical_names(root: Path) -> set[str]:
-    return {
-        child.name
-        for child in root.iterdir()
-        if child.name not in IGNORED_CANONICAL_DIRS
-        and not child.name.startswith(".")
-        and child.is_dir()
-        and (child / "SKILL.md").is_file()
-    }
+    catalog = load_skill_catalog(root)
+    if catalog.errors:
+        raise ValueError("; ".join(catalog.errors))
+    return catalog.active
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -64,10 +62,18 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR alias root must be a regular directory: {alias_root}")
         return 2
 
-    names = canonical_names(canonical)
+    catalog = load_skill_catalog(canonical)
+    for error in catalog.errors:
+        print(f"ERROR canonical catalog: {error}")
+    if catalog.errors:
+        return 2
+    names = catalog.active
     if not names:
         print(f"ERROR canonical root has no skill directories: {canonical}")
         return 2
+    if catalog.retired_physical:
+        retired = ", ".join(sorted(catalog.retired_physical))
+        print(f"NOTE retired physical skills excluded from sync: {retired}")
 
     ignored = set(args.ignore_entry)
     if any(not name or Path(name).name != name or name in {".", ".."} for name in ignored):

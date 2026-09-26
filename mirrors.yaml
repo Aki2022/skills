@@ -191,6 +191,54 @@ mirrors:
     reinstall: npx degit openai/skills/skills/.curated/gh-fix-ci ~/.agents/skills/gh-fix-ci
     note: Codex の $skill-installer は使わず正典へミラーした（installer は 1 席だけに実体を置く）
 
+  - dir: eli5
+    upstream: "anthropics/claude-plugins-community"
+    upstream_path: "eli5/skills/eli5"
+    upstream_version: "f4c9452f5ca091f1be7064d9faab1b001ea21645"
+    fetched_at: 2026-09-26
+    license: "MIT (plugin manifest); Apache-2.0 (upstream repository LICENSE; unresolved)"
+    reinstall: "npx degit anthropics/claude-plugins-community/eli5/skills/eli5 ~/.agents/skills/eli5"
+    local_copy: "~/.claude/plugins/cache/claude-community/eli5/1.0.0/skills/eli5"
+    note: "Upstream repository LICENSE says Apache-2.0 while the Claude plugin manifest says MIT; conflict unresolved."
+
+  - dir: karpathy-guidelines
+    upstream: "forrestchang/andrej-karpathy-skills"
+    upstream_path: "skills/karpathy-guidelines"
+    upstream_version: "2c606141936f1eeef17fa3043a72095b4765b9c2"
+    fetched_at: 2026-09-26
+    license: "MIT (skill frontmatter; repository root LICENSE absent)"
+    reinstall: "npx degit forrestchang/andrej-karpathy-skills/skills/karpathy-guidelines ~/.agents/skills/karpathy-guidelines"
+    local_copy: "~/.claude-seat2/plugins/cache/karpathy-skills/andrej-karpathy-skills/1.0.0/skills/karpathy-guidelines"
+
+  - dir: claude-automation-recommender
+    upstream: "anthropics/claude-plugins-official"
+    upstream_path: "plugins/claude-code-setup/skills/claude-automation-recommender"
+    upstream_version: "plugin version 1.0.0 (installed snapshot)"
+    fetched_at: 2026-09-26
+    license: "Apache-2.0 (upstream repository LICENSE)"
+    reinstall: "npx degit anthropics/claude-plugins-official/plugins/claude-code-setup/skills/claude-automation-recommender ~/.agents/skills/claude-automation-recommender"
+    local_copy: "~/.claude-seat2/plugins/cache/claude-plugins-official/claude-code-setup/1.0.0/skills/claude-automation-recommender"
+
+  - dir: claude-md-improver
+    upstream: "anthropics/claude-plugins-official"
+    upstream_path: "plugins/claude-md-management/skills/claude-md-improver"
+    upstream_version: "plugin version 1.0.0 (installed snapshot)"
+    fetched_at: 2026-09-26
+    license: "Apache-2.0 (upstream repository LICENSE)"
+    reinstall: "npx degit anthropics/claude-plugins-official/plugins/claude-md-management/skills/claude-md-improver ~/.agents/skills/claude-md-improver"
+    local_copy: "~/.claude-seat2/plugins/cache/claude-plugins-official/claude-md-management/1.0.0/skills/claude-md-improver"
+    note: "Mirrored independently; keep the hybrid plugin active for its command feature."
+
+  - dir: frontend-design
+    upstream: "anthropics/claude-plugins-official"
+    upstream_path: "plugins/frontend-design/skills/frontend-design"
+    upstream_version: "6bfd4e0c6d3d"
+    fetched_at: 2026-09-26
+    license: "Apache-2.0 (upstream repository LICENSE)"
+    reinstall: "npx degit anthropics/claude-plugins-official/plugins/frontend-design/skills/frontend-design ~/.agents/skills/frontend-design"
+    local_copy: "~/.claude-seat2/plugins/cache/claude-plugins-official/frontend-design/6bfd4e0c6d3d/skills/frontend-design"
+    note: "Reactivated retired entry and refreshed its older snapshot from the installed plugin source."
+
 retired:
   - dir: agents-sdk
     upstream: cloudflare/skills
@@ -262,14 +310,6 @@ retired:
     fetched_at: 2026-08-01
     license: Apache-2.0 (repo root LICENSE)
     reinstall: git clone https://github.com/google/skills && cp -r skills/skills/cloud/firebase-basics ~/.agents/skills/firebase-basics
-  - dir: frontend-design
-    upstream: anthropics/claude-plugins-official
-    upstream_path: plugins/frontend-design/skills/frontend-design
-    upstream_version: 2026-07-26 時点のスナップショット
-    fetched_at: 2026-09-07
-    license: Apache-2.0 (LICENSE.txt)
-    reinstall: Claude Code で /plugin marketplace add anthropics/claude-plugins-official → plugin frontend-design を導入し、その skills/frontend-design を複製
-    note: 上流 HEAD は以降書き換えられており同内容は取れない
   - dir: gke-basics
     upstream: google/skills
     upstream_path: skills/cloud/gke-basics

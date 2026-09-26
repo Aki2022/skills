@@ -114,6 +114,22 @@ class SyncPerSkillAliasesTest(unittest.TestCase):
         self.assertEqual((self.aliases / "gamma").resolve(), adapted.resolve())
         self.assertEqual((self.aliases / "beta").resolve(), (self.canonical / "beta").resolve())
 
+    def test_retired_physical_skill_is_not_reported_as_create(self):
+        _skill(self.canonical, "retired-skill")
+        (self.canonical / "mirrors.yaml").write_text(
+            "mirrors:\n  - dir: alpha\n  - dir: beta\n"
+            "retired:\n  - dir: retired-skill\n",
+            encoding="utf-8",
+        )
+        (self.aliases / "beta").symlink_to(self.canonical / "beta")
+
+        rc, output = self._run()
+
+        self.assertEqual(rc, 0, output)
+        self.assertNotIn("CREATE", output)
+        self.assertIn("retired physical skills excluded", output)
+        self.assertFalse((self.aliases / "retired-skill").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

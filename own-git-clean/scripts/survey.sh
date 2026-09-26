@@ -13,6 +13,7 @@
 #               An orchestrator invoked *against* a repository (own-ws-drain,
 #               own-session-close) is not, so it must pass this.
 #   main_branch defaults to "main", falling back to "master" if main is absent.
+#   If that local branch is absent, an origin/<branch> tracking ref is used.
 
 set -uo pipefail
 
@@ -67,9 +68,11 @@ print_worktree_status() {
   (
     cd "$path" || exit
     git status --short --branch
-    if git status --porcelain | grep -q .; then
+    local status
+    status="$(git status --porcelain)"
+    if [[ -n "$status" ]]; then
       echo "dirty: yes"
-      echo "untracked_count: $(git status --porcelain | grep -c '^??' || true)"
+      echo "untracked_count: $(printf '%s\n' "$status" | awk 'substr($0, 1, 2) == "??" {n++} END {print n+0}')"
     else
       echo "dirty: no"
       echo "untracked_count: 0"
@@ -86,6 +89,19 @@ if [[ -z "$main_branch" ]]; then
     main_branch="master"
   else
     main_branch="main"
+  fi
+fi
+
+# A local integration branch may not exist in a checkout that tracks only the
+# remote branch. Resolve the comparison ref explicitly; an unresolved ref must
+# never turn a failed `git diff` into an empty diff / false PATCH-EQUIVALENT.
+integration_ref="$main_branch"
+if ! git rev-parse --verify --quiet "${integration_ref}^{commit}" >/dev/null; then
+  remote_candidate="origin/$main_branch"
+  if [[ "$main_branch" != origin/* ]] && git rev-parse --verify --quiet "${remote_candidate}^{commit}" >/dev/null; then
+    integration_ref="$remote_candidate"
+  else
+    integration_ref=""
   fi
 fi
 
@@ -107,6 +123,11 @@ fi
 echo "toplevel: $(git rev-parse --show-toplevel)"
 echo "current branch: $(git rev-parse --abbrev-ref HEAD)"
 echo "integration branch (assumed): $main_branch"
+if [[ -n "$integration_ref" ]]; then
+  echo "integration comparison ref: $integration_ref"
+else
+  echo "integration comparison ref: unavailable — branch status cannot be classified safely"
+fi
 
 section "REMOTE"
 if git remote -v | grep -q .; then
@@ -122,7 +143,8 @@ else
 fi
 
 section "WORKING TREE (uncommitted / untracked)"
-if git status --porcelain | grep -q .; then
+working_status="$(git status --porcelain)"
+if [[ -n "$working_status" ]]; then
   git status --short
 else
   echo "(clean)"
@@ -145,7 +167,8 @@ if [[ "$root_path" != "$current_worktree" ]]; then
   echo "note: you are in a LINKED worktree; root_ready below describes the main worktree, not this one"
 fi
 echo "root_branch: $root_branch"
-if [[ "$root_branch" == "$main_branch" ]] && ! git -C "$root_path" status --porcelain | grep -q .; then
+root_status="$(git -C "$root_path" status --porcelain)"
+if [[ "$root_branch" == "$main_branch" && -z "$root_status" ]]; then
   echo "root_ready: yes"
 else
   echo "root_ready: no (cleanup must finish with root on $main_branch and clean)"
@@ -165,10 +188,15 @@ echo "current_branch: $cur_branch"
 if [[ "$cur_branch" == "$main_branch" ]]; then
   echo "status: on integration branch — no feature branch to delete from here"
 else
-  ahead="$(git rev-list --count "$main_branch..HEAD" 2>/dev/null || echo '?')"
-  behind="$(git rev-list --count "HEAD..$main_branch" 2>/dev/null || echo '?')"
-  echo "commits ahead of $main_branch: $ahead"
-  echo "commits behind $main_branch: $behind"
+  if [[ -z "$integration_ref" ]]; then
+    echo "commits ahead of $main_branch: ?"
+    echo "commits behind $main_branch: ?"
+    echo "merge_state: UNKNOWN — no local $main_branch or origin/$main_branch ref; keep this branch until an integration ref is available"
+  else
+    ahead="$(git rev-list --count "$integration_ref..HEAD" 2>/dev/null || echo '?')"
+    behind="$(git rev-list --count "HEAD..$integration_ref" 2>/dev/null || echo '?')"
+    echo "commits ahead of $integration_ref: $ahead"
+    echo "commits behind $integration_ref: $behind"
   # A branch with no commits of its own is an ancestor of main by definition,
   # which made this report "MERGED — delete it" for a freshly cut branch whose
   # work was still uncommitted in the working tree. That is the most dangerous
@@ -181,12 +209,13 @@ else
   # falls through to the ancestry test below, exactly as before.
   if [[ "$ahead" == "0" && -n "$(git status --porcelain 2>/dev/null)" ]]; then
     echo "merge_state: NO COMMITS YET, working tree dirty — this branch holds uncommitted work. Do NOT delete it; commit first."
-  elif git merge-base --is-ancestor HEAD "$main_branch" 2>/dev/null; then
-    echo "merge_state: MERGED into $main_branch (ancestry) — delete after switching to $main_branch"
-  elif [[ -z "$(git diff "$main_branch"..HEAD 2>/dev/null)" ]]; then
-    echo "merge_state: PATCH-EQUIVALENT to $main_branch (likely squash/cherry-pick merged) — verify via PR, then delete after switching to $main_branch"
+  elif git merge-base --is-ancestor HEAD "$integration_ref" 2>/dev/null; then
+    echo "merge_state: MERGED into $integration_ref (ancestry) — delete after switching to $main_branch"
+  elif [[ -z "$(git diff "$integration_ref"..HEAD 2>/dev/null)" ]]; then
+    echo "merge_state: PATCH-EQUIVALENT to $integration_ref (likely squash/cherry-pick merged) — verify via PR, then delete after switching to $main_branch"
   else
-    echo "merge_state: has unmerged changes vs $main_branch — merge/integrate before deleting"
+    echo "merge_state: has unmerged changes vs $integration_ref — merge/integrate before deleting"
+  fi
   fi
   echo "reminder: switch root worktree to $main_branch FIRST, then 'git branch -d $cur_branch' and delete its remote/tracking ref"
 fi
@@ -212,22 +241,32 @@ section "BRANCHES MERGED INTO $main_branch (deletion candidates, excl. protected
 # '+'. Drop '+' lines entirely — a branch checked out in another worktree is
 # active work and git won't let you delete it anyway. Strip '* ' / '  ' markers
 # from the rest, then exclude protected branches.
-git branch --merged "$main_branch" 2>/dev/null \
-  | grep -v '^+ ' \
-  | sed 's/^[* ] //' \
-  | grep -vE "^(${main_branch}|master|develop|release/.*)$" \
-  || true
+if [[ -n "$integration_ref" ]]; then
+  git branch --merged "$integration_ref" 2>/dev/null \
+    | grep -v '^+ ' \
+    | sed 's/^[* ] //' \
+    | grep -vE "^(${main_branch}|master|develop|release/.*)$" \
+    || true
+else
+  echo "(unavailable; no integration ref resolved)"
+fi
 
 section "BRANCHES CHECKED OUT IN A WORKTREE (KEEP — git refuses to delete these)"
-git branch --merged "$main_branch" 2>/dev/null | grep '^+ ' | sed 's/^+ //' || true
-git branch --no-merged "$main_branch" 2>/dev/null | grep '^+ ' | sed 's/^+ //' || true
+if [[ -n "$integration_ref" ]]; then
+  git branch --merged "$integration_ref" 2>/dev/null | grep '^+ ' | sed 's/^+ //' || true
+  git branch --no-merged "$integration_ref" 2>/dev/null | grep '^+ ' | sed 's/^+ //' || true
+else
+  echo "(unavailable; no integration ref resolved)"
+fi
 
 section "BRANCHES NOT MERGED INTO $main_branch (KEEP — likely active work)"
 # Exclude the current branch (marked '*'): a squash-merged branch you're standing
 # on lands here too, but it's the cleanup target, not parallel work. It's already
 # analyzed in the CURRENT BRANCH section above with a proper merge_state check.
-git branch --no-merged "$main_branch" 2>/dev/null | grep -v '^+ ' | grep -v '^\* ' | sed 's/^  //' || true
-if git branch --no-merged "$main_branch" 2>/dev/null | grep -q '^\* '; then
+if [[ -n "$integration_ref" ]]; then
+  git branch --no-merged "$integration_ref" 2>/dev/null | grep -v '^+ ' | grep -v '^\* ' | sed 's/^  //' || true
+fi
+if [[ -n "$integration_ref" ]] && git branch --no-merged "$integration_ref" 2>/dev/null | grep -q '^\* '; then
   echo "(current branch '$cur_branch' also shows as not-merged — see CURRENT BRANCH section; may be squash-merged, not active work)"
 fi
 

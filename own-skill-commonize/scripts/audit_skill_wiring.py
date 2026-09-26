@@ -30,6 +30,8 @@ import argparse
 import os
 import sys
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from skill_catalog import load_skill_catalog
 
 # 正典直下の、skill ではない管理ディレクトリ
 NON_SKILL = {".git", "docs", "synced", "node_modules"}
@@ -40,10 +42,7 @@ RETIRED_MARKERS = ("_backup_", "_old_", ".bak_", ".orphaned_", ".disabled")
 
 
 def canon_skills(canon: Path) -> set[str]:
-    return {
-        d.name for d in canon.iterdir()
-        if d.is_dir() and d.name not in NON_SKILL and not d.name.startswith(".")
-    }
+    return load_skill_catalog(canon).active
 
 
 def is_retired(path: Path) -> bool:
@@ -86,8 +85,12 @@ def _walk(base: Path, max_depth: int):
             yield d / name
 
 
-def audit(canon: Path, wiring: dict[Path, str]) -> tuple[list[str], list[str], dict]:
-    base = canon_skills(canon)
+def audit(
+    canon: Path,
+    wiring: dict[Path, str],
+    base: set[str] | None = None,
+) -> tuple[list[str], list[str], dict]:
+    base = canon_skills(canon) if base is None else base
     failures: list[str] = []
     notes: list[str] = []
     coverage = {"roots": len(wiring), "whole": 0, "per_skill": 0}
@@ -170,17 +173,28 @@ def main(argv=None) -> int:
     if not canon.is_dir():
         print(f"ERROR 正典が無い: {canon}", file=sys.stderr)
         return 2
-    if not canon_skills(canon):
+    catalog = load_skill_catalog(canon)
+    if catalog.errors:
+        for error in catalog.errors:
+            print(f"FAIL canonical catalog: {error}")
+        print(f"RESULT: FAIL ({len(catalog.errors)} canonical catalog errors)")
+        return 2
+    if not catalog.active:
         # 対象0件を黙って通さない
         print(f"ERROR 正典に skill が1件も無い: {canon}", file=sys.stderr)
         return 2
+    if catalog.retired_physical:
+        print(
+            "NOTE retired physical skills excluded from active set: "
+            + ", ".join(sorted(catalog.retired_physical))
+        )
 
     search = [p.expanduser() for p in args.search] or [
         d for d in Path.home().glob(".*") if d.is_dir() and not d.is_symlink()
     ]
 
     wiring = discover(canon, search, args.max_depth)
-    failures, notes, cov = audit(canon, wiring)
+    failures, notes, cov = audit(canon, wiring, catalog.active)
     individual = audit_individual(canon)
 
     for line in notes + [l for l in individual if l.startswith("OK")]:
@@ -192,7 +206,7 @@ def main(argv=None) -> int:
     # 緑と「何も見ていない」を出力で区別できるようにするため。
     print(f"coverage: 配線先 {cov['roots']} 件を検査"
           f"（棚ごと {cov['whole']} / 1冊ずつ {cov['per_skill']}）"
-          f" 正典 {len(canon_skills(canon))} 件 / 個別対処 {len(individual)} 件")
+          f" 正典 {len(catalog.active)} 件 / 個別対処 {len(individual)} 件")
     if not wiring:
         # 配線0件には2つの意味がある。区別しないと空振りを通す。
         #   A まだ配線していない正典（新しい環境・差し替えた $HOME の fixture）→ 正常

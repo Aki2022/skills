@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import os
 import sys
 from datetime import date
@@ -50,7 +51,15 @@ def parse_manifest(text: str) -> list[dict]:
         if cur is None or ":" not in s:
             continue
         k, v = s.split(":", 1)
-        cur[k.strip()] = v.strip()
+        value = v.strip()
+        if value.startswith('"') and value.endswith('"'):
+            try:
+                value = json.loads(value)
+            except json.JSONDecodeError:
+                pass
+        elif value.startswith("'") and value.endswith("'"):
+            value = value[1:-1].replace("''", "'")
+        cur[k.strip()] = value
     return entries
 
 

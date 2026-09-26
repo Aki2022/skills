@@ -1,14 +1,14 @@
 ---
 schema_version: 2
 id: ISSUE-20260926-global-skill-plugin-commonization
-status: in_progress
+status: archived
 workstream: none
 priority: medium
 due: none
 created_at: 2026-09-26
 updated_at: 2026-09-26
 branch: codex/global-skill-commonization-20260926
-pr: ""
+pr: "https://github.com/Aki2022/skills/pull/16"
 related_specs: []
 related_guides: []
 guide_impact: none
@@ -30,11 +30,11 @@ Claude・Codex・AGY のグローバル skill 供給を `~/.agents/skills` に�
 
 ## Current Status
 
-as of 2026-09-26 — the latest three-account Codex inventory is `RESULT: OK` with zero enabled-config/install mismatches; main `google-drive@openai-curated` is installed and enabled, and the required tests and native canaries pass. Branch integration remains.
+as of 2026-09-26 — PR #16 merged as `1b1f1d7`; active mirrors, the three-account plugin inventory, native ELI5 canaries, and full skill lint pass. The task branch has been deleted.
 
 ## Next Actions
 
-- Push this branch, create or reuse its PR, merge after checks pass, then sync main and archive the completed issues.
+- None — PR #16 is merged, the task branch is cleaned up, and this issue is archived.
 
 ## Guide Impact
 
@@ -54,6 +54,7 @@ as of 2026-09-26 — the latest three-account Codex inventory is `RESULT: OK` wi
 
 - 2026-09-26 — Corrected sync and audit to use active `mirrors:` entries and exclude `retired:`; mirrored and wired ELI5; documented plugin skill/MCP/command/hook routes and license caveat; reconciled config-only Codex flags; verified test suites, lint, and native canaries for Claude, Codex, and AGY.
 - 2026-09-26 — Re-read the live account-specific Codex plugin inventory after the main Drive record appeared; confirmed all three inventories return `RESULT: OK` with zero config/install mismatches and updated the dated reference.
+- 2026-09-26 — PR #16 merged; the task branch was deleted after syncing main, and the issue was closed during session cleanup.
 
 ## Completion
 
@@ -61,6 +62,6 @@ as of 2026-09-26 — the latest three-account Codex inventory is `RESULT: OK` wi
 - [x] Specs updated if direction or requirements changed
 - [x] Guide impact classified before implementation
 - [x] Guides updated in the same slice if implemented behavior changed
-- [ ] Branch merged and cleaned up (or intentionally kept — note why)
+- [x] Branch merged and cleaned up (or intentionally kept — note why)
 - [x] 00_index.md updated
-- [ ] Moved to docs/issues/archive/ when complete
+- [x] Moved to docs/issues/archive/ when complete

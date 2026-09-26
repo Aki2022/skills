@@ -1,14 +1,14 @@
 ---
 schema_version: 2
 id: ISSUE-20260926-improve-loop-git-clean-survey-dirty-state
-status: in_progress
+status: archived
 workstream: none
 priority: high
 due: none
 created_at: 2026-09-26
 updated_at: 2026-09-26
 branch: codex/global-skill-commonization-20260926
-pr: ""
+pr: "https://github.com/Aki2022/skills/pull/16"
 related_specs: []
 related_guides: []
 guide_impact: none
@@ -28,11 +28,11 @@ guide_impact_reason: "own-git-clean/SKILL.md と scripts/survey.sh が現行手�
 
 ## Current Status
 
-as of 2026-09-26 — false-clean and missing-ref conditions are fixed and four focused regression tests pass; the implementation and docs are committed on the commonization branch, pending PR integration.
+as of 2026-09-26 — PR #16 merged as `1b1f1d7`; false-clean and missing-ref conditions are fixed, and all four focused regression tests pass. The task branch has been deleted.
 
 ## Next Actions
 
-- Push and merge `codex/global-skill-commonization-20260926` with the related commonization changes, then archive this issue.
+- None — PR #16 is merged, the task branch is cleaned up, and this issue is archived.
 
 ## Guide Impact
 
@@ -50,6 +50,7 @@ as of 2026-09-26 — false-clean and missing-ref conditions are fixed and four f
 - 2026-09-26 — Replaced early-exit `grep -q` checks with complete status snapshots and added clean/dirty repository fixtures.
 - 2026-09-26 — Resolved remote-tracking integration refs when the local branch is absent, guarded classifications when no ref exists, and added missing-ref regression fixtures.
 - 2026-09-26 — Reconfirmed the issue's four-test acceptance result; branch integration remains.
+- 2026-09-26 — PR #16 merged and the task branch was deleted after syncing main; acceptance and closeout are complete.
 
 ## Completion
 
@@ -57,6 +58,6 @@ as of 2026-09-26 — false-clean and missing-ref conditions are fixed and four f
 - [x] Specs updated if direction or requirements changed
 - [x] Guide impact classified before implementation
 - [x] Guides updated in the same slice if implemented behavior changed
-- [ ] Branch merged and cleaned up (or intentionally kept — note why)
+- [x] Branch merged and cleaned up (or intentionally kept — note why)
 - [x] 00_index.md updated
-- [ ] Moved to docs/issues/archive/ when complete
+- [x] Moved to docs/issues/archive/ when complete

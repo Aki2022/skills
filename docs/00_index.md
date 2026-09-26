@@ -1,5 +1,5 @@
 ---
-updated_at: 2026-09-22
+updated_at: 2026-09-26
 current_focus: []
 ---
 
@@ -27,8 +27,6 @@ Read this file first. Do not scan all docs unless needed. Read the active workst
 ## Active Issues
 
 <!-- own-doc-update:generated active-issues begin -->
-- [ISSUE-20260926-global-skill-plugin-commonization](issues/ISSUE-20260926-global-skill-plugin-commonization.md) — グローバルスキルの共通化とプラグイン監査 · medium · due none
-- [ISSUE-20260926-improve-loop-git-clean-survey-dirty-state](issues/ISSUE-20260926-improve-loop-git-clean-survey-dirty-state.md) — own-git-clean survey の false-clean 判定を塞ぐ · high · due none
 <!-- own-doc-update:generated active-issues end -->
 
 

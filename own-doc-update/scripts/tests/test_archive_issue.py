@@ -159,6 +159,10 @@ class IndexLinkSurvivesArchivingTest(unittest.TestCase):
 
     SCRIPT = SCRIPTS / "archive_issue.py"
     ISSUE_ID = "ISSUE-20260901-example"
+    # Where this script's documents live. The subclass below re-runs every test
+    # in this class against `archive_workstream.py`, so anything that touches a
+    # document path has to ask rather than hardcode `docs/issues`.
+    DOC_DIR = "docs/issues"
 
     def make_repo(self, index_body: str) -> Path:
         root = Path(tempfile.mkdtemp())
@@ -185,6 +189,30 @@ class IndexLinkSurvivesArchivingTest(unittest.TestCase):
         import validate_repo_docs
         errors, _warnings = validate_repo_docs.validate_repo(root)
         return [e for e in errors if "broken relative link" in e]
+
+    def test_an_issue_without_a_completion_section_is_refused(self):
+        """The checklist gate must not be skipped by the absence of the checklist.
+
+        Measured 2026-09-26: guarding only the "section present" branch meant an
+        issue with NO `## Completion` section skipped the gate entirely and
+        archived in silence. In one repository 8 of 11 open issues, and 38 of 74
+        already archived, had no section -- so for all of them the gate had never
+        run. `archive_workstream.py` already refused this case; only the issue
+        script did not. Turns red if that branch goes back to `if len(...) == 2`.
+        """
+        root = self.make_repo(f"- [{self.ISSUE_ID}]({self.ISSUE_ID}.md) -- x\n")
+        doc = root / self.DOC_DIR / f"{self.ISSUE_ID}.md"
+        doc.write_text(doc.read_text().split("## Completion", 1)[0])
+
+        result = self.run_archive(root)
+
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("no '## Completion' section", result.stderr)
+        self.assertTrue(doc.is_file(), "a refused archive must not move the file")
+        self.assertFalse(
+            (root / self.DOC_DIR / "archive" / f"{self.ISSUE_ID}.md").exists(),
+            "a refused archive must not leave a copy in archive/",
+        )
 
     def test_a_prose_row_is_repointed_instead_of_left_broken(self):
         prose = (
@@ -232,6 +260,7 @@ class WorkstreamIndexLinkSurvivesArchivingTest(IndexLinkSurvivesArchivingTest):
 
     SCRIPT = SCRIPTS / "archive_workstream.py"
     ISSUE_ID = "WS-20260901-example"
+    DOC_DIR = "docs/workstreams"
 
     WS_DOC = """---
 schema_version: 2

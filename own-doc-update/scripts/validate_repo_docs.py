@@ -968,7 +968,14 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
 
     specs_dir = root / "docs/specs"
     if specs_dir.is_dir():
-        valid_statuses = {"draft", "active", "superseded"}
+        # `implemented` was added 2026-09-27. The three-value vocabulary had no
+        # way to say "this spec describes behaviour that now exists and is
+        # current", so two specs that said it were flattened to `active` purely
+        # to clear this check, and the distinction their authors recorded was
+        # lost. `active` means the spec is the current intent; `implemented`
+        # means the intent is also shipped. Purely additive: every document that
+        # validated before still validates.
+        valid_statuses = {"draft", "active", "implemented", "superseded"}
         # Only the top level: archive/ keeps history verbatim and template/ holds
         # placeholder text that is not a spec.
         for path in sorted(specs_dir.glob("*.md")):
@@ -997,12 +1004,15 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
                     errors.append(f"{rel}: {key} is required")
                 elif not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
                     errors.append(f"{rel}: {key} must be YYYY-MM-DD, got '{value}'")
-            # Both spec templates ship `status: draft # draft | active | superseded`,
+            # Both spec templates ship
+            # `status: draft # draft | active | implemented | superseded`,
             # and the front-matter reader does not strip YAML comments — so without
             # this the check would reject a spec created straight from the template.
             status = as_text(fm.get("status", "")).split("#")[0].strip()
             if status not in valid_statuses:
-                errors.append(f"{rel}: status must be draft, active, or superseded")
+                errors.append(
+                    f"{rel}: status must be draft, active, implemented, or superseded"
+                )
             if status == "superseded" and not as_text(fm.get("superseded_by", "")):
                 errors.append(
                     f"{rel}: superseded_by is required when status is superseded"

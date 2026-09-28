@@ -203,17 +203,31 @@ def main():
     # improvement issue filed precisely so an observation would not be lost could
     # be archived unstarted, dropped from the index, and reported as archived.
     completion = content.split("## Completion", 1)
-    if len(completion) == 2:
-        unchecked = UNCHECKED_BOX.findall(completion[1])
-        if unchecked:
-            print(
-                "Error: complete every issue checklist item before archiving. "
-                f"{len(unchecked)} still unchecked:",
-                file=sys.stderr,
-            )
-            for item in unchecked:
-                print(f"  {item}", file=sys.stderr)
-            sys.exit(1)
+    # Two different problems, two different messages -- the shape
+    # `archive_workstream.py` already had. Guarding only the `== 2` branch meant
+    # an issue with NO section skipped the checklist gate entirely and archived
+    # in silence. Measured 2026-09-26 in one repository: 8 of 11 open issues and
+    # 38 of 74 already in its archive had no section, so the gate had never run
+    # for any of them. A guard that is skipped by the absence of the thing it
+    # guards is not a guard.
+    if len(completion) != 2:
+        print(
+            "Error: this issue has no '## Completion' section, so there is "
+            "nothing to verify before archiving. Add the section from "
+            "references/issue.template.md and tick its items.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    unchecked = UNCHECKED_BOX.findall(completion[1])
+    if unchecked:
+        print(
+            "Error: complete every issue checklist item before archiving. "
+            f"{len(unchecked)} still unchecked:",
+            file=sys.stderr,
+        )
+        for item in unchecked:
+            print(f"  {item}", file=sys.stderr)
+        sys.exit(1)
 
     errors, _warnings = validate_repo(repo)
     target = os.path.relpath(src, repo)

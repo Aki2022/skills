@@ -1209,7 +1209,20 @@ class SpecFrontMatterTest(ValidateRepoDocsV2Test):
 
         errors, _warnings = MODULE.validate_repo(root)
 
-        self.assertTrue(any("status must be draft, active, or superseded" in e for e in errors))
+        self.assertTrue(any("status must be draft, active, implemented, or superseded" in e for e in errors))
+
+    def test_implemented_is_a_valid_spec_status(self):
+        # Added 2026-09-27. The vocabulary had no value for "the intent is also
+        # shipped", so two specs that said it were flattened to `active` to
+        # clear this check and the distinction their authors recorded was lost.
+        # Without this test the value could be dropped again and only the
+        # flattening would come back -- silently, because `active` validates.
+        root = self.make_repo()
+        self.write_spec(root, self.VALID.replace("status: active", "status: implemented"))
+
+        errors, _warnings = MODULE.validate_repo(root)
+
+        self.assertFalse([e for e in errors if "status must be" in e], errors)
 
     def test_an_id_without_the_spec_prefix_is_reported(self):
         root = self.make_repo()
@@ -1292,7 +1305,7 @@ class SpecFrontMatterTest(ValidateRepoDocsV2Test):
 
         errors, _warnings = MODULE.validate_repo(root)
 
-        self.assertTrue(any("status must be draft, active, or superseded" in e for e in errors))
+        self.assertTrue(any("status must be draft, active, implemented, or superseded" in e for e in errors))
 
 
 class _LinkRepoMixin:

@@ -225,6 +225,19 @@ Classify it explicitly:
 - Is it main itself? → there's no feature branch to merge; focus on syncing and
   pruning.
 
+### Prove the integration target
+
+For every `integrate` branch, resolve the branch named by the work owner, issue,
+or PR to a commit SHA. A generated worktree branch name is not proof that it
+contains the reported work. Compare `git log --oneline <integration-ref>..<branch>`
+and `git diff --name-status <integration-ref>...<branch>` with the expected
+commits and deliverable paths; check both commands' exit status. Record the
+target SHA and expected paths in the plan. If the branch has no new work while
+work was claimed, stop and find the actual branch. If the work is already on
+main, classify it as already integrated with evidence instead of claiming a
+new merge. A `git merge` exit code of 0, including "Already up to date", only
+proves that the command succeeded.
+
 ### Patch-equivalence and obsolete branch checks
 
 Use these when a branch is not ancestry-merged but looks already handled:
@@ -351,7 +364,7 @@ actions:
 
 Will do autonomously:
 - Commit <files> on <branch>  — "<message>"  (reason)
-- Push <branch> and merge via <PR+squash | local ff> into main
+- Push <branch> at <target-sha> and merge <expected paths> via <PR+squash | local ff> into main
 - Switch to main and sync with origin/main
 
 Requires confirmation before deletion:
@@ -373,9 +386,17 @@ destructive until they approve.
 1. Commit or stash uncommitted changes per the decision.
 2. Push the current branch if it has unpushed commits.
 3. Merge into main:
+   - Re-resolve the selected branch before merging; if its SHA differs from the
+     recorded target, inspect the new commits and update the plan first.
    - GitHub: `gh pr create …` then `gh pr merge <N> --squash`, retiring the
      remote ref in step 10 rather than with a flag on the merge.
    - Local: `git checkout main && git merge --ff-only <branch>`.
+   - Before cleanup or a completion claim, verify the result against the target
+     SHA and expected paths. For a PR, compare its `headRefOid`, merged state,
+     merge commit, and changed files with the recorded target and deliverables.
+     For a local fast-forward, confirm the target SHA is an ancestor of main and
+     inspect the before/after file diff. A successful merge command with no
+     expected changes is not evidence that the intended work arrived.
 4. Sync main: `git checkout main && git pull --ff-only`.
 5. Return the repository root worktree to main if it is not already there. **Do
    this before any branch deletion** — you cannot delete the branch you're on, so
@@ -417,6 +438,8 @@ Confirm and report the end state:
 - `git status` is clean,
 - repository root is on `main` (or the integration branch),
 - `git rev-parse main` == `git rev-parse origin/main` (or report ahead/behind),
+- the intended deliverable paths and merge target match the recorded integration
+  proof; report any missing path or status rather than claiming integration,
 - `git worktree list` contains only intentional worktrees,
 - `git branch -vv` contains only intentional branches,
 - every remaining branch/worktree is listed with its disposition and reason.

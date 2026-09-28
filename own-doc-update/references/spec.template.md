@@ -1,6 +1,6 @@
 ---
 id: SPEC-name
-status: draft # draft | active | superseded
+status: draft # draft | active | implemented | superseded
 created_at: YYYY-MM-DD
 updated_at: YYYY-MM-DD
 related_guides: []

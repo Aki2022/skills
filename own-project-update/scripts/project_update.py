@@ -211,6 +211,10 @@ def _add_record_backlink(note: Note, key: str) -> str:
 
 def prepare_record(path: Path, key: str) -> Change:
     note = parse_note(path)
+    # 書く経路の検査は読む経路（_validate_record）と同じ強さにする。
+    # 2026-09-29 以前は backfill だけがこの検査を通らず、validate が拒否する入力を
+    # 受け入れて書き込んでいた。読むモードより書くモードが緩いのは「成功に見えて誤る」側。
+    _check_local_paths(path, note.text)
     _assert_no_other_project(note, key)
     text = _add_project_key(note, key)
     text = _add_record_backlink(_parse_note_text(path, text), key)

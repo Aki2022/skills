@@ -3,7 +3,7 @@ name: own-spec-grill
 description: Shape, create, or materially revise repository specs through a rigorous interview that stress-tests material assumptions one question at a time, grounded in existing docs and code. Use at the start of greenfield development, when a feature or product direction is still ambiguous, when the user asks to create or grill a spec, or when an existing docs/specs file needs a substantive change. Create the expected docs scaffold when absent, persist resolved decisions into a draft spec during the dialogue, and finalize only after explicit shared-understanding approval. Do not use for mechanical spec edits, typo fixes, read-only summaries, or implementation after a spec is already settled.
 ---
 
-# Origin Grill
+# Own Spec Grill
 
 Turn an ambiguous development direction into an approved `docs/specs/` source of intent. Interview the user, stress-test material assumptions, maintain the domain language, and write the spec as decisions resolve. Do not implement the result.
 

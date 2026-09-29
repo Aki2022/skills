@@ -3,7 +3,7 @@ name: own-goal-run
 description: Run a long-lived, workstream-driven objective inside explicit human boundaries. Use when the user asks to keep working until a goal or checkpoint is reached, resume or execute a docs workstream, orchestrate subagents over multiple slices, control retries or metered cost, or prepare a durable autonomous run with human approval gates. Establish the control unit using the repository's own convention, and complete the preflight interview before starting or resuming execution.
 ---
 
-# Origin Goal
+# Own Goal Run
 
 Treat the workstream as durable truth, the runtime goal as the persistence
 engine, and the plan as the current execution view. Keep the parent agent

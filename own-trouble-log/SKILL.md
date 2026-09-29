@@ -13,7 +13,7 @@ description: >-
   が所有）、hook や settings.json の作成（settings を扱う skill が所有）。
 ---
 
-# Origin Trouble Log
+# Own Trouble Log
 
 エージェント（Claude / Codex 等）の作業トラブルを集積する。**集積と、集積物の
 トリアージ、対策 status の管理まで**をこの skill が所有する。形式化の実行は所有しない。

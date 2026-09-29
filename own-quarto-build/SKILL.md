@@ -3,7 +3,7 @@ name: own-quarto-build
 description: Create, modify, or render any Quarto document or project, including `.qmd` files, `_quarto.yml`, RevealJS slides, and PowerPoint output. Always use the bundled organization template and extensions when creating Quarto or QMD content.
 ---
 
-# Origin Quarto
+# Own Quarto Build
 
 Create Quarto deliverables from the bundled template. Keep the template files together so its RevealJS plugins, SCSS, citation style, and PowerPoint reference document remain available.
 

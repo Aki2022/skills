@@ -7,7 +7,7 @@ description: >-
   pipeline remains the default for newly recorded meetings.
 ---
 
-# Origin Project Update
+# Own Project Update
 
 Obsidian の `vault/project/`、`vault/record/`、`vault/setting/list/list_project.md` を
 整合させる skill だよ。新規 project の初期化、過去議事録の backfill、project/list の

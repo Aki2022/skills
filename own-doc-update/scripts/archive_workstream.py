@@ -10,8 +10,8 @@ from datetime import date
 from pathlib import Path
 
 from archive_links import plan_link_updates, repoint
+from archive_index_policy import read_policy, update_rows
 from archive_transaction import apply_archive, cleanup_staged, stage_text
-from index_entries import find_index_entry_lines, remove_index_entry
 from validate_repo_docs import parse_front_matter, parse_workstream_issue_blocks, validate_repo
 import ownership
 
@@ -169,20 +169,11 @@ def main() -> None:
             raise OSError(f"index path is not a regular file: {index}")
         if index.is_file():
             index_content = index.read_text()
-            target_lines = find_index_entry_lines(
-                index_content, "docs/workstreams", workstream_id
+            policy = read_policy(index_content)
+            mode = "completed" if policy == "completed" else "keep" if args.keep_row else policy
+            new_index, target_lines, moved = update_rows(
+                index_content, "docs/workstreams", workstream_id, mode
             )
-            if args.keep_row:
-                new_index, removed, target_lines = index_content, 0, []
-            else:
-                new_index, removed = remove_index_entry(
-                    index_content, "docs/workstreams", workstream_id
-                )
-                if removed != len(target_lines):
-                    raise ValueError(
-                        "index target count mismatch: "
-                        f"removed={removed}, reported={len(target_lines)}"
-                    )
             # Anything the row matcher did not take still links the old path
             # after the move; repoint it rather than leave the breakage behind
             # (same defect as archive_issue.py, measured 2026-09-19).
@@ -197,7 +188,7 @@ def main() -> None:
                 1 for old, new in zip(before_repoint.splitlines(), new_index.splitlines())
                 if old != new
             )
-            if removed or target_lines or repointed:
+            if target_lines or moved or repointed:
                 new_index = re.sub(
                     r"(updated_at:[ \t]*)[\d-]+", rf"\g<1>{today}", new_index, count=1
                 )
@@ -249,8 +240,9 @@ def main() -> None:
     if index_plan is not None:
         target_lines, repointed = index_plan[2], index_plan[3]
         if target_lines:
+            action = "moved to Completed" if read_policy(index_plan[0]) == "completed" else "removed"
             print(
-                f"Updated: docs/00_index.md (removed {len(target_lines)} active reference(s))"
+                f"Updated: docs/00_index.md ({action} {len(target_lines)} active reference(s))"
             )
             for line_number, line in target_lines:
                 print(f"  line {line_number}: {line}")

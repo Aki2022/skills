@@ -254,6 +254,96 @@ class IndexLinkSurvivesArchivingTest(unittest.TestCase):
         self.assertIn(f"- [{self.ISSUE_ID}](issues/archive/{self.ISSUE_ID}.md) — one line", index)
         self.assertEqual(self.broken_links(root), [])
 
+    def test_completed_policy_moves_row_out_of_generated_active_section(self):
+        rel_dir = "workstreams" if self.ISSUE_ID.startswith("WS-") else "issues"
+        bullet = f"- [{self.ISSUE_ID}]({rel_dir}/{self.ISSUE_ID}.md) — one line\n"
+        root = self.make_repo(
+            "<!-- own-doc-update:generated active-issues begin -->\n"
+            + bullet
+            + "<!-- own-doc-update:generated active-issues end -->\n\n"
+            + "## Completed (archive)\n\n"
+        )
+        index_path = root / "docs/00_index.md"
+        index_path.write_text(index_path.read_text().replace(
+            "current_focus: x\n", "current_focus: x\narchive_index_rows: completed\n"
+        ))
+
+        result = self.run_archive(root)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        index = index_path.read_text()
+        active, completed = index.split("## Completed (archive)")
+        self.assertNotIn(self.ISSUE_ID, active)
+        self.assertIn(
+            f"- [{self.ISSUE_ID}]({rel_dir}/archive/{self.ISSUE_ID}.md) — one line",
+            completed,
+        )
+        self.assertEqual(self.broken_links(root), [])
+
+    def test_completed_policy_takes_precedence_over_keep_row_flag(self):
+        rel_dir = "workstreams" if self.ISSUE_ID.startswith("WS-") else "issues"
+        root = self.make_repo(
+            f"- [{self.ISSUE_ID}]({rel_dir}/{self.ISSUE_ID}.md) — one line\n"
+            "\n## Completed (archive)\n\n"
+        )
+        index_path = root / "docs/00_index.md"
+        index_path.write_text(index_path.read_text().replace(
+            "current_focus: x\n", "current_focus: x\narchive_index_rows: completed\n"
+        ))
+
+        result = self.run_archive(root, "--keep-row")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        active, completed = index_path.read_text().split("## Completed (archive)")
+        self.assertNotIn(self.ISSUE_ID, active)
+        self.assertIn(f"{rel_dir}/archive/{self.ISSUE_ID}.md", completed)
+
+    def test_invalid_policy_stops_before_moving_issue(self):
+        rel_dir = "workstreams" if self.ISSUE_ID.startswith("WS-") else "issues"
+        root = self.make_repo(f"- [{self.ISSUE_ID}]({rel_dir}/{self.ISSUE_ID}.md)\n")
+        index_path = root / "docs/00_index.md"
+        index_path.write_text(index_path.read_text().replace(
+            "current_focus: x\n", "current_focus: x\narchive_index_rows: unexpected\n"
+        ))
+
+        result = self.run_archive(root)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertTrue((root / "docs" / rel_dir / f"{self.ISSUE_ID}.md").exists())
+        self.assertFalse((root / "docs" / rel_dir / "archive" / f"{self.ISSUE_ID}.md").exists())
+
+    def test_completed_policy_requires_destination_heading_before_move(self):
+        rel_dir = "workstreams" if self.ISSUE_ID.startswith("WS-") else "issues"
+        root = self.make_repo(f"- [{self.ISSUE_ID}]({rel_dir}/{self.ISSUE_ID}.md)\n")
+        index_path = root / "docs/00_index.md"
+        index_path.write_text(index_path.read_text().replace(
+            "current_focus: x\n", "current_focus: x\narchive_index_rows: completed\n"
+        ))
+
+        result = self.run_archive(root)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Completed (archive)", result.stderr)
+        self.assertTrue((root / "docs" / rel_dir / f"{self.ISSUE_ID}.md").exists())
+
+    def test_completed_policy_moves_plain_path_row(self):
+        rel_dir = "workstreams" if self.ISSUE_ID.startswith("WS-") else "issues"
+        root = self.make_repo(
+            f"- docs/{rel_dir}/{self.ISSUE_ID}.md — one line\n"
+            "\n## Completed (archive)\n\n"
+        )
+        index_path = root / "docs/00_index.md"
+        index_path.write_text(index_path.read_text().replace(
+            "current_focus: x\n", "current_focus: x\narchive_index_rows: completed\n"
+        ))
+
+        result = self.run_archive(root)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        active, completed = index_path.read_text().split("## Completed (archive)")
+        self.assertNotIn(self.ISSUE_ID, active)
+        self.assertIn(f"docs/{rel_dir}/archive/{self.ISSUE_ID}.md", completed)
+
 
 class WorkstreamIndexLinkSurvivesArchivingTest(IndexLinkSurvivesArchivingTest):
     """The twin script carried the identical defect; fixing only one leaves it live."""
@@ -366,5 +456,25 @@ none
         index = (root / "docs/00_index.md").read_text()
         self.assertIn(
             f"- [{self.ISSUE_ID}](workstreams/archive/{self.ISSUE_ID}.md) — one line", index
+        )
+
+    def test_completed_policy_moves_workstream_row(self):
+        root = self.make_repo(
+            f"- [{self.ISSUE_ID}](workstreams/{self.ISSUE_ID}.md) — one line\n"
+            "\n## Completed (archive)\n\n"
+        )
+        index_path = root / "docs/00_index.md"
+        index_path.write_text(index_path.read_text().replace(
+            "current_focus: x\n", "current_focus: x\narchive_index_rows: completed\n"
+        ))
+
+        result = self.run_archive(root)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        active, completed = index_path.read_text().split("## Completed (archive)")
+        self.assertNotIn(self.ISSUE_ID, active)
+        self.assertIn(
+            f"- [{self.ISSUE_ID}](workstreams/archive/{self.ISSUE_ID}.md) — one line",
+            completed,
         )
         self.assertEqual(self.broken_links(root), [])

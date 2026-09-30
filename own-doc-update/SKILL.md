@@ -237,8 +237,13 @@ Before archive:
    exact index lines they changed. Treat a zero or unexpected count as a stop condition and
    inspect the diff before continuing. An entry the row matcher does not recognize (prose, a
    nested bullet) is repointed at the archive path instead of being left pointing at the file
-   that just moved; pass `--keep-row` when the index's own policy keeps completed rows, and the
-   row is repointed in place rather than removed.
+   that just moved. Repositories that retain completed rows set
+   `archive_index_rows: completed` in the front matter of `docs/00_index.md` and provide a
+   `## Completed (archive)` section. The scripts and `docs_hygiene.py --fix` then move the
+   row there and repoint it. Without that setting, the old remove behavior remains. The
+   explicit `--keep-row` flag still repoints the row in place when no completed-row policy
+   is set; an explicit repository policy takes precedence. Review the row's summary after the move
+   so it records the conclusion, then check the index diff.
 10. Hand merged branch cleanup to `own-git-clean`.
 
 ## Resume and onboard

@@ -10,8 +10,9 @@ from typing import Optional
 
 from archive_workstream import UNCHECKED_BOX
 from archive_links import plan_link_updates, repoint
+from archive_index_policy import read_policy, update_rows
 from archive_transaction import apply_archive, cleanup_staged, stage_text
-from index_entries import find_index_entry_lines, normalize_entry_id, remove_index_entry
+from index_entries import normalize_entry_id
 from validate_repo_docs import parse_front_matter, validate_repo
 import ownership
 
@@ -90,16 +91,9 @@ def prepare_index_update(
     with open(index_path) as f:
         content = f.read()
 
-    target_lines = find_index_entry_lines(content, "docs/issues", issue_id)
-    if keep_row:
-        new_content, removed = content, 0
-        target_lines = []
-    else:
-        new_content, removed = remove_index_entry(content, "docs/issues", issue_id)
-        if removed != len(target_lines):
-            raise ValueError(
-                f"index target count mismatch: removed={removed}, reported={len(target_lines)}"
-            )
+    policy = read_policy(content)
+    mode = "completed" if policy == "completed" else "keep" if keep_row else policy
+    new_content, target_lines, moved = update_rows(content, "docs/issues", issue_id, mode)
 
     # Whatever the row matcher did not take now gets repointed, so the move can
     # never leave a link to the old path behind.
@@ -114,7 +108,7 @@ def prepare_index_update(
         1 for old, new in zip(before_repoint.splitlines(), new_content.splitlines()) if old != new
     )
 
-    if not removed and not target_lines and not repointed:
+    if not target_lines and not moved and not repointed:
         return None
 
     today = today or date.today().isoformat()
@@ -317,7 +311,8 @@ def main():
     if index_plan is not None:
         target_lines, repointed = index_plan[2], index_plan[3]
         if target_lines:
-            print(f"Updated: docs/00_index.md (removed {len(target_lines)} active reference(s))")
+            action = "moved to Completed" if read_policy(index_plan[0]) == "completed" else "removed"
+            print(f"Updated: docs/00_index.md ({action} {len(target_lines)} active reference(s))")
             for line_number, line in target_lines:
                 print(f"  line {line_number}: {line}")
         if repointed:

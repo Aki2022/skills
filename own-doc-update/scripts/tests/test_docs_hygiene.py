@@ -112,6 +112,31 @@ class HygieneFixture(unittest.TestCase):
 
 
 class ArchiveCompleteTest(HygieneFixture):
+    def test_completed_policy_survives_hygiene_and_second_run(self):
+        root = self.make_repo()
+        issue_id = "ISSUE-20260801-done"
+        self.add_issue(root, issue_id, "complete", "2026-08-01")
+        index_path = root / "docs/00_index.md"
+        index_text = index_path.read_text().replace(
+            "current_focus: []\n", "current_focus: []\narchive_index_rows: completed\n"
+        )
+        index_text = index_text.replace(
+            f"- [{issue_id}](issues/{issue_id}.md) — one line\n",
+            "<!-- own-doc-update:generated active-issues begin -->\n"
+            f"- [{issue_id}](issues/{issue_id}.md) — one line\n"
+            "<!-- own-doc-update:generated active-issues end -->\n",
+        )
+        index_path.write_text(index_text + "\n## Completed (archive)\n\n")
+
+        first = MODULE.run(root, fix=True, report=False, today=date(2026, 9, 19))
+        second = MODULE.run(root, fix=True, report=False, today=date(2026, 9, 19))
+
+        self.assertEqual(first["fixes"]["A1_archived"]["count"], 1)
+        self.assertEqual(second["fixes"]["A1_archived"]["count"], 0)
+        active, completed = index_path.read_text().split("## Completed (archive)")
+        self.assertNotIn(issue_id, active)
+        self.assertEqual(completed.count(f"issues/archive/{issue_id}.md"), 1)
+
     def test_complete_issue_is_archived_and_index_row_removed(self):
         root = self.make_repo()
         self.add_issue(root, "ISSUE-20260801-done", "complete", "2026-08-01")

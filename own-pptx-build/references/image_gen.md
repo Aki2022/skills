@@ -2,20 +2,22 @@
 title: own-pptx-build — Codex image_gen 完全ガイド
 ---
 
-# Codex image_gen（built-in, gpt-image-2）完全ガイド
+# Codex image_gen（built-in, ChatGPT Images 2.5）完全ガイド
 > 器と実行機構の正典は `own-image-gen`。本書はその派生で pptx 固有の運用を足したもの。
 
-このスキルの②（デザインモックアップ生成）と③（文字なし**イラスト**生成）で使う唯一の画像生成手段。Codex CLI 組み込みの `image_gen` ツール（モデル: **gpt-image-2**）を使う。
+このスキルの②（デザインモックアップ生成）と③（文字なし**イラスト**生成）で使う唯一の画像生成手段。Codex 組み込みの `image_gen` ツール（**ChatGPT Images 2.5**）を使う。
 **③の意味アイコンは対象外**——2026-08-27 の A/B 実測で Material Symbols 標準に置換した
 （`references/material-icons.md` が正典。image_gen が③で作るのは人物・いらすとや調・UIモック等の
 イラストのみ）。本書のアイコン関連記述（正規化・白チップ等）は歴史的経緯＋イラスト運用として読む。
 
 ## モデル・認証・コスト
 
-- モデル: **gpt-image-2**（Codex 組み込みツール経由。CLIフォールバックの `gpt-image-1.5` とは別物）
+- 画像モデル世代: **ChatGPT Images 2.5**。2026-09-08の[公式発表](https://openai.com/index/introducing-chatgpt-images-2-5/)でCodexへの提供を確認（確認日: 2026-09-30）。
+- 組込みツールのモデル選択はホスト管理。公開引数に `model` はなく、特定variantの強制指定や個別生成の実行モデルの実測確認はできない。プロンプトのモデル名を設定値と扱わない。
+- APIでは `gpt-image-2.5-flare` / `gpt-image-2.5-sunburst` が正確なモデルID（[公式ガイド](https://developers.openai.com/api/docs/guides/image-generation)）。これは組込みツールの引数ではない。API・API鍵・従量課金経路へ自動切替しない。
 - 認証: ChatGPTサブスクリプションのOAuth（使用シートの `auth.json` で `auth_mode=chatgpt`）
 - **`OPENAI_API_KEY` は不要。従量API課金も発生しない**（サブスクリプション内の利用）
-- 品質は実写レベルで確認済み（PoCで日本語オフィス協働シーン・柴犬系写実画像を検証、いずれも高忠実度）
+- 過去モデルの画像生成PoCでは、日本語オフィス協働シーン・柴犬系写実画像の高忠実度を確認した。これはImages 2.5の実測証拠ではなく、Images 2.5の品質は各成果物で検収する。
 
 ## コマンド解決（マルチシート・2026-08-31 導入）
 
@@ -52,7 +54,7 @@ CODEX_BIN=$(command -v codex2 || command -v codex)
 
 ※作業ディレクトリがgitリポジトリ外（scratchpad等）の場合は `--skip-git-repo-check` を追加する（無いと「Not inside a trusted directory」で即終了する・2026-07-28実測）。
 
-Codexの既定サンドボックス（`read-only`）はネットワークを遮断するため、そのままでは image_gen 呼び出しがブロックされる。しかし**フルバイパスは不要**: `workspace-write` サンドボックスを維持したまま `sandbox_workspace_write.network_access=true` でネットワークだけ許可すれば image_gen（gpt-image-2）は正常動作する（2026-07-26 hachinohe_sea_2026 のデッキ生成で実証。生成画像が `$CODEX_HOME/generated_images/<session-id>/` に保存される挙動もバイパス時と同一）。
+Codexの既定サンドボックス（`read-only`）はネットワークを遮断するため、そのままでは image_gen 呼び出しがブロックされる。しかし**フルバイパスは不要**: `workspace-write` サンドボックスを維持したまま `sandbox_workspace_write.network_access=true` でネットワークだけ許可すれば image_gen は正常動作する（2026-07-26 hachinohe_sea_2026 のデッキ生成で実証。生成画像が `$CODEX_HOME/generated_images/<session-id>/` に保存される挙動もバイパス時と同一）。
 
 `--dangerously-bypass-approvals-and-sandbox` は**使わない**。Claude Code の分類器がこのフラグをハードブロックするため（許可ルールがあっても通らない）、そもそも AI からは実行できない。詳細は下の AUTHORIZATION 節。
 

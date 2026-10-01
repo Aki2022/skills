@@ -1,13 +1,14 @@
 {
   "_meta": {
     "name": "origin-pptx-skill-config",
-    "version": "1.5.0",
+    "version": "1.5.1",
     "usage": "実行設定の正典。⓪スタイルガイド読込時に読む。モデル割当・検証ループ・並列度を変えたいときはこのファイルを編集する（SKILL.md/pipeline.md 本文のハードコードは背景説明であり、実行時はここが優先）。"
   },
   "imageGen": {
     "codexBin": "codex2",
     "fallbackBin": "codex",
-    "_note": "image_gen（②モックアップ・③イラスト）の実行コマンド。codexBin が PATH に存在すればそれを、無ければ fallbackBin を使う（`command -v codex2 || command -v codex` で解決）。codex2 は CODEX_HOME を別シート（~/.codex-seat2）へ切り替えて同じ codex バイナリを起動するラッパーで、シートごとに認証・利用枠が分かれる（2026-08-31 メインシートの『out of credits』を受けて導入・ChatGPTサブスクOAuth側のシートを既定にする）。生成物の回収は collect_codex_images.py が session id から ~/.codex* 全シートを自動探索するため、CODEX_HOME の手渡しは不要。"
+    "_note": "image_gen（②モックアップ・③イラスト）の実行コマンド。codexBin が PATH に存在すればそれを、無ければ fallbackBin を使う（`command -v codex2 || command -v codex` で解決）。codex2 は CODEX_HOME を別シートへ切り替えて同じ codex バイナリを起動するラッパーで、シートごとに認証・利用枠が分かれる（2026-08-31 メインシートの『out of credits』を受けて導入・ChatGPTサブスクOAuth側のシートを既定にする）。生成物の回収は collect_codex_images.py が session id から各 CODEX_HOME を自動探索するため、環境変数の手渡しは不要。",
+    "_modelNote": "画像モデル世代: ChatGPT Images 2.5（2026-09-08公式提供、2026-09-30確認）。組込みimage_genはホスト管理でmodel引数を公開せず、この記述は実行モデルを強制する設定ではない。Flare/Sunburstのvariant指定や個別生成の実行モデルを確認済みと断定しない。API課金経路へ自動切替しない。根拠とAPIモデルIDは references/image_gen.md。"
   },
   "models": {
     "_note": "orchestrator はメインループ＝セッションのモデルをそのまま使う（指定不可）。サブエージェントのみ割当。effort はサブエージェント起動時の reasoning effort 指定（対応環境のみ）。",

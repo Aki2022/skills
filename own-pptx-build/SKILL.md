@@ -19,7 +19,7 @@ description: >
 ## 核心原則
 
 **ネイティブ層（PptxGenJS）＝ レイアウト・箱・矢印・日本語テキスト・チャート・表**（完全編集可能）
-＋ **image_gen 層（Codex built-in gpt-image-2）＝ モックアップ（デザイン仕様）と文字なしアセット**（創造性）
+＋ **image_gen 層（Codex built-in ChatGPT Images 2.5）＝ モックアップ（デザイン仕様）と文字なしアセット**（創造性）
 
 - 日本語テキストは常にネイティブ。画像内に焼き込まない（小さい日本語はimage_genで誤字化リスクがあり、部分修正もできないため）。
 - **実データのチャート・表は必ずネイティブ**（エクセルベースのOOXMLチャート）。imagegenで実データを描かせない（数値捏造が起きる）。→ `style-guide/chart-rules.md`
@@ -214,7 +214,7 @@ python3 <skill>/scripts/set_fonts.py 最終成果物.pptx     # 必須: テン�
 「新しいスライド」で会社レイアウト（11種）を使え、テーマの色（44546A等）・フォント（Noto）が正しく並ぶ。
 注入後は 1回レンダして注入前と同一であること＋ `sanitize_pptx.py --check` を確認する。
 
-## image_gen（Codex built-in, gpt-image-2）— 概要
+## image_gen（Codex built-in, ChatGPT Images 2.5）— 概要
 
 ②のモックアップと、③の**イラスト**生成で使う（③の意味アイコンは Material Symbols 標準に置換済み
 ——`references/material-icons.md`）。組立規約は `style-guide/imagegen-prompt-convention.md`。
@@ -226,7 +226,9 @@ CODEX_BIN=$(command -v codex2 || command -v codex)
 "$CODEX_BIN" exec --sandbox workspace-write -c sandbox_workspace_write.network_access=true --cd "$PWD" "<プロンプト>"
 ```
 
-- gpt-image-2、ChatGPTサブスクOAuth。**OPENAI_API_KEY 不要・従量課金なし**。
+- ChatGPT Images 2.5、ChatGPTサブスクOAuth。**OPENAI_API_KEY 不要・従量API課金なし**。
+  組込みツールはホスト側でモデルを管理し、`model` 引数を公開していない。APIのFlare/Sunburstを
+  強制選択したり、個別生成の実行モデルを確認済みと断定したりしない（詳細は `references/image_gen.md`）。
   `codex2` は CODEX_HOME を別シートへ切り替えるラッパー（マルチシート）——メインシートが
   「out of credits」を返す環境ではサブスクOAuth側のシートを使う（skill-config.json `imageGen._note`）
 - アセットのプロンプトは必ず **"NO text, no labels"** で終える

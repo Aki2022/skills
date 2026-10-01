@@ -116,11 +116,10 @@ mirrors:
   - dir: playwright-cli
     upstream: microsoft/playwright-cli
     upstream_path: skills/playwright-cli
-    upstream_version: unknown (取得時の版を記録していない)
-    fetched_at: 2026-07-20 以前
-    license: 記載なし（上流 repo のライセンスに従う）
-    reinstall: npx degit microsoft/playwright-cli/skills/playwright-cli ~/.agents/skills/playwright-cli
-    note: ローカルは 392 行・上流 HEAD は 542 行で古い。2026-09-23 に own-playwright-run への改名を誤って行い破棄した（自作ではない）
+    upstream_version: b85c7a736bb473bf55b584e54a09ffa698d6d871
+    fetched_at: 2026-10-01
+    license: Apache-2.0 (repo root LICENSE)
+    reinstall: "npx degit microsoft/playwright-cli#b85c7a736bb473bf55b584e54a09ffa698d6d871/skills/playwright-cli ~/.agents/skills/playwright-cli"
   - dir: quarto-authoring
     upstream: posit-dev/skills
     upstream_path: quarto/quarto-authoring
@@ -238,6 +237,14 @@ mirrors:
     reinstall: "npx degit anthropics/claude-plugins-official/plugins/frontend-design/skills/frontend-design ~/.agents/skills/frontend-design"
     local_copy: "~/.claude-seat2/plugins/cache/claude-plugins-official/frontend-design/6bfd4e0c6d3d/skills/frontend-design"
     note: "Reactivated retired entry and refreshed its older snapshot from the installed plugin source."
+
+  - dir: yomiyasu
+    upstream: "nanaism/yomiyasu"
+    upstream_path: "skills/yomiyasu"
+    upstream_version: "30ee6041c328ce21d38a7963f667e079a93d7a12"
+    fetched_at: 2026-10-01
+    license: "MIT (repo root LICENSE; SKILL.md frontmatter)"
+    reinstall: "npx degit nanaism/yomiyasu#30ee6041c328ce21d38a7963f667e079a93d7a12/skills/yomiyasu ~/.agents/skills/yomiyasu"
 
 retired:
   - dir: agents-sdk

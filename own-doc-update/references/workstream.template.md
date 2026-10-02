@@ -6,7 +6,7 @@ priority: ""
 due: ""
 created_at: YYYY-MM-DD
 updated_at: YYYY-MM-DD
-branch: WS-YYYYMMDD-short-slug
+branch: ""
 pr: ""
 human_boundary_confirmed_at: YYYY-MM-DD
 next_human_gate: short-gate-name

@@ -127,7 +127,7 @@ def main():
         content = (
             f"---\nid: {issue_id}\nstatus: active\n"
             f"created_at: {today_iso}\nupdated_at: {today_iso}\n"
-            f"branch: {issue_id}\npr: \"\"\n"
+            f"branch: \"\"\npr: \"\"\n"
             f"related_specs: []\nrelated_guides: {related_guides}\n"
             f"guide_impact: {guide_impact}\n"
             f'guide_impact_reason: "{guide_reason}"\n---\n\n'

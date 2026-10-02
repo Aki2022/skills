@@ -14,6 +14,28 @@ import sys
 from typing import Optional
 
 
+def strip_inline_comment(raw: str) -> str:
+    """Remove a trailing YAML `# comment` from a scalar value.
+
+    YAML only starts a comment at a `#` preceded by whitespace (or at the start of
+    the value), and never inside a quoted scalar. So `feat/x#frag` and
+    `"has # inside"` keep their `#`, while `"" # memo` and `feat/x # memo` lose the memo.
+    Mirrored verbatim in own-git-clean/scripts/check_active_issue_branches.py (the two
+    skills are independent, so the function is copied rather than imported; a test
+    pins them to the same answer).
+    """
+    quote = ""
+    for index, char in enumerate(raw):
+        if quote:
+            if char == quote:
+                quote = ""
+        elif char in "\"'" and not raw[:index].strip(" \t"):
+            quote = char
+        elif char == "#" and (index == 0 or raw[index - 1] in " \t"):
+            return raw[:index].rstrip()
+    return raw.rstrip()
+
+
 def parse_front_matter(path: str) -> Optional[dict]:
     """Parse top-level scalar YAML front matter fields. Mirrors own-doc-update's
     validate_repo_docs.py parser: only reads unindented `key: value` lines,
@@ -37,7 +59,7 @@ def parse_front_matter(path: str) -> Optional[dict]:
     for line in fm.splitlines():
         if ":" in line and not line.startswith(" ") and not line.startswith("-"):
             key, _, val = line.partition(":")
-            result[key.strip()] = val.strip().strip('"').strip("'")
+            result[key.strip()] = strip_inline_comment(val.strip()).strip('"').strip("'")
     return result
 
 

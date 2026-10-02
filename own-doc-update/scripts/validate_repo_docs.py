@@ -112,6 +112,28 @@ def read_flow_continuation(lines: list[str], start: int) -> tuple[int, list[str]
     return 0, []
 
 
+def strip_inline_comment(raw: str) -> str:
+    """Remove a trailing YAML `# comment` from a scalar value.
+
+    YAML only starts a comment at a `#` preceded by whitespace (or at the start of
+    the value), and never inside a quoted scalar. So `feat/x#frag` and
+    `"has # inside"` keep their `#`, while `"" # memo` and `feat/x # memo` lose the memo.
+    Mirrored verbatim in own-git-clean/scripts/check_active_issue_branches.py (the two
+    skills are independent, so the function is copied rather than imported; a test
+    pins them to the same answer).
+    """
+    quote = ""
+    for index, char in enumerate(raw):
+        if quote:
+            if char == quote:
+                quote = ""
+        elif char in "\"'" and not raw[:index].strip(" \t"):
+            quote = char
+        elif char == "#" and (index == 0 or raw[index - 1] in " \t"):
+            return raw[:index].rstrip()
+    return raw.rstrip()
+
+
 def parse_front_matter(path: str | Path) -> Optional[FrontMatter]:
     """Parse the small YAML subset used by own-doc-update templates."""
     try:
@@ -137,7 +159,7 @@ def parse_front_matter(path: str | Path) -> Optional[FrontMatter]:
         index += 1
         if KEY_LINE.match(line):
             key, _, raw = line.partition(":")
-            raw = raw.strip()
+            raw = strip_inline_comment(raw.strip())
             if key in result and key not in duplicates:
                 duplicates.append(key)
             current_list = None

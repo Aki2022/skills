@@ -5,7 +5,7 @@ status: active
 workstream: ""
 created_at: YYYY-MM-DD
 updated_at: YYYY-MM-DD
-branch: ISSUE-YYYYMMDD-short-slug
+branch: ""
 pr: ""
 related_specs: []
 related_guides: []

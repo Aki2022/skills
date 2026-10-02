@@ -1,12 +1,12 @@
 ---
 schema_version: 2
 id: ISSUE-20261001-fix-branch-record-mechanisms-that-fabricate-missing
-status: active
+status: archived
 workstream: none
 priority: high
 due: none
 created_at: 2026-10-01
-updated_at: 2026-10-01
+updated_at: 2026-10-02
 branch: ""
 pr: ""
 related_specs: []
@@ -70,28 +70,41 @@ MISSING が 93 → 95 に増えた。同リポジトリの MISSING 95 件のう�
 
 ## Current Status
 
-as of 2026-10-01 — 起票のみ。未着手。
+as of 2026-10-02 — 実装・検証済み（commit 8f30056）。issue の記述と実装で違った点がある。
 
-消費側 yorisoi_kaigo の WS-20260926-missing-issue-archive-sieve（archive 候補を
-Jev で篩う試み）が 2026-09-27 に調査する過程で発見した。その WS は別の理由
-（校正が原理的に成立しない）で不採用になったが、**本件 2 つのバグは独立に実在し、
-その WS の成否と無関係に直す価値がある**。詳細は yorisoi_kaigo の
-`docs/log/archive-sieve-rejection-20260927.md` と
-`docs/issues/ISSUE-20260803-issue-branch-record-drift.md`。
+**issue の記述との差分（実装して初めて分かったこと）:**
 
-<!-- Snapshot for the next session, overwritten each time: first line `as of 2026-10-01 — <state in one sentence>`. History goes to ## Log, not here. -->
+1. **主経路の原因はテンプレート側だった。** 本 issue は `create_issue.py:130` を原因と書いたが、
+   そこはテンプレートが読めない時のフォールバック。主経路は
+   `content.replace("ISSUE-YYYYMMDD-short-slug", issue_id)` で、`issue.template.md:8` の
+   `branch:` もこの置換で実 ID になる。130 行だけ直しても主経路は直らなかった。
+2. **`workstream.template.md` の `branch: WS-YYYYMMDD-short-slug` も同型**なので直した
+   （範囲外だが同じ原因。消費側 WS-20260926 が `branch_note` で自力回避していた罠）。
+3. **パーサの不具合は issue の記述より重かった。** `branch: "feat/x" # memo` は
+   閉じクォートが残って `feat/x" # memo` になっていた（空値だけの話ではなかった）。
+
+**やったこと:** `strip_inline_comment()` を `validate_repo_docs.py` と
+`check_active_issue_branches.py` に置いた。YAML 仕様どおり、`#` の前に空白がある時だけ
+コメントで、クォート内は対象外（`feat/x#frag`・`"has # inside"` は保つ）。
+`own-git-clean` は `own-doc-update` に依存しない独立 skill なので import せず同じ関数を
+置き、`StripInlineCommentMirrorTest` でソース一致を機械的に縛った。
+
+**検証（Acceptance の verify を消費側で実測）:**
+
+| 検査 | 結果 |
+| --- | --- |
+| 赤を先に確認 | 新規 10 テスト中 6 が落ち 14 件失敗 |
+| 既存テスト | own-doc-update 328 → 338 件（差分は追加分ちょうど）全緑、own-git-clean 4 件緑 |
+| yorisoi_kaigo の MISSING | 93 → 91。消えたのは `ISSUE-20260803-issue-branch-record-drift` と `ISSUE-20260803-core-capability-request-pr`（事前に特定した 2 件）、増加 0 |
+| 対照実験（同じ docs に 1 件起票） | 原版の生成器 98 → **99**（+1）、修正後 98 → **98**（±0） |
+
+**未対応（本 issue の範囲外）:** 消費側の既存 `branch == 自分の id` 59 件の一括
+`branch: ""` 化は各 repo の作業。
 
 ## Next Actions
 
-1. `create_issue.py:130` の `branch: {issue_id}` を `branch: ""` に変える。
-2. `references/issue.template.md:8` の `branch: ISSUE-YYYYMMDD-short-slug` を
-   `branch: ""` に変える（テンプレートがプレースホルダの書き方を教えてしまっている）。
-3. `check_active_issue_branches.py:17-39`・`validate_repo_docs.py` の front matter
-   パーサに `#` コメント剥がしを足す（`val.split("#", 1)[0]` 相当、ただし値が
-   クォートで囲まれている場合はクォート内の `#` を剥がさないこと）。
-4. 消費側リポジトリで、本 Acceptance の verify を実際に回して確認する。
-
-<!-- First bullet = the very next command or step (or what unblocks a blocked issue). Required once work starts; the validator rejects an empty section. -->
+1. 消費側リポジトリで `branch == 自分の id` かつ実在しない枝の issue を `branch: ""` にする
+   （yorisoi_kaigo は `ISSUE-20260803-issue-branch-record-drift` の Next Actions 2）。
 
 ## Guide Impact
 
@@ -109,10 +122,10 @@ bug (1) を自分で再現してしまうため。
 
 ## Completion
 
-- [ ] Implementation completed or intentionally not needed
-- [ ] Specs updated if direction or requirements changed
-- [ ] Guide impact classified before implementation
-- [ ] Guides updated in the same slice if implemented behavior changed
-- [ ] Branch merged and cleaned up (or intentionally kept — note why)
-- [ ] 00_index.md updated
-- [ ] Moved to docs/issues/archive/ when complete
+- [x] Implementation completed or intentionally not needed
+- [x] Specs updated if direction or requirements changed
+- [x] Guide impact classified before implementation
+- [x] Guides updated in the same slice if implemented behavior changed
+- [x] Branch merged and cleaned up (or intentionally kept — note why)
+- [x] 00_index.md updated
+- [x] Moved to docs/issues/archive/ when complete

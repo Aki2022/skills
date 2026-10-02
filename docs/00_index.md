@@ -1,5 +1,5 @@
 ---
-updated_at: 2026-09-26
+updated_at: 2026-10-02
 current_focus: []
 ---
 
@@ -27,7 +27,6 @@ Read this file first. Do not scan all docs unless needed. Read the active workst
 ## Active Issues
 
 <!-- own-doc-update:generated active-issues begin -->
-- [ISSUE-20261001-fix-branch-record-mechanisms-that-fabricate-missing](issues/ISSUE-20261001-fix-branch-record-mechanisms-that-fabricate-missing.md) — create_issue.py の branch プレースホルダと front matter の # コメント剥がし漏れが MISSING を捏造する · high · due none
 <!-- own-doc-update:generated active-issues end -->
 
 

@@ -30,6 +30,7 @@ Do not copy implementation history into guides or current behavior into workstre
    - Use a **standalone issue** for one bounded change, an unrelated blocker, or work with an independent lifecycle.
    - Use **docs only** when no implementation changes.
 5. Reuse the recorded branch or worktree. Do not create a second branch for resumed work.
+   A new issue or workstream starts with `branch: ""`. Write the branch name only after you have actually cut it: a name recorded in advance points at a branch that does not exist, and `check_active_issue_branches.py` reports it as MISSING.
 
 Default to one workstream file with embedded issue blocks. Split it only when independent branches, parallel ownership, or file size makes one file materially harder to resume.
 

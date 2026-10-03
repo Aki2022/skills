@@ -1,16 +1,29 @@
 #!/usr/bin/env python3
 """Deterministic preflight, validation, and record backfill for project notes.
 
-The script deliberately does not create or rewrite a project note.  Semantic project
-content is reviewed separately; this helper owns the mechanical record/list contract.
+The script deliberately does not create or rewrite the narrative of a project note.  Semantic
+project content is reviewed separately; this helper owns the mechanical record/list contract.
+
+Two subcommands extend it for SPEC-document-publish / SPEC-project-association:
+
+* ``render``  rewrites only the ``generated:associated-notes`` region of project notes.
+* ``attach-document``  publishes a generated document's text as a document note, associates it
+  with projects through frontmatter, and renders the affected project notes in the same batch.
+
+The original flat ``--mode bootstrap|backfill|validate`` interface is unchanged.
 """
 
 from __future__ import annotations
 
 import argparse
+import datetime
+import difflib
+import hashlib
+import json
 import os
 import re
 import stat
+import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass
@@ -71,6 +84,7 @@ class Change:
     path: Path
     before: str
     after: str
+    created: bool = False
 
 
 def _parse_note_text(path: Path, text: str) -> Note:
@@ -117,7 +131,8 @@ def _safe_key(value: str) -> str:
 
 
 def _yaml_scalar(value: str) -> str:
-    dumped = yaml.safe_dump(value, allow_unicode=True, default_flow_style=True)
+    # width を広げないと長い値が折り返され、先頭行だけを使うここで値が欠ける。
+    dumped = yaml.safe_dump(value, allow_unicode=True, default_flow_style=True, width=10**6)
     return dumped.splitlines()[0]
 
 
@@ -407,17 +422,23 @@ def vault_project_path(vault: Path, key: str) -> Path:
 
 
 def _write_batch(vault: Path, changes: Iterable[Change]) -> None:
-    changes = [change for change in changes if change.before != change.after]
+    changes = [change for change in changes if change.before != change.after or change.created]
     if not changes:
         return
-    originals: dict[Path, bytes] = {}
+    originals: dict[Path, bytes | None] = {}
     modes: dict[Path, int] = {}
     temp_paths: list[Path] = []
     applied: list[Path] = []
     try:
         for change in changes:
-            originals[change.path] = change.path.read_bytes()
-            modes[change.path] = stat.S_IMODE(change.path.stat().st_mode)
+            if change.created:
+                if change.path.exists() or change.path.is_symlink():
+                    raise ConflictError(f"{change.path.name}: file appeared before it could be created")
+                originals[change.path] = None
+                modes[change.path] = 0o644
+            else:
+                originals[change.path] = change.path.read_bytes()
+                modes[change.path] = stat.S_IMODE(change.path.stat().st_mode)
         for change in changes:
             with tempfile.NamedTemporaryFile(
                 mode="wb", dir=change.path.parent, prefix=f".{change.path.name}.project-update-", delete=False
@@ -430,8 +451,12 @@ def _write_batch(vault: Path, changes: Iterable[Change]) -> None:
             applied.append(change.path)
     except Exception:
         for path in applied:
-            path.write_bytes(originals[path])
-            os.chmod(path, modes[path])
+            original = originals[path]
+            if original is None:
+                path.unlink(missing_ok=True)
+            else:
+                path.write_bytes(original)
+                os.chmod(path, modes[path])
         raise
     finally:
         for temp_path in temp_paths:
@@ -439,6 +464,677 @@ def _write_batch(vault: Path, changes: Iterable[Change]) -> None:
                 temp_path.unlink()
             except FileNotFoundError:
                 pass
+
+
+# ---------------------------------------------------------------------------
+# render / attach-document（SPEC-project-association・SPEC-document-publish）
+# ---------------------------------------------------------------------------
+
+_BEGIN_MARK = "<!-- generated:associated-notes begin -->"
+_END_MARK = "<!-- generated:associated-notes end -->"
+_REGION_NOTE = "<!-- render が毎回書き直す領域。手で編集しない（SPEC-project-association） -->"
+_EMPTY_REGION_LINE = "_関連ノートなし_"
+# render が関連ノートを集めない最上位ディレクトリ。project は project ノート自身
+# （自分の key を `project:` に持つ）、setting は一覧・テンプレートで、どちらも関連ノートではない。
+_RENDER_SKIP_DIRS = frozenset({"project", "setting"})
+# document note の kind にできない名前（議事録・project・設定の置き場）。
+_RESERVED_KINDS = frozenset({"project", "setting", "record"})
+_KIND_RE = re.compile(r"^[a-z][a-z0-9_-]*$")
+_REPO_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+_ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_DATE_PREFIX_RE = re.compile(r"^(\d{4})-?(\d{2})-?(\d{2})(?!\d)")
+_FM_KEY_RE = re.compile(r"^([A-Za-z_][\w-]*)\s*:")
+_BULLET_RE = re.compile(r"^\s*(?:[-*+]\s+|#+\s+|\d+[.)]\s+)")
+_HINT_RE = re.compile(r"^([A-Za-z_][\w-]*)=(.*)$")
+_ARTIFACT_LINE_RE = re.compile(r"^\[([^\]]+)\]\(<?\1>?\)$")
+
+
+@dataclass(frozen=True)
+class _Row:
+    kind: str
+    date: str
+    title: str
+    link: str
+    summary: str
+
+
+def _read_frontmatter(path: Path, text: str) -> Note | None:
+    """Return the parsed note, or None when it has no frontmatter to speak of.
+
+    A frontmatter that does not parse is skipped only if it does not claim a project: a
+    note that declares `project:` but cannot be read would silently vanish from every
+    project's view, so that case stops the whole run instead.
+    """
+    lines = text.splitlines(keepends=True)
+    if not lines or lines[0].strip() != "---":
+        return None
+    close = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
+    if close is None:
+        return None
+    try:
+        return _parse_note_text(path, text)
+    except ValidationError:
+        raw = "".join(lines[1:close])
+        if any(_PROJECT_LINE_RE.match(line) for line in raw.splitlines()):
+            raise ValidationError(
+                f"{path.name}: frontmatter does not parse but declares project; fix it before render"
+            ) from None
+        return None
+
+
+def _projects_of(note: Note) -> list[str]:
+    """Association keys of a note. A legacy scalar `project:` counts as a one-element list."""
+    value = note.data.get("project")
+    if value is None:
+        return []
+    items = value if isinstance(value, list) else [value]
+    keys: list[str] = []
+    for item in items:
+        if not isinstance(item, str):
+            raise ValidationError(f"{note.path.name}: project must be a string or a list of strings")
+        key = item.strip()
+        if key and key not in keys:
+            keys.append(key)
+    return keys
+
+
+def _fmt_date(value: object) -> str:
+    if isinstance(value, (datetime.datetime, datetime.date)):
+        return value.isoformat()[:10]
+    if isinstance(value, str):
+        text = value.strip()
+        return text[:10] if _ISO_DATE_RE.match(text[:10]) else text
+    return ""
+
+
+def _note_date(note: Note) -> str:
+    for field in ("date", "created"):
+        found = _fmt_date(note.data.get(field))
+        if found:
+            return found
+    match = _DATE_PREFIX_RE.match(note.path.name)
+    return f"{match.group(1)}-{match.group(2)}-{match.group(3)}" if match else ""
+
+
+def _cell(value: object) -> str:
+    return " ".join(str(value).split()).replace("|", "\\|")
+
+
+def _link_target(vault: Path, path: Path) -> str:
+    rel = os.path.relpath(path, vault / "project").replace(os.sep, "/")
+    return f"<{rel}>" if re.search(r"[\s()]", rel) else rel
+
+
+def _collect_associations(vault: Path, overlay: dict[Path, str]) -> dict[str, list[tuple[_Row, str]]]:
+    """Group every associated note by project key, reading each note once."""
+    paths: list[Path] = []
+    for dirpath, dirnames, filenames in os.walk(vault):
+        top = Path(dirpath) == vault
+        dirnames[:] = sorted(
+            d for d in dirnames if not d.startswith(".") and not (top and d in _RENDER_SKIP_DIRS)
+        )
+        for filename in sorted(filenames):
+            if filename.endswith(".md") and not filename.startswith("."):
+                paths.append(Path(dirpath) / filename)
+    known = set(paths)
+    for extra in sorted(overlay):
+        rel_parts = extra.relative_to(vault).parts
+        if extra not in known and rel_parts[0] not in _RENDER_SKIP_DIRS and not rel_parts[0].startswith("."):
+            paths.append(extra)
+
+    grouped: dict[str, list[tuple[_Row, str]]] = {}
+    for path in paths:
+        if path.is_symlink():
+            continue
+        text = overlay.get(path)
+        if text is None:
+            try:
+                text = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError) as exc:
+                raise ValidationError(f"{path.name}: cannot read file: {exc}") from exc
+        note = _read_frontmatter(path, text)
+        if note is None:
+            continue
+        keys = _projects_of(note)
+        if not keys:
+            continue
+        rel = path.relative_to(vault)
+        kind = str(note.data.get("kind") or rel.parts[0]).strip()
+        title = str(note.data.get("title") or path.stem).strip()
+        summary = " ".join(str(note.data.get("summary") or "").split())
+        for label, value in (("title", title), ("summary", summary)):
+            if _LOCAL_PATH_RE.search(value):
+                raise ValidationError(f"{path.name}: {label} contains a local absolute path or file:// URL")
+        row = _Row(kind, _note_date(note), title, _link_target(vault, path), summary)
+        for key in keys:
+            grouped.setdefault(key, []).append((row, rel.as_posix()))
+    return grouped
+
+
+def _region_lines(rows: list[_Row]) -> list[str]:
+    lines = [_BEGIN_MARK, _REGION_NOTE, ""]
+    if not rows:
+        lines.append(_EMPTY_REGION_LINE)
+    else:
+        ordered = sorted(rows, key=lambda r: r.link)
+        ordered.sort(key=lambda r: r.date, reverse=True)
+        ordered.sort(key=lambda r: r.kind)
+        lines += ["| kind | date | note | summary |", "| --- | --- | --- | --- |"]
+        for row in ordered:
+            title = _cell(row.title).replace("[", "\\[").replace("]", "\\]")
+            lines.append(
+                f"| {_cell(row.kind)} | {_cell(row.date)} | [{title}]({row.link}) | {_cell(row.summary)} |"
+            )
+    lines.append(_END_MARK)
+    return lines
+
+
+def _with_region(note: Note, region: list[str] | None) -> str:
+    """Return the note text with the associated-notes region rewritten (or created)."""
+    nl = note.newline
+    begins = [i for i, line in enumerate(note.lines) if line.strip() == _BEGIN_MARK]
+    ends = [i for i, line in enumerate(note.lines) if line.strip() == _END_MARK]
+    if len(begins) != len(ends) or len(begins) > 1 or (begins and ends[0] < begins[0]):
+        raise ValidationError(
+            f"{note.path.name}: associated-notes markers are broken "
+            f"(begin={len(begins)}, end={len(ends)}); fix them by hand before render"
+        )
+    if begins:
+        if region is None:
+            region = _region_lines([])
+        replaced = (
+            list(note.lines[: begins[0]])
+            + [line + nl for line in region]
+            + list(note.lines[ends[0] + 1 :])
+        )
+        return "".join(replaced)
+    if region is None:
+        return note.text
+    text = note.text if note.text.endswith(nl) else note.text + nl
+    return text + nl + nl.join(region) + nl
+
+
+def _project_note_targets(vault: Path, keys: Sequence[str] | None) -> list[tuple[str, Path]]:
+    if keys:
+        targets = []
+        for raw in dict.fromkeys(keys):
+            key = _safe_key(raw)
+            path = vault_project_path(vault, key)
+            if not path.is_file() or path.is_symlink():
+                raise ValidationError(f"project note does not exist: {path.name}")
+            targets.append((key, path))
+        return targets
+    targets = []
+    for path in sorted((vault / "project").glob("project_*.md")):
+        if path.is_symlink() or not path.is_file():
+            continue
+        targets.append((path.name[len("project_") : -len(".md")], path))
+    return targets
+
+
+def plan_render(
+    vault: Path, keys: Sequence[str] | None, overlay: dict[Path, str] | None = None
+) -> tuple[list[Change], list[tuple[str, int, bool]], list[tuple[str, str]]]:
+    """Compute the render result without writing anything.
+
+    Returns (changes, per-project (key, notes, changed), unknown (key, note) references).
+    All inputs are read before any output is decided, so a failure leaves nothing half-done.
+    """
+    overlay = overlay or {}
+    grouped = _collect_associations(vault, overlay)
+    targets = _project_note_targets(vault, keys)
+    changes: list[Change] = []
+    summary: list[tuple[str, int, bool]] = []
+    for key, path in targets:
+        note = parse_note(path)
+        if _project_value(note) != key:
+            raise ValidationError(f"{path.name}: YAML project must be {key!r}")
+        rows = [row for row, _ in grouped.get(key, [])]
+        has_region = any(line.strip() == _BEGIN_MARK for line in note.lines)
+        after = _with_region(note, _region_lines(rows) if (rows or has_region) else None)
+        changed = after != note.text
+        if changed:
+            changes.append(Change(path, note.text, after))
+        summary.append((key, len(rows), changed))
+    existing = {key for key, _ in _project_note_targets(vault, None)}
+    unknown = sorted(
+        (key, rel) for key, items in grouped.items() if key not in existing for _, rel in items
+    )
+    return changes, summary, unknown
+
+
+def _report_render(
+    summary: list[tuple[str, int, bool]], unknown: list[tuple[str, str]]
+) -> None:
+    for key, count, changed in summary:
+        print(f"RENDER project={key} notes={count} {'CHANGE' if changed else 'NOOP'}")
+    for key, rel in unknown:
+        print(f"WARN unknown project key {key!r} referenced by {rel}", file=sys.stderr)
+
+
+def _cmd_render(args: argparse.Namespace) -> int:
+    changes, summary, unknown = plan_render(args.vault, args.project_key)
+    _report_render(summary, unknown)
+    if not changes:
+        print("NOOP no render changes required")
+        return 0
+    if not args.apply:
+        print("DRY_RUN no files written (pass --apply after review)")
+        return 0
+    _write_batch(args.vault, changes)
+    print(f"APPLIED files={len(changes)}")
+    return 0
+
+
+# ---- document note ---------------------------------------------------------------
+
+
+class _NotARepo(Exception):
+    """`git` ran but the path is not inside a repository."""
+
+
+def _git_output(args: list[str], cwd: Path) -> str:
+    result = subprocess.run(
+        ["git", *args], cwd=cwd, capture_output=True, text=True, timeout=15, check=False
+    )
+    if result.returncode != 0:
+        raise _NotARepo(result.stderr.strip())
+    return result.stdout
+
+
+def _main_worktree(top: Path) -> Path | None:
+    for line in _git_output(["worktree", "list", "--porcelain"], top).splitlines():
+        if line.startswith("worktree "):
+            return Path(line[len("worktree ") :])
+    return None
+
+
+def _resolve_artifact(artifact: Path) -> tuple[Path | None, str]:
+    """Resolve the original deliverable to a path that outlives a task worktree.
+
+    Returns (target, "") or (None, reason).  A deliverable inside a linked git worktree is
+    mapped to the same relative path in the main checkout, because a worktree is removed
+    after the work is merged and would leave the symlink dangling.
+    """
+    path = Path(os.path.abspath(artifact.expanduser()))
+    if not path.is_file():
+        return None, "artifact file does not exist"
+    if path.suffix.lower() in {"", ".md"}:
+        return None, "artifact must be a non-Markdown file"
+    try:
+        top = Path(_git_output(["rev-parse", "--show-toplevel"], path.parent).strip())
+    except _NotARepo:
+        return path, ""
+    except (FileNotFoundError, subprocess.SubprocessError):
+        return None, "git is not available to resolve the main checkout"
+    try:
+        main = _main_worktree(top)
+    except (_NotARepo, FileNotFoundError, subprocess.SubprocessError):
+        return None, "cannot list git worktrees to find the main checkout"
+    if main is None:
+        return None, "cannot find the main checkout"
+    if top.resolve() == main.resolve():
+        return path, ""
+    try:
+        relative = path.resolve().relative_to(top.resolve())
+    except ValueError:
+        return None, "artifact is outside its repository"
+    candidate = main / relative
+    if not candidate.is_file():
+        return None, "artifact is not present in the main checkout"
+    return candidate, ""
+
+
+def _sha256(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _normalize_content(text: str) -> str:
+    return text.strip("\n") + "\n"
+
+
+def _backlink_line(key: str) -> str:
+    return f"> project: [project_{key}](../project/project_{key}.md)"
+
+
+def _split_body(note: Note) -> tuple[list[str], str]:
+    """Split a document note body into its leading backlink keys and the rest."""
+    lines = note.body.splitlines()
+    names: list[str] = []
+    index = 0
+    while index < len(lines):
+        if not lines[index].strip():
+            index += 1
+            continue
+        match = _BACKLINK_RE.match(lines[index])
+        if match is None or match.group("label") != match.group("link"):
+            break
+        names.append(match.group("label"))
+        index += 1
+    return names, "\n".join(lines[index:])
+
+
+def _fm_block(key: str, value: object) -> list[str]:
+    if isinstance(value, list):
+        return [f"{key}:\n"] + [f"  - {_yaml_scalar(str(item))}\n" for item in value]
+    if key == "date":
+        return [f"date: {value}\n"]  # bare ISO date so YAML reads it back as a date
+    return [f"{key}: {_yaml_scalar(str(value))}\n"]
+
+
+def _replace_fm_key(fm_lines: list[str], key: str, block: list[str] | None) -> list[str]:
+    out: list[str] = []
+    replaced = False
+    index = 0
+    while index < len(fm_lines):
+        match = _FM_KEY_RE.match(fm_lines[index])
+        if match and match.group(1) == key:
+            end = index + 1
+            while end < len(fm_lines) and (
+                fm_lines[end][:1] in (" ", "\t") or fm_lines[end].startswith("-")
+            ):
+                end += 1
+            if block is not None and not replaced:
+                out += block
+            replaced = True
+            index = end
+            continue
+        out.append(fm_lines[index])
+        index += 1
+    if not replaced and block is not None:
+        if out and not out[-1].endswith("\n"):
+            out[-1] += "\n"
+        out += block
+    return out
+
+
+def _compose(fm_lines: list[str], projects: list[str], content: str, nl: str = "\n") -> str:
+    head = "---" + nl + "".join(line.rstrip("\r\n") + nl for line in fm_lines) + "---" + nl
+    if projects:
+        head += "".join(_backlink_line(key) + nl for key in projects) + nl
+    return head + content.replace("\n", nl)
+
+
+def _summary_line(digest: str) -> str:
+    for line in digest.splitlines():
+        stripped = _BULLET_RE.sub("", line).strip()
+        if stripped:
+            return " ".join(stripped.split())
+    raise ValidationError("digest has no text to use as summary")
+
+
+def _read_material(path: Path | None, label: str, required: bool) -> str:
+    if path is None:
+        if required:
+            raise ValidationError(f"--{label}-file is required")
+        return ""
+    try:
+        text = path.expanduser().read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise ValidationError(f"{label}: cannot read {path.name}: {exc}") from exc
+    if required and not text.strip():
+        raise ValidationError(f"{label}: {path.name} is empty")
+    if _LOCAL_PATH_RE.search(text):
+        raise ValidationError(f"{label}: local absolute path or file:// URL detected in {path.name}")
+    return text
+
+
+def _check_source_path(value: str) -> str:
+    text = value.strip()
+    parts = text.replace("\\", "/").split("/")
+    if (
+        not text
+        or text.startswith(("/", "~"))
+        or re.match(r"^[A-Za-z]:", text)
+        or ".." in parts
+        or "\\" in text
+        or any(ord(char) < 0x20 for char in text)
+        or _LOCAL_PATH_RE.search(text)
+    ):
+        raise ValidationError("--source-path must be a repository-relative path without local paths")
+    return text
+
+
+def _document_date(name: str, explicit: str | None) -> str:
+    if explicit:
+        try:
+            return datetime.date.fromisoformat(explicit).isoformat()
+        except ValueError as exc:
+            raise ValidationError("--date must be YYYY-MM-DD") from exc
+    match = _DATE_PREFIX_RE.match(name)
+    if match:
+        try:
+            return datetime.date(int(match.group(1)), int(match.group(2)), int(match.group(3))).isoformat()
+        except ValueError:
+            pass
+    raise ValidationError("name has no yyyymmdd prefix; pass --date YYYY-MM-DD")
+
+
+def _now() -> str:
+    return datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat()
+
+
+def _content_diff(old: str, new: str) -> str:
+    diff = list(
+        difflib.unified_diff(
+            old.splitlines(), new.splitlines(), "vault (edited)", "regenerated", lineterm="", n=1
+        )
+    )
+    shown = diff[:40]
+    if len(diff) > len(shown):
+        shown.append(f"... {len(diff) - len(shown)} more diff lines")
+    return "\n".join(shown)
+
+
+def _document_content(digest: str, outline: str, notes: str, artifact_name: str | None) -> str:
+    parts: list[str] = []
+    if artifact_name:
+        target = f"<{artifact_name}>" if re.search(r"[\s()]", artifact_name) else artifact_name
+        parts.append(f"[{artifact_name}]({target})")
+    parts.append("## digest\n\n" + digest.strip())
+    if outline.strip():
+        parts.append("## outline\n\n" + outline.strip())
+    if notes.strip():
+        parts.append("## speaker notes\n\n" + notes.strip())
+    return "\n\n".join(parts) + "\n"
+
+
+def _cmd_attach_document(args: argparse.Namespace) -> int:
+    vault: Path = args.vault
+    kind = args.kind.strip()
+    if not _KIND_RE.match(kind) or kind in _RESERVED_KINDS:
+        raise ValidationError(f"kind {kind!r} is not allowed")
+    kind_dir = vault / kind
+    if kind_dir.is_symlink() or not kind_dir.is_dir():
+        raise ValidationError(f"kind directory vault/{kind} does not exist; create it explicitly first")
+    name = _safe_key(args.name)
+    if name.startswith(".") or name.lower().endswith(".md"):
+        raise ValidationError("name must not start with '.' or end with .md")
+    if not _REPO_RE.match(args.source_repo.strip()):
+        raise ValidationError("--source-repo must be a repository name, not a path")
+    source_repo = args.source_repo.strip()
+    source_path = _check_source_path(args.source_path)
+    date = _document_date(name, args.date)
+
+    digest = _read_material(args.digest_file, "digest", required=True)
+    outline = _read_material(args.outline_file, "outline", required=False)
+    speaker_notes = _read_material(args.notes_file, "notes", required=False)
+    title = (args.title or name).strip()
+    for label, value in [("title", title)] + [("hint", h) for h in args.hint]:
+        if _LOCAL_PATH_RE.search(value) or "\n" in value:
+            raise ValidationError(f"{label}: local path or multi-line value is not allowed")
+    hints = []
+    for raw in args.hint:
+        match = _HINT_RE.match(raw)
+        if match is None:
+            raise ValidationError(f"--hint must be KEY=VALUE, got {raw!r}")
+        hints.append(raw)
+    summary = _summary_line(digest)
+
+    manual = [_safe_key(key) for key in dict.fromkeys(args.project)]
+    for key in manual:
+        if not vault_project_path(vault, key).is_file():
+            raise ValidationError(f"project note does not exist for {key!r}; refusing to associate")
+
+    note_path = kind_dir / f"{name}.md"
+    if note_path.is_symlink():
+        raise ValidationError(f"{note_path.name}: document note must not be a symlink")
+    existing = parse_note(note_path) if note_path.exists() else None
+    source_hash = _sha256(
+        json.dumps(
+            {"digest": digest.strip(), "outline": outline.strip(), "speaker_notes": speaker_notes.strip()},
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
+
+    current: list[str] = []
+    old_content = ""
+    if existing is not None:
+        for field, expected in (("kind", kind), ("source_repo", source_repo), ("source_path", source_path)):
+            found = existing.data.get(field)
+            if found is not None and str(found) != expected:
+                raise ConflictError(
+                    f"{note_path.name}: existing note has {field}={found!r}, not {expected!r}; "
+                    "refusing to overwrite another document"
+                )
+        current = _projects_of(existing)
+        _, old_content = _split_body(existing)
+        stored = existing.data.get("content_hash")
+        if not stored:
+            raise ConflictError(
+                f"{note_path.name}: no content_hash recorded, so human edits cannot be told apart; "
+                "resolve by hand"
+            )
+        if _sha256(_normalize_content(old_content)) != str(stored):
+            regenerated = _document_content(digest, outline, speaker_notes, None)
+            raise ConflictError(
+                f"{note_path.name}: the note was edited after publish; not overwriting "
+                "(diff against what the current source would generate, artifact line omitted)\n"
+                + _content_diff(old_content, regenerated)
+            )
+
+    projects = list(dict.fromkeys(current + manual))
+    if existing is None and not projects and not args.no_project:
+        undecided = True
+    else:
+        undecided = False
+
+    # --- assess seam (SPEC-project-association layer B is not implemented yet) ---
+    print(f"PREFLIGHT_OK attach-document kind={kind} name={name}")
+    for hint in hints:
+        print(f"HINT {hint}")
+    if manual:
+        print("ASSESS skipped (manual project given)")
+    elif undecided or not projects:
+        print("ASSESS unavailable (no proposals)")
+    if undecided:
+        message = "association undecided: pass --project KEY (repeatable) or --no-project"
+        if args.apply:
+            raise ConflictError(message)
+        print(f"ASSOCIATION undecided ({message})")
+
+    # --- artifact link ---
+    link_path: Path | None = None
+    link_target = ""
+    link_status = ""
+    artifact_name: str | None = None
+    if args.artifact is not None:
+        target, reason = _resolve_artifact(args.artifact)
+        if target is None:
+            print(f"ARTIFACT skipped ({reason})")
+        else:
+            candidate = kind_dir / f"{name}{target.suffix}"
+            relative = os.path.relpath(target, kind_dir)
+            if candidate.is_symlink():
+                link_status = "same" if os.readlink(candidate) == relative else "replace"
+            elif candidate.exists():
+                print("ARTIFACT skipped (a regular file already exists at the artifact path)")
+            else:
+                link_status = "create"
+            if link_status:
+                link_path, link_target, artifact_name = candidate, relative, candidate.name
+    elif existing is not None:
+        # --artifact なしの再実行で内容を再生成しても、まだ有効な artifact link 行は落とさない
+        kept = _ARTIFACT_LINE_RE.match(old_content.strip().splitlines()[0]) if old_content.strip() else None
+        if kept and (kind_dir / kept.group(1)).is_symlink():
+            artifact_name = kept.group(1)
+
+    # --- compose the note ---
+    if existing is None:
+        content = _document_content(digest, outline, speaker_notes, artifact_name)
+        fm: list[str] = []
+        fm += _fm_block("title", title) + _fm_block("kind", kind)
+        if projects:
+            fm += _fm_block("project", projects)
+            fm += _fm_block("project_source", "manual")
+        fm += _fm_block("date", date) + _fm_block("summary", summary)
+        fm += _fm_block("source_repo", source_repo) + _fm_block("source_path", source_path)
+        fm += _fm_block("source_hash", source_hash)
+        fm += _fm_block("content_hash", _sha256(_normalize_content(content)))
+        fm += _fm_block("published_at", _now())
+        after = _compose(fm, projects, content)
+        action = "CREATE"
+    else:
+        same_source = str(existing.data.get("source_hash")) == source_hash
+        fm_lines = list(existing.lines[1 : existing.close_index])
+        content = old_content
+        if not same_source:
+            content = _document_content(digest, outline, speaker_notes, artifact_name)
+            for key, value in (
+                ("summary", summary),
+                ("source_hash", source_hash),
+                ("content_hash", _sha256(_normalize_content(content))),
+                ("published_at", _now()),
+            ):
+                fm_lines = _replace_fm_key(fm_lines, key, _fm_block(key, value))
+        if projects != current:
+            fm_lines = _replace_fm_key(fm_lines, "project", _fm_block("project", projects))
+        if manual:
+            fm_lines = _replace_fm_key(fm_lines, "project_source", _fm_block("project_source", "manual"))
+        after = _compose(fm_lines, projects, _normalize_content(content), existing.newline)
+        action = "NOOP" if after == existing.text else "UPDATE"
+
+    changes: list[Change] = []
+    overlay: dict[Path, str] = {}
+    if action == "CREATE":
+        changes.append(Change(note_path, "", after, created=True))
+        overlay[note_path] = after
+    elif action == "UPDATE":
+        assert existing is not None
+        changes.append(Change(note_path, existing.text, after))
+        overlay[note_path] = after
+    print(f"DOCUMENT {action} {note_path.relative_to(vault).as_posix()}")
+
+    if link_path is not None:
+        verb = {"create": "would link", "replace": "would relink", "same": "unchanged"}[link_status]
+        print(f"ARTIFACT {verb} {link_path.name} -> {link_target}")
+
+    # --- render the projects this note belongs to, in the same batch ---
+    if projects:
+        render_changes, summary_rows, unknown = plan_render(vault, projects, overlay)
+        _report_render(summary_rows, unknown)
+        changes += render_changes
+
+    if not changes and link_status in ("", "same"):
+        print("NOOP no changes required")
+        return 0
+    if not args.apply:
+        print("DRY_RUN no files written (pass --apply after review)")
+        return 0
+    _write_batch(vault, changes)
+    if link_path is not None and link_status in ("create", "replace"):
+        temp_link = link_path.parent / f".{link_path.name}.project-update-link"
+        try:
+            temp_link.unlink(missing_ok=True)
+            os.symlink(link_target, temp_link)
+            os.replace(temp_link, link_path)
+            print(f"ARTIFACT linked {link_path.name} -> {link_target}")
+        except OSError as exc:
+            temp_link.unlink(missing_ok=True)
+            print(f"ARTIFACT skipped (could not create symlink: {exc})")
+    print(f"APPLIED files={len(changes)}")
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -462,8 +1158,68 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_subcommand_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="project_update.py", description=__doc__)
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    render = sub.add_parser("render", help="rewrite the generated associated-notes region of project notes")
+    render.add_argument("--vault", type=Path, required=True, help="Obsidian data vault root")
+    render.add_argument(
+        "--project-key", action="append", default=[], help="Limit to this project (repeatable); default all"
+    )
+    render.add_argument("--apply", action="store_true", help="Write changes; default is a dry-run")
+
+    attach = sub.add_parser("attach-document", help="publish a generated document as a document note")
+    attach.add_argument("--vault", type=Path, required=True, help="Obsidian data vault root")
+    attach.add_argument("--kind", required=True, help="Document kind = vault directory name (e.g. presentation)")
+    attach.add_argument("--name", required=True, help="Document name = note file stem (yyyymmdd_...)")
+    attach.add_argument("--title", help="Note title (default: name)")
+    attach.add_argument("--date", help="YYYY-MM-DD (default: yyyymmdd prefix of the name)")
+    attach.add_argument("--source-repo", required=True, help="Repository that owns the source")
+    attach.add_argument("--source-path", required=True, help="Repository-relative path of the source")
+    attach.add_argument("--digest-file", type=Path, required=True, help="Key-message digest (first line becomes summary)")
+    attach.add_argument("--outline-file", type=Path, help="Outline text")
+    attach.add_argument("--notes-file", type=Path, help="Speaker notes text")
+    attach.add_argument("--hint", action="append", default=[], help="KEY=VALUE hint forwarded to assess (repeatable)")
+    group = attach.add_mutually_exclusive_group()
+    group.add_argument("--project", action="append", default=[], help="Confirmed project key (repeatable)")
+    group.add_argument("--no-project", action="store_true", help="Publish without associating a project")
+    attach.add_argument("--artifact", type=Path, help="Original deliverable (e.g. pptx) to link next to the note")
+    attach.add_argument("--apply", action="store_true", help="Write changes; default is a dry-run")
+    return parser
+
+
+_SUBCOMMANDS = {"render": _cmd_render, "attach-document": _cmd_attach_document}
+
+
+def _run_guarded(action) -> int:
+    try:
+        return action()
+    except ConflictError as exc:
+        print(f"CONFLICT {exc}", file=sys.stderr)
+        return 2
+    except (ProjectUpdateError, OSError) as exc:
+        print(f"ERROR {exc}", file=sys.stderr)
+        return 3
+
+
+def _main_subcommand(argv: Sequence[str]) -> int:
+    args = build_subcommand_parser().parse_args(argv)
+
+    def action() -> int:
+        args.vault = args.vault.expanduser().resolve()
+        if not args.vault.is_dir():
+            raise ValidationError("selected vault directory does not exist")
+        return _SUBCOMMANDS[args.command](args)
+
+    return _run_guarded(action)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    raw = list(sys.argv[1:] if argv is None else argv)
+    if raw and raw[0] in _SUBCOMMANDS:
+        return _main_subcommand(raw)
+    args = build_parser().parse_args(raw)
     try:
         args.vault = args.vault.expanduser().resolve()
         if not args.vault.is_dir():

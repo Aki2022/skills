@@ -203,6 +203,17 @@ ceiling. Do not multiply agents merely because concurrency is available.
 
 ## 5. Execute vertical slices
 
+When a slice waits for a GitHub Actions workflow after a push, pin the full
+commit SHA and the expected workflow. Use
+`python3 ~/.agents/skills/own-goal-run/scripts/wait_ci_run.py --commit <full-sha> --workflow <workflow-name>`.
+The helper queries `gh run list --commit` and checks each returned `headSha`.
+No matching run means "not registered yet" and remains pending; a run from an
+older SHA cannot satisfy the wait. A matching failed, cancelled, or skipped run
+stops with failure, while a query error or timeout never reports success. Do
+not infer completion from `gh run list --limit 1` or from the non-pending checks
+currently visible on a PR. A successful helper result verifies only the named
+workflow on that SHA; inspect the other required PR checks before a merge.
+
 For each queued issue:
 
 1. Confirm dependencies, acceptance criteria, and `guide_impact` before edits.

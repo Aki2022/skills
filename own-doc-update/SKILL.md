@@ -315,6 +315,11 @@ Scripts in `scripts/`:
 - `archive_transaction.py`: stage and atomically roll back archive/index file updates
 - `docs_hygiene.py <repo> [--fix] [--report] [--json]`: `--fix` applies the
   mechanical repairs above; `--report` writes `docs/log/hygiene-YYYYMMDD.md` with
+  the first result of that day. A distinct same-day rerun writes
+  `docs/log/hygiene-YYYYMMDD-2.md` (then `-3.md`, etc.); an identical rerun
+  reuses its existing report. Use the returned `report_path` to read that run.
+  This preserves the first run's mechanical fix counts.
+  Reports include
   the judgment candidates (R1 stale + branch gone, R2 untouched 60 days, R3 dead
   `npm run`/workflow/path references, R4 history in guides or specs, R5
   non-canonical directories and duplicate basenames, R6 baseline debt, R7 open

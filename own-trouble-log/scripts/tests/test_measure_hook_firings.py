@@ -332,9 +332,14 @@ class RenderAndSampleTests(unittest.TestCase):
         rendered = measure.render_report(measure.aggregate([self.scan]))
         self.assertIn("hook-h2-pipeline-status", rendered)
 
-    def test_unmapped_tag_is_reported_as_unregistered(self):
-        self.assertEqual(measure.response_id_for("H4"), None)
+    def test_registered_guard_tags_map_to_their_own_response(self):
+        self.assertEqual(measure.response_id_for("H3"), "hook-h3-loop-predicate")
+        self.assertEqual(measure.response_id_for("H4"), "hook-h4-capped-count")
+        self.assertEqual(measure.response_id_for("H5c"), "hook-h5c-worktree-write")
+        self.assertEqual(measure.response_id_for("H5d"), "hook-h5d-untrusted-mise")
+        self.assertEqual(measure.response_id_for("H5f"), "hook-h5f-broad-stage")
         self.assertEqual(measure.response_id_for("H5e"), "hook-h5-git-state")
+        self.assertIsNone(measure.response_id_for("H99"))
 
     def test_sample_is_deterministic_for_a_seed_and_carries_commands(self):
         first = measure.sample_firings([self.scan], tag="H2", n=3, seed=7)

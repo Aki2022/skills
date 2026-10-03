@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "name": "origin-pptx-skill-config",
+    "name": "own-pptx-skill-config",
     "version": "1.5.1",
     "usage": "実行設定の正典。⓪スタイルガイド読込時に読む。モデル割当・検証ループ・並列度を変えたいときはこのファイルを編集する（SKILL.md/pipeline.md 本文のハードコードは背景説明であり、実行時はここが優先）。"
   },

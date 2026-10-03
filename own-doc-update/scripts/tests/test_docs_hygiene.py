@@ -100,6 +100,7 @@ class HygieneFixture(unittest.TestCase):
         git(root, "commit", "-q", "-m", "init")
         return root
 
+
     def add_issue(self, root: Path, id_: str, status: str, updated: str,
                   branch: str = "", index: bool = True) -> Path:
         path = root / "docs/issues" / f"{id_}.md"
@@ -109,6 +110,25 @@ class HygieneFixture(unittest.TestCase):
             with (root / "docs/00_index.md").open("a") as fh:
                 fh.write(f"- [{id_}](issues/{id_}.md) — one line\n")
         return path
+
+
+class ReportPreservationTest(HygieneFixture):
+    def test_second_same_day_fix_preserves_first_report(self):
+        root = self.make_repo()
+        (root / "docs/guides/needs-front-matter.md").write_text("# Guide\n")
+        first = MODULE.run(root, fix=True, report=True, today=date(2026, 10, 3))
+        self.assertGreater(first["fixes"]["A4_front_matter_added"]["count"], 0)
+        first_path = root / first["report_path"]
+        first_text = first_path.read_text()
+
+        second = MODULE.run(root, fix=True, report=True, today=date(2026, 10, 3))
+        second_path = root / second["report_path"]
+        self.assertNotEqual(first_path, second_path)
+        self.assertEqual(first_path.read_text(), first_text)
+        self.assertTrue(second_path.is_file())
+
+        third = MODULE.run(root, fix=True, report=True, today=date(2026, 10, 3))
+        self.assertEqual(third["report_path"], second["report_path"])
 
 
 class ArchiveCompleteTest(HygieneFixture):

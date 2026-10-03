@@ -1420,6 +1420,25 @@ def render_report(result: dict) -> str:
     return "\n".join(lines)
 
 
+def write_report_preserving_history(log_dir: Path, day: date, content: str) -> Path:
+    """Keep each distinct same-day result; repeated identical runs reuse its file."""
+    stem = f"hygiene-{day.strftime('%Y%m%d')}"
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=log_dir,
+                                     prefix=f".{stem}.", suffix=".tmp") as temp:
+        temp.write(content)
+        temp.flush()
+        for number in range(1, 1000):
+            suffix = "" if number == 1 else f"-{number}"
+            path = log_dir / f"{stem}{suffix}.md"
+            try:
+                os.link(temp.name, path)
+                return path
+            except FileExistsError:
+                if path.read_text(encoding="utf-8") == content:
+                    return path
+    raise RuntimeError(f"too many same-day hygiene reports for {day}")
+
+
 def summary_text(result: dict) -> str:
     out = [f"docs_hygiene: {result['repo']} ({'fix' if result['fix'] else 'dry-run'})"]
     for key, value in result["fixes"].items():
@@ -1474,8 +1493,7 @@ def run(repo: str | Path, fix: bool, report: bool, today: Optional[date] = None)
     if report:
         log_dir = root / "docs/log"
         log_dir.mkdir(parents=True, exist_ok=True)
-        path = log_dir / f"hygiene-{today.strftime('%Y%m%d')}.md"
-        path.write_text(render_report(result))
+        path = write_report_preserving_history(log_dir, today, render_report(result))
         result["report_path"] = rel(root, path)
     return result
 

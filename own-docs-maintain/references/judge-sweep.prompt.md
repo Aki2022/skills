@@ -8,6 +8,9 @@
 You are deciding, with primary evidence, which open documentation items in the repository at {REPO} can be
 closed (archived) and which must stay. Work ONLY inside that directory. Do not commit, do not create branches,
 do not run archive scripts, do not touch other repositories. Read excerpts (grep, sed -n), not whole files.
+Before each write, verify `pwd` is inside {REPO} and `git rev-parse --show-toplevel` equals {REPO}; use an absolute
+target path inside {REPO}. If a hook or permission guard refuses a write, stop and report its exact rejection.
+Do not retry through Bash, Python, or another tool.
 
 Two checklists: {SWEEP} (closure candidates for issues/workstreams: R1 = recorded branch gone, R2 = no commit
 for 60+ days, R7 = its text already says done) and the "Demote candidates" section of {REVIEW} (guides/specs/ADRs

@@ -190,6 +190,13 @@ Give each subagent a single deliverable, exact scope, expected evidence, and
 return format. Keep the parent agent responsible for the workstream, cost
 ledger, shared-file writes, conflict resolution, and final verification. Use
 separate worktrees or disjoint file ownership for parallel write tasks.
+For every write-capable subagent, name the assigned checkout explicitly. Before
+each write, require it to verify that `pwd` is inside that checkout and
+`git rev-parse --show-toplevel` equals its root, then use an absolute target
+path inside it. If a hook or permission guard refuses a write, the subagent
+must stop and report the exact rejection to the parent. It must not retry the
+write through Bash, Python, or another tool; the parent decides the authorized
+integration path.
 
 Include subagent tokens, calls, time, and retries in the shared resource
 ceiling. Do not multiply agents merely because concurrency is available.

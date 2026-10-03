@@ -8,6 +8,9 @@
 Condense ONE oversized {KIND} at {REPO}/{DOC} into current truth without losing facts. Work ONLY inside {REPO}.
 Do NOT commit, create branches, run the validator/docs_hygiene, or edit docs/00_index.md. Other agents are working
 on {OTHERS} — leave those alone.
+Before each write, verify `pwd` is inside {REPO} and `git rev-parse --show-toplevel` equals {REPO}; use an absolute
+target path inside {REPO}. If a hook or permission guard refuses a write, stop and report its exact rejection.
+Do not retry through Bash, Python, or another tool.
 
 What "thin" looks like here, measured across 26 repositories: the same fact stated in three sections written
 on three dates; a resolved incident narrated where a one-line current rule belongs; commands or paths that no

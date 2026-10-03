@@ -8,6 +8,9 @@
 Restructure ONE oversized {KIND} at {REPO}/{DOC}. Work ONLY inside {REPO}. Do NOT commit, do NOT create branches,
 do NOT run the validator or docs_hygiene, do NOT edit docs/00_index.md (the orchestrator integrates). Other agents
 are working on {OTHERS} in the same tree — do not touch those files or their new siblings.
+Before each write, verify `pwd` is inside {REPO} and `git rev-parse --show-toplevel` equals {REPO}; use an absolute
+target path inside {REPO}. If a hook or permission guard refuses a write, stop and report its exact rejection.
+Do not retry through Bash, Python, or another tool.
 
 Governing rule (~/.agents/skills/own-doc-update/SKILL.md, "Write for the next session"): a guide is CURRENT
 TRUTH (what the system does now, how to use it, constraints, verification, known limitations); a spec is CURRENT

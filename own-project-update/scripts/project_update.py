@@ -500,8 +500,12 @@ _DATE_PREFIX_RE = re.compile(r"^(\d{4})-?(\d{2})-?(\d{2})(?!\d)")
 # _LOCAL_PATH_RE は行頭・空白・`(` の直後しか見ないので、クォート直後・~/・ドライブ文字・
 # クラウド同期フォルダの実体パスを通してしまう。公開 vault に載る入口なので広く拒否する。
 _INGEST_LOCAL_RE = re.compile(
-    r"(?:^|[^\w])/(?:Users|home|private|Volumes|mnt)/|(?:^|[\s\"'`(])~/|file://|"
-    r"\b[A-Za-z]:\\|CloudStorage|GoogleDrive-|My Drive/|マイドライブ/"
+    r"(?:^|[\s\"'`(\[<])/(?:Users|home)/[^/\s{}<>)\]\"'`]+(?:[/\s\"'`]|$)|"
+    r"(?:^|[\s\"'`(\[<])/Volumes/[^/\s]+/|"
+    r"(?:^|[\s\"'`(\[<])/private/(?:var|tmp|etc)/|"
+    r"(?:^|[\s\"'`(])~/(?:Library|Documents|Desktop|Downloads|Dropbox|code|\.)|"
+    r"file://|(?<![\w])[A-Za-z]:[\\/](?:Users|Documents and Settings)[\\/]|"
+    r"Library/CloudStorage|GoogleDrive-|/My Drive/|マイドライブ/"
 )
 _FM_KEY_RE = re.compile(r"^([A-Za-z_][\w-]*)\s*:")
 _BULLET_RE = re.compile(r"^\s*(?:[-*+]\s+|#+\s+|\d+[.)]\s+)")
@@ -573,7 +577,10 @@ def _fmt_date(value: object) -> str:
         if match is None and _ISO_DATE_RE.match(text[:10]):
             return text[:10]
         if match:
-            return f"{match.group(1)}-{int(match.group(2)):02d}-{int(match.group(3)):02d}"
+            try:
+                return datetime.date(int(match.group(1)), int(match.group(2)), int(match.group(3))).isoformat()
+            except ValueError:
+                return text
         return text
     return ""
 
@@ -976,9 +983,36 @@ def _artifact_line(artifact_name: str) -> str:
     return f"[{artifact_name}]({target})"
 
 
+def _leading_artifact_lines(content: str) -> list[str]:
+    lines = [line for line in content.strip("\n").splitlines()]
+    found: list[str] = []
+    for line in lines:
+        if not line.strip():
+            if found:
+                continue
+            continue
+        if _ARTIFACT_LINE_RE.match(line):
+            found.append(line)
+            continue
+        break
+    return found
+
+
 def _has_artifact_line(content: str, artifact_name: str) -> bool:
-    first = content.strip().splitlines()[0] if content.strip() else ""
-    return first == _artifact_line(artifact_name)
+    return _leading_artifact_lines(content) == [_artifact_line(artifact_name)]
+
+
+def _without_artifact_lines(content: str) -> str:
+    drop = len(_leading_artifact_lines(content))
+    lines = content.strip("\n").splitlines()
+    seen = 0
+    out: list[str] = []
+    for line in lines:
+        if seen < drop and _ARTIFACT_LINE_RE.match(line):
+            seen += 1
+            continue
+        out.append(line)
+    return "\n".join(out).lstrip("\n")
 
 
 def _install_link(link: Path, target: str) -> None:
@@ -1179,7 +1213,7 @@ def _cmd_attach_document(args: argparse.Namespace) -> int:
             if not same_source:
                 content = _document_content(digest, outline, speaker_notes, artifact_name)
             elif artifact_name and not _has_artifact_line(old_content, artifact_name):
-                content = _artifact_line(artifact_name) + "\n\n" + old_content.lstrip("\n")
+                content = _artifact_line(artifact_name) + "\n\n" + _without_artifact_lines(old_content)
             if content is not old_content:
                 updates = [("content_hash", _sha256(_normalize_content(content)))]
                 if not same_source:

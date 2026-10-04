@@ -493,3 +493,49 @@ def test_write_refuses_when_the_file_changed_after_planning(vault: Path) -> None
     with pytest.raises(pu.ConflictError):
         pu._write_batch(vault, [change])
     assert "別セッションが書いた" in path.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    "prose",
+    [
+        "SCIM endpoint GET /Users/{id}",
+        "the /home/ route and (/home/) tab",
+        "[docs](/home/guide)",
+        "regex a:\\d+ と C:\\ drive root",
+        "CloudStorageClient and Store in CloudStorage buckets",
+        "Approx ~/month",
+        "My Drive/Shared is a product name",
+        "https://ex.com/a?u=/home/x",
+    ],
+)
+def test_ingest_does_not_reject_ordinary_technical_prose(vault: Path, material, prose: str) -> None:
+    material["outline"].write_text(f"# t\n\n{prose}\n", encoding="utf-8")
+    assert attach(vault, material, "--project", "proj_a", "--apply") == 0
+
+
+def test_changing_the_artifact_extension_replaces_the_link_line(vault: Path, material, tmp_path: Path) -> None:
+    pptx, key = tmp_path / "deck.pptx", tmp_path / "deck.key"
+    pptx.write_bytes(b"a")
+    key.write_bytes(b"b")
+    assert attach(vault, material, "--project", "proj_a", "--apply") == 0
+    for artifact in (pptx, key, pptx):
+        assert attach(vault, material, "--project", "proj_a", "--artifact", str(artifact), "--apply") == 0
+    text = doc(vault).read_text(encoding="utf-8")
+    assert text.count(f"]({NAME}.pptx)") == 1 and f"]({NAME}.key)" not in text
+    first = snapshot(vault)
+    assert attach(vault, material, "--project", "proj_a", "--artifact", str(pptx), "--apply") == 0
+    assert snapshot(vault) == first  # 冪等（行が増え続けない）
+
+
+def test_an_existing_note_with_an_api_path_summary_does_not_block_render(vault: Path) -> None:
+    write_note(
+        vault / "record/20260701_scim.md",
+        "title: scim\ndate: 2026-07-01\nproject: proj_a\nsummary: GET /Users/{id} を設計\n",
+    )
+    assert pu.main(["render", "--vault", str(vault), "--apply"]) == 0
+
+
+def test_impossible_dates_are_left_as_text(vault: Path) -> None:
+    write_note(vault / "record/a.md", "title: a\ndate: 20261399\nproject: proj_a\n")
+    assert pu.main(["render", "--vault", str(vault), "--apply"]) == 0
+    assert "2026-13-99" not in (vault / "project/project_proj_a.md").read_text(encoding="utf-8")

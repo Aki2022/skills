@@ -224,3 +224,62 @@ def test_project_key_filter_limits_writes(vault: Path) -> None:
 
 def test_unknown_project_key_option_stops(vault: Path) -> None:
     assert run(vault, "--project-key", "nope", "--apply") == 3
+
+
+# ---- レビュー指摘（PR #26）の回帰 --------------------------------------------------
+
+
+def test_bom_prefixed_note_is_collected(vault: Path) -> None:
+    (vault / "record").mkdir(exist_ok=True)
+    (vault / "record/20260701_bom.md").write_text(
+        "\ufeff---\ntitle: bom\ndate: 2026-07-01\nproject: proj_a\n---\n本文\n", encoding="utf-8"
+    )
+    assert run(vault, "--apply") == 0
+    assert "20260701_bom.md" in region_of(vault / "project/project_proj_a.md")
+
+
+def test_unclosed_frontmatter_that_declares_project_stops(vault: Path) -> None:
+    (vault / "record/20260701_open.md").write_text("---\ntitle: x\nproject: proj_a\n本文\n", encoding="utf-8")
+    before = snapshot(vault)
+    assert run(vault, "--apply") == 3
+    assert snapshot(vault) == before
+
+
+def test_loose_and_integer_dates_are_normalised_for_ordering(vault: Path) -> None:
+    write_note(vault / "record/a.md", "title: a\ndate: 2026-7-5\nproject: proj_a\n")
+    write_note(vault / "record/b.md", "title: b\ndate: '2026/08/01'\nproject: proj_a\n")
+    write_note(vault / "record/c.md", "title: c\ndate: 20260710\nproject: proj_a\n")
+    assert run(vault, "--apply") == 0
+    region = region_of(vault / "project/project_proj_a.md")
+    assert "2026-07-05" in region and "2026-08-01" in region and "2026-07-10" in region
+    assert region.index("b.md") < region.index("c.md") < region.index("a.md")
+
+
+def test_crlf_project_note_keeps_crlf(vault: Path) -> None:
+    seed_notes(vault)
+    note = vault / "project/project_proj_a.md"
+    note.write_bytes(note.read_bytes().replace(b"\n", b"\r\n"))
+    assert run(vault, "--apply") == 0
+    raw = note.read_bytes()
+    assert BEGIN.encode() in raw
+    assert raw.count(b"\r\n") == raw.count(b"\n")  # LF だけの行が混ざらない
+    first = snapshot(vault)
+    assert run(vault, "--apply") == 0
+    assert snapshot(vault) == first
+
+
+def test_render_refuses_to_write_over_a_note_that_changed_meanwhile(
+    vault: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seed_notes(vault)
+    note = vault / "project/project_proj_a.md"
+    real = pu._write_batch
+
+    def racing(v, changes):  # 計画後・書き込み前に別の書き手が同じ project ノートを更新した状況
+        note.write_text(note.read_text(encoding="utf-8") + "\n別セッション\n", encoding="utf-8")
+        return real(v, changes)
+
+    monkeypatch.setattr(pu, "_write_batch", racing)
+    assert run(vault, "--apply") == 2
+    assert "別セッション" in note.read_text(encoding="utf-8")
+    assert BEGIN not in note.read_text(encoding="utf-8")

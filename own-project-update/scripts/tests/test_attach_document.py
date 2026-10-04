@@ -325,7 +325,7 @@ def test_artifact_in_linked_worktree_resolves_to_main_checkout(
     (main / "decks").mkdir(parents=True)
     (wt / "decks").mkdir(parents=True)
     (main / "decks" / "d.pptx").write_bytes(b"main")
-    (wt / "decks" / "d.pptx").write_bytes(b"worktree")
+    (wt / "decks" / "d.pptx").write_bytes(b"main")
 
     def fake_git(args: list[str], cwd: Path) -> str:
         if args[:2] == ["rev-parse", "--show-toplevel"]:
@@ -338,3 +338,158 @@ def test_artifact_in_linked_worktree_resolves_to_main_checkout(
     assert attach(vault, material, "--project", "proj_a", "--artifact", str(wt / "decks" / "d.pptx"), "--apply") == 0
     link = vault / "presentation" / f"{NAME}.pptx"
     assert (link.parent / os.readlink(link)).resolve() == (main / "decks" / "d.pptx").resolve()
+
+
+def test_worktree_artifact_that_differs_from_main_is_not_linked(
+    vault: Path, material, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    main, wt = tmp_path / "main_checkout", tmp_path / "wt_checkout"
+    for root, payload in ((main, b"old"), (wt, b"new, unmerged")):
+        (root / "decks").mkdir(parents=True)
+        (root / "decks" / "d.pptx").write_bytes(payload)
+
+    def fake_git(args: list[str], cwd: Path) -> str:
+        if args[:2] == ["rev-parse", "--show-toplevel"]:
+            return str(wt)
+        return f"worktree {main}\n\nworktree {wt}\n"
+
+    monkeypatch.setattr(pu, "_git_output", fake_git)
+    assert attach(vault, material, "--project", "proj_a", "--artifact", str(wt / "decks" / "d.pptx"), "--apply") == 0
+    assert not (vault / "presentation" / f"{NAME}.pptx").exists()
+    assert "not merged yet" in capsys.readouterr().out
+
+
+# ---- レビュー指摘（PR #26）の回帰 --------------------------------------------------
+
+
+def test_rerun_with_artifact_adds_the_link_line_to_an_unchanged_source(
+    vault: Path, material, tmp_path: Path
+) -> None:
+    deck = tmp_path / "deck.pptx"
+    deck.write_bytes(b"pptx")
+    assert attach(vault, material, "--project", "proj_a", "--apply") == 0
+    assert f"]({NAME}.pptx)" not in doc(vault).read_text(encoding="utf-8")
+    assert attach(vault, material, "--project", "proj_a", "--artifact", str(deck), "--apply") == 0
+    assert f"]({NAME}.pptx)" in doc(vault).read_text(encoding="utf-8")
+    assert (vault / "presentation" / f"{NAME}.pptx").is_symlink()
+    first = snapshot(vault)  # content_hash が更新されているので、次の再実行は人間編集と誤認しない
+    assert attach(vault, material, "--project", "proj_a", "--artifact", str(deck), "--apply") == 0
+    assert snapshot(vault) == first
+
+
+def test_regeneration_without_artifact_option_keeps_a_live_link_line(
+    vault: Path, material, tmp_path: Path
+) -> None:
+    deck = tmp_path / "deck.pptx"
+    deck.write_bytes(b"pptx")
+    assert attach(vault, material, "--project", "proj_a", "--artifact", str(deck), "--apply") == 0
+    material["digest"].write_text("- 改訂\n", encoding="utf-8")
+    assert attach(vault, material, "--apply") == 0
+    assert f"]({NAME}.pptx)" in doc(vault).read_text(encoding="utf-8")
+
+
+def test_hand_removed_association_clears_the_stale_row(vault: Path, material) -> None:
+    assert attach(vault, material, "--project", "proj_a", "--apply") == 0
+    note = doc(vault)
+    text = note.read_text(encoding="utf-8")
+    note.write_text(text.replace("project:\n  - proj_a\n", "project: []\n"), encoding="utf-8")
+    assert attach(vault, material, "--no-project", "--apply") == 0
+    assert NAME not in region_of(vault / "project/project_proj_a.md")
+
+
+def test_long_summary_round_trips_without_folding(vault: Path, material) -> None:
+    long = "長い要約 " * 60
+    material["digest"].write_text(f"- {long}\n", encoding="utf-8")
+    assert attach(vault, material, "--project", "proj_a", "--apply") == 0
+    assert frontmatter(doc(vault))["summary"] == long.strip()
+    first = snapshot(vault)
+    assert attach(vault, material, "--project", "proj_a", "--apply") == 0
+    assert snapshot(vault) == first
+
+
+@pytest.mark.parametrize(
+    "leak",
+    [
+        "`/home/someone/x`",
+        '"/private/tmp/x"',
+        "'/Volumes/Drive/x'",
+        "(~/Library/CloudStorage/GoogleDrive-a/b)",
+        "C:\\Users\\x\\deck",
+        "file:///x",
+    ],
+)
+def test_ingest_rejects_quoted_and_drive_paths(vault: Path, material, leak: str) -> None:
+    material["outline"].write_text(f"# t\n\n参照 {leak}\n", encoding="utf-8")
+    before = snapshot(vault)
+    assert attach(vault, material, "--project", "proj_a", "--apply") == 3
+    assert snapshot(vault) == before
+
+
+def test_ordinary_urls_and_paths_are_not_mistaken_for_local_paths(vault: Path, material) -> None:
+    material["outline"].write_text("# t\n\nhttps://example.com/home/page と docs/private/x\n", encoding="utf-8")
+    assert attach(vault, material, "--project", "proj_a", "--apply") == 0
+
+
+@pytest.mark.parametrize("bad", ["20260726_a(b)", "20260726_a[b]", "20260727_x#y", "20260727_x%y"])
+def test_names_that_break_links_are_refused_with_a_name_message(
+    vault: Path, material, bad: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert attach(vault, material, "--project", "proj_a", "--apply", name=bad) == 3
+    assert "project key" not in capsys.readouterr().err
+
+
+def test_crlf_document_note_keeps_crlf_when_a_project_is_added(vault: Path, material) -> None:
+    assert attach(vault, material, "--project", "proj_a", "--apply") == 0
+    note = doc(vault)
+    note.write_bytes(note.read_bytes().replace(b"\n", b"\r\n"))
+    assert attach(vault, material, "--project", "proj_a", "--apply") == 0  # 同内容は NOOP
+    assert attach(vault, material, "--project", "proj_b", "--apply") == 0
+    raw = note.read_bytes()
+    assert raw.count(b"\r\n") == raw.count(b"\n") > 0
+
+
+def test_symlink_failure_publishes_without_a_dangling_link_line(
+    vault: Path, material, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    deck = tmp_path / "deck.pptx"
+    deck.write_bytes(b"pptx")
+
+    def refuse(link: Path, target: str) -> None:
+        raise OSError("symlinks are refused here")
+
+    monkeypatch.setattr(pu, "_install_link", refuse)
+    assert attach(vault, material, "--project", "proj_a", "--artifact", str(deck), "--apply") == 0
+    assert f"]({NAME}.pptx)" not in doc(vault).read_text(encoding="utf-8")
+    assert "ARTIFACT skipped" in capsys.readouterr().out
+
+
+def test_batch_failure_removes_the_link_it_just_created(
+    vault: Path, material, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    deck = tmp_path / "deck.pptx"
+    deck.write_bytes(b"pptx")
+    before = snapshot(vault)
+    real_replace = os.replace
+    calls = {"n": 0}
+
+    def flaky(src, dst, *a, **k):
+        calls["n"] += 1
+        if calls["n"] == 3:  # 1 = symlink、2 = document note、3 = project ノートで失敗
+            raise OSError("simulated I/O failure")
+        return real_replace(src, dst, *a, **k)
+
+    monkeypatch.setattr(os, "replace", flaky)
+    assert attach(vault, material, "--project", "proj_a", "--artifact", str(deck), "--apply") == 3
+    monkeypatch.undo()
+    assert snapshot(vault) == before
+    assert not (vault / "presentation" / f"{NAME}.pptx").is_symlink()
+
+
+def test_write_refuses_when_the_file_changed_after_planning(vault: Path) -> None:
+    path = vault / "project/project_proj_a.md"
+    planned = path.read_text(encoding="utf-8")
+    change = pu.Change(path, planned, planned + "\nplanned", verify_before=True)
+    path.write_text(planned + "\n別セッションが書いた\n", encoding="utf-8")
+    with pytest.raises(pu.ConflictError):
+        pu._write_batch(vault, [change])
+    assert "別セッションが書いた" in path.read_text(encoding="utf-8")

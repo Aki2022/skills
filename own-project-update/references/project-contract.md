@@ -88,14 +88,17 @@ published_at: <timestamp>
 
 本文は frontmatter 直後の backlink 行（project ごとに 1 行）、artifact link、`## digest`、`## outline`、`## speaker notes`。
 `content_hash` は backlink 行を除いた本文のハッシュで、人間が本文を編集したかの判定に使う。一致しなければ上書きせず停止する。
-`source_hash` が同じなら本文は書き換えない。絶対パス・`file://` は素材にも frontmatter にも入れない。
+`source_hash` が同じなら本文は書き換えない。絶対パス・`file://`・クラウド同期フォルダの実体パス（`CloudStorage`・`GoogleDrive-`・ドライブ文字・`~/`・クォート直後の `/Users` 等）は素材・title・hint にも frontmatter にも入れない（検出したら何も書かず停止）。
+`--artifact` が linked worktree 内なら main チェックアウトの同じ相対パスへ解決し、中身が一致しなければ（未マージ）link を作らない。
+既存 note の改行（CRLF）は保つ。書き込み直前に対象ファイルが計画時から変わっていれば停止する（別セッションの書き込みを上書きしない）。
 読み手は旧来の文字列 `project:` を 1 要素のリストとして読み、既存の所属は保持して追加する。
 
 ## Generated region (render)
 
 project ノートの関連ノート表は `<!-- generated:associated-notes begin -->` と `<!-- generated:associated-notes end -->`
 で囲んだ領域 1 つ。`render` が frontmatter の `project` に key を持つ vault 内ノート（`project/` と `setting/` を除く）を集め、
-kind 昇順・日付降順の表（kind・日付・リンク・`summary`）に全体を書き直す。領域外の本文は 1 byte も変えない。領域が無く関連ノートが
+kind 昇順・日付降順の表（kind・日付・リンク・`summary`）に全体を書き直す。領域外の本文は 1 byte も変えない（CRLF も保つ）。BOM 付き・閉じ `---` の無い frontmatter が `project:` を名乗る場合も停止する。
+`attach-document` は紐付け先に加えて、まだその note を載せている project（手で外した所属）も同じ batch で render する。領域が無く関連ノートが
 あれば末尾に新設する。マーカーが壊れている・`project:` を持つノートの YAML が読めない・summary にローカルパスがある場合は何も書かずに停止する。
 存在しない project key を指すノートは stderr に警告する。
 

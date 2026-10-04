@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import datetime
 import difflib
+import filecmp
 import hashlib
 import json
 import os
@@ -85,6 +86,8 @@ class Change:
     before: str
     after: str
     created: bool = False
+    # True when `before` was read byte-exact: the write refuses if the file changed since planning.
+    verify_before: bool = False
 
 
 def _parse_note_text(path: Path, text: str) -> Note:
@@ -111,10 +114,16 @@ def _parse_note_text(path: Path, text: str) -> Note:
     return Note(path, text, lines, close_index, data, newline)
 
 
-def parse_note(path: Path) -> Note:
+def _read_exact(path: Path) -> str:
+    """Read a file without newline translation, so CRLF notes survive a rewrite."""
+    with path.open(encoding="utf-8", newline="") as handle:
+        return handle.read()
+
+
+def parse_note(path: Path, exact: bool = False) -> Note:
     try:
-        text = path.read_text(encoding="utf-8")
-    except OSError as exc:
+        text = _read_exact(path) if exact else path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
         raise ValidationError(f"{path.name}: cannot read file: {exc}") from exc
     return _parse_note_text(path, text)
 
@@ -439,6 +448,10 @@ def _write_batch(vault: Path, changes: Iterable[Change]) -> None:
             else:
                 originals[change.path] = change.path.read_bytes()
                 modes[change.path] = stat.S_IMODE(change.path.stat().st_mode)
+                if change.verify_before and originals[change.path] != change.before.encode("utf-8"):
+                    raise ConflictError(
+                        f"{change.path.name}: file changed since it was read; nothing was written, rerun"
+                    )
         for change in changes:
             with tempfile.NamedTemporaryFile(
                 mode="wb", dir=change.path.parent, prefix=f".{change.path.name}.project-update-", delete=False
@@ -483,6 +496,13 @@ _KIND_RE = re.compile(r"^[a-z][a-z0-9_-]*$")
 _REPO_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 _ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _DATE_PREFIX_RE = re.compile(r"^(\d{4})-?(\d{2})-?(\d{2})(?!\d)")
+# 取り込み経路（document note の素材・title・hint、render が読む summary）用。legacy の
+# _LOCAL_PATH_RE は行頭・空白・`(` の直後しか見ないので、クォート直後・~/・ドライブ文字・
+# クラウド同期フォルダの実体パスを通してしまう。公開 vault に載る入口なので広く拒否する。
+_INGEST_LOCAL_RE = re.compile(
+    r"(?:^|[^\w])/(?:Users|home|private|Volumes|mnt)/|(?:^|[\s\"'`(])~/|file://|"
+    r"\b[A-Za-z]:\\|CloudStorage|GoogleDrive-|My Drive/|マイドライブ/"
+)
 _FM_KEY_RE = re.compile(r"^([A-Za-z_][\w-]*)\s*:")
 _BULLET_RE = re.compile(r"^\s*(?:[-*+]\s+|#+\s+|\d+[.)]\s+)")
 _HINT_RE = re.compile(r"^([A-Za-z_][\w-]*)=(.*)$")
@@ -501,15 +521,18 @@ class _Row:
 def _read_frontmatter(path: Path, text: str) -> Note | None:
     """Return the parsed note, or None when it has no frontmatter to speak of.
 
-    A frontmatter that does not parse is skipped only if it does not claim a project: a
-    note that declares `project:` but cannot be read would silently vanish from every
-    project's view, so that case stops the whole run instead.
+    A note that declares `project:` but cannot be read — YAML that does not parse, or a
+    frontmatter that is never closed — would silently vanish from every project's view, so
+    that case stops the whole run instead of being skipped.
     """
+    text = text.lstrip("\ufeff")
     lines = text.splitlines(keepends=True)
     if not lines or lines[0].strip() != "---":
         return None
     close = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
     if close is None:
+        if any(_PROJECT_LINE_RE.match(line) and not line[:1].isspace() for line in lines[1:]):
+            raise ValidationError(f"{path.name}: frontmatter is never closed but declares project")
         return None
     try:
         return _parse_note_text(path, text)
@@ -538,12 +561,20 @@ def _projects_of(note: Note) -> list[str]:
     return keys
 
 
+_LOOSE_DATE_RE = re.compile(r"^(\d{4})[-/.]?(\d{1,2})[-/.]?(\d{1,2})$")
+
+
 def _fmt_date(value: object) -> str:
     if isinstance(value, (datetime.datetime, datetime.date)):
         return value.isoformat()[:10]
-    if isinstance(value, str):
-        text = value.strip()
-        return text[:10] if _ISO_DATE_RE.match(text[:10]) else text
+    if isinstance(value, (str, int)) and not isinstance(value, bool):
+        text = str(value).strip()
+        match = _LOOSE_DATE_RE.match(text[:10]) if len(text) <= 10 else None
+        if match is None and _ISO_DATE_RE.match(text[:10]):
+            return text[:10]
+        if match:
+            return f"{match.group(1)}-{int(match.group(2)):02d}-{int(match.group(3)):02d}"
+        return text
     return ""
 
 
@@ -589,7 +620,7 @@ def _collect_associations(vault: Path, overlay: dict[Path, str]) -> dict[str, li
         text = overlay.get(path)
         if text is None:
             try:
-                text = path.read_text(encoding="utf-8")
+                text = _read_exact(path)
             except (OSError, UnicodeDecodeError) as exc:
                 raise ValidationError(f"{path.name}: cannot read file: {exc}") from exc
         note = _read_frontmatter(path, text)
@@ -603,7 +634,7 @@ def _collect_associations(vault: Path, overlay: dict[Path, str]) -> dict[str, li
         title = str(note.data.get("title") or path.stem).strip()
         summary = " ".join(str(note.data.get("summary") or "").split())
         for label, value in (("title", title), ("summary", summary)):
-            if _LOCAL_PATH_RE.search(value):
+            if _INGEST_LOCAL_RE.search(value):
                 raise ValidationError(f"{path.name}: {label} contains a local absolute path or file:// URL")
         row = _Row(kind, _note_date(note), title, _link_target(vault, path), summary)
         for key in keys:
@@ -686,7 +717,7 @@ def plan_render(
     changes: list[Change] = []
     summary: list[tuple[str, int, bool]] = []
     for key, path in targets:
-        note = parse_note(path)
+        note = parse_note(path, exact=True)
         if _project_value(note) != key:
             raise ValidationError(f"{path.name}: YAML project must be {key!r}")
         rows = [row for row, _ in grouped.get(key, [])]
@@ -694,7 +725,7 @@ def plan_render(
         after = _with_region(note, _region_lines(rows) if (rows or has_region) else None)
         changed = after != note.text
         if changed:
-            changes.append(Change(path, note.text, after))
+            changes.append(Change(path, note.text, after, verify_before=True))
         summary.append((key, len(rows), changed))
     existing = {key for key, _ in _project_note_targets(vault, None)}
     unknown = sorted(
@@ -782,6 +813,8 @@ def _resolve_artifact(artifact: Path) -> tuple[Path | None, str]:
     candidate = main / relative
     if not candidate.is_file():
         return None, "artifact is not present in the main checkout"
+    if not filecmp.cmp(path, candidate, shallow=False):
+        return None, "artifact differs from the main checkout's copy (not merged yet); rerun after it lands"
     return candidate, ""
 
 
@@ -874,7 +907,7 @@ def _read_material(path: Path | None, label: str, required: bool) -> str:
         raise ValidationError(f"{label}: cannot read {path.name}: {exc}") from exc
     if required and not text.strip():
         raise ValidationError(f"{label}: {path.name} is empty")
-    if _LOCAL_PATH_RE.search(text):
+    if _INGEST_LOCAL_RE.search(text):
         raise ValidationError(f"{label}: local absolute path or file:// URL detected in {path.name}")
     return text
 
@@ -889,7 +922,7 @@ def _check_source_path(value: str) -> str:
         or ".." in parts
         or "\\" in text
         or any(ord(char) < 0x20 for char in text)
-        or _LOCAL_PATH_RE.search(text)
+        or _INGEST_LOCAL_RE.search(text)
     ):
         raise ValidationError("--source-path must be a repository-relative path without local paths")
     return text
@@ -929,14 +962,49 @@ def _content_diff(old: str, new: str) -> str:
 def _document_content(digest: str, outline: str, notes: str, artifact_name: str | None) -> str:
     parts: list[str] = []
     if artifact_name:
-        target = f"<{artifact_name}>" if re.search(r"[\s()]", artifact_name) else artifact_name
-        parts.append(f"[{artifact_name}]({target})")
+        parts.append(_artifact_line(artifact_name))
     parts.append("## digest\n\n" + digest.strip())
     if outline.strip():
         parts.append("## outline\n\n" + outline.strip())
     if notes.strip():
         parts.append("## speaker notes\n\n" + notes.strip())
     return "\n\n".join(parts) + "\n"
+
+
+def _artifact_line(artifact_name: str) -> str:
+    target = f"<{artifact_name}>" if re.search(r"[\s()]", artifact_name) else artifact_name
+    return f"[{artifact_name}]({target})"
+
+
+def _has_artifact_line(content: str, artifact_name: str) -> bool:
+    first = content.strip().splitlines()[0] if content.strip() else ""
+    return first == _artifact_line(artifact_name)
+
+
+def _install_link(link: Path, target: str) -> None:
+    temp_link = link.parent / f".{link.name}.project-update-link"
+    try:
+        temp_link.unlink(missing_ok=True)
+        os.symlink(target, temp_link)
+        os.replace(temp_link, link)
+    finally:
+        try:
+            temp_link.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def _projects_listing(vault: Path, note_path: Path) -> list[str]:
+    """Projects whose generated region still links to this note (e.g. after a hand-removed association)."""
+    needle = f"]({_link_target(vault, note_path)})"
+    keys: list[str] = []
+    for key, path in _project_note_targets(vault, None):
+        try:
+            if needle in _read_exact(path):
+                keys.append(key)
+        except (OSError, UnicodeDecodeError) as exc:
+            raise ValidationError(f"{path.name}: cannot read file: {exc}") from exc
+    return keys
 
 
 def _cmd_attach_document(args: argparse.Namespace) -> int:
@@ -947,9 +1015,12 @@ def _cmd_attach_document(args: argparse.Namespace) -> int:
     kind_dir = vault / kind
     if kind_dir.is_symlink() or not kind_dir.is_dir():
         raise ValidationError(f"kind directory vault/{kind} does not exist; create it explicitly first")
-    name = _safe_key(args.name)
-    if name.startswith(".") or name.lower().endswith(".md"):
-        raise ValidationError("name must not start with '.' or end with .md")
+    try:
+        name = _safe_key(args.name)
+    except ValidationError as exc:
+        raise ValidationError(str(exc).replace("project key", "document name")) from None
+    if name.startswith(".") or name.lower().endswith(".md") or any(char in name for char in "#%|"):
+        raise ValidationError("document name must not start with '.', end with .md, or contain # % |")
     if not _REPO_RE.match(args.source_repo.strip()):
         raise ValidationError("--source-repo must be a repository name, not a path")
     source_repo = args.source_repo.strip()
@@ -961,7 +1032,7 @@ def _cmd_attach_document(args: argparse.Namespace) -> int:
     speaker_notes = _read_material(args.notes_file, "notes", required=False)
     title = (args.title or name).strip()
     for label, value in [("title", title)] + [("hint", h) for h in args.hint]:
-        if _LOCAL_PATH_RE.search(value) or "\n" in value:
+        if _INGEST_LOCAL_RE.search(value) or "\n" in value:
             raise ValidationError(f"{label}: local path or multi-line value is not allowed")
     hints = []
     for raw in args.hint:
@@ -979,7 +1050,7 @@ def _cmd_attach_document(args: argparse.Namespace) -> int:
     note_path = kind_dir / f"{name}.md"
     if note_path.is_symlink():
         raise ValidationError(f"{note_path.name}: document note must not be a symlink")
-    existing = parse_note(note_path) if note_path.exists() else None
+    existing = parse_note(note_path, exact=True) if note_path.exists() else None
     source_hash = _sha256(
         json.dumps(
             {"digest": digest.strip(), "outline": outline.strip(), "speaker_notes": speaker_notes.strip()},
@@ -1054,91 +1125,120 @@ def _cmd_attach_document(args: argparse.Namespace) -> int:
                 link_status = "create"
             if link_status:
                 link_path, link_target, artifact_name = candidate, relative, candidate.name
-    elif existing is not None:
-        # --artifact なしの再実行で内容を再生成しても、まだ有効な artifact link 行は落とさない
-        kept = _ARTIFACT_LINE_RE.match(old_content.strip().splitlines()[0]) if old_content.strip() else None
+    if artifact_name is None and existing is not None and old_content.strip():
+        # 再生成しても、まだ有効な artifact link 行は落とさない
+        kept = _ARTIFACT_LINE_RE.match(old_content.strip().splitlines()[0])
         if kept and (kind_dir / kept.group(1)).is_symlink():
             artifact_name = kept.group(1)
 
-    # --- compose the note ---
-    if existing is None:
-        content = _document_content(digest, outline, speaker_notes, artifact_name)
-        fm: list[str] = []
-        fm += _fm_block("title", title) + _fm_block("kind", kind)
-        if projects:
-            fm += _fm_block("project", projects)
-            fm += _fm_block("project_source", "manual")
-        fm += _fm_block("date", date) + _fm_block("summary", summary)
-        fm += _fm_block("source_repo", source_repo) + _fm_block("source_path", source_path)
-        fm += _fm_block("source_hash", source_hash)
-        fm += _fm_block("content_hash", _sha256(_normalize_content(content)))
-        fm += _fm_block("published_at", _now())
-        after = _compose(fm, projects, content)
-        action = "CREATE"
-    else:
-        same_source = str(existing.data.get("source_hash")) == source_hash
-        fm_lines = list(existing.lines[1 : existing.close_index])
-        content = old_content
-        if not same_source:
-            content = _document_content(digest, outline, speaker_notes, artifact_name)
-            for key, value in (
-                ("summary", summary),
-                ("source_hash", source_hash),
-                ("content_hash", _sha256(_normalize_content(content))),
-                ("published_at", _now()),
-            ):
-                fm_lines = _replace_fm_key(fm_lines, key, _fm_block(key, value))
-        if projects != current:
-            fm_lines = _replace_fm_key(fm_lines, "project", _fm_block("project", projects))
-        if manual:
-            fm_lines = _replace_fm_key(fm_lines, "project_source", _fm_block("project_source", "manual"))
-        after = _compose(fm_lines, projects, _normalize_content(content), existing.newline)
-        action = "NOOP" if after == existing.text else "UPDATE"
-
-    changes: list[Change] = []
-    overlay: dict[Path, str] = {}
-    if action == "CREATE":
-        changes.append(Change(note_path, "", after, created=True))
-        overlay[note_path] = after
-    elif action == "UPDATE":
-        assert existing is not None
-        changes.append(Change(note_path, existing.text, after))
-        overlay[note_path] = after
-    print(f"DOCUMENT {action} {note_path.relative_to(vault).as_posix()}")
-
-    if link_path is not None:
-        verb = {"create": "would link", "replace": "would relink", "same": "unchanged"}[link_status]
-        print(f"ARTIFACT {verb} {link_path.name} -> {link_target}")
-
-    # --- render the projects this note belongs to, in the same batch ---
-    if projects:
-        render_changes, summary_rows, unknown = plan_render(vault, projects, overlay)
-        _report_render(summary_rows, unknown)
-        changes += render_changes
-
-    if not changes and link_status in ("", "same"):
-        print("NOOP no changes required")
-        return 0
-    if not args.apply:
-        print("DRY_RUN no files written (pass --apply after review)")
-        return 0
-    _write_batch(vault, changes)
-    if link_path is not None and link_status in ("create", "replace"):
-        temp_link = link_path.parent / f".{link_path.name}.project-update-link"
+    # --- create the symlink first: a failure then costs only the link, never a dangling body line ---
+    previous_target: str | None = None
+    link_installed = False
+    if args.apply and link_path is not None and link_status in ("create", "replace"):
         try:
-            temp_link.unlink(missing_ok=True)
-            os.symlink(link_target, temp_link)
-            os.replace(temp_link, link_path)
+            if link_status == "replace":
+                previous_target = os.readlink(link_path)
+            _install_link(link_path, link_target)
+            link_installed = True
             print(f"ARTIFACT linked {link_path.name} -> {link_target}")
         except OSError as exc:
-            temp_link.unlink(missing_ok=True)
             print(f"ARTIFACT skipped (could not create symlink: {exc})")
+            link_path, link_status, artifact_name = None, "", None
+
+    def undo_link() -> None:
+        if not link_installed or link_path is None:
+            return
+        try:
+            if previous_target is None:
+                link_path.unlink(missing_ok=True)
+            else:
+                _install_link(link_path, previous_target)
+        except OSError:
+            pass
+
+    # --- compose the note, render, and write one batch ---
+    try:
+        if existing is None:
+            content = _document_content(digest, outline, speaker_notes, artifact_name)
+            fm: list[str] = []
+            fm += _fm_block("title", title) + _fm_block("kind", kind)
+            if projects:
+                fm += _fm_block("project", projects)
+                fm += _fm_block("project_source", "manual")
+            fm += _fm_block("date", date) + _fm_block("summary", summary)
+            fm += _fm_block("source_repo", source_repo) + _fm_block("source_path", source_path)
+            fm += _fm_block("source_hash", source_hash)
+            fm += _fm_block("content_hash", _sha256(_normalize_content(content)))
+            fm += _fm_block("published_at", _now())
+            after = _compose(fm, projects, content)
+            action = "CREATE"
+        else:
+            same_source = str(existing.data.get("source_hash")) == source_hash
+            fm_lines = list(existing.lines[1 : existing.close_index])
+            content = old_content
+            if not same_source:
+                content = _document_content(digest, outline, speaker_notes, artifact_name)
+            elif artifact_name and not _has_artifact_line(old_content, artifact_name):
+                content = _artifact_line(artifact_name) + "\n\n" + old_content.lstrip("\n")
+            if content is not old_content:
+                updates = [("content_hash", _sha256(_normalize_content(content)))]
+                if not same_source:
+                    updates = [
+                        ("summary", summary),
+                        ("source_hash", source_hash),
+                        *updates,
+                        ("published_at", _now()),
+                    ]
+                for key, value in updates:
+                    fm_lines = _replace_fm_key(fm_lines, key, _fm_block(key, value))
+            if projects != current:
+                fm_lines = _replace_fm_key(fm_lines, "project", _fm_block("project", projects))
+            if manual:
+                fm_lines = _replace_fm_key(fm_lines, "project_source", _fm_block("project_source", "manual"))
+            after = _compose(fm_lines, projects, _normalize_content(content), existing.newline)
+            action = "NOOP" if after == existing.text else "UPDATE"
+
+        changes: list[Change] = []
+        overlay: dict[Path, str] = {}
+        if action == "CREATE":
+            changes.append(Change(note_path, "", after, created=True))
+            overlay[note_path] = after
+        elif action == "UPDATE":
+            assert existing is not None
+            changes.append(Change(note_path, existing.text, after, verify_before=True))
+            overlay[note_path] = after
+        print(f"DOCUMENT {action} {note_path.relative_to(vault).as_posix()}")
+
+        if link_path is not None and not link_installed:
+            verb = {"create": "would link", "replace": "would relink", "same": "unchanged"}[link_status]
+            print(f"ARTIFACT {verb} {link_path.name} -> {link_target}")
+
+        # 紐付け先と、まだこのノートを載せている project（手で外した所属）を同じ batch で render する
+        render_keys = list(dict.fromkeys(projects + _projects_listing(vault, note_path)))
+        if render_keys:
+            render_changes, summary_rows, unknown = plan_render(vault, render_keys, overlay)
+            _report_render(summary_rows, unknown)
+            changes += render_changes
+
+        if not changes and link_status in ("", "same"):
+            print("NOOP no changes required")
+            return 0
+        if not args.apply:
+            print("DRY_RUN no files written (pass --apply after review)")
+            return 0
+        _write_batch(vault, changes)
+    except BaseException:
+        undo_link()
+        raise
     print(f"APPLIED files={len(changes)}")
     return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        epilog="Subcommands: `render` and `attach-document` (first argument; see `<subcommand> --help`).",
+    )
     parser.add_argument("--vault", type=Path, required=True, help="Obsidian data vault root")
     parser.add_argument("--project-key", required=True, help="Canonical project key")
     parser.add_argument(

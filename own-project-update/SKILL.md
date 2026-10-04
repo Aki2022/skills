@@ -100,6 +100,27 @@ python3 scripts/project_update.py --vault <vault-root> --mode validate \
 LLM 草案と人間確認を終えて project ノートを作成した後、`backfill` と `validate` を実行する。
 ヘルパーは preflight を全件終えてから書き込み、書き込み失敗時は変更済み record を復元する。
 
+## render と attach-document
+
+`render` は project ノートの generated 領域（associated-notes view）だけを書き直す。`attach-document` は生成資料のテキストを
+document note として公開し、同じ batch で関連 project ノートを render する。どちらも dry-run が既定で、`--apply` で書く。
+契約の詳細は [references/project-contract.md](references/project-contract.md) の Document note と Generated region。
+
+```text
+python3 scripts/project_update.py render --vault <vault-root> [--project-key <key>] [--apply]
+
+python3 scripts/project_update.py attach-document --vault <vault-root> \
+  --kind <kind> --name <yyyymmdd_name> --source-repo <repo> --source-path <relative path> \
+  --digest-file <digest.md> [--outline-file <outline.md>] [--notes-file <notes.md>] \
+  [--hint KEY=VALUE ...] (--project <key> ... | --no-project) [--artifact <original file>] [--apply]
+```
+
+- project は判定器（assess）の提案を人間が確定してから `--project` で渡す。assess は未実装の間「提案なし」を返し、
+  `--apply` は `--project` か `--no-project` のどちらかが無いと停止する（黙って未紐付けにしない）。
+- 既存の document note は、`source_hash` が同じなら本文を書かず、人間が本文を編集していたら上書きせず停止する。
+- `--artifact` は worktree 内の成果物を main チェックアウトの同じ相対パスへ解決して相対 symlink を作る。解決できなければ
+  link を作らず document note だけ公開する。
+
 ## 必須の検査
 
 - YAML parse 成功、指定 key との一致、backlink の相対リンクと重複なし

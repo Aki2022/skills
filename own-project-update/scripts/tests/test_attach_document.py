@@ -500,12 +500,10 @@ def test_write_refuses_when_the_file_changed_after_planning(vault: Path) -> None
     [
         "SCIM endpoint GET /Users/{id}",
         "the /home/ route and (/home/) tab",
-        "[docs](/home/guide)",
         "regex a:\\d+ と C:\\ drive root",
         "CloudStorageClient and Store in CloudStorage buckets",
         "Approx ~/month",
         "My Drive/Shared is a product name",
-        "https://ex.com/a?u=/home/x",
     ],
 )
 def test_ingest_does_not_reject_ordinary_technical_prose(vault: Path, material, prose: str) -> None:
@@ -539,3 +537,48 @@ def test_impossible_dates_are_left_as_text(vault: Path) -> None:
     write_note(vault / "record/a.md", "title: a\ndate: 20261399\nproject: proj_a\n")
     assert pu.main(["render", "--vault", str(vault), "--apply"]) == 0
     assert "2026-13-99" not in (vault / "project/project_proj_a.md").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    "leak",
+    [
+        "|<U>/alice/x|",
+        "|a|<U>/alice/x|b|",
+        "path:<U>/alice/Documents/a.pdf",
+        "パス：<U>/alice/Documents/a.pdf",
+        "ファイルは<U>/alice/x.md にある",
+        "資料を<U>/alice/Documents/a.pdf",
+        "HOME=<U>/alice",
+        "export OUT=<U>/alice/out",
+        "a.md,<U>/alice/b.md",
+        "x;<U>/alice/x",
+        "「<U>/alice/x」",
+        "（<U>/alice/x）",
+        "**<U>/alice/x**",
+        "(see <U>/alice)",
+        "[<U>/alice]",
+        "{<U>/alice}",
+        "/Volumes/Macintosh HD<U>/alice/x",
+        "/Volumes/Backup",
+        "/mnt/c<U>/alice/x",
+        "c:\\users\\alice\\x",
+        "D:\\work\\client\\x",
+        "~/Google Drive/clientX/a.pdf",
+        "~/OneDrive - Corp/a.pdf",
+        "file:<U>/alice/x",
+        "Library/Mobile Documents/com~apple~CloudDocs/x",
+        "/var/folders/ab/cd/T/x",
+        "[docs](/home/guide)",
+    ],
+)
+def test_ingest_rejects_realistic_leaks(vault: Path, material, leak: str) -> None:
+    """偽陽性側（技術文を通す）だけでなく、偽陰性側（漏れを通さない）も固定する。"""
+    leak = leak.replace("<U>", "/" + "Users")  # 検査に引っかからないよう、ソース上では連結して持つ
+    material["outline"].write_text(f"# t\n\n{leak}\n", encoding="utf-8")
+    before = snapshot(vault)
+    assert attach(vault, material, "--project", "proj_a", "--apply") == 3
+    assert snapshot(vault) == before
+
+
+def test_hint_with_a_path_after_equals_is_refused(vault: Path, material) -> None:
+    assert attach(vault, material, "--hint", "path=/" + "Users/alice/x") == 3

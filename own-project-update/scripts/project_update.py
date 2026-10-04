@@ -499,13 +499,16 @@ _DATE_PREFIX_RE = re.compile(r"^(\d{4})-?(\d{2})-?(\d{2})(?!\d)")
 # 取り込み経路（document note の素材・title・hint、render が読む summary）用。legacy の
 # _LOCAL_PATH_RE は行頭・空白・`(` の直後しか見ないので、クォート直後・~/・ドライブ文字・
 # クラウド同期フォルダの実体パスを通してしまう。公開 vault に載る入口なので広く拒否する。
+_NOT_AFTER_PATH_CHAR = r"(?<![A-Za-z0-9_/.\-])"  # ASCII だけで境界を取る: 日本語の助詞・全角記号の直後も拾う
 _INGEST_LOCAL_RE = re.compile(
-    r"(?:^|[\s\"'`(\[<])/(?:Users|home)/[^/\s{}<>)\]\"'`]+(?:[/\s\"'`]|$)|"
-    r"(?:^|[\s\"'`(\[<])/Volumes/[^/\s]+/|"
-    r"(?:^|[\s\"'`(\[<])/private/(?:var|tmp|etc)/|"
-    r"(?:^|[\s\"'`(])~/(?:Library|Documents|Desktop|Downloads|Dropbox|code|\.)|"
-    r"file://|(?<![\w])[A-Za-z]:[\\/](?:Users|Documents and Settings)[\\/]|"
-    r"Library/CloudStorage|GoogleDrive-|/My Drive/|マイドライブ/"
+    rf"{_NOT_AFTER_PATH_CHAR}/(?:Users|home)/[^/\s{{}}<>)\]\"'`]+|"
+    rf"{_NOT_AFTER_PATH_CHAR}/Volumes/\S|"
+    rf"{_NOT_AFTER_PATH_CHAR}/mnt/[a-z]/|"
+    rf"{_NOT_AFTER_PATH_CHAR}/(?:private/(?:var|tmp|etc)|var/folders|root)/|"
+    rf"{_NOT_AFTER_PATH_CHAR}~/(?:Library|Documents|Desktop|Downloads|Dropbox|code|Google|OneDrive|Box|iCloud|Projects|work|\.)|"
+    r"file:/|(?<![A-Za-z0-9])[a-z]:[\\/](?:[^\\/\s]+[\\/]|Users|Windows)|"
+    r"Library/CloudStorage|Library/Mobile Documents|com~apple~CloudDocs|GoogleDrive-|/My Drive/|マイドライブ/",
+    re.IGNORECASE,
 )
 _FM_KEY_RE = re.compile(r"^([A-Za-z_][\w-]*)\s*:")
 _BULLET_RE = re.compile(r"^\s*(?:[-*+]\s+|#+\s+|\d+[.)]\s+)")
@@ -984,17 +987,13 @@ def _artifact_line(artifact_name: str) -> str:
 
 
 def _leading_artifact_lines(content: str) -> list[str]:
-    lines = [line for line in content.strip("\n").splitlines()]
     found: list[str] = []
-    for line in lines:
+    for line in content.strip("\n").splitlines():
         if not line.strip():
-            if found:
-                continue
             continue
-        if _ARTIFACT_LINE_RE.match(line):
-            found.append(line)
-            continue
-        break
+        if not _ARTIFACT_LINE_RE.match(line):
+            break
+        found.append(line)
     return found
 
 

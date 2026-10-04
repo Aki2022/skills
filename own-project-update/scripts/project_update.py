@@ -20,6 +20,7 @@ import datetime
 import difflib
 import filecmp
 import hashlib
+import html
 import json
 import os
 import re
@@ -27,6 +28,8 @@ import stat
 import subprocess
 import sys
 import tempfile
+import unicodedata
+import urllib.parse
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
@@ -499,17 +502,51 @@ _DATE_PREFIX_RE = re.compile(r"^(\d{4})-?(\d{2})-?(\d{2})(?!\d)")
 # 取り込み経路（document note の素材・title・hint、render が読む summary）用。legacy の
 # _LOCAL_PATH_RE は行頭・空白・`(` の直後しか見ないので、クォート直後・~/・ドライブ文字・
 # クラウド同期フォルダの実体パスを通してしまう。公開 vault に載る入口なので広く拒否する。
-_NOT_AFTER_PATH_CHAR = r"(?<![A-Za-z0-9_/.\-])"  # ASCII だけで境界を取る: 日本語の助詞・全角記号の直後も拾う
+# 入口の best-effort 検査。確定判定は vibe-guard の scan-text（pre-commit・夜間 vault_doctor）が持つ。
+# 目的は「普通に起きる形」を vault に書く前に止めること: ユーザー名を含むホーム配下、マウント接頭辞つき、
+# クラウド同期フォルダ、Windows/UNC/WSL、環境変数、URL エンコード・HTML 実体・JSON エスケープ・改行分断。
+_NOT_AFTER_WORD = r"(?<![A-Za-z0-9_])"
 _INGEST_LOCAL_RE = re.compile(
-    rf"{_NOT_AFTER_PATH_CHAR}/(?:Users|home)/[^/\s{{}}<>)\]\"'`]+|"
-    rf"{_NOT_AFTER_PATH_CHAR}/Volumes/\S|"
-    rf"{_NOT_AFTER_PATH_CHAR}/mnt/[a-z]/|"
-    rf"{_NOT_AFTER_PATH_CHAR}/(?:private/(?:var|tmp|etc)|var/folders|root)/|"
-    rf"{_NOT_AFTER_PATH_CHAR}~/(?:Library|Documents|Desktop|Downloads|Dropbox|code|Google|OneDrive|Box|iCloud|Projects|work|\.)|"
-    r"file:/|(?<![A-Za-z0-9])[a-z]:[\\/](?:[^\\/\s]+[\\/]|Users|Windows)|"
-    r"Library/CloudStorage|Library/Mobile Documents|com~apple~CloudDocs|GoogleDrive-|/My Drive/|マイドライブ/",
-    re.IGNORECASE,
+    # macOS: /Users/<name> は大文字小文字を区別し、どの前置でも拾う（/System/Volumes/Data/Users/…・/cygdrive/c/Users/…）。
+    # 小文字の /users/ は REST ルートなので拾わない。/Users/{id} のようなプレースホルダと /Users/Shared は通す。
+    r"/Users/(?!Shared\b)[^/\s{}<>)\]\"'`:]+|"
+    # Linux: /home/<name>。英数字の直後（URL の path）は除く。automount 系は前置つきでも拾う。
+    rf"(?<![A-Za-z0-9_./\-])/home/[^/\s{{}}<>)\]\"'`:]+|/(?:export|net/[^/\s]+)/home/|@[\w.-]+/home/|/volume\d+/homes?/|"
+    r"(?<![A-Za-z0-9_./\-])/(?:root|Volumes)/\S|(?<![A-Za-z0-9_./\-])/mnt/[a-z]/|"
+    r"(?<![A-Za-z0-9_./\-])/(?:private/(?:var|tmp|etc)|var/folders)/|"
+    # ホーム直下: ~/ は ~/.config|.local|.cache 以外を拒否、~user/ も拒否。
+    r"(?<![A-Za-z0-9_])~/(?!\.(?:config|local|cache)\b)[A-Za-z.]|(?<![A-Za-z0-9_~])~[a-z][\w.-]*/|"
+    r"\$\{?HOME\}?\b|%(?:USERPROFILE|APPDATA|LOCALAPPDATA|HOMEPATH)%|"
+    # file: / smb: / UNC / WSL / Windows のドライブ付き
+    rf"{_NOT_AFTER_WORD}file:/|smb://|\\\\[A-Za-z0-9.$_-]+\\[A-Za-z0-9$_]|"
+    r"(?<![A-Za-z0-9_])[A-Za-z]:(?:\\[^\\/\n:]+[\\/]|[\\/](?:Users|Windows)[\\/])|"
+    r"(?i:Library/CloudStorage|Library/Mobile Documents|com~apple~CloudDocs|/My Drive/|マイドライブ/)|"
+    rf"{_NOT_AFTER_WORD}GoogleDrive-[^/\s]*@|OneDrive - |共有ドライブ/|Google ドライブ/|iCloud Drive/|"
+    r"Dropbox \(|(?<![A-Za-z0-9_])CloudStorage/|sharepoint\.com/personal/"
 )
+_LINEBREAK_AT_SLASH_RE = re.compile(r"\s*\n\s*(?=[/\\])|(?<=[/\\])\s*\n\s*")
+
+
+def _ingest_variants(text: str) -> list[str]:
+    """The text and its decoded/normalised forms, so an encoded or wrapped path is still seen."""
+    base = unicodedata.normalize("NFKC", text)
+    forms = [text, base]
+    current = base
+    for _ in range(2):
+        current = html.unescape(urllib.parse.unquote(current))
+        forms.append(current)
+    out: list[str] = []
+    for form in forms:
+        form = form.replace("\\/", "/")
+        out.append(form)
+        out.append(re.sub(r"/{2,}", "/", _LINEBREAK_AT_SLASH_RE.sub("", form)))
+    return out
+
+
+def _has_local_path(text: str) -> bool:
+    return any(_INGEST_LOCAL_RE.search(form) for form in _ingest_variants(text))
+
+
 _FM_KEY_RE = re.compile(r"^([A-Za-z_][\w-]*)\s*:")
 _BULLET_RE = re.compile(r"^\s*(?:[-*+]\s+|#+\s+|\d+[.)]\s+)")
 _HINT_RE = re.compile(r"^([A-Za-z_][\w-]*)=(.*)$")
@@ -644,7 +681,7 @@ def _collect_associations(vault: Path, overlay: dict[Path, str]) -> dict[str, li
         title = str(note.data.get("title") or path.stem).strip()
         summary = " ".join(str(note.data.get("summary") or "").split())
         for label, value in (("title", title), ("summary", summary)):
-            if _INGEST_LOCAL_RE.search(value):
+            if _has_local_path(value):
                 raise ValidationError(f"{path.name}: {label} contains a local absolute path or file:// URL")
         row = _Row(kind, _note_date(note), title, _link_target(vault, path), summary)
         for key in keys:
@@ -917,7 +954,7 @@ def _read_material(path: Path | None, label: str, required: bool) -> str:
         raise ValidationError(f"{label}: cannot read {path.name}: {exc}") from exc
     if required and not text.strip():
         raise ValidationError(f"{label}: {path.name} is empty")
-    if _INGEST_LOCAL_RE.search(text):
+    if _has_local_path(text):
         raise ValidationError(f"{label}: local absolute path or file:// URL detected in {path.name}")
     return text
 
@@ -932,7 +969,7 @@ def _check_source_path(value: str) -> str:
         or ".." in parts
         or "\\" in text
         or any(ord(char) < 0x20 for char in text)
-        or _INGEST_LOCAL_RE.search(text)
+        or _has_local_path(text)
     ):
         raise ValidationError("--source-path must be a repository-relative path without local paths")
     return text
@@ -1065,7 +1102,7 @@ def _cmd_attach_document(args: argparse.Namespace) -> int:
     speaker_notes = _read_material(args.notes_file, "notes", required=False)
     title = (args.title or name).strip()
     for label, value in [("title", title)] + [("hint", h) for h in args.hint]:
-        if _INGEST_LOCAL_RE.search(value) or "\n" in value:
+        if _has_local_path(value) or "\n" in value:
             raise ValidationError(f"{label}: local path or multi-line value is not allowed")
     hints = []
     for raw in args.hint:

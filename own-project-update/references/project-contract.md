@@ -88,7 +88,14 @@ published_at: <timestamp>
 
 本文は frontmatter 直後の backlink 行（project ごとに 1 行）、artifact link、`## digest`、`## outline`、`## speaker notes`。
 `content_hash` は backlink 行を除いた本文のハッシュで、人間が本文を編集したかの判定に使う。一致しなければ上書きせず停止する。
-`source_hash` が同じなら本文は書き換えない。絶対パス・`file://`・クラウド同期フォルダの実体パス（`/Users/<name>`・`/home/<name>`・`/Volumes/`・`/mnt/<drive>/`・ドライブ文字付きのパス・`~/Library` `~/Google…` 等・`Library/CloudStorage`・`GoogleDrive-`）は素材・title・hint にも frontmatter にも入れない（検出したら何も書かず停止）。境界は ASCII の単語文字・`/`・`.`・`-` の直後でないことだけで取るので、区切り文字や日本語の助詞の直後でも検出する。`/Users/{id}` のような API パスは対象外で、`/home/guide` のような実在しそうなルートは安全側で拒否する（書き換えて回避する）。
+`source_hash` が同じなら本文は書き換えない。絶対パス・`file://`・クラウド同期フォルダの実体パスは素材・title・hint・既存ノートの summary に入れない（検出したら何も書かず停止）。
+この検査は入口の best-effort で、確定判定は vibe-guard の `scan-text`（pre-commit・夜間 vault_doctor）が持つ。止める対象は
+「普通に起きる形」: `/Users/<name>`（大文字小文字を区別。小文字の `/users/` は REST ルートとして通す）・`/home/<name>`・`/Volumes/`・
+`/mnt/<drive>/`・マウント接頭辞つきのホーム（`/System/Volumes/Data/Users/…` 等）・`~/…`（`~/.config` `~/.local` `~/.cache` 以外）・`~user/`・
+`$HOME`・`%USERPROFILE%`・ドライブ文字つき/UNC/WSL の Windows パス・`file:`・`smb://`・クラウド同期フォルダ（`Library/CloudStorage`・
+`GoogleDrive-<account>@`・`OneDrive - `・`iCloud Drive/`・`Dropbox (`・共有ドライブ等）。URL エンコード・HTML 実体・JSON エスケープ・
+2 重エンコード・改行分断・重複スラッシュ・全角は正規化してから検査する。`/Users/{id}` のようなプレースホルダと `/Users/Shared` は通す。
+安全側の誤拒否（`/home/app`、`/Users/123` など）は書き換えて回避する。
 `--artifact` の拡張子を変えて再実行すると本文の link 行は 1 本に置き換わるが、旧拡張子の symlink は vault に残る（手で消す）。
 `--artifact` が linked worktree 内なら main チェックアウトの同じ相対パスへ解決し、中身が一致しなければ（未マージ）link を作らない。
 既存 note の改行（CRLF）は保つ。書き込み直前に対象ファイルが計画時から変わっていれば停止する（別セッションの書き込みを上書きしない）。

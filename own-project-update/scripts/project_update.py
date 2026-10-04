@@ -519,12 +519,13 @@ _INGEST_LOCAL_RE = re.compile(
     r"\$\{?HOME\}?\b|%(?:USERPROFILE|APPDATA|LOCALAPPDATA|HOMEPATH)%|"
     # file: / smb: / UNC / WSL / Windows のドライブ付き
     rf"{_NOT_AFTER_WORD}file:/|smb://|\\\\[A-Za-z0-9.$_-]+\\[A-Za-z0-9$_]|"
-    r"(?<![A-Za-z0-9_])[A-Za-z]:(?:\\[^\\/\n:]+[\\/]|[\\/](?:Users|Windows)[\\/])|"
+    r"(?<![A-Za-z0-9_])[A-Za-z]:(?:\\[^\\/\n:]+[\\/]|[\\/](?i:Users|Windows)[\\/])|"
     r"(?i:Library/CloudStorage|Library/Mobile Documents|com~apple~CloudDocs|/My Drive/|マイドライブ/)|"
     rf"{_NOT_AFTER_WORD}GoogleDrive-[^/\s]*@|OneDrive - |共有ドライブ/|Google ドライブ/|iCloud Drive/|"
     r"Dropbox \(|(?<![A-Za-z0-9_])CloudStorage/|sharepoint\.com/personal/"
 )
-_LINEBREAK_AT_SLASH_RE = re.compile(r"\s*\n\s*(?=[/\\])|(?<=[/\\])\s*\n\s*")
+# [^\S\n] は改行以外の空白。\s*\n\s* の入れ子は、空白だけの行が続くと 3 乗時間になる。
+_LINEBREAK_AT_SLASH_RE = re.compile(r"[^\S\n]*\n[^\S\n]*(?=[/\\])|(?<=[/\\])[^\S\n]*\n[^\S\n]*")
 
 
 def _ingest_variants(text: str) -> list[str]:
@@ -539,6 +540,7 @@ def _ingest_variants(text: str) -> list[str]:
     for form in forms:
         form = form.replace("\\/", "/")
         out.append(form)
+        out.append(form.replace("\\\\", "\\"))  # JSON・コード中の二重バックスラッシュ
         out.append(re.sub(r"/{2,}", "/", _LINEBREAK_AT_SLASH_RE.sub("", form)))
     return out
 

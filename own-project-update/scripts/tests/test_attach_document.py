@@ -595,6 +595,8 @@ def test_impossible_dates_are_left_as_text(vault: Path) -> None:
         "smb://server/share",
         "C:\\My Documents\\alice\\x",
         "C：\\Users\\alice",
+        "C:\\\\Users\\\\alice\\\\Desktop",
+        "c:/users/alice/x",
         "OneDrive - Contoso/Documents/x.pptx",
         "共有ドライブ/営業/x と Google ドライブ/x と iCloud Drive/x と Dropbox (Personal)/x",
         "CloudStorage/Dropbox/x",
@@ -612,3 +614,11 @@ def test_ingest_rejects_realistic_leaks(vault: Path, material, leak: str) -> Non
 
 def test_hint_with_a_path_after_equals_is_refused(vault: Path, material) -> None:
     assert attach(vault, material, "--hint", "path=/" + "Users/alice/x") == 3
+
+
+def test_whitespace_only_lines_do_not_make_the_check_quadratic() -> None:
+    import time
+
+    started = time.monotonic()
+    assert not pu._has_local_path(" \n" * 3000 + "ordinary text")
+    assert time.monotonic() - started < 5

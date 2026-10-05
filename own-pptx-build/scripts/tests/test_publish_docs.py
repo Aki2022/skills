@@ -61,7 +61,8 @@ def test_step5_explains_success_outputs_and_missing_notes() -> None:
 
 def test_step5_passes_the_outline_and_a_summary_not_a_digest_file() -> None:
     step5 = section(PIPELINE, "⑤ ")
-    assert '--summary "' in step5 and '--outline-file "$M/outline.md"' in step5
+    assert '--summary-file "$M/summary.txt"' in step5 and '--outline-file "$M/outline.md"' in step5
+    assert '--summary "' not in step5  # 題をシェル文字列へ展開しない（$(…)・引用符で壊れる）
     assert "--digest-file" not in step5
     assert "--fallback-title" in step5
     assert "mktemp -d" in step5 and "デッキ repo の外" in step5
@@ -80,3 +81,11 @@ def test_skill_table_mentions_both_steps() -> None:
     row5 = next(l for l in SKILL.splitlines() if l.startswith("| ⑤ "))
     assert "opt-out" in row1 and "vault_publish" in row1
     assert "attach-document" in row5
+
+
+def test_step5_covers_dry_run_conflict_and_the_name_remedies() -> None:
+    step5 = section(PIPELINE, "⑤ ")
+    assert "CONFLICT" in step5 and "dry-run でも出る" in step5
+    assert "--source-repo <ASCII 名>" in step5
+    assert "題として妥当か" in step5
+    assert "元の `process/outline.md`" in step5

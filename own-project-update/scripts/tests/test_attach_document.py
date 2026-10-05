@@ -709,3 +709,39 @@ def test_summary_option_beats_the_digest_first_line(vault: Path, material) -> No
     assert attach(vault, material, "--summary", "明示した題", "--no-project", "--apply") == 0
     assert frontmatter(doc(vault))["summary"] == "明示した題"
     assert "## digest" in doc(vault).read_text(encoding="utf-8")  # digest を渡せば節は残る
+
+
+# ---- --summary-file と summary の変更検知（PR #28 レビュー） ---------------------------------
+
+
+def test_summary_file_passes_a_title_the_shell_would_mangle(vault: Path, material, tmp_path: Path) -> None:
+    title = '題 "引用" $(printf INJECTED) `printf BT` $VAR - 先頭'
+    summary_file = tmp_path / "summary.txt"
+    summary_file.write_text(title + "\n", encoding="utf-8")
+    assert attach_without_digest(vault, material, "--summary-file", str(summary_file), "--no-project", "--apply") == 0
+    assert frontmatter(doc(vault))["summary"] == title
+
+
+def test_summary_and_summary_file_are_exclusive(vault: Path, material, tmp_path: Path) -> None:
+    summary_file = tmp_path / "s.txt"
+    summary_file.write_text("題\n", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        attach_without_digest(vault, material, "--summary", "x", "--summary-file", str(summary_file), "--no-project")
+
+
+def test_summary_file_with_several_lines_or_a_local_path_is_refused(vault: Path, material, tmp_path: Path) -> None:
+    before = snapshot(vault)
+    for text in ("一行目\n二行目\n", "see /private/tmp/someone/x\n", "\n"):
+        summary_file = tmp_path / "s.txt"
+        summary_file.write_text(text, encoding="utf-8")
+        assert attach_without_digest(vault, material, "--summary-file", str(summary_file), "--no-project", "--apply") == 3
+    assert snapshot(vault) == before
+
+
+def test_changing_only_the_summary_updates_the_note(vault: Path, material) -> None:
+    assert attach_without_digest(vault, material, "--summary", "最初の題", "--no-project", "--apply") == 0
+    assert attach_without_digest(vault, material, "--summary", "改めた題", "--no-project", "--apply") == 0
+    assert frontmatter(doc(vault))["summary"] == "改めた題"
+    first = snapshot(vault)
+    assert attach_without_digest(vault, material, "--summary", "改めた題", "--no-project", "--apply") == 0
+    assert snapshot(vault) == first

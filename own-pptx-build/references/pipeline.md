@@ -319,15 +319,20 @@ AI が「良い」と採点したことと、人間が最終形を承認した�
 1. **素材と opt-out の記録を読む**:
    ```bash
    M="$(mktemp -d)"   # 一時（システムの temp）。デッキ repo の外・コミットしない
-   python3 <skill>/scripts/prepare_publish_materials.py process/outline.md --out-dir "$M" --fallback-title <デッキ名>
+   python3 <skill>/scripts/prepare_publish_materials.py process/outline.md --out-dir "$M" --fallback-title <yyyymmdd_内容>
    ```
-   標準出力の JSON `{"vault_publish", "summary", "source_repo"}` を使う。`vault_publish` で分岐する:
+   `<yyyymmdd_内容>` はデッキのディレクトリ名（以降の `--name`・`--source-path`・`deck_name` ヒントも同じ文字列）。
+   標準出力の JSON `{"vault_publish", "summary", "source_repo"}` を使う。`$M/summary.txt` には summary が 1 行で入る。`vault_publish` で分岐する:
    `opted_out` → **vault には何も書かない**（このセクションを終えてクリーンアップへ。すでに vault に note がある場合も
    この skill は消さない。消すのは人間）。
    `null`（`outline.md` に行が無い既存デッキ）→ **記録が無いので、ここで opt-out の 1 問を補って**回答を待ち、
    `outline.md` の先頭に行（`<!-- vault_publish: publish -->` または `opted_out`）を足してからもう一度実行する。
    `publish` → 続行。`summary` は outline の題（note の frontmatter の 1 行要約になる）、`source_repo` は 4 で使う。
-   失敗（非 0）はメッセージのとおり: 行が 2 つある・値が不正・git の外・題が無い（`--fallback-title` を渡し直す）。
+   **`summary` が題として妥当かを見る**（`# 目次` のような章見出しを拾うことがある。違えば `process/outline.md` の
+   最初の見出しを `# outline.md — <題>` に直してもう一度実行する）。
+   失敗（非 0）はメッセージのとおり: 行が 2 つある・先頭行ではない・値が不正（`process/outline.md` の `vault_publish` 行を直す）、
+   git の外、題が無い（`--fallback-title` を渡し直す）、リポジトリ名を導出できない（日本語・空白・先頭が `_` や `.` の名前。
+   `--source-repo <ASCII 名>` で固定する。vault に既に note があるならその frontmatter の `source_repo` と同じ値にする）。
 2. スピーカーノート: `python3 <skill>/scripts/export_speaker_notes.py <成果物>.pptx --output "$M/speaker_notes.md"`。
    **ノートが 1 枚も無い pptx は非 0 で止まる。その場合は `--notes-file` を付けずに進める**（ノートは任意の素材）。
 3. 書き込み先の vault は `own-project-update` の「対象 vault を確定する」手順で決める。**場所は人間に確認する**
@@ -340,13 +345,14 @@ AI が「良い」と採点したことと、人間が最終形を承認した�
    python3 <own-project-update>/scripts/project_update.py attach-document --vault <vault-root> \
      --kind presentation --name <yyyymmdd_内容> --source-repo <source_repo> \
      --source-path presentation/<yyyymmdd_内容> \
-     --summary "<1 の summary>" --outline-file "$M/outline.md" [--notes-file "$M/speaker_notes.md"] \
-     --hint "deck_name=<デッキ名>" --hint "audience=<宛先>" --hint "client=<クライアント名>" \
+     --summary-file "$M/summary.txt" --outline-file "$M/outline.md" [--notes-file "$M/speaker_notes.md"] \
+     --hint "deck_name=<yyyymmdd_内容>" --hint "audience=<宛先>" --hint "client=<クライアント名>" \
      --artifact <成果物>.pptx
    ```
    値にスペースを含む `--hint` は引用符で囲む。`--hint` は判定器（assess）へ渡す。assess が未実装・停止中の間は
    `ASSESS unavailable (no proposals)` と出る。dry-run は何も書かない（終了コード 0）。
-6. **出力の `DOCUMENT` 行で分岐する**:
+6. **出力で分岐する**（`CONFLICT`〔終了コード 2〕と `ERROR`〔3〕は dry-run でも出る。**上書きせず**差分と理由を人間に報告して止まる。
+   vault 側を人間が編集していた・出典が別・素材のローカルパス等）。それ以外は `DOCUMENT` 行で:
    - `DOCUMENT CREATE`（初回）→ `ASSOCIATION undecided` が出る。**提案を人間に 1 回見せて確定する**（念のための確認。判定の原則は自動化で、
      これはこの skill の方針）。提案（key と確率）を、assess が未実装なら catalog 一覧（`vault/project/project_*.md` の key と client）を見せ、
      「この project に紐付けるか／紐付けない」を選んでもらう。確定した値を `--project <key>`（複数可）または `--no-project` として 7 で使う。
@@ -361,7 +367,8 @@ AI が「良い」と採点したことと、人間が最終形を承認した�
 9. `--artifact` の symlink は、成果物が git worktree 内にあり main チェックアウトにまだ同じ中身が無い間は作られない
    （出力に `ARTIFACT skipped` と理由が出る。document note は公開される）。マージ後に同じコマンドを再実行すると
    link が付く（再納品の扱いなので質問は無い）。
-10. ノートや outline にローカルパスがあると `attach-document` が拒否する（`ERROR ...`）。素材を直してやり直す。
+10. ノートや outline にローカルパスがあると `attach-document` が拒否する（`ERROR ...`）。**元の `process/outline.md`（や pptx のノート）**
+    を直して、1 から（prepare を含めて）やり直す。`$M` の中は一時コピーで、そこだけ直しても残らない。
 
 **承認後のクリーンアップ（必須・承認がトリガー）**: 人間の最終承認を受けたら
 `scripts/cleanup_deck.py <デッキdir>` を dry-run で提示し、承認後に `--apply` で実行する。

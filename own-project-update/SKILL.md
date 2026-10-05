@@ -111,11 +111,11 @@ python3 scripts/project_update.py render --vault <vault-root> [--project-key <ke
 
 python3 scripts/project_update.py attach-document --vault <vault-root> \
   --kind <kind> --name <yyyymmdd_name> --source-repo <repo> --source-path <relative path> \
-  (--summary "<1 行の要約>" | --digest-file <digest.md>) [--outline-file <outline.md>] [--notes-file <notes.md>] \
+  [--summary "<1 行の要約>" | --summary-file <summary.txt>] [--digest-file <digest.md>] [--outline-file <outline.md>] [--notes-file <notes.md>] \
   [--hint KEY=VALUE ...] (--project <key> ... | --no-project) [--artifact <original file>] [--apply]
 ```
 
-- 公開する中身は `--outline-file` と `--digest-file` の少なくとも一方。`--digest-file` を渡さないときは `--summary`（1 行）が必須で、
+- 公開する中身は `--outline-file` と `--digest-file` の少なくとも一方。`--digest-file` を渡さないときは `--summary` か `--summary-file`（1 行。題に引用符や `$` があるときは後者）が必須で、
   note に `## digest` 節は作らない（キーメッセージを抜き出す解析を生産者側に持たせず、outline をそのまま載せる使い方）。
 - project は判定器（assess）の提案を人間が確定してから `--project` で渡す。assess は未実装の間「提案なし」を返し、
   `--apply` は `--project` か `--no-project` のどちらかが無いと停止する（黙って未紐付けにしない）。

@@ -47,6 +47,19 @@ def git(cwd: Path, *args: str) -> None:
     subprocess.run(["git", "-C", str(cwd), *args], check=True, capture_output=True)
 
 
+def commit_without_hooks(root: Path) -> None:
+    """linked worktree には HEAD の commit が要る。hook を走らせない plumbing で空の commit を作る。"""
+    env = {
+        "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
+        "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com",
+        "PATH": __import__("os").environ["PATH"], "HOME": str(root),
+    }
+    tree = subprocess.run(["git", "-C", str(root), "mktree"], input="", capture_output=True, text=True, check=True, env=env).stdout.strip()
+    sha = subprocess.run(["git", "-C", str(root), "commit-tree", tree, "-m", "x"], capture_output=True, text=True, check=True, env=env).stdout.strip()
+    git(root, "update-ref", "refs/heads/main", sha)
+    git(root, "symbolic-ref", "HEAD", "refs/heads/main")
+
+
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
     """deck repo の代わり。remote の URL だけで足りるので commit は作らない。"""
@@ -68,7 +81,7 @@ def test_outputs_title_choice_and_repo_as_json_and_writes_only_the_published_out
         "summary": "デモ提案スライド（全3枚）",
         "source_repo": "deck_repo",
     }
-    assert sorted(p.name for p in out.iterdir()) == ["outline.md"]  # digest は作らない
+    assert sorted(p.name for p in out.iterdir()) == ["outline.md", "summary.txt"]  # digest は作らない
     assert (out / "outline.md").read_text(encoding="utf-8") == OUTLINE.split("\n", 1)[1]
 
 
@@ -163,3 +176,57 @@ def test_not_a_git_repository_is_an_error(tmp_path: Path) -> None:
 
 def test_missing_file_is_an_error(repo: Path, tmp_path: Path) -> None:
     assert run(repo / "nope.md", tmp_path / "out").returncode != 0
+
+
+def test_marker_that_is_not_the_first_line_is_an_error_not_a_silent_null(repo: Path, tmp_path: Path) -> None:
+    text = "# outline.md — 題\n\n<!-- vault_publish: publish -->\n本文\n"
+    result = run(write(repo, text), tmp_path / "out")
+    assert result.returncode != 0
+    assert "first line" in result.stderr
+
+
+def test_linked_worktree_without_a_remote_returns_the_main_checkout_name(tmp_path: Path) -> None:
+    main = tmp_path / "main_checkout"
+    main.mkdir()
+    git(main, "init", "-q")
+    commit_without_hooks(main)
+    wt = tmp_path / "linked_wt_dir"
+    git(main, "worktree", "add", "--detach", str(wt))
+    result = run(write(wt, OUTLINE), tmp_path / "out")
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["source_repo"] == "main_checkout"  # worktree のディレクトリ名ではない
+
+
+def test_summary_file_is_written_so_the_shell_never_sees_the_title(repo: Path, tmp_path: Path) -> None:
+    text = OUTLINE.replace("デモ提案スライド（全3枚）", '題 "引用" $(x) `y` $VAR')
+    out = tmp_path / "out"
+    assert run(write(repo, text), out).returncode == 0
+    assert (out / "summary.txt").read_text(encoding="utf-8") == '題 "引用" $(x) `y` $VAR\n'
+
+
+@pytest.mark.parametrize(
+    "heading",
+    ["# スライド 1: 表紙", "# S1: 表紙", "# Slide 1｜表紙", "# スライド１: 表紙"],
+)
+def test_slide_style_headings_are_never_taken_as_the_title(repo: Path, tmp_path: Path, heading: str) -> None:
+    text = f"<!-- vault_publish: publish -->\n{heading}\n\n本文\n"
+    result = run(write(repo, text), tmp_path / "out", "--fallback-title", "FALLBACK")
+    assert json.loads(result.stdout)["summary"] == "FALLBACK"
+
+
+def test_a_heading_inside_a_code_fence_is_not_the_title(repo: Path, tmp_path: Path) -> None:
+    text = "<!-- vault_publish: publish -->\n```\n# コメント行\n```\n\n# outline.md — 本当の題\n"
+    assert json.loads(run(write(repo, text), tmp_path / "out").stdout)["summary"] == "本当の題"
+
+
+def test_title_after_the_first_slide_heading_is_not_used(repo: Path, tmp_path: Path) -> None:
+    text = "<!-- vault_publish: publish -->\n# スライド1: 表紙\n\n# 付録\n"
+    assert json.loads(run(write(repo, text), tmp_path / "out", "--fallback-title", "F").stdout)["summary"] == "F"
+
+
+def test_source_repo_override_for_names_that_cannot_be_derived(repo: Path, tmp_path: Path) -> None:
+    git(repo, "remote", "set-url", "origin", "https://example.com/org/日本語リポ.git")
+    assert run(write(repo, OUTLINE), tmp_path / "a").returncode != 0
+    result = run(write(repo, OUTLINE), tmp_path / "b", "--source-repo", "nihongo_repo")
+    assert json.loads(result.stdout)["source_repo"] == "nihongo_repo"
+    assert run(write(repo, OUTLINE), tmp_path / "c", "--source-repo", "bad name").returncode != 0

@@ -1126,8 +1126,18 @@ def _cmd_attach_document(args: argparse.Namespace) -> int:
         hints.append(raw)
     if not digest.strip() and not outline.strip():
         raise ValidationError("nothing to publish: pass --digest-file and/or --outline-file")
-    if args.summary is not None:
-        summary = _normalize_line_separators(args.summary).strip()
+    summary_text = args.summary
+    if args.summary_file is not None:
+        try:
+            summary_text = args.summary_file.expanduser().read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            raise ValidationError(f"--summary-file: cannot read {args.summary_file.name}: {exc}") from exc
+        if summary_text.endswith("\n"):
+            summary_text = summary_text[:-1]
+        if "\n" in summary_text.replace("\r\n", "\n"):
+            raise ValidationError("--summary-file must hold exactly one line")
+    if summary_text is not None:
+        summary = _normalize_line_separators(summary_text).strip()
         if not summary or "\n" in summary:
             raise ValidationError("--summary must be one non-empty line")
         if _has_local_path(summary):
@@ -1136,7 +1146,7 @@ def _cmd_attach_document(args: argparse.Namespace) -> int:
     elif digest.strip():
         summary = _summary_line(digest)
     else:
-        raise ValidationError("--summary is required when there is no --digest-file")
+        raise ValidationError("--summary (or --summary-file) is required when there is no --digest-file")
 
     manual = [_safe_key(key) for key in dict.fromkeys(args.project)]
     for key in manual:
@@ -1149,7 +1159,12 @@ def _cmd_attach_document(args: argparse.Namespace) -> int:
     existing = parse_note(note_path, exact=True) if note_path.exists() else None
     source_hash = _sha256(
         json.dumps(
-            {"digest": digest.strip(), "outline": outline.strip(), "speaker_notes": speaker_notes.strip()},
+            {
+                "digest": digest.strip(),
+                "outline": outline.strip(),
+                "speaker_notes": speaker_notes.strip(),
+                "summary": summary,  # 題だけ変えた再実行も更新として扱う
+            },
             ensure_ascii=False,
             sort_keys=True,
         )
@@ -1374,7 +1389,11 @@ def build_subcommand_parser() -> argparse.ArgumentParser:
     attach.add_argument("--source-repo", required=True, help="Repository that owns the source")
     attach.add_argument("--source-path", required=True, help="Repository-relative path of the source")
     attach.add_argument("--digest-file", type=Path, help="Optional key-message digest (its first line is the summary unless --summary is given)")
-    attach.add_argument("--summary", help="One-line summary for the note frontmatter (required when there is no digest)")
+    summary_group = attach.add_mutually_exclusive_group()
+    summary_group.add_argument("--summary", help="One-line summary for the note frontmatter (required when there is no digest)")
+    summary_group.add_argument(
+        "--summary-file", type=Path, help="Same as --summary, read from a one-line file (safe for titles with quotes or $)"
+    )
     attach.add_argument("--outline-file", type=Path, help="Outline text")
     attach.add_argument("--notes-file", type=Path, help="Speaker notes text")
     attach.add_argument("--hint", action="append", default=[], help="KEY=VALUE hint forwarded to assess (repeatable)")

@@ -31,6 +31,7 @@ Do not copy implementation history into guides or current behavior into workstre
    - Use **docs only** when no implementation changes.
 5. Reuse the recorded branch or worktree. Do not create a second branch for resumed work.
    A new issue or workstream starts with `branch: ""`. Write the branch name only after you have actually cut it: a name recorded in advance points at a branch that does not exist, and `check_active_issue_branches.py` reports it as MISSING.
+   Set `status: in_progress` when work actually starts. `validate_repo_docs.py` warns about a missing `branch` only for `in_progress` issues, and `check_active_issue_branches.py` reports MISSING only for them: an issue that has not started has no branch yet, and one that is finished has had its branch deleted, so neither is an anomaly.
 
 Default to one workstream file with embedded issue blocks. Split it only when independent branches, parallel ownership, or file size makes one file materially harder to resume.
 

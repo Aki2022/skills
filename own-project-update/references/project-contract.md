@@ -38,20 +38,37 @@ tags:
 
 ## Meeting record
 
-project に属する record は YAML と本文の両方で紐付ける。
+project に属する record は YAML と本文の両方で紐付ける。`project` は**常にリスト**（1 件でもリスト）で、主／副の区別は持たない。
+出所は `project_source`（`manual` / `model` / `legacy`）。手動の指定は model に勝つ。
 
 ```yaml
-project: <key>
+project:
+  - <key>
+project_source: manual
+summary: <1 行要約>   # 任意。backfill の --summary は、record に summary が無いときだけ書く
 ```
 
-frontmatter の直後、本文の先頭に次を一つだけ置く。
+frontmatter の直後、本文の先頭に、所属する project ごとに 1 行ずつ次を置く（`project` のリストと同じ project 集合）。
 
 ```markdown
 > project: [project_<key>](../project/project_<key>.md)
 ```
 
-既に別 project の YAML または backlink がある record は移管せず停止する。既に同じ key が
-ある場合は重複させず no-op にする。
+- 読み手は旧来の文字列 `project: <key>` を 1 要素のリストとして読む。既に同じ key があれば何も書かない（旧形式のまま触らず、
+  リスト化は `migrate` の仕事）。
+- 書き手（`--mode backfill`）は既存の所属を**保持して追加**する。追加時は `project` をリストで書き直し、`project_source: manual`、
+  backlink 行を project ごとに作り直す。他の frontmatter キー・本文・改行（CRLF）は保つ。
+- `project` のリストと backlink の集合が食い違う（崩れた backlink・リストに無い project の backlink・backlink 欠落）record は、
+  どちらが正しいかを推測せず停止する（backfill/bootstrap は CONFLICT、validate は ERROR）。
+- 明示的な backfill で、既に `project_source: model` の key が載っている record は `manual` に昇格する（人の採用は model に勝つ。
+  `legacy`・未記載は触らない）。
+- `project` / `project_source` の行（リストの中を含む）に YAML コメントがあると、書き直しで消えるので CONFLICT で止まる（人間が直す）。
+  引用符つきの `"project":` も同じキーとして置き換え、重複キーを作らない。書く前に書いた結果を読み直して検査する。
+- `summary` は既存と違う値なら上書きせず停止する。1 行・ローカルパスなし。`--summary` は backfill だけ・`--record` が 1 件のときだけ
+  （1 会議の要約を複数 record に書かない）。key が既にある record に summary だけを足す場合は、backlink ブロックの空行も整える。
+- 食い違いの停止は backfill/bootstrap では CONFLICT（2）、validate では ERROR（3）。backlink の重複と「frontmatter 直後でない」は常に ERROR（3）。
+- **書き手の注意**: 書き手はリスト形式で書く。recorder など旧形式しか読めない読み手が残る vault では、読み手が両形式に対応してから使う
+  （recorder 側 WS の ISSUE-03）。
 
 ## Project list
 
@@ -120,5 +137,5 @@ kind 昇順・日付降順の表（kind・日付・リンク・`summary`）に�
 
 - bootstrap 先の project ノートが存在する場合は、ノート・一覧・record を変更せず停止。
 - 一覧に同じ project key がある場合も重複登録せず停止。
-- 対象 record が別 project を指す場合は既存紐付けを保持して停止。
+- 対象 record が別 project を指す場合は、既存の所属を保持して追加する（旧: 停止）。
 - 解除・再割当・明示上書きは別操作で、bootstrap の暗黙動作にしない。

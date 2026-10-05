@@ -233,6 +233,24 @@ def _body_without_backlinks(note: Note) -> str:
     return "".join(lines[index:])
 
 
+_YAML_COMMENT_RE = re.compile(r"(^|\s)#")
+
+
+def _fm_key_block(fm_lines: list[str], key: str) -> list[str]:
+    """The lines a top-level frontmatter key occupies (the key line and its indented / `-` continuation)."""
+    block: list[str] = []
+    capturing = False
+    for line in fm_lines:
+        match = _FM_KEY_RE.match(line)
+        if match:
+            capturing = match.group(1) == key
+        elif capturing and not (line[:1] in (" ", "\t") or line.startswith("-")):
+            capturing = False
+        if capturing:
+            block.append(line)
+    return block
+
+
 def prepare_record(path: Path, key: str, summary: str | None = None) -> Change:
     """Plan adding `key` to a record: list-form `project`, `project_source: manual`, per-project backlinks, optional `summary`.
 
@@ -250,8 +268,17 @@ def prepare_record(path: Path, key: str, summary: str | None = None) -> Change:
     changed = False
 
     new_projects = projects if key in projects else projects + [key]
-    if key not in projects:
-        fm_lines = _replace_fm_key(fm_lines, "project", _fm_block("project", new_projects))
+    source = str(note.data.get("project_source") or "").strip()
+    if key not in projects or source == "model":
+        # 書き直す行に YAML コメントがあると、書き直しで黙って消える。消さずに止める（人間が直す）。
+        for name in ("project", "project_source"):
+            if any(_YAML_COMMENT_RE.search(line) for line in _fm_key_block(fm_lines, name)):
+                raise ConflictError(
+                    f"{path.name}: the {name!r} frontmatter has a YAML comment that a rewrite would drop; edit it by hand"
+                )
+        if key not in projects:
+            fm_lines = _replace_fm_key(fm_lines, "project", _fm_block("project", new_projects))
+        # 人が明示的に採用したら、model の判定に勝つ。legacy・未記載は触らない。
         fm_lines = _replace_fm_key(fm_lines, "project_source", _fm_block("project_source", "manual"))
         changed = True
     if summary is not None:
@@ -278,6 +305,12 @@ def prepare_record(path: Path, key: str, summary: str | None = None) -> Change:
         + separator
         + rest
     )
+    # 書く前に、書いた結果を読み直して検査する。PyYAML は重複キーを後勝ちで黙って読むので、validate が通っても
+    # 2 つ目のキーが生まれていては困る（成功に見えて誤る）。
+    written = _parse_note_text(path, text)
+    top_level_project_keys = sum(1 for line in text.splitlines()[1 : written.close_index] if re.match(r"^[\"\']?project[\"\']?\s*:", line))
+    if _projects_of(written) != new_projects or top_level_project_keys != 1:
+        raise ConflictError(f"{path.name}: refusing to write a record whose `project` key would be duplicated or misread")
     return Change(path, note.text, text, verify_before=True)
 
 
@@ -415,6 +448,13 @@ def _preflight(args: argparse.Namespace, paths: list[Path]) -> tuple[Path, list[
     project_path = vault_project_path(args.vault, key)
     list_names, list_client = list_rows(args.vault, key)
 
+    summary = _normalize_summary(getattr(args, "summary", None))
+    if summary is not None and args.mode != "backfill":
+        raise ValidationError("--summary is for --mode backfill only")
+    if summary is not None and len(paths) > 1:
+        # summary は会議 1 件の要約。複数 record に同じ 1 行を黙って書かない。
+        raise ValidationError("--summary can only be used with a single --record")
+
     if args.mode == "bootstrap":
         if project_path.exists():
             raise ConflictError(f"project note already exists: {project_path.name}")
@@ -443,7 +483,6 @@ def _preflight(args: argparse.Namespace, paths: list[Path]) -> tuple[Path, list[
             "confirm explicitly before continuing"
         )
 
-    summary = _normalize_summary(getattr(args, "summary", None))
     changes: list[Change] = []
     for path in paths:
         if args.mode == "validate":
@@ -575,7 +614,7 @@ def _has_local_path(text: str) -> bool:
     return any(_INGEST_LOCAL_RE.search(form) for form in _ingest_variants(text))
 
 
-_FM_KEY_RE = re.compile(r"^([A-Za-z_][\w-]*)\s*:")
+_FM_KEY_RE = re.compile(r"^[\"']?([A-Za-z_][\w-]*)[\"']?\s*:")
 _BULLET_RE = re.compile(r"^\s*(?:[-*+]\s+|#+\s+|\d+[.)]\s+)")
 _HINT_RE = re.compile(r"^([A-Za-z_][\w-]*)=(.*)$")
 _ARTIFACT_LINE_RE = re.compile(r"^\[([^\]]+)\]\(<?\1>?\)$")

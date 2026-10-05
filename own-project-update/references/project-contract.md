@@ -60,7 +60,15 @@ frontmatter の直後、本文の先頭に、所属する project ごとに 1 �
   backlink 行を project ごとに作り直す。他の frontmatter キー・本文・改行（CRLF）は保つ。
 - `project` のリストと backlink の集合が食い違う（崩れた backlink・リストに無い project の backlink・backlink 欠落）record は、
   どちらが正しいかを推測せず停止する（backfill/bootstrap は CONFLICT、validate は ERROR）。
-- `summary` は既存と違う値なら上書きせず停止する。1 行・ローカルパスなし。
+- 明示的な backfill で、既に `project_source: model` の key が載っている record は `manual` に昇格する（人の採用は model に勝つ。
+  `legacy`・未記載は触らない）。
+- `project` / `project_source` の行（リストの中を含む）に YAML コメントがあると、書き直しで消えるので CONFLICT で止まる（人間が直す）。
+  引用符つきの `"project":` も同じキーとして置き換え、重複キーを作らない。書く前に書いた結果を読み直して検査する。
+- `summary` は既存と違う値なら上書きせず停止する。1 行・ローカルパスなし。`--summary` は backfill だけ・`--record` が 1 件のときだけ
+  （1 会議の要約を複数 record に書かない）。key が既にある record に summary だけを足す場合は、backlink ブロックの空行も整える。
+- 食い違いの停止は backfill/bootstrap では CONFLICT（2）、validate では ERROR（3）。backlink の重複と「frontmatter 直後でない」は常に ERROR（3）。
+- **書き手の注意**: 書き手はリスト形式で書く。recorder など旧形式しか読めない読み手が残る vault では、読み手が両形式に対応してから使う
+  （recorder 側 WS の ISSUE-03）。
 
 ## Project list
 

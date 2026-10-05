@@ -7,6 +7,7 @@ SPEC-project-association Requirement 2・4・14 と WS-20261003-project-associat
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -176,11 +177,15 @@ def test_manual_beats_model_when_a_project_is_added(legacy_vault: Path) -> None:
     assert fm(path)["project_source"] == "manual"
 
 
-def test_existing_key_keeps_its_project_source(legacy_vault: Path) -> None:
-    path = record(legacy_vault, "r1", "project:\n  - proj_a\nproject_source: model\n", backlink("proj_a") + "\n\n本文。\n")
-    before = path.read_bytes()
-    assert run(legacy_vault, "backfill", "proj_a", "record/r1.md", extra=["--apply"]) == 0
-    assert path.read_bytes() == before
+def test_explicit_backfill_of_an_existing_key_promotes_model_to_manual_but_leaves_legacy_alone(legacy_vault: Path) -> None:
+    """人が明示的に採用したら model に勝つ（SPEC-project-association Req 13）。legacy・未記載は触らない。"""
+    model = record(legacy_vault, "m", "project:\n  - proj_a\nproject_source: model\n", backlink("proj_a") + "\n\n本文。\n")
+    legacy = record(legacy_vault, "l", "project:\n  - proj_a\nproject_source: legacy\n", backlink("proj_a") + "\n\n本文。\n")
+    bare = record(legacy_vault, "b", "project: proj_a\n", backlink("proj_a") + "\n\n本文。\n")
+    legacy_before, bare_before = legacy.read_bytes(), bare.read_bytes()
+    assert run(legacy_vault, "backfill", "proj_a", "record/m.md", "record/l.md", "record/b.md", extra=["--apply"]) == 0
+    assert fm(model)["project_source"] == "manual"
+    assert legacy.read_bytes() == legacy_before and bare.read_bytes() == bare_before
 
 
 @pytest.mark.parametrize(
@@ -245,3 +250,55 @@ def test_backlinks_are_written_in_list_order_with_one_line_per_project(legacy_va
     assert fm(path)["project"] == ["proj_b", "proj_a"]
     assert body_of(path).startswith(backlink("proj_b") + "\n" + backlink("proj_a") + "\n")
     assert body_of(path).count("> project:") == 2
+
+
+# ---- レビュー指摘（PR #29）の回帰 -----------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "frontmatter",
+    [
+        "project:\n  - proj_a\n  # 手書きの注意書き\n  - proj_c\nproject_source: manual\n",
+        "project: proj_a  # 誰の案件\n",
+    ],
+    ids=["comment-inside-the-list", "trailing-comment"],
+)
+def test_yaml_comments_on_the_project_key_stop_the_write_instead_of_being_dropped(
+    legacy_vault: Path, frontmatter: str
+) -> None:
+    record(legacy_vault, "r1", frontmatter, backlink("proj_a") + "\n" + backlink("proj_c") + "\n\n本文。\n" if "proj_c" in frontmatter else backlink("proj_a") + "\n\n本文。\n")
+    before = snapshot(legacy_vault)
+    assert run(legacy_vault, "backfill", "proj_b", "record/r1.md", extra=["--apply"]) == 2
+    assert snapshot(legacy_vault) == before
+
+
+def test_comments_on_other_keys_are_kept(legacy_vault: Path) -> None:
+    path = record(legacy_vault, "r1", "title: x  # 題\n# 全体のメモ\n")
+    assert run(legacy_vault, "backfill", "proj_a", "record/r1.md", extra=["--apply"]) == 0
+    text = path.read_text(encoding="utf-8")
+    assert "title: x  # 題" in text and "# 全体のメモ" in text
+
+
+@pytest.mark.parametrize("key_form", ['"project"', "'project'"])
+def test_quoted_project_key_is_replaced_not_duplicated(legacy_vault: Path, key_form: str) -> None:
+    """PyYAML は重複キーを後勝ちで黙って読む。引用符つきのキーを見落として 2 つ目を書くと、validate が通るのに誤る。"""
+    path = record(legacy_vault, "r1", f"{key_form}: proj_a\n", backlink("proj_a") + "\n\n本文。\n")
+    assert run(legacy_vault, "backfill", "proj_b", "record/r1.md", extra=["--apply"]) == 0
+    frontmatter_text = path.read_text(encoding="utf-8").split("---\n", 2)[1]
+    keys = [l for l in frontmatter_text.splitlines() if re.match(r"^[\"']?project[\"']?\s*:", l)]
+    assert len(keys) == 1, keys
+    assert fm(path)["project"] == ["proj_a", "proj_b"]
+
+
+def test_summary_with_several_records_is_refused(legacy_vault: Path) -> None:
+    record(legacy_vault, "a", "title: a\n")
+    record(legacy_vault, "b", "title: b\n")
+    before = snapshot(legacy_vault)
+    assert run(legacy_vault, "backfill", "proj_a", "record/a.md", "record/b.md", extra=["--apply", "--summary", "一件の要約"]) == 3
+    assert snapshot(legacy_vault) == before  # 1 会議の要約を全 record に黙って書かない
+
+
+@pytest.mark.parametrize("mode", ["validate", "bootstrap"])
+def test_summary_is_backfill_only(legacy_vault: Path, mode: str) -> None:
+    record(legacy_vault, "a", "project: proj_a\n", backlink("proj_a") + "\n\n本文。\n")
+    assert run(legacy_vault, mode, "proj_a", "record/a.md", extra=["--summary", "x"]) == 3

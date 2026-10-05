@@ -108,7 +108,7 @@ def _parse_note_text(path: Path, text: str) -> Note:
     yaml_text = "".join(lines[1:close_index])
     try:
         data = yaml.safe_load(yaml_text) or {}
-    except yaml.YAMLError as exc:
+    except (yaml.YAMLError, ValueError) as exc:  # 存在しない日付（2026-02-30）は ValueError で来る
         raise ValidationError(f"{path.name}: YAML parse failed: {exc}") from exc
     if not isinstance(data, dict):
         raise ValidationError(f"{path.name}: YAML frontmatter must be a mapping")
@@ -137,8 +137,8 @@ def _safe_key(value: str) -> str:
         raise ValidationError("project key must be non-empty and cannot contain path separators")
     if any(ord(char) < 0x20 for char in key):
         raise ValidationError("project key cannot contain control characters")
-    if any(char in key for char in "[]()"):
-        raise ValidationError("project key cannot contain Markdown link delimiters")
+    if any(char in key for char in "[]()|"):
+        raise ValidationError("project key cannot contain Markdown link delimiters or '|'")
     return key
 
 
@@ -354,7 +354,8 @@ def _table_cells(line: str) -> list[str] | None:
     stripped = line.strip()
     if not stripped.startswith("|") or not stripped.endswith("|"):
         return None
-    return [cell.strip().replace("\\_", "_") for cell in stripped[1:-1].split("|")]
+    # `\|` はセルの中の `|`。生の `|` だけがセルの区切り（render が書いた表を読み戻しても食い違わない）
+    return [cell.strip().replace("\\_", "_").replace("\\|", "|") for cell in re.split(r"(?<!\\)\|", stripped[1:-1])]
 
 
 def _list_table(text: str) -> tuple[dict[str, int], list[tuple[int, list[str]]]]:
@@ -498,6 +499,15 @@ def vault_project_path(vault: Path, key: str) -> Path:
     return vault / "project" / f"project_{key}.md"
 
 
+def _restore_file(path: Path, original: bytes, mode: int) -> None:
+    """Put the original bytes back by replacing the file (works for a read-only file in a writable directory)."""
+    with tempfile.NamedTemporaryFile(mode="wb", dir=path.parent, prefix=f".{path.name}.restore-", delete=False) as handle:
+        handle.write(original)
+        temp = Path(handle.name)
+    os.chmod(temp, mode)
+    os.replace(temp, path)
+
+
 def _write_batch(vault: Path, changes: Iterable[Change]) -> None:
     changes = [change for change in changes if change.before != change.after or change.created]
     if not changes:
@@ -536,8 +546,7 @@ def _write_batch(vault: Path, changes: Iterable[Change]) -> None:
             if original is None:
                 path.unlink(missing_ok=True)
             else:
-                path.write_bytes(original)
-                os.chmod(path, modes[path])
+                _restore_file(path, original, modes[path])
         raise
     finally:
         for temp_path in temp_paths:
@@ -735,7 +744,19 @@ def _collect_associations(vault: Path, overlay: dict[Path, str]) -> dict[str, li
         if text is None:
             try:
                 text = _read_exact(path)
-            except (OSError, UnicodeDecodeError) as exc:
+            except UnicodeDecodeError:
+                # 実 vault には途中で切れたマルチバイトを含む note がある。1 本で vault 全体の render を止めない代わりに、
+                # project を名乗れる（frontmatter が読めて project を持つ）ものは止め、名乗らないものだけ警告して飛ばす。
+                lossy = path.read_bytes().decode("utf-8", errors="replace")
+                declared = _read_frontmatter(path, lossy)
+                if declared is not None and _projects_of(declared):
+                    raise ValidationError(f"{path.name}: not valid UTF-8 but declares project; fix the file before render")
+                print(
+                    f"WARN {path.relative_to(vault).as_posix()}: not valid UTF-8; skipped (it declares no project)",
+                    file=sys.stderr,
+                )
+                continue
+            except OSError as exc:
                 raise ValidationError(f"{path.name}: cannot read file: {exc}") from exc
         note = _read_frontmatter(path, text)
         if note is None:
@@ -825,8 +846,12 @@ def plan_render(
     Returns (changes, per-project (key, notes, changed), unknown (key, note) references).
     All inputs are read before any output is decided, so a failure leaves nothing half-done.
     """
-    overlay = overlay or {}
-    grouped = _collect_associations(vault, overlay)
+    return _plan_regions(vault, keys, _collect_associations(vault, overlay or {}))
+
+
+def _plan_regions(
+    vault: Path, keys: Sequence[str] | None, grouped: dict[str, list[tuple[_Row, str]]]
+) -> tuple[list[Change], list[tuple[str, int, bool]], list[tuple[str, str]]]:
     targets = _project_note_targets(vault, keys)
     changes: list[Change] = []
     summary: list[tuple[str, int, bool]] = []
@@ -848,6 +873,186 @@ def plan_render(
     return changes, summary, unknown
 
 
+_RAYCAST_ARG2_RE = re.compile(r"^# @raycast\.argument2 [^\r\n]*", re.MULTILINE)  # CRLF の \r は管理行の外に残す
+_LIST_COLUMNS = ("name", "client", "partner", "status", "last meeting", "path")
+_LIST_NOTE = "<!-- render が毎回書き直す一覧。手で編集しない。正典は project ノートの frontmatter（SPEC-project-association） -->"
+
+
+@dataclass(frozen=True)
+class _ProjectRow:
+    key: str
+    client: str
+    partner: str
+    status: str
+    last_meeting: str
+
+    @property
+    def active(self) -> bool:
+        return self.status in ("", "active")  # status が無い project は active 扱い（recorder の dropdown と同じ）
+
+
+def _joined(value: object) -> str:
+    if value is None:
+        return ""
+    items = value if isinstance(value, list) else [value]
+    return ", ".join(" ".join(str(item).split()) for item in items if item is not None and str(item).strip())
+
+
+def _valid_iso_date(text: str) -> bool:
+    if not _ISO_DATE_RE.match(text):
+        return False
+    try:
+        datetime.date.fromisoformat(text)
+    except ValueError:
+        return False
+    return True
+
+
+def _project_rows(vault: Path, grouped: dict[str, list[tuple[_Row, str]]]) -> list[_ProjectRow]:
+    """One row per project note, in list order: active first, last meeting newest first, then name."""
+    rows: list[_ProjectRow] = []
+    for key, path in _project_note_targets(vault, None):
+        note = parse_note(path, exact=True)
+        if _project_value(note) != key:
+            raise ValidationError(f"{path.name}: YAML project must be {key!r}")
+        # 最終会議日は record だけから求める。資料（document note）の公開では更新しない（SPEC-document-publish Req 11）。
+        dates = [row.date for row, _ in grouped.get(key, []) if row.kind == "record" and _valid_iso_date(row.date)]
+        project_row = _ProjectRow(
+            _safe_key(key),
+            _joined(note.data.get("client")),
+            _joined(note.data.get("partner")),
+            _joined(note.data.get("status")),
+            max(dates, default=""),
+        )
+        for label, value in (("client", project_row.client), ("partner", project_row.partner)):
+            if "|" in value:
+                raise ValidationError(f"{path.name}: {label} contains '|', which the list table cannot hold")
+        rows.append(project_row)
+    rows.sort(key=lambda r: r.key)
+    rows.sort(key=lambda r: r.last_meeting, reverse=True)
+    rows.sort(key=lambda r: not r.active)
+    return rows
+
+
+def _list_text(rows: list[_ProjectRow]) -> str:
+    lines = ["# list of projects", "", _LIST_NOTE, "", "## list", ""]
+    lines.append("| " + " | ".join(_LIST_COLUMNS) + " |")
+    lines.append("| " + " | ".join("---" for _ in _LIST_COLUMNS) + " |")
+    for row in rows:
+        target = f"../../project/project_{row.key}.md"
+        target = f"<{target}>" if re.search(r"[\s()]", target) else target
+        cells = [_cell(row.key), _cell(row.client), _cell(row.partner), _cell(row.status), row.last_meeting,
+                 f"[project_{_cell(row.key)}]({target})"]
+        lines.append("| " + " | ".join(cells) + " |")
+    return "\n".join(lines) + "\n"
+
+
+def _normalised_set(text: str) -> frozenset[str]:
+    return frozenset(part.strip() for part in re.split(r"[,、]", text) if part.strip())
+
+
+def _list_losses(existing_text: str, rows: list[_ProjectRow]) -> list[str]:
+    """What an overwrite of list_project.md would silently lose.
+
+    Fails closed: a non-empty file that is not a table render can read back is itself a reason to stop, and a column
+    render does not write (a hand-added note column) counts as lost.
+    """
+    if not existing_text.strip():
+        return []
+    lines = existing_text.splitlines()
+    header_index, headers = None, []
+    for index, line in enumerate(lines):
+        cells = _table_cells(line)
+        if cells and "name" in [c.lower() for c in cells]:
+            header_index, headers = index, [c.lower() for c in cells]
+            break
+    if header_index is None or "client" not in headers:
+        return ["the existing file is not a project table with name and client columns that render can read back"]
+    header_map = {name: index for index, name in enumerate(headers)}
+    new = {row.key: row for row in rows}
+    losses = [f"column {name!r} would be dropped" for name in headers if name not in _LIST_COLUMNS]
+    for line in lines[header_index + 2 :]:
+        cells = _table_cells(line)
+        if cells is None or all(set(c) <= {"-", " ", ":"} for c in cells):
+            continue
+
+        def cell(name: str) -> str:
+            index = header_map.get(name)
+            return cells[index].strip() if index is not None and index < len(cells) else ""
+
+        name = cell("name")
+        if not name:
+            continue
+        if name not in new:
+            losses.append(f"row {name!r} has no project note")
+            continue
+        row = new[name]
+        if cell("client") and " ".join(cell("client").split()) != row.client:
+            losses.append(f"{name}: client {cell('client')!r} is not in the project note frontmatter")
+        if cell("status") and cell("status").lower() != row.status.lower():
+            losses.append(f"{name}: status {cell('status')!r} is not in the project note frontmatter")
+        if cell("partner") and _normalised_set(cell("partner")) != _normalised_set(row.partner):
+            losses.append(f"{name}: partner {cell('partner')!r} is not in the project note frontmatter (run migrate first)")
+        old_date = cell("last meeting")
+        if old_date and old_date != row.last_meeting:
+            if not _valid_iso_date(old_date):
+                losses.append(f"{name}: last meeting {old_date!r} is not a date render can reproduce")
+            elif old_date > row.last_meeting:
+                losses.append(f"{name}: last meeting {old_date} would regress to {row.last_meeting or 'none'}")
+    return losses
+
+
+def _plan_list(vault: Path, rows: list[_ProjectRow], accept_losses: bool) -> tuple[Change | None, bool]:
+    path = vault / "setting" / "list" / "list_project.md"
+    after = _list_text(rows)
+    if path.is_symlink():
+        raise ValidationError("setting/list/list_project.md must not be a symlink")
+    if not path.exists():
+        if not path.parent.is_dir():
+            raise ValidationError("setting/list does not exist; create it explicitly first")
+        return Change(path, "", after, created=True), True
+    try:
+        before = _read_exact(path)
+    except (OSError, UnicodeDecodeError) as exc:
+        raise ValidationError(f"list_project.md: cannot read file: {exc}") from exc
+    losses = _list_losses(before, rows)
+    if losses and not accept_losses:
+        raise ConflictError(
+            "rendering list_project.md would lose information; fix the project notes (or pass --accept-list-changes):\n  "
+            + "\n  ".join(losses)
+        )
+    if before == after:
+        return None, False
+    return Change(path, before, after, verify_before=True), True
+
+
+def _plan_raycast(script: Path, rows: list[_ProjectRow]) -> tuple[Change | None, int]:
+    if script.is_symlink():
+        # 書き込みはファイルを置き換えるので、symlink は通常ファイルに化けて本体は更新されない。実体のパスを渡させる。
+        raise ValidationError(f"{script.name}: the Raycast script is a symlink; pass the real path")
+    try:
+        text = _read_exact(script)
+    except (OSError, UnicodeDecodeError) as exc:
+        raise ValidationError(f"{script.name}: cannot read file: {exc}") from exc
+    found = _RAYCAST_ARG2_RE.findall(text)
+    if len(found) != 1:
+        raise ValidationError(f"{script.name}: expected exactly one '# @raycast.argument2' line, found {len(found)}")
+    entries = [
+        {"title": f"{row.key} ({row.client})" if row.client and row.client != row.key else row.key, "value": row.key}
+        for row in rows
+        if row.active
+    ]
+    if not entries:
+        raise ValidationError("no active project to put in the Raycast dropdown")
+    line = "# @raycast.argument2 " + json.dumps(
+        {"type": "dropdown", "placeholder": "project", "data": entries}, ensure_ascii=False
+    )
+    after = _RAYCAST_ARG2_RE.sub(lambda _m: line, text, count=1)
+    if after == text:
+        return None, len(entries)
+    return Change(script, text, after, verify_before=True), len(entries)
+
+
 def _report_render(
     summary: list[tuple[str, int, bool]], unknown: list[tuple[str, str]]
 ) -> None:
@@ -858,15 +1063,31 @@ def _report_render(
 
 
 def _cmd_render(args: argparse.Namespace) -> int:
-    changes, summary, unknown = plan_render(args.vault, args.project_key)
+    vault: Path = args.vault
+    # 3 出力（generated 領域・list_project.md・Raycast 一覧）は全部計画してから 1 batch で書く。
+    # どれか 1 つでも作れなければ何も書かない（部分出力を残さない）。
+    grouped = _collect_associations(vault, {})
+    changes, summary, unknown = _plan_regions(vault, args.project_key, grouped)
+    rows = _project_rows(vault, grouped)
+    list_change, list_changed = _plan_list(vault, rows, args.accept_list_changes)
+    if list_change is not None:
+        changes.append(list_change)
+    raycast_note = "RAYCAST skipped (no --raycast-script)"
+    if args.raycast_script is not None:
+        raycast_change, entries = _plan_raycast(args.raycast_script.expanduser(), rows)
+        if raycast_change is not None:
+            changes.append(raycast_change)
+        raycast_note = f"RAYCAST {args.raycast_script.name} entries={entries} {'CHANGE' if raycast_change else 'NOOP'}"
     _report_render(summary, unknown)
+    print(f"LIST list_project.md rows={len(rows)} {'CHANGE' if list_changed else 'NOOP'}")
+    print(raycast_note)
     if not changes:
         print("NOOP no render changes required")
         return 0
     if not args.apply:
         print("DRY_RUN no files written (pass --apply after review)")
         return 0
-    _write_batch(args.vault, changes)
+    _write_batch(vault, changes)
     print(f"APPLIED files={len(changes)}")
     return 0
 
@@ -1445,6 +1666,14 @@ def build_subcommand_parser() -> argparse.ArgumentParser:
     render.add_argument("--vault", type=Path, required=True, help="Obsidian data vault root")
     render.add_argument(
         "--project-key", action="append", default=[], help="Limit to this project (repeatable); default all"
+    )
+    render.add_argument(
+        "--raycast-script", type=Path, help="Raycast script whose single `# @raycast.argument2` line is regenerated"
+    )
+    render.add_argument(
+        "--accept-list-changes",
+        action="store_true",
+        help="Overwrite list_project.md even if that drops a partner, a row or an older last-meeting date",
     )
     render.add_argument("--apply", action="store_true", help="Write changes; default is a dry-run")
 

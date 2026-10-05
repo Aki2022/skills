@@ -19,8 +19,8 @@ Obsidian の `vault/project/`、`vault/record/`、`vault/setting/list/list_proje
 
 録音開始時に recorder が `vault_project` を解決した会議は、recorder が次を行う正規経路だよ。
 
-- 議事録 YAML に `project: <key>` を入れる
-- frontmatter 直後に record backlink を入れる
+- 議事録 YAML に `project`（リスト）と `project_source` を入れる
+- frontmatter 直後に record backlink を project ごとに入れる
 - publish 後に既存 project ノートを更新する
 - `list_project.md` の最終会議日を決定論的に更新する
 
@@ -46,7 +46,7 @@ record・一覧の契約を確認するだけなら audit として扱う。い�
 
 - project key の正典は `vault/project/project_<key>.md` の frontmatter `project`
 - project ノートの frontmatter `client` が正典で、`list_project.md` は表示用の写像
-- record は YAML `project` と、次の backlink を両方持つ
+- record は YAML `project`（常にリスト。旧来の文字列も読める）と、所属 project ごとの次の backlink を両方持つ
   `> project: [project_<key>](../project/project_<key>.md)`
 - `client_aliases` は候補発見用で、曖昧な候補を自動確定しない
 
@@ -74,7 +74,7 @@ record・一覧の契約を確認するだけなら audit として扱う。い�
   ノート、record、一覧、入力内容は変更しない。
 - `list_project.md` に既存の project 行がある場合も重複作成せず停止する。client 差分は
   project ノートを正典として示し、確認を得てから一覧を合わせる。
-- 対象 record に別 project の YAML または backlink があれば、既存紐付けを保持して停止する。
+- 対象 record に別 project の YAML または backlink があっても、既存の所属を保持して追加する。リストと backlink が食い違う record は推測せず停止する。
   解除・再割当・明示上書きは別操作であり、bootstrap に含めない。
 - 内容のない会議は `minutes` へのリンク追加に限定し、overview / next actions / risks に
   空振りの「確認する」項目を生成しない。
@@ -91,6 +91,8 @@ python3 scripts/project_update.py --vault <vault-root> --mode bootstrap \
 python3 scripts/project_update.py --vault <vault-root> --mode backfill \
   --project-key <key> --record record/<meeting>.md
 # dry-run が既定。差分確認後だけ --apply を追加する。
+# 既存の所属は保持して追加する（project は常にリスト・project_source: manual・project ごとの backlink）。
+# --summary "<1 行>" は record に summary が無いときだけ書く。
 
 python3 scripts/project_update.py --vault <vault-root> --mode validate \
   --project-key <key> --record record/<meeting>.md

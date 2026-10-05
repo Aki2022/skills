@@ -144,4 +144,4 @@ def test_backfill_still_writes_a_clean_record(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stdout + result.stderr
     after = record.read_text(encoding="utf-8")
     assert after != before, "clean な record が書き換わっていない"
-    assert "project: acme" in after
+    assert "project:\n  - acme\n" in after  # 書き手は常にリスト（SPEC-project-association）

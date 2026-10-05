@@ -77,16 +77,16 @@ project:            # 常にリスト（1 件でもリスト）。未紐付け�
   - <key>
 project_source: manual
 date: <YYYY-MM-DD>
-summary: <ダイジェスト 1 行目>
+summary: <`--summary` の 1 行、無ければダイジェストの 1 行目>
 source_repo: <repository name>
 source_path: <repository-relative path>
-source_hash: <sha256 of digest + outline + notes>
+source_hash: <sha256 of digest(任意) + outline + notes>
 content_hash: <sha256 of the published body, backlinks excluded>
 published_at: <timestamp>
 ---
 ```
 
-本文は frontmatter 直後の backlink 行（project ごとに 1 行）、artifact link、`## digest`、`## outline`、`## speaker notes`。
+本文は frontmatter 直後の backlink 行（project ごとに 1 行）、artifact link、`## digest`（`--digest-file` を渡したときだけ）、`## outline`、`## speaker notes`。
 `content_hash` は backlink 行を除いた本文のハッシュで、人間が本文を編集したかの判定に使う。一致しなければ上書きせず停止する。
 `source_hash` が同じなら本文は書き換えない。素材・title・hint の Unicode の行区切り（垂直タブ・改ページ・U+0085・U+2028/2029 等。PowerPoint の Shift+Enter は垂直タブ）は取り込み時に改行へ揃える（揃えないと再読込で行構造が変わり `content_hash` が合わず偽の CONFLICT になる）。絶対パス・`file://`・クラウド同期フォルダの実体パスは素材・title・hint・既存ノートの summary に入れない（検出したら何も書かず停止）。
 この検査は入口の best-effort で、確定判定は vibe-guard の `scan-text`（pre-commit・夜間 vault_doctor）が持つ。止める対象は

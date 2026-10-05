@@ -41,7 +41,7 @@ cmp -s <デッキdir>/process/output.pptx <デッキdir>/<デッキ名>.pptx && 
 
 **④.5 の適用（編集モードでも必須）**: ルートA・Bいずれも、修正後のスライドを**レンダリング画像（preview PNG）で人間に提示し、明示的な OK を得てから**成果物 pptx を確定・納品する。pptx はパッケージング成果物であり、レビューの単位は常に画像（本編パイプラインの ④.5 ゲートと同一の規律。`references/pipeline.md` 参照）。
 
-**vault 公開（再納品）**: 成果物を作り直して納品する巡でも、`references/pipeline.md` の⑤「vault 公開（`attach-document`）」を同じ位置（最終承認の直後・クリーンアップの前）で実行する。`process/deck_meta.json` の `vault_publish`・`source_repo`、そして `project_confirmed: true` のときの `project` は前回の確定値を**再利用し、聞かない**（`project_confirmed` が無ければ⑤で提案を見せる。`opted_out` なら何も書かず、①相当の確認が再び走る時だけ「前回は出さなかった」と添えて再度問う）。`source_hash` が変わっていれば document note が再生成され、vault 側を人間が編集していれば上書きせず停止する。
+**vault 公開（再納品）**: 成果物を作り直して納品する巡でも、`references/pipeline.md` の⑤「vault 公開（`attach-document`）」を同じ位置（最終承認の直後・クリーンアップの前）で実行する。`outline.md` 先頭の `vault_publish` 行が `opted_out` なら何も書かない（①相当の確認が再び走る時だけ「前回は出さなかった」と添えて再度問う）。公開済みなら dry-run が `DOCUMENT UPDATE|NOOP` と出るので、project は**聞かず**、vault の note の紐付けをそのまま使う。`source_hash` が変わっていれば document note が再生成され、vault 側を人間が編集していれば上書きせず停止する。
 
 ## ルートB: 人間が編集したpptxが正 — 外科的編集（再ビルド絶対禁止）
 

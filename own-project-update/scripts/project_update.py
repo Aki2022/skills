@@ -1023,7 +1023,8 @@ def _document_content(digest: str, outline: str, notes: str, artifact_name: str 
     parts: list[str] = []
     if artifact_name:
         parts.append(_artifact_line(artifact_name))
-    parts.append("## digest\n\n" + digest.strip())
+    if digest.strip():
+        parts.append("## digest\n\n" + digest.strip())
     if outline.strip():
         parts.append("## outline\n\n" + outline.strip())
     if notes.strip():
@@ -1110,7 +1111,7 @@ def _cmd_attach_document(args: argparse.Namespace) -> int:
     source_path = _check_source_path(args.source_path)
     date = _document_date(name, args.date)
 
-    digest = _read_material(args.digest_file, "digest", required=True)
+    digest = _read_material(args.digest_file, "digest", required=False)
     outline = _read_material(args.outline_file, "outline", required=False)
     speaker_notes = _read_material(args.notes_file, "notes", required=False)
     title = _normalize_line_separators(args.title or name).strip()  # 行区切りは改行にして、下の複数行検査で止める
@@ -1123,7 +1124,29 @@ def _cmd_attach_document(args: argparse.Namespace) -> int:
         if match is None:
             raise ValidationError(f"--hint must be KEY=VALUE, got {raw!r}")
         hints.append(raw)
-    summary = _summary_line(digest)
+    if not digest.strip() and not outline.strip():
+        raise ValidationError("nothing to publish: pass --digest-file and/or --outline-file")
+    summary_text = args.summary
+    if args.summary_file is not None:
+        try:
+            summary_text = args.summary_file.expanduser().read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            raise ValidationError(f"--summary-file: cannot read {args.summary_file.name}: {exc}") from exc
+        if summary_text.endswith("\n"):
+            summary_text = summary_text[:-1]
+        if "\n" in summary_text.replace("\r\n", "\n"):
+            raise ValidationError("--summary-file must hold exactly one line")
+    if summary_text is not None:
+        summary = _normalize_line_separators(summary_text).strip()
+        if not summary or "\n" in summary:
+            raise ValidationError("--summary must be one non-empty line")
+        if _has_local_path(summary):
+            raise ValidationError("--summary: local path is not allowed")
+        summary = " ".join(summary.split())
+    elif digest.strip():
+        summary = _summary_line(digest)
+    else:
+        raise ValidationError("--summary (or --summary-file) is required when there is no --digest-file")
 
     manual = [_safe_key(key) for key in dict.fromkeys(args.project)]
     for key in manual:
@@ -1136,7 +1159,12 @@ def _cmd_attach_document(args: argparse.Namespace) -> int:
     existing = parse_note(note_path, exact=True) if note_path.exists() else None
     source_hash = _sha256(
         json.dumps(
-            {"digest": digest.strip(), "outline": outline.strip(), "speaker_notes": speaker_notes.strip()},
+            {
+                "digest": digest.strip(),
+                "outline": outline.strip(),
+                "speaker_notes": speaker_notes.strip(),
+                "summary": summary,  # 題だけ変えた再実行も更新として扱う
+            },
             ensure_ascii=False,
             sort_keys=True,
         )
@@ -1360,7 +1388,12 @@ def build_subcommand_parser() -> argparse.ArgumentParser:
     attach.add_argument("--date", help="YYYY-MM-DD (default: yyyymmdd prefix of the name)")
     attach.add_argument("--source-repo", required=True, help="Repository that owns the source")
     attach.add_argument("--source-path", required=True, help="Repository-relative path of the source")
-    attach.add_argument("--digest-file", type=Path, required=True, help="Key-message digest (first line becomes summary)")
+    attach.add_argument("--digest-file", type=Path, help="Optional key-message digest (its first line is the summary unless --summary is given)")
+    summary_group = attach.add_mutually_exclusive_group()
+    summary_group.add_argument("--summary", help="One-line summary for the note frontmatter (required when there is no digest)")
+    summary_group.add_argument(
+        "--summary-file", type=Path, help="Same as --summary, read from a one-line file (safe for titles with quotes or $)"
+    )
     attach.add_argument("--outline-file", type=Path, help="Outline text")
     attach.add_argument("--notes-file", type=Path, help="Speaker notes text")
     attach.add_argument("--hint", action="append", default=[], help="KEY=VALUE hint forwarded to assess (repeatable)")

@@ -50,7 +50,7 @@ Hiragino Sans W4 がPowerPoint実機で解決されず廃止。Windows 10+標準
 | Step                                     | 内容                                                                                                                                                                                            | 詳細                         |
 | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
 | ⓪ スタイルガイド                         | `style-guide/` のトークン・レイアウト文法・プロンプト規約・チャート規則を読む                                                                                                                   | 下記参照                     |
-| ① outline.md 共同作成                    | テキスト・数値の Single Source of Truth を人間と確定。**共同確定はダイジェスト（キーメッセージ一覧＋各枚1行要約）を提示して取る**（長文 outline は読まれずに「確定」が通る）。内容品質は**コンテンツ評価ループ**（計画承認制・審査員＋初見読者）で基準点まで反復できる。ダイジェスト確定時に **vault 公開の opt-out を 1 問だけ**聞き `process/deck_meta.json` に記録、ダイジェストは `process/digest.md` に保存                                        | `references/pipeline.md`・`references/content-eval.md` |
+| ① outline.md 共同作成                    | テキスト・数値の Single Source of Truth を人間と確定。**共同確定はダイジェスト（キーメッセージ一覧＋各枚1行要約）を提示して取る**（長文 outline は読まれずに「確定」が通る）。内容品質は**コンテンツ評価ループ**（計画承認制・審査員＋初見読者）で基準点まで反復できる。ダイジェスト確定時に **vault 公開の opt-out を 1 問だけ**聞き、`outline.md` の先頭 1 行（`<!-- vault_publish: publish|opted_out -->`）に記録                                        | `references/pipeline.md`・`references/content-eval.md` |
 | ② デザインモックアップ生成               | image_gen フルスライドで構図決定。**1枚目=スタイルアンカーとして人間承認**、以降はedit-modeでアンカー参照。**全枚の構図承認（feedback.json 全ok）が③の前提**——アンカー承認は②の完了条件ではない | `references/image_gen.md`    |
 | ②.5 コンテンツ評価（計画承認制）         | 合成デッキ（final render＋改訂mockup）を審査員＋初見読者に読者評価させ、ビルド前に内容・構成の欠陥を落とす。**読者評価の入力は画像のみ**（.md併給禁止）                                          | `references/content-eval.md` |
 | ③ ネイティブビルド                       | PptxGenJS でレイアウト＋テキスト＋チャート/表を構築、文字なしアセットを埋め込み                                                                                                                 | 下記「ネイティブビルド」     |
@@ -106,7 +106,7 @@ pptx 生成後の差し戻し（注入やり直し・成果物の版管理混乱
   （`process/node_modules/`・`process/*.png`・`process/*.pdf`・`process/output.pptx`・
   `process/*.log`・`process/assets/`・codexが勝手に作る `generated/` や `icons_task_*/`・
   PowerPointロックファイル `~$*.pptx`）を除外し、*_再構築ソース（outline.md・slides/・
-  build_deck.js・feedback.json・package_.json・**deck_meta.json・digest.md・speaker_notes.md**＝vault 公開の記録と素材）と input/・最終pptx は追跡**する。
+  build_deck.js・feedback.json・package_.json）と input/・最終pptx は追跡**する。
   mockup/preview 等のPNGは git に入れない——mockupの役割は「②承認〜⑤最終承認までの検証用仕様書」で、
   ⑤以降の修正の正はスクリプト側に移るため中長期価値がない（デザインやり直し時は新mockupを作る）
 - 元資料が別リポジトリ等にある場合はパス参照ではなく **input/ にコピー**する（再現性の担保）
@@ -326,6 +326,7 @@ imagegen-prompt-convention.md §10（型スライド=厳格 / 自由形=ブラ�
 - `scripts/inject_template.py` — **④.5（人間の画像確認OK）後の最終成果物化**: template_v3.pptx を土台に生成スライドを移植（人間がマスター準拠スライドを追加できる形にする）
 - `scripts/check_feedback.py` — **③開始前の必須プリフライト**: `feedback.json` の verdict が
   全て ok か確認する（②の人間承認を飛ばして③へ進むのを機械的に防ぐ）
+- `scripts/prepare_publish_materials.py` — **⑤の vault 公開素材**: outline.md から公開用 outline（先頭の vault_publish 行を除いたもの）と summary.txt（題 1 行。シェルを通さず `--summary-file` に渡す）を一時ディレクトリへ作り、opt-out の記録・note の summary（outline の題）・出典リポジトリ名（git remote から）を JSON で返す（スライド見出しは解析しない。opt-out なら何も作らない）
 - `scripts/export_speaker_notes.py` — **⑤の vault 公開の素材**: pptx のスピーカーノートを `## スライド N` 見出しつき Markdown に書き出す（ノートが 1 枚も無い・読めないファイルは非 0 で停止）
 - `scripts/cleanup_deck.py` — **⑤承認後の必須クリーンアップ**（dry-run既定）。役割を終えたmockup/preview/ログ等を削除し、再構築ソース（outline/slides/assets/output.pptx）は残す。承認前に実行しない
 - `scripts/build_template_v3.py` — template_v3.pptx の生成スクリプト（旧会社テンプレ→間引き・v3化。テンプレ更新時に再実行）

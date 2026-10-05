@@ -91,11 +91,11 @@ def test_rows_are_ordered_active_first_then_last_meeting_desc_then_name(vault: P
     assert [r[0] for r in rows(vault)] == ["proj_d", "proj_a", "proj_b", "proj_c"]  # active が先、closed は日付が新しくても後ろ
 
 
-def test_partner_list_is_joined_and_cells_are_escaped(vault: Path) -> None:
-    note_with(vault, "proj_a", "client: 'A | B'\npartner:\n  - 社一\n  - 社二\nstatus: active\n")
+def test_partner_list_is_joined(vault: Path) -> None:
+    note_with(vault, "proj_a", "client: A\npartner:\n  - 社一\n  - 社二\n  - null\nstatus: active\n")
     assert run(vault, "--apply", "--accept-list-changes") == 0
     row = next(r for r in rows(vault) if r[0] == "proj_a")
-    assert row[1] == "A \\| B" and row[2] == "社一, 社二"
+    assert row[2] == "社一, 社二"  # None の項目は文字列 "None" にしない
 
 
 def test_second_run_is_byte_identical_for_every_output(vault: Path, raycast: Path) -> None:
@@ -216,3 +216,132 @@ def test_dry_run_writes_nothing_and_reports_all_three_outputs(vault: Path, rayca
     out = capsys.readouterr().out
     assert "LIST " in out and "RAYCAST " in out and "RENDER project=proj_a" in out and "DRY_RUN" in out
     assert snapshot(vault) == before and raycast.read_bytes() == before_script
+
+
+# ---- レビュー指摘（PR #30）の回帰 ------------------------------------------------------------
+
+LIST_HEAD = "# projects\n\n| name | client | partner | status | last meeting | path |\n| --- | --- | --- | --- | --- | --- |\n"
+
+
+@pytest.mark.parametrize(
+    "existing",
+    [
+        "メモだけ。表は無い。\n",
+        "# p\n\n| name | last meeting |\n| --- | --- |\n| ghost | 2026-09-09 |\n",
+        LIST_HEAD.replace("| path |", "| path | note |").replace("| --- | --- | --- | --- | --- | --- |", "| --- | --- | --- | --- | --- | --- | --- |")
+        + "| proj_a | Client A | 協力会社 | active | 2026-08-20 | [x](y) | 手書きのメモ |\n",
+    ],
+    ids=["no-table", "table-without-client-column", "extra-column"],
+)
+def test_an_existing_list_that_cannot_be_rewritten_losslessly_stops_instead_of_failing_open(
+    vault: Path, existing: str
+) -> None:
+    seed(vault)
+    list_file(vault).write_text(existing, encoding="utf-8")
+    before = snapshot(vault)
+    assert run(vault, "--apply") == 2
+    assert snapshot(vault) == before
+    assert run(vault, "--apply", "--accept-list-changes") == 0
+
+
+def test_an_empty_existing_list_has_nothing_to_lose(vault: Path) -> None:
+    seed(vault)
+    list_file(vault).write_text("\n", encoding="utf-8")
+    assert run(vault, "--apply") == 0
+
+
+def test_client_or_status_that_exist_only_in_the_old_list_are_protected(vault: Path) -> None:
+    note_with(vault, "proj_a", "")  # frontmatter に client も status も無い
+    for key in ("proj_b",):
+        (vault / "project" / f"project_{key}.md").unlink()
+    list_file(vault).write_text(
+        LIST_HEAD + "| proj_a | OnlyInList | | closed | | [x](y) |\n", encoding="utf-8"
+    )
+    before = snapshot(vault)
+    assert run(vault, "--apply") == 2  # closed の project が active として Raycast に現れるのを防ぐ
+    assert snapshot(vault) == before
+
+
+@pytest.mark.parametrize(
+    "old,new",
+    [("B, A", "[A, B]"), ("A,B", "[A, B]"), ("延岡市、宮崎県", "[延岡市, 宮崎県]")],
+    ids=["order", "spacing", "japanese-comma"],
+)
+def test_partner_comparison_is_by_normalised_set_not_exact_string(vault: Path, old: str, new: str) -> None:
+    note_with(vault, "proj_a", f"client: C\npartner: {new}\nstatus: active\n")
+    (vault / "project/project_proj_b.md").unlink()
+    list_file(vault).write_text(LIST_HEAD + f"| proj_a | C | {old} | active | | [x](y) |\n", encoding="utf-8")
+    assert run(vault, "--apply") == 0
+
+
+def test_a_list_that_is_not_utf8_is_an_error_not_a_traceback(vault: Path) -> None:
+    seed(vault)
+    list_file(vault).write_bytes(b"# p\n\xe3\x81\n")
+    before = snapshot(vault)
+    assert run(vault, "--apply") == 3
+    assert snapshot(vault) == before
+
+
+def test_a_symlinked_raycast_script_is_refused_and_left_alone(vault: Path, raycast: Path, tmp_path: Path) -> None:
+    seed(vault)
+    link = tmp_path / "linked.sh"
+    link.symlink_to(raycast)
+    before_vault, before_target = snapshot(vault), raycast.read_bytes()
+    assert run(vault, "--apply", "--accept-list-changes", "--raycast-script", str(link)) == 3
+    assert link.is_symlink() and raycast.read_bytes() == before_target and snapshot(vault) == before_vault
+
+
+@pytest.mark.parametrize("field", ["client: 'A | B'\n", "partner: 'x | y'\n"], ids=["client", "partner"])
+def test_a_pipe_in_client_or_partner_is_refused_because_the_table_cannot_hold_it(vault: Path, field: str) -> None:
+    note_with(vault, "proj_a", field + "status: active\n")
+    before = snapshot(vault)
+    assert run(vault, "--apply", "--accept-list-changes") == 3
+    assert snapshot(vault) == before
+
+
+def test_a_pipe_in_a_project_key_is_refused(vault: Path) -> None:
+    (vault / "project" / "project_a|b.md").write_text(
+        "---\ntitle: x\nproject: a|b\nclient: c\nstatus: active\n---\n\n# a|b\n", encoding="utf-8"
+    )
+    before = snapshot(vault)
+    assert run(vault, "--apply", "--accept-list-changes") == 3
+    assert snapshot(vault) == before
+
+
+def test_rollback_works_even_when_the_list_is_read_only(vault: Path, raycast: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    seed(vault)
+    assert run(vault, "--apply", "--accept-list-changes") == 0  # 先に一覧を生成しておく
+    list_file(vault).chmod(0o444)
+    note_with(vault, "proj_c", "client: C\nstatus: active\n")  # 一覧が変わる状況にする
+    before_vault = snapshot(vault)
+    real_replace = os.replace
+    calls = {"n": 0}
+
+    def flaky(src, dst, *a, **k):
+        calls["n"] += 1
+        if str(dst).endswith("raycast_start.sh"):
+            raise OSError("simulated failure on the last write")
+        return real_replace(src, dst, *a, **k)
+
+    monkeypatch.setattr(os, "replace", flaky)
+    assert run(vault, "--apply", "--raycast-script", str(raycast)) == 3
+    monkeypatch.undo()
+    assert snapshot(vault) == before_vault  # 読み取り専用の一覧も、書き込み済みのものは全部元に戻る
+    assert stat.S_IMODE(list_file(vault).stat().st_mode) == 0o444
+
+
+def test_crlf_raycast_script_keeps_crlf_on_the_managed_line(vault: Path, tmp_path: Path) -> None:
+    seed(vault)
+    script = tmp_path / "crlf.sh"
+    script.write_bytes(RAYCAST.replace("\n", "\r\n").encode("utf-8"))
+    assert run(vault, "--apply", "--accept-list-changes", "--raycast-script", str(script)) == 0
+    raw = script.read_bytes()
+    assert raw.count(b"\r\n") == raw.count(b"\n")  # 管理行だけ LF になって改行が混ざらない
+
+
+def test_an_impossible_record_date_is_not_a_last_meeting(vault: Path) -> None:
+    note_with(vault, "proj_a", "client: C\nstatus: active\n")
+    write_note(vault / "record/a.md", "title: a\ndate: '2026-02-30'\nproject: proj_a\n")
+    write_note(vault / "record/b.md", "title: b\ndate: 2026-02-01\nproject: proj_a\n")
+    assert run(vault, "--apply", "--accept-list-changes") == 0
+    assert next(r for r in rows(vault) if r[0] == "proj_a")[4] == "2026-02-01"

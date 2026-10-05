@@ -108,7 +108,7 @@ def _parse_note_text(path: Path, text: str) -> Note:
     yaml_text = "".join(lines[1:close_index])
     try:
         data = yaml.safe_load(yaml_text) or {}
-    except yaml.YAMLError as exc:
+    except (yaml.YAMLError, ValueError) as exc:  # 存在しない日付（2026-02-30）は ValueError で来る
         raise ValidationError(f"{path.name}: YAML parse failed: {exc}") from exc
     if not isinstance(data, dict):
         raise ValidationError(f"{path.name}: YAML frontmatter must be a mapping")
@@ -137,8 +137,8 @@ def _safe_key(value: str) -> str:
         raise ValidationError("project key must be non-empty and cannot contain path separators")
     if any(ord(char) < 0x20 for char in key):
         raise ValidationError("project key cannot contain control characters")
-    if any(char in key for char in "[]()"):
-        raise ValidationError("project key cannot contain Markdown link delimiters")
+    if any(char in key for char in "[]()|"):
+        raise ValidationError("project key cannot contain Markdown link delimiters or '|'")
     return key
 
 
@@ -354,7 +354,8 @@ def _table_cells(line: str) -> list[str] | None:
     stripped = line.strip()
     if not stripped.startswith("|") or not stripped.endswith("|"):
         return None
-    return [cell.strip().replace("\\_", "_") for cell in stripped[1:-1].split("|")]
+    # `\|` はセルの中の `|`。生の `|` だけがセルの区切り（render が書いた表を読み戻しても食い違わない）
+    return [cell.strip().replace("\\_", "_").replace("\\|", "|") for cell in re.split(r"(?<!\\)\|", stripped[1:-1])]
 
 
 def _list_table(text: str) -> tuple[dict[str, int], list[tuple[int, list[str]]]]:
@@ -498,6 +499,15 @@ def vault_project_path(vault: Path, key: str) -> Path:
     return vault / "project" / f"project_{key}.md"
 
 
+def _restore_file(path: Path, original: bytes, mode: int) -> None:
+    """Put the original bytes back by replacing the file (works for a read-only file in a writable directory)."""
+    with tempfile.NamedTemporaryFile(mode="wb", dir=path.parent, prefix=f".{path.name}.restore-", delete=False) as handle:
+        handle.write(original)
+        temp = Path(handle.name)
+    os.chmod(temp, mode)
+    os.replace(temp, path)
+
+
 def _write_batch(vault: Path, changes: Iterable[Change]) -> None:
     changes = [change for change in changes if change.before != change.after or change.created]
     if not changes:
@@ -536,8 +546,7 @@ def _write_batch(vault: Path, changes: Iterable[Change]) -> None:
             if original is None:
                 path.unlink(missing_ok=True)
             else:
-                path.write_bytes(original)
-                os.chmod(path, modes[path])
+                _restore_file(path, original, modes[path])
         raise
     finally:
         for temp_path in temp_paths:
@@ -864,7 +873,7 @@ def _plan_regions(
     return changes, summary, unknown
 
 
-_RAYCAST_ARG2_RE = re.compile(r"^# @raycast\.argument2 .*$", re.MULTILINE)
+_RAYCAST_ARG2_RE = re.compile(r"^# @raycast\.argument2 [^\r\n]*", re.MULTILINE)  # CRLF の \r は管理行の外に残す
 _LIST_COLUMNS = ("name", "client", "partner", "status", "last meeting", "path")
 _LIST_NOTE = "<!-- render が毎回書き直す一覧。手で編集しない。正典は project ノートの frontmatter（SPEC-project-association） -->"
 
@@ -886,7 +895,17 @@ def _joined(value: object) -> str:
     if value is None:
         return ""
     items = value if isinstance(value, list) else [value]
-    return ", ".join(" ".join(str(item).split()) for item in items if str(item).strip())
+    return ", ".join(" ".join(str(item).split()) for item in items if item is not None and str(item).strip())
+
+
+def _valid_iso_date(text: str) -> bool:
+    if not _ISO_DATE_RE.match(text):
+        return False
+    try:
+        datetime.date.fromisoformat(text)
+    except ValueError:
+        return False
+    return True
 
 
 def _project_rows(vault: Path, grouped: dict[str, list[tuple[_Row, str]]]) -> list[_ProjectRow]:
@@ -897,16 +916,18 @@ def _project_rows(vault: Path, grouped: dict[str, list[tuple[_Row, str]]]) -> li
         if _project_value(note) != key:
             raise ValidationError(f"{path.name}: YAML project must be {key!r}")
         # 最終会議日は record だけから求める。資料（document note）の公開では更新しない（SPEC-document-publish Req 11）。
-        dates = [row.date for row, _ in grouped.get(key, []) if row.kind == "record" and _ISO_DATE_RE.match(row.date)]
-        rows.append(
-            _ProjectRow(
-                key,
-                _joined(note.data.get("client")),
-                _joined(note.data.get("partner")),
-                _joined(note.data.get("status")),
-                max(dates, default=""),
-            )
+        dates = [row.date for row, _ in grouped.get(key, []) if row.kind == "record" and _valid_iso_date(row.date)]
+        project_row = _ProjectRow(
+            _safe_key(key),
+            _joined(note.data.get("client")),
+            _joined(note.data.get("partner")),
+            _joined(note.data.get("status")),
+            max(dates, default=""),
         )
+        for label, value in (("client", project_row.client), ("partner", project_row.partner)):
+            if "|" in value:
+                raise ValidationError(f"{path.name}: {label} contains '|', which the list table cannot hold")
+        rows.append(project_row)
     rows.sort(key=lambda r: r.key)
     rows.sort(key=lambda r: r.last_meeting, reverse=True)
     rows.sort(key=lambda r: not r.active)
@@ -926,30 +947,58 @@ def _list_text(rows: list[_ProjectRow]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _normalised_set(text: str) -> frozenset[str]:
+    return frozenset(part.strip() for part in re.split(r"[,、]", text) if part.strip())
+
+
 def _list_losses(existing_text: str, rows: list[_ProjectRow]) -> list[str]:
-    """What an overwrite of list_project.md would silently lose (partner not yet in frontmatter, an older last meeting, a row)."""
-    try:
-        header_map, old_rows = _list_table(existing_text)
-    except ValidationError:
-        return []  # 一覧として読めない既存ファイルには守る情報が無い
+    """What an overwrite of list_project.md would silently lose.
+
+    Fails closed: a non-empty file that is not a table render can read back is itself a reason to stop, and a column
+    render does not write (a hand-added note column) counts as lost.
+    """
+    if not existing_text.strip():
+        return []
+    lines = existing_text.splitlines()
+    header_index, headers = None, []
+    for index, line in enumerate(lines):
+        cells = _table_cells(line)
+        if cells and "name" in [c.lower() for c in cells]:
+            header_index, headers = index, [c.lower() for c in cells]
+            break
+    if header_index is None or "client" not in headers:
+        return ["the existing file is not a project table with name and client columns that render can read back"]
+    header_map = {name: index for index, name in enumerate(headers)}
     new = {row.key: row for row in rows}
-    losses: list[str] = []
-    for _, cells in old_rows:
+    losses = [f"column {name!r} would be dropped" for name in headers if name not in _LIST_COLUMNS]
+    for line in lines[header_index + 2 :]:
+        cells = _table_cells(line)
+        if cells is None or all(set(c) <= {"-", " ", ":"} for c in cells):
+            continue
+
         def cell(name: str) -> str:
             index = header_map.get(name)
-            return cells[index].strip().replace("\\", "") if index is not None and index < len(cells) else ""
+            return cells[index].strip() if index is not None and index < len(cells) else ""
+
         name = cell("name")
         if not name:
             continue
         if name not in new:
             losses.append(f"row {name!r} has no project note")
             continue
-        old_partner, new_partner = cell("partner"), new[name].partner
-        if old_partner and " ".join(old_partner.split()) != new_partner:
-            losses.append(f"{name}: partner {old_partner!r} is not in the project note frontmatter (run migrate first)")
+        row = new[name]
+        if cell("client") and " ".join(cell("client").split()) != row.client:
+            losses.append(f"{name}: client {cell('client')!r} is not in the project note frontmatter")
+        if cell("status") and cell("status").lower() != row.status.lower():
+            losses.append(f"{name}: status {cell('status')!r} is not in the project note frontmatter")
+        if cell("partner") and _normalised_set(cell("partner")) != _normalised_set(row.partner):
+            losses.append(f"{name}: partner {cell('partner')!r} is not in the project note frontmatter (run migrate first)")
         old_date = cell("last meeting")
-        if _ISO_DATE_RE.match(old_date) and old_date > new[name].last_meeting:
-            losses.append(f"{name}: last meeting {old_date} would regress to {new[name].last_meeting or 'none'}")
+        if old_date and old_date != row.last_meeting:
+            if not _valid_iso_date(old_date):
+                losses.append(f"{name}: last meeting {old_date!r} is not a date render can reproduce")
+            elif old_date > row.last_meeting:
+                losses.append(f"{name}: last meeting {old_date} would regress to {row.last_meeting or 'none'}")
     return losses
 
 
@@ -962,7 +1011,10 @@ def _plan_list(vault: Path, rows: list[_ProjectRow], accept_losses: bool) -> tup
         if not path.parent.is_dir():
             raise ValidationError("setting/list does not exist; create it explicitly first")
         return Change(path, "", after, created=True), True
-    before = _read_exact(path)
+    try:
+        before = _read_exact(path)
+    except (OSError, UnicodeDecodeError) as exc:
+        raise ValidationError(f"list_project.md: cannot read file: {exc}") from exc
     losses = _list_losses(before, rows)
     if losses and not accept_losses:
         raise ConflictError(
@@ -975,6 +1027,9 @@ def _plan_list(vault: Path, rows: list[_ProjectRow], accept_losses: bool) -> tup
 
 
 def _plan_raycast(script: Path, rows: list[_ProjectRow]) -> tuple[Change | None, int]:
+    if script.is_symlink():
+        # 書き込みはファイルを置き換えるので、symlink は通常ファイルに化けて本体は更新されない。実体のパスを渡させる。
+        raise ValidationError(f"{script.name}: the Raycast script is a symlink; pass the real path")
     try:
         text = _read_exact(script)
     except (OSError, UnicodeDecodeError) as exc:

@@ -136,13 +136,16 @@ kind 昇順・日付降順の表（kind・日付・リンク・`summary`）に�
 - `setting/list/list_project.md`: 列は `name | client | partner | status | last meeting | path`。`client`・`partner`（文字列またはリスト。リストは `, ` 連結）・
   `status` は project ノートの frontmatter、`last meeting` は**record だけ**の最新日付（資料の公開では更新しない）、`path` は project ノートへの相対リンク。
   行は active（`status` が無い場合も active 扱い）が先、最終会議日の新しい順、名前順。`setting/list` が無ければ停止する（勝手に作らない）。
-  **情報を黙って落とさない**: 既存の一覧に、frontmatter に無い `partner`・より新しい `last meeting`・project ノートの無い行があるときは CONFLICT で停止する
-  （先に `migrate` で frontmatter へ移す。意図して落とすときだけ `--accept-list-changes`）。
+  **情報を黙って落とさない（fail-closed）**: 既存の一覧に、frontmatter に無い `client`・`status`・`partner`（`,` と `、` 区切りの集合として比較）、
+  より新しい／日付として再現できない `last meeting`、表に無い列（手書きのメモ列など）、project ノートの無い行があるとき、また空でない既存ファイルが
+  render の読み戻せる表でないときは CONFLICT で停止する（先に `migrate` で frontmatter へ移す。意図して落とすときだけ `--accept-list-changes`）。
+  `|` を含む key・client・partner は表に入れられないので ERROR で停止する。UTF-8 でない・symlink の一覧も ERROR。
 - Raycast 一覧（`--raycast-script <path>`）: そのスクリプトにちょうど 1 行ある `# @raycast.argument2 {...}` を、active な project の
   `{"title": "<key> (<client>)" または "<key>", "value": "<key>"}` に置き換える（recorder の `render_raycast_dropdown_line` と同じ形式。title は client が key と同じなら key だけ）。
-  管理行が 0 本・2 本以上、active が 0 件のときは停止する。実行ビットを保つ。`--raycast-script` が無いときは `RAYCAST skipped` と報告する。
+  管理行が 0 本・2 本以上、active が 0 件、スクリプトが symlink（実体のパスを渡す）のときは停止する。実行ビットと CRLF を保つ。`--raycast-script` が無いときは `RAYCAST skipped` と報告する。
 
-`--project-key` は generated 領域の対象だけを絞る。list_project.md と Raycast 一覧は常に vault 全体から作る。
+`--project-key` は generated 領域の対象だけを絞る。list_project.md と Raycast 一覧は常に vault 全体から作るので、他の project ノートが壊れていれば `--project-key` でも停止する。
+書き込み中の失敗は、読み取り専用のファイルも含めて元のバイトに戻す。
 
 ## Evidence and uncertainty
 

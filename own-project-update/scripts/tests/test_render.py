@@ -138,10 +138,13 @@ def test_existing_region_is_rewritten_and_text_around_it_is_kept(vault: Path) ->
     assert text.endswith(f"{END}\n\n## 手書きの後続\n\n残す。\n")
 
 
-def test_no_notes_and_no_region_is_a_noop(vault: Path) -> None:
-    before = snapshot(vault)
+def test_no_notes_and_no_region_leaves_the_project_notes_alone_and_the_second_run_is_a_noop(vault: Path) -> None:
+    notes_before = {p.name: p.read_bytes() for p in (vault / "project").glob("*.md")}
     assert run(vault, "--apply") == 0
-    assert snapshot(vault) == before
+    assert {p.name: p.read_bytes() for p in (vault / "project").glob("*.md")} == notes_before  # 領域は新設しない
+    first = snapshot(vault)  # list_project.md は生成ビューとして書き直される（render 完全版）
+    assert run(vault, "--apply") == 0
+    assert snapshot(vault) == first
 
 
 @pytest.mark.parametrize(
@@ -283,3 +286,35 @@ def test_render_refuses_to_write_over_a_note_that_changed_meanwhile(
     assert run(vault, "--apply") == 2
     assert "別セッション" in note.read_text(encoding="utf-8")
     assert BEGIN not in note.read_text(encoding="utf-8")
+
+
+# ---- 実 vault で見つかった: UTF-8 として読めない note ------------------------------------
+
+
+def test_a_note_that_is_not_utf8_and_declares_no_project_is_skipped_with_a_warning(
+    vault: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """実 vault の clip に、途中で切れたマルチバイトを含む note が 1 本あるだけで render 全体が止まっていた。"""
+    seed_notes(vault)
+    (vault / "record/broken_bytes.md").write_bytes(
+        "---\ntitle: broken\n---\n本文".encode("utf-8") + b"\xe3\x81" + b"\n"  # 途中で切れた「あ」
+    )
+    assert run(vault, "--apply") == 0
+    assert "broken_bytes.md" in capsys.readouterr().err  # 黙って飛ばさない
+    assert "20260701_kickoff.md" in region_of(vault / "project/project_proj_a.md")
+
+
+def test_a_non_utf8_note_that_declares_a_project_stops_the_render(vault: Path) -> None:
+    seed_notes(vault)
+    (vault / "record/broken_project.md").write_bytes(
+        "---\ntitle: x\nproject: proj_a\n---\n本文".encode("utf-8") + b"\xe3\x81\n"
+    )
+    before = snapshot(vault)
+    assert run(vault, "--apply") == 3  # project を名乗るのに読めないノートは、黙って表から消さない
+    assert snapshot(vault) == before
+
+
+def test_a_non_utf8_note_whose_frontmatter_is_unreadable_stops_the_render(vault: Path) -> None:
+    seed_notes(vault)
+    (vault / "record/broken_frontmatter.md").write_bytes(b"---\ntitle: \xe3\x81\nproject: proj_a\n---\n\xe3\n")
+    assert run(vault, "--apply") == 3

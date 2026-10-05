@@ -104,12 +104,12 @@ LLM 草案と人間確認を終えて project ノートを作成した後、`bac
 
 ## render と attach-document
 
-`render` は project ノートの generated 領域（associated-notes view）だけを書き直す。`attach-document` は生成資料のテキストを
+`render` は project ノートの generated 領域（associated-notes view）に加えて、`list_project.md` と（指定時）Raycast 一覧を同じ入力から全体生成する（全部揃えられなければ何も書かない）。`attach-document` は生成資料のテキストを
 document note として公開し、同じ batch で関連 project ノートを render する。どちらも dry-run が既定で、`--apply` で書く。
 契約の詳細は [references/project-contract.md](references/project-contract.md) の Document note と Generated region。
 
 ```text
-python3 scripts/project_update.py render --vault <vault-root> [--project-key <key>] [--apply]
+python3 scripts/project_update.py render --vault <vault-root> [--project-key <key>] [--raycast-script <path>] [--accept-list-changes] [--apply]
 
 python3 scripts/project_update.py attach-document --vault <vault-root> \
   --kind <kind> --name <yyyymmdd_name> --source-repo <repo> --source-path <relative path> \

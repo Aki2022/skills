@@ -1113,8 +1113,8 @@ def _cmd_attach_document(args: argparse.Namespace) -> int:
     digest = _read_material(args.digest_file, "digest", required=True)
     outline = _read_material(args.outline_file, "outline", required=False)
     speaker_notes = _read_material(args.notes_file, "notes", required=False)
-    title = (args.title or name).strip()
-    for label, value in [("title", title)] + [("hint", h) for h in args.hint]:
+    title = _normalize_line_separators(args.title or name).strip()  # 行区切りは改行にして、下の複数行検査で止める
+    for label, value in [("title", title)] + [("hint", _normalize_line_separators(h)) for h in args.hint]:
         if _has_local_path(value) or "\n" in value:
             raise ValidationError(f"{label}: local path or multi-line value is not allowed")
     hints = []

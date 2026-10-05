@@ -636,3 +636,13 @@ def test_unicode_line_separators_in_material_do_not_break_idempotence(
     first = snapshot(vault)
     assert attach(vault, material, "--project", "proj_a", "--apply") == 0  # 偽の CONFLICT にならない
     assert snapshot(vault) == first
+
+
+@pytest.mark.parametrize("separator", ["\x0b", "\x85", " "])
+def test_title_with_a_line_separator_is_refused_before_it_reaches_the_note(
+    vault: Path, material, separator: str
+) -> None:
+    """title は frontmatter の 1 行値。行区切りが入ると公開は通るのに次回の読み込みが YAML エラーになる。"""
+    before = snapshot(vault)
+    assert attach(vault, material, "--project", "proj_a", "--title", f"前{separator}後", "--apply") == 3
+    assert snapshot(vault) == before

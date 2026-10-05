@@ -45,6 +45,7 @@ title: own-pptx-build パイプライン詳細（⓪〜⑤）
   ③の `mk({font: "BIZ UDPGothic"})` に渡す。表紙有無・フッター日付はこのタイミングで聞く。
 - 人間と内容を確認しながら書く。**このファイルが最終テキストの唯一の出典**であり、以降どのステップで生成される画像・モックアップの文字も参照しない。
 - **ダイジェスト確定時に、vault 公開の opt-out を 1 問だけ相乗りで聞く**（SPEC-document-publish。別の確認ターンを増やさない）。
+  **`process/deck_meta.json` に `vault_publish` が既にあれば聞かない**（edit-mode・再開で①に再入しても同じ）。ただし前回 `opted_out` で、①相当の確認が再び走る時だけ「前回は出さなかった」と添えて再度問う。
   「このデッキのテキスト（ダイジェスト・outline・スピーカーノート。pptx 本体は含まない）を Obsidian vault に公開してよいか。
   既定は公開。機密資料なら opt-out」と、project を人間が最初から知っていれば任意でその key も聞く（これは確定ではなく
   **ヒント**として `project_hint` に記録し、⑤で提案と並べて 1 回確認する）。答えを `process/deck_meta.json` に記録する（下記）。
@@ -371,8 +372,8 @@ AI が「良い」と採点したことと、人間が最終形を承認した�
    （セッション内で 1 回。呼び出し元プロジェクトの AGENTS.md や docs に vault の解決手順があればそれに従う）。
    `.env` を読まない。vault のパスを `deck_meta.json` や報告・コミットに残さない。
 4. `--source-repo` を決める: `deck_meta.json` に `source_repo` があればそれを使う。無ければ
-   `basename "$(git remote get-url origin)" .git`（remote が無ければ `git worktree list --porcelain` の先頭＝main チェックアウトの
-   ディレクトリ名）で求めて記録する。**git worktree のディレクトリ名を使わない**（別の値で再実行すると vault 側が
+   `git remote get-url origin`（無ければ最初の remote）の URL の最後の `/` または `:` より後ろから `.git` を除いた名前
+   （remote が無ければ `git worktree list --porcelain` の先頭＝main チェックアウトのディレクトリ名）で求めて記録する。**git worktree のディレクトリ名を使わない**（別の値で再実行すると vault 側が
    「別資料」とみなして `CONFLICT` で止まる）。
 5. **`--project` を付けずに** dry-run を実行して提案を取る（`--apply` も付けない）。`--project` を付けると
    `ASSESS skipped (manual project given)` になり、提案が出ない。値にスペースを含む `--hint` は引用符で囲む。
@@ -396,6 +397,8 @@ AI が「良い」と採点したことと、人間が最終形を承認した�
    `APPLIED files=N`、再実行で変更なし = `DOCUMENT NOOP`・`NOOP no changes required`（`APPLIED` は出ない。失敗ではない）。
    `CONFLICT`（終了コード 2: 人間が vault 側の note を編集していた・出典が別・紐付け未決定 等）と `ERROR`（3）は、
    **上書きせず**差分と理由を人間に報告する。vault 公開の失敗はデッキ納品とクリーンアップを妨げない。
+   `--no-project` と `--project` の指定は**追加のみ**で、既に vault 側に紐付いている project は外れない（外すのは note の
+   frontmatter を人間が直す）。
    報告・コミットに `ARTIFACT ... -> ...` 行を貼らない（相対でもリポジトリと vault の配置が分かる）。
 9. `--artifact` の symlink は、成果物が git worktree 内にあり main チェックアウトにまだ同じ中身が無い間は作られない
    （出力に `ARTIFACT skipped` と理由が出る。document note は公開される）。マージ後に同じコマンドを再実行すると

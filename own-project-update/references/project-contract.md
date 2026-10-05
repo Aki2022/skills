@@ -88,7 +88,7 @@ published_at: <timestamp>
 
 本文は frontmatter 直後の backlink 行（project ごとに 1 行）、artifact link、`## digest`、`## outline`、`## speaker notes`。
 `content_hash` は backlink 行を除いた本文のハッシュで、人間が本文を編集したかの判定に使う。一致しなければ上書きせず停止する。
-`source_hash` が同じなら本文は書き換えない。絶対パス・`file://`・クラウド同期フォルダの実体パスは素材・title・hint・既存ノートの summary に入れない（検出したら何も書かず停止）。
+`source_hash` が同じなら本文は書き換えない。素材・title・hint の Unicode の行区切り（垂直タブ・改ページ・U+0085・U+2028/2029 等。PowerPoint の Shift+Enter は垂直タブ）は取り込み時に改行へ揃える（揃えないと再読込で行構造が変わり `content_hash` が合わず偽の CONFLICT になる）。絶対パス・`file://`・クラウド同期フォルダの実体パスは素材・title・hint・既存ノートの summary に入れない（検出したら何も書かず停止）。
 この検査は入口の best-effort で、確定判定は vibe-guard の `scan-text`（pre-commit・夜間 vault_doctor）が持つ。止める対象は
 「普通に起きる形」: `/Users/<name>`（大文字小文字を区別。小文字の `/users/` は REST ルートとして通す）・`/home/<name>`・`/Volumes/`・
 `/mnt/<drive>/`・マウント接頭辞つきのホーム（`/System/Volumes/Data/Users/…` 等）・`~/…`（`~/.config` `~/.local` `~/.cache` 以外）・`~user/`・

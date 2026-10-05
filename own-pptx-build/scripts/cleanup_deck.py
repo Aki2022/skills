@@ -25,6 +25,8 @@ cleanup_deck.py — ⑤人間最終承認後のデッキクリーンアップ（
 保持（修正時の再構築に必要 or 正典）:
   - input/・process/outline.md・slides/・build_deck.js・deck_helpers.js・
     mockup_task*.md・icons_task*.md・builder_brief.md・feedback.json・package*.json
+  - process/deck_meta.json・digest.md・speaker_notes.md … vault 公開の記録と素材。edit-mode の再納品で
+    確定値（opt-out・project）を再利用するため残す（消すと再納品のたびに聞き直しになる）
   - process/assets/*.png    … build_deck.js が参照。消すと修正リビルドでアイコンが消える
                               （imagegen非決定的なので再生成すると絵が変わる。最終pptxから
                               抽出復元も可能だが、残す方が安全で安い）

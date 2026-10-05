@@ -137,7 +137,7 @@ mirrors:
   - dir: typesafe-ai
     upstream: typesafe-ai/skills
     upstream_path: skills/typesafe-ai
-    upstream_version: 上流 HEAD とバイト一致（2026-09-23 時点）
+    upstream_version: 65a39f393687675ce170e6094757de20370365b9（2026-10-05 にバイト一致を再確認）
     fetched_at: 2026-09-19
     license: MIT (LICENSE)
     reinstall: npx degit typesafe-ai/skills/skills/typesafe-ai ~/.agents/skills/typesafe-ai

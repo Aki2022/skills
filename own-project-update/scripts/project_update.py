@@ -169,85 +169,149 @@ def _backlink_names(text: str) -> tuple[list[str], bool]:
     return names, malformed
 
 
-def _assert_no_other_project(note: Note, key: str) -> list[str]:
-    value = _project_value(note)
-    if value is not None and value != key:
-        raise ConflictError(f"{note.path.name}: existing YAML project={value!r} differs from {key!r}")
+def _record_state(note: Note, error: type[ProjectUpdateError] = ConflictError) -> tuple[list[str], list[str]]:
+    """(project list, backlink keys) of a record, refusing a record whose two representations disagree.
 
+    The record's `project` is read as a list (a legacy scalar counts as one element); each listed project must have
+    exactly one backlink line and no backlink may point at an unlisted project.  An inconsistent record is stopped
+    rather than guessed at: which of the two representations is right is a human decision.
+    """
+    projects = _projects_of(note)
     names, malformed = _backlink_names(note.text)
     if malformed:
-        raise ConflictError(f"{note.path.name}: an existing project backlink is malformed")
-    other_names = sorted(set(name for name in names if name != key))
-    if other_names:
-        raise ConflictError(
-            f"{note.path.name}: existing project backlink points to {', '.join(other_names)!r}"
-        )
-    return names
-
-
-def _add_project_key(note: Note, key: str) -> str:
-    if _project_value(note) == key:
-        return note.text
-
-    lines = note.lines
-    fm_lines = list(lines[1 : note.close_index])
-    scalar = _yaml_scalar(key)
-    for index, line in enumerate(fm_lines):
-        if _PROJECT_LINE_RE.match(line):
-            fm_lines[index] = f"project: {scalar}{note.newline}"
-            yaml_text = "".join(fm_lines)
-            return lines[0] + yaml_text + lines[note.close_index] + "".join(lines[note.close_index + 1 :])
-
-    yaml_text = "".join(fm_lines)
-    if yaml_text and not yaml_text.endswith(note.newline):
-        yaml_text += note.newline
-    yaml_text += f"project: {scalar}{note.newline}"
-    return lines[0] + yaml_text + lines[note.close_index] + "".join(lines[note.close_index + 1 :])
-
-
-def _add_record_backlink(note: Note, key: str) -> str:
-    expected = f"> project: [project_{key}](../project/project_{key}.md)"
-    names, malformed = _backlink_names(note.text)
-    if malformed:
-        raise ConflictError(f"{note.path.name}: an existing project backlink is malformed")
-    if any(name != key for name in names):
-        raise ConflictError(f"{note.path.name}: another project backlink already exists")
-    if names.count(key) > 1:
+        raise error(f"{note.path.name}: an existing project backlink is malformed")
+    if len(set(names)) != len(names):
         raise ValidationError(f"{note.path.name}: duplicate project backlinks")
+    if set(names) != set(projects):
+        raise error(
+            f"{note.path.name}: project list {projects!r} and backlinks {names!r} disagree; fix the record by hand"
+        )
     if names:
-        body_lines = note.body.splitlines()
-        first_nonempty = next((line for line in body_lines if line.strip()), None)
-        if first_nonempty != expected:
-            raise ValidationError(f"{note.path.name}: project backlink is not immediately after frontmatter")
-        return note.text
-
-    body = note.body
-    if body and not body.startswith(note.newline):
-        body = note.newline + body
-    closing = note.lines[note.close_index]
-    if not closing.endswith(note.newline):
-        closing += note.newline
-    return (
-        "".join(note.lines[: note.close_index])
-        + closing
-        + expected
-        + note.newline
-        + body
-    )
+        first = _leading_backlink_lines(note)
+        if len(first) != len(names):
+            raise ValidationError(f"{note.path.name}: project backlinks are not immediately after frontmatter")
+    return projects, names
 
 
-def prepare_record(path: Path, key: str) -> Change:
-    note = parse_note(path)
+def _leading_backlink_lines(note: Note) -> list[str]:
+    """Backlink lines forming the block right after the frontmatter (blank lines between them allowed)."""
+    found: list[str] = []
+    for line in note.body.splitlines():
+        if not line.strip():
+            continue
+        match = _BACKLINK_RE.match(line)
+        if match is None or match.group("label") != match.group("link"):
+            break
+        found.append(match.group("label"))
+    return found
+
+
+def _normalize_summary(raw: str | None) -> str | None:
+    if raw is None:
+        return None
+    text = _normalize_line_separators(raw).strip()
+    if not text or "\n" in text:
+        raise ValidationError("--summary must be one non-empty line")
+    if _has_local_path(text):
+        raise ValidationError("--summary: local path is not allowed")
+    return " ".join(text.split())
+
+
+def _body_without_backlinks(note: Note) -> str:
+    """The text after the frontmatter with the leading backlink block (and the blank lines after it) removed."""
+    lines = list(note.lines[note.close_index + 1 :])
+    index = 0
+    while index < len(lines):
+        stripped = lines[index].strip()
+        if not stripped:
+            index += 1
+            continue
+        match = _BACKLINK_RE.match(stripped)
+        if match is None or match.group("label") != match.group("link"):
+            break
+        index += 1
+    return "".join(lines[index:])
+
+
+_YAML_COMMENT_RE = re.compile(r"(^|\s)#")
+
+
+def _fm_key_block(fm_lines: list[str], key: str) -> list[str]:
+    """The lines a top-level frontmatter key occupies (the key line and its indented / `-` continuation)."""
+    block: list[str] = []
+    capturing = False
+    for line in fm_lines:
+        match = _FM_KEY_RE.match(line)
+        if match:
+            capturing = match.group(1) == key
+        elif capturing and not (line[:1] in (" ", "\t") or line.startswith("-")):
+            capturing = False
+        if capturing:
+            block.append(line)
+    return block
+
+
+def prepare_record(path: Path, key: str, summary: str | None = None) -> Change:
+    """Plan adding `key` to a record: list-form `project`, `project_source: manual`, per-project backlinks, optional `summary`.
+
+    An existing association is kept and the key is appended (manual beats model).  A record that already lists the key is
+    left byte-for-byte alone (a legacy scalar stays a scalar until `migrate`).  Line endings are preserved.
+    """
+    note = parse_note(path, exact=True)
     # 書く経路の検査は読む経路（_validate_record）と同じ強さにする。
     # 2026-09-29 以前は backfill だけがこの検査を通らず、validate が拒否する入力を
     # 受け入れて書き込んでいた。読むモードより書くモードが緩いのは「成功に見えて誤る」側。
     _check_local_paths(path, note.text)
-    _assert_no_other_project(note, key)
-    text = _add_project_key(note, key)
-    text = _add_record_backlink(_parse_note_text(path, text), key)
-    if text == note.text:
-        return Change(path, note.text, note.text)
-    return Change(path, note.text, text)
+    projects, _ = _record_state(note)
+    nl = note.newline
+    fm_lines = list(note.lines[1 : note.close_index])
+    changed = False
+
+    new_projects = projects if key in projects else projects + [key]
+    source = str(note.data.get("project_source") or "").strip()
+    if key not in projects or source == "model":
+        # 書き直す行に YAML コメントがあると、書き直しで黙って消える。消さずに止める（人間が直す）。
+        for name in ("project", "project_source"):
+            if any(_YAML_COMMENT_RE.search(line) for line in _fm_key_block(fm_lines, name)):
+                raise ConflictError(
+                    f"{path.name}: the {name!r} frontmatter has a YAML comment that a rewrite would drop; edit it by hand"
+                )
+        if key not in projects:
+            fm_lines = _replace_fm_key(fm_lines, "project", _fm_block("project", new_projects))
+        # 人が明示的に採用したら、model の判定に勝つ。legacy・未記載は触らない。
+        fm_lines = _replace_fm_key(fm_lines, "project_source", _fm_block("project_source", "manual"))
+        changed = True
+    if summary is not None:
+        existing = str(note.data.get("summary") or "").strip()
+        if existing and " ".join(existing.split()) != summary:
+            raise ConflictError(f"{path.name}: existing summary differs from --summary; not overwriting")
+        if not existing:
+            fm_lines = _replace_fm_key(fm_lines, "summary", _fm_block("summary", summary))
+            changed = True
+    if not changed:
+        return Change(path, note.text, note.text, verify_before=True)
+
+    rest = _body_without_backlinks(note)
+    block = "".join(_backlink_line(k) + nl for k in new_projects)
+    separator = nl if rest and not rest.startswith(nl) else ""
+    closing = note.lines[note.close_index]
+    if not closing.endswith(nl):
+        closing += nl
+    text = (
+        note.lines[0]
+        + "".join(line.rstrip("\r\n") + nl for line in fm_lines)
+        + closing
+        + block
+        + separator
+        + rest
+    )
+    # 書く前に、書いた結果を読み直して検査する。PyYAML は重複キーを後勝ちで黙って読むので、validate が通っても
+    # 2 つ目のキーが生まれていては困る（成功に見えて誤る）。
+    written = _parse_note_text(path, text)
+    top_level_project_keys = sum(1 for line in text.splitlines()[1 : written.close_index] if re.match(r"^[\"\']?project[\"\']?\s*:", line))
+    if _projects_of(written) != new_projects or top_level_project_keys != 1:
+        raise ConflictError(f"{path.name}: refusing to write a record whose `project` key would be duplicated or misread")
+    return Change(path, note.text, text, verify_before=True)
 
 
 def _resolve_under(root: Path, value: str, label: str) -> Path:
@@ -365,16 +429,10 @@ def _validate_project_note(path: Path, key: str) -> Note:
 
 
 def _validate_record(path: Path, key: str) -> None:
-    note = parse_note(path)
-    names = _assert_no_other_project(note, key)
-    if _project_value(note) != key:
-        raise ValidationError(f"{path.name}: YAML project is missing or does not match {key!r}")
-    expected = f"> project: [project_{key}](../project/project_{key}.md)"
-    if names != [key]:
-        raise ValidationError(f"{path.name}: exactly one project backlink is required")
-    first_nonempty = next((line for line in note.body.splitlines() if line.strip()), None)
-    if first_nonempty != expected:
-        raise ValidationError(f"{path.name}: project backlink is not immediately after frontmatter")
+    note = parse_note(path, exact=True)
+    projects, _ = _record_state(note, error=ValidationError)
+    if key not in projects:
+        raise ValidationError(f"{path.name}: YAML project is missing or does not list {key!r}")
     _check_local_paths(path, note.text)
 
 
@@ -390,15 +448,22 @@ def _preflight(args: argparse.Namespace, paths: list[Path]) -> tuple[Path, list[
     project_path = vault_project_path(args.vault, key)
     list_names, list_client = list_rows(args.vault, key)
 
+    summary = _normalize_summary(getattr(args, "summary", None))
+    if summary is not None and args.mode != "backfill":
+        raise ValidationError("--summary is for --mode backfill only")
+    if summary is not None and len(paths) > 1:
+        # summary は会議 1 件の要約。複数 record に同じ 1 行を黙って書かない。
+        raise ValidationError("--summary can only be used with a single --record")
+
     if args.mode == "bootstrap":
         if project_path.exists():
             raise ConflictError(f"project note already exists: {project_path.name}")
         if key in list_names:
             raise ConflictError(f"list_project.md already contains project {key!r}")
         for path in paths:
-            note = parse_note(path)
-            names = _assert_no_other_project(note, key)
-            if _project_value(note) == key or key in names:
+            note = parse_note(path, exact=True)
+            projects, names = _record_state(note)
+            if key in projects or key in names:
                 raise ConflictError(
                     f"{path.name}: project {key!r} is already present without a project note"
                 )
@@ -423,7 +488,7 @@ def _preflight(args: argparse.Namespace, paths: list[Path]) -> tuple[Path, list[
         if args.mode == "validate":
             _validate_record(path, key)
         else:
-            changes.append(prepare_record(path, key))
+            changes.append(prepare_record(path, key, summary))
     if args.mode == "validate":
         print(f"VALID_OK project={key} records={len(paths)}")
     return project_path, changes
@@ -549,7 +614,7 @@ def _has_local_path(text: str) -> bool:
     return any(_INGEST_LOCAL_RE.search(form) for form in _ingest_variants(text))
 
 
-_FM_KEY_RE = re.compile(r"^([A-Za-z_][\w-]*)\s*:")
+_FM_KEY_RE = re.compile(r"^[\"']?([A-Za-z_][\w-]*)[\"']?\s*:")
 _BULLET_RE = re.compile(r"^\s*(?:[-*+]\s+|#+\s+|\d+[.)]\s+)")
 _HINT_RE = re.compile(r"^([A-Za-z_][\w-]*)=(.*)$")
 _ARTIFACT_LINE_RE = re.compile(r"^\[([^\]]+)\]\(<?\1>?\)$")
@@ -1360,6 +1425,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--apply", action="store_true", help="Apply backfill changes; default is a dry-run"
+    )
+    parser.add_argument(
+        "--summary", help="backfill only: one-line summary written to the record's frontmatter when it has none"
     )
     parser.add_argument(
         "--allow-list-client-mismatch",

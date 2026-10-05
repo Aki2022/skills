@@ -735,7 +735,19 @@ def _collect_associations(vault: Path, overlay: dict[Path, str]) -> dict[str, li
         if text is None:
             try:
                 text = _read_exact(path)
-            except (OSError, UnicodeDecodeError) as exc:
+            except UnicodeDecodeError:
+                # 実 vault には途中で切れたマルチバイトを含む note がある。1 本で vault 全体の render を止めない代わりに、
+                # project を名乗れる（frontmatter が読めて project を持つ）ものは止め、名乗らないものだけ警告して飛ばす。
+                lossy = path.read_bytes().decode("utf-8", errors="replace")
+                declared = _read_frontmatter(path, lossy)
+                if declared is not None and _projects_of(declared):
+                    raise ValidationError(f"{path.name}: not valid UTF-8 but declares project; fix the file before render")
+                print(
+                    f"WARN {path.relative_to(vault).as_posix()}: not valid UTF-8; skipped (it declares no project)",
+                    file=sys.stderr,
+                )
+                continue
+            except OSError as exc:
                 raise ValidationError(f"{path.name}: cannot read file: {exc}") from exc
         note = _read_frontmatter(path, text)
         if note is None:
@@ -825,8 +837,12 @@ def plan_render(
     Returns (changes, per-project (key, notes, changed), unknown (key, note) references).
     All inputs are read before any output is decided, so a failure leaves nothing half-done.
     """
-    overlay = overlay or {}
-    grouped = _collect_associations(vault, overlay)
+    return _plan_regions(vault, keys, _collect_associations(vault, overlay or {}))
+
+
+def _plan_regions(
+    vault: Path, keys: Sequence[str] | None, grouped: dict[str, list[tuple[_Row, str]]]
+) -> tuple[list[Change], list[tuple[str, int, bool]], list[tuple[str, str]]]:
     targets = _project_note_targets(vault, keys)
     changes: list[Change] = []
     summary: list[tuple[str, int, bool]] = []
@@ -848,6 +864,140 @@ def plan_render(
     return changes, summary, unknown
 
 
+_RAYCAST_ARG2_RE = re.compile(r"^# @raycast\.argument2 .*$", re.MULTILINE)
+_LIST_COLUMNS = ("name", "client", "partner", "status", "last meeting", "path")
+_LIST_NOTE = "<!-- render が毎回書き直す一覧。手で編集しない。正典は project ノートの frontmatter（SPEC-project-association） -->"
+
+
+@dataclass(frozen=True)
+class _ProjectRow:
+    key: str
+    client: str
+    partner: str
+    status: str
+    last_meeting: str
+
+    @property
+    def active(self) -> bool:
+        return self.status in ("", "active")  # status が無い project は active 扱い（recorder の dropdown と同じ）
+
+
+def _joined(value: object) -> str:
+    if value is None:
+        return ""
+    items = value if isinstance(value, list) else [value]
+    return ", ".join(" ".join(str(item).split()) for item in items if str(item).strip())
+
+
+def _project_rows(vault: Path, grouped: dict[str, list[tuple[_Row, str]]]) -> list[_ProjectRow]:
+    """One row per project note, in list order: active first, last meeting newest first, then name."""
+    rows: list[_ProjectRow] = []
+    for key, path in _project_note_targets(vault, None):
+        note = parse_note(path, exact=True)
+        if _project_value(note) != key:
+            raise ValidationError(f"{path.name}: YAML project must be {key!r}")
+        # 最終会議日は record だけから求める。資料（document note）の公開では更新しない（SPEC-document-publish Req 11）。
+        dates = [row.date for row, _ in grouped.get(key, []) if row.kind == "record" and _ISO_DATE_RE.match(row.date)]
+        rows.append(
+            _ProjectRow(
+                key,
+                _joined(note.data.get("client")),
+                _joined(note.data.get("partner")),
+                _joined(note.data.get("status")),
+                max(dates, default=""),
+            )
+        )
+    rows.sort(key=lambda r: r.key)
+    rows.sort(key=lambda r: r.last_meeting, reverse=True)
+    rows.sort(key=lambda r: not r.active)
+    return rows
+
+
+def _list_text(rows: list[_ProjectRow]) -> str:
+    lines = ["# list of projects", "", _LIST_NOTE, "", "## list", ""]
+    lines.append("| " + " | ".join(_LIST_COLUMNS) + " |")
+    lines.append("| " + " | ".join("---" for _ in _LIST_COLUMNS) + " |")
+    for row in rows:
+        target = f"../../project/project_{row.key}.md"
+        target = f"<{target}>" if re.search(r"[\s()]", target) else target
+        cells = [_cell(row.key), _cell(row.client), _cell(row.partner), _cell(row.status), row.last_meeting,
+                 f"[project_{_cell(row.key)}]({target})"]
+        lines.append("| " + " | ".join(cells) + " |")
+    return "\n".join(lines) + "\n"
+
+
+def _list_losses(existing_text: str, rows: list[_ProjectRow]) -> list[str]:
+    """What an overwrite of list_project.md would silently lose (partner not yet in frontmatter, an older last meeting, a row)."""
+    try:
+        header_map, old_rows = _list_table(existing_text)
+    except ValidationError:
+        return []  # 一覧として読めない既存ファイルには守る情報が無い
+    new = {row.key: row for row in rows}
+    losses: list[str] = []
+    for _, cells in old_rows:
+        def cell(name: str) -> str:
+            index = header_map.get(name)
+            return cells[index].strip().replace("\\", "") if index is not None and index < len(cells) else ""
+        name = cell("name")
+        if not name:
+            continue
+        if name not in new:
+            losses.append(f"row {name!r} has no project note")
+            continue
+        old_partner, new_partner = cell("partner"), new[name].partner
+        if old_partner and " ".join(old_partner.split()) != new_partner:
+            losses.append(f"{name}: partner {old_partner!r} is not in the project note frontmatter (run migrate first)")
+        old_date = cell("last meeting")
+        if _ISO_DATE_RE.match(old_date) and old_date > new[name].last_meeting:
+            losses.append(f"{name}: last meeting {old_date} would regress to {new[name].last_meeting or 'none'}")
+    return losses
+
+
+def _plan_list(vault: Path, rows: list[_ProjectRow], accept_losses: bool) -> tuple[Change | None, bool]:
+    path = vault / "setting" / "list" / "list_project.md"
+    after = _list_text(rows)
+    if path.is_symlink():
+        raise ValidationError("setting/list/list_project.md must not be a symlink")
+    if not path.exists():
+        if not path.parent.is_dir():
+            raise ValidationError("setting/list does not exist; create it explicitly first")
+        return Change(path, "", after, created=True), True
+    before = _read_exact(path)
+    losses = _list_losses(before, rows)
+    if losses and not accept_losses:
+        raise ConflictError(
+            "rendering list_project.md would lose information; fix the project notes (or pass --accept-list-changes):\n  "
+            + "\n  ".join(losses)
+        )
+    if before == after:
+        return None, False
+    return Change(path, before, after, verify_before=True), True
+
+
+def _plan_raycast(script: Path, rows: list[_ProjectRow]) -> tuple[Change | None, int]:
+    try:
+        text = _read_exact(script)
+    except (OSError, UnicodeDecodeError) as exc:
+        raise ValidationError(f"{script.name}: cannot read file: {exc}") from exc
+    found = _RAYCAST_ARG2_RE.findall(text)
+    if len(found) != 1:
+        raise ValidationError(f"{script.name}: expected exactly one '# @raycast.argument2' line, found {len(found)}")
+    entries = [
+        {"title": f"{row.key} ({row.client})" if row.client and row.client != row.key else row.key, "value": row.key}
+        for row in rows
+        if row.active
+    ]
+    if not entries:
+        raise ValidationError("no active project to put in the Raycast dropdown")
+    line = "# @raycast.argument2 " + json.dumps(
+        {"type": "dropdown", "placeholder": "project", "data": entries}, ensure_ascii=False
+    )
+    after = _RAYCAST_ARG2_RE.sub(lambda _m: line, text, count=1)
+    if after == text:
+        return None, len(entries)
+    return Change(script, text, after, verify_before=True), len(entries)
+
+
 def _report_render(
     summary: list[tuple[str, int, bool]], unknown: list[tuple[str, str]]
 ) -> None:
@@ -858,15 +1008,31 @@ def _report_render(
 
 
 def _cmd_render(args: argparse.Namespace) -> int:
-    changes, summary, unknown = plan_render(args.vault, args.project_key)
+    vault: Path = args.vault
+    # 3 出力（generated 領域・list_project.md・Raycast 一覧）は全部計画してから 1 batch で書く。
+    # どれか 1 つでも作れなければ何も書かない（部分出力を残さない）。
+    grouped = _collect_associations(vault, {})
+    changes, summary, unknown = _plan_regions(vault, args.project_key, grouped)
+    rows = _project_rows(vault, grouped)
+    list_change, list_changed = _plan_list(vault, rows, args.accept_list_changes)
+    if list_change is not None:
+        changes.append(list_change)
+    raycast_note = "RAYCAST skipped (no --raycast-script)"
+    if args.raycast_script is not None:
+        raycast_change, entries = _plan_raycast(args.raycast_script.expanduser(), rows)
+        if raycast_change is not None:
+            changes.append(raycast_change)
+        raycast_note = f"RAYCAST {args.raycast_script.name} entries={entries} {'CHANGE' if raycast_change else 'NOOP'}"
     _report_render(summary, unknown)
+    print(f"LIST list_project.md rows={len(rows)} {'CHANGE' if list_changed else 'NOOP'}")
+    print(raycast_note)
     if not changes:
         print("NOOP no render changes required")
         return 0
     if not args.apply:
         print("DRY_RUN no files written (pass --apply after review)")
         return 0
-    _write_batch(args.vault, changes)
+    _write_batch(vault, changes)
     print(f"APPLIED files={len(changes)}")
     return 0
 
@@ -1445,6 +1611,14 @@ def build_subcommand_parser() -> argparse.ArgumentParser:
     render.add_argument("--vault", type=Path, required=True, help="Obsidian data vault root")
     render.add_argument(
         "--project-key", action="append", default=[], help="Limit to this project (repeatable); default all"
+    )
+    render.add_argument(
+        "--raycast-script", type=Path, help="Raycast script whose single `# @raycast.argument2` line is regenerated"
+    )
+    render.add_argument(
+        "--accept-list-changes",
+        action="store_true",
+        help="Overwrite list_project.md even if that drops a partner, a row or an older last-meeting date",
     )
     render.add_argument("--apply", action="store_true", help="Write changes; default is a dry-run")
 

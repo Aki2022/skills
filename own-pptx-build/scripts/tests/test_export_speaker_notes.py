@@ -57,3 +57,12 @@ def test_output_option_writes_the_file(tmp_path: Path) -> None:
     out = tmp_path / "speaker_notes.md"
     assert run(str(deck), "--output", str(out)).returncode == 0
     assert out.read_text(encoding="utf-8") == "## スライド 1\n\n語り。\n"
+
+
+def test_soft_line_breaks_become_plain_newlines(tmp_path: Path) -> None:
+    """Shift+Enter は python-pptx で \\v（垂直タブ）になる。vault へ渡す前に普通の改行へ直す。"""
+    deck = make_deck(tmp_path / "d.pptx", ["一行目\x0b二行目"])
+    result = run(str(deck))
+    assert result.returncode == 0, result.stderr
+    assert "\x0b" not in result.stdout
+    assert result.stdout == "## スライド 1\n\n一行目\n二行目\n"

@@ -622,3 +622,17 @@ def test_whitespace_only_lines_do_not_make_the_check_quadratic() -> None:
     started = time.monotonic()
     assert not pu._has_local_path(" \n" * 3000 + "ordinary text")
     assert time.monotonic() - started < 5
+
+
+@pytest.mark.parametrize("separator", ["\x0b", "\x0c", "\x1c", "\x85", " ", " "])
+def test_unicode_line_separators_in_material_do_not_break_idempotence(
+    vault: Path, material, separator: str
+) -> None:
+    """PowerPoint の Shift+Enter は python-pptx で \\v になる。splitlines が分割して hash が合わなくなる。"""
+    material["notes"].write_text(f"一行目{separator}二行目\n", encoding="utf-8")
+    assert attach(vault, material, "--project", "proj_a", "--apply") == 0
+    text = doc(vault).read_text(encoding="utf-8")
+    assert separator not in text and "一行目\n二行目" in text
+    first = snapshot(vault)
+    assert attach(vault, material, "--project", "proj_a", "--apply") == 0  # 偽の CONFLICT にならない
+    assert snapshot(vault) == first

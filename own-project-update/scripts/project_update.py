@@ -881,7 +881,9 @@ def _backlink_line(key: str) -> str:
 
 def _split_body(note: Note) -> tuple[list[str], str]:
     """Split a document note body into its leading backlink keys and the rest."""
-    lines = note.body.splitlines()
+    lines = re.split(r"\r\n|\n", note.body)
+    if lines and lines[-1] == "":
+        lines.pop()
     names: list[str] = []
     index = 0
     while index < len(lines):
@@ -945,6 +947,15 @@ def _summary_line(digest: str) -> str:
     raise ValidationError("digest has no text to use as summary")
 
 
+# str.splitlines() はこれらでも行を分ける。PowerPoint の Shift+Enter（python-pptx では \v）が素材に入ると、
+# 公開時と再読込時で行構造が変わり content_hash が合わなくなる（偽の CONFLICT）。取り込み時に \n へ揃える。
+_LINE_SEPARATORS_RE = re.compile("[\x0b\x0c\x1c\x1d\x1e\x85\u2028\u2029]")
+
+
+def _normalize_line_separators(text: str) -> str:
+    return _LINE_SEPARATORS_RE.sub("\n", text.replace("\r\n", "\n").replace("\r", "\n"))
+
+
 def _read_material(path: Path | None, label: str, required: bool) -> str:
     if path is None:
         if required:
@@ -958,7 +969,7 @@ def _read_material(path: Path | None, label: str, required: bool) -> str:
         raise ValidationError(f"{label}: {path.name} is empty")
     if _has_local_path(text):
         raise ValidationError(f"{label}: local absolute path or file:// URL detected in {path.name}")
-    return text
+    return _normalize_line_separators(text)
 
 
 def _check_source_path(value: str) -> str:

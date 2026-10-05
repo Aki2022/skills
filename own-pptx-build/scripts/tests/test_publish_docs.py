@@ -53,3 +53,27 @@ def test_skill_table_mentions_both_steps() -> None:
     row5 = next(l for l in SKILL.splitlines() if l.startswith("| ⑤ "))
     assert "opt-out" in row1
     assert "attach-document" in row5
+
+
+def test_step1_records_source_repo_and_project_confirmation_state() -> None:
+    step1 = section(PIPELINE, "① ")
+    assert "source_repo" in step1
+    assert "project_confirmed" in step1 and "project_hint" in step1
+
+
+def test_step5_derives_source_repo_from_remote_not_the_worktree_directory() -> None:
+    step5 = section(PIPELINE, "⑤ ")
+    assert "remote get-url origin" in step5
+    assert "worktree" in step5 and "ディレクトリ名" in step5
+
+
+def test_step5_proposal_dry_run_omits_project_and_explains_success_outputs() -> None:
+    step5 = section(PIPELINE, "⑤ ")
+    assert "NOOP no changes required" in step5  # 再実行の成功は APPLIED が出ない
+    assert "ASSESS skipped" in step5 and "ASSOCIATION undecided" in step5
+    assert "`--project` を付けずに" in step5  # 提案を見せる dry-run には --project を付けない
+
+
+def test_step5_tells_how_to_find_the_vault_without_reading_env() -> None:
+    step5 = section(PIPELINE, "⑤ ")
+    assert ".env" in step5 and "人間に確認" in step5

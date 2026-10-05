@@ -11,6 +11,7 @@
 """
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -18,6 +19,11 @@ try:
     from pptx import Presentation
 except ImportError:  # pragma: no cover - 環境の欠落
     raise SystemExit("python-pptx is required: pip install python-pptx")
+
+
+# PowerPoint の Shift+Enter は python-pptx の text で垂直タブ(\v)になる。str.splitlines() はこれらで行を分けるので、
+# vault の document note に入れる前に普通の改行へ揃える（own-project-update も取り込み時に同じ正規化をする）。
+_LINE_SEPARATORS = re.compile("[\x0b\x0c\x1c\x1d\x1e\x85\u2028\u2029]")
 
 
 def export(pptx_path: Path) -> str:
@@ -29,7 +35,7 @@ def export(pptx_path: Path) -> str:
     for number, slide in enumerate(deck.slides, start=1):
         if not slide.has_notes_slide:
             continue
-        text = slide.notes_slide.notes_text_frame.text.strip()
+        text = _LINE_SEPARATORS.sub("\n", slide.notes_slide.notes_text_frame.text).strip()
         if text:
             blocks.append(f"## スライド {number}\n\n{text}\n")
     if not blocks:

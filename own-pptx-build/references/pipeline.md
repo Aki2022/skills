@@ -45,62 +45,16 @@ title: own-pptx-build パイプライン詳細（⓪〜⑤）
   ③の `mk({font: "BIZ UDPGothic"})` に渡す。表紙有無・フッター日付はこのタイミングで聞く。
 - 人間と内容を確認しながら書く。**このファイルが最終テキストの唯一の出典**であり、以降どのステップで生成される画像・モックアップの文字も参照しない。
 - **ダイジェスト確定時に、vault 公開の opt-out を 1 問だけ相乗りで聞く**（SPEC-document-publish。別の確認ターンを増やさない）。
-  **`process/deck_meta.json` に `vault_publish` が既にあれば聞かない**（edit-mode・再開で①に再入しても同じ）。ただし前回 `opted_out` で、①相当の確認が再び走る時だけ「前回は出さなかった」と添えて再度問う。
-  「このデッキのテキスト（ダイジェスト・outline・スピーカーノート。pptx 本体は含まない）を Obsidian vault に公開してよいか。
-  既定は公開。機密資料なら opt-out」と、project を人間が最初から知っていれば任意でその key も聞く（これは確定ではなく
-  **ヒント**として `project_hint` に記録し、⑤で提案と並べて 1 回確認する）。答えを `process/deck_meta.json` に記録する（下記）。
-  opt-out なら⑤で vault には何も書かない。
-- 確定したダイジェストを **`process/digest.md`** に保存する（⑤で `attach-document` の素材になる）。1 行目は
-  デッキ全体を 1 行で（宛先・目的・結論。vault ノートの `summary` になる）、2 行目以降にキーメッセージ一覧と各枚 1 行要約。
-- `outline.md` を後から変えたら `digest.md` も作り直し、⑤の前に人間へ見せる。
-
-### `process/deck_meta.json`（vault 公開の記録）
-
-```json
-{
-  "vault_publish": "publish",
-  "source_repo": "<リポジトリ名>",
-  "project_hint": ["<key>"],
-  "project": ["<key>"],
-  "project_confirmed": true
-}
-```
-
-- `vault_publish`: `publish` または `opted_out`（①で聞いた答え）。キーが無ければ未回答。
-- `source_repo`: vault ノートの出典リポジトリ名（⑤の初回に記録し、以降の再納品で同じ値を使う。パスではなく名前）。
-- `project_hint`: ①で人間が挙げた project key（任意・未確定）。⑤の提案と並べて見せる材料で、紐付けの確定ではない。
-- `project` と `project_confirmed`: **⑤で人間が確定した後にだけ**書く。`project_confirmed: true` なら `project` が確定値
-  （`[]` は決定済みで紐付けなし、1 件以上はその key に紐付ける。vault では `project_source: manual`）。
-  `project_confirmed` が無ければ未決定で、⑤で提案を見せる。**edit-mode の再納品は `project_confirmed: true` の値を再利用し、聞かない**。
-- **ローカルパス・vault の場所・クラウドドライブ名を書かない**。このファイルは再構築ソースとして git 追跡される。
-- `.gitignore` 対象外（追跡する）。`cleanup_deck.py` は消さない。
-
-実例形式:
-
-```markdown
-# スライド: 導入までの3ステップ
-
-パターン B（図解型）。960×540pt / 16:9 キャンバス。左から右へ3ステップのプロセスフロー。
-
-## タイトル（tracker）
-
-導入プロセス
-
-## キーメッセージ（1行）
-
-導入は申込み・審査・承認の3ステップで最短2週間
-
-## ステップ
-
-1. **申込み** — オンラインで申込書を送信
-2. **審査** — 書類確認と与信審査
-3. **承認** — 契約締結とアカウント発行
-
-## 構図メモ
-
-- ノード3個（角丸四角形）を横並びに配置、ノード間を矢印コネクタ2本で接続。
-- 各ノード内部: 上部に番号バッジ、中央に見出し、下部に補足1行。
-```
+  「このデッキのテキスト（outline・スピーカーノート。pptx 本体は含まない）を Obsidian vault に公開してよいか。
+  既定は公開。機密資料なら opt-out」。答えは **`outline.md` の先頭 1 行**に残す:
+  `<!-- vault_publish: publish -->` または `<!-- vault_publish: opted_out -->`。行が無い既存デッキは未回答で、⑤で補って聞く。
+  すでに行があれば聞かない（edit-mode・再開で①に再入しても同じ）。前回 `opted_out` で、①相当の確認が再び走る時だけ
+  「前回は出さなかった」と添えて再度問う。opt-out なら⑤で vault には何も書かない。
+- ダイジェストはこれまでどおりチャットで見せて確認を取るだけで、**ファイルとして残さない**。vault の note には
+  `outline.md` をそのまま載せる（キーメッセージは outline の本文に入っている）。公開用の素材は⑤で
+  `scripts/prepare_publish_materials.py` が作る（LLM を使わず、スライド見出しも解析しない）。
+- project（紐付け先）はここでは聞かない。⑤で提案または catalog を見せて決める。決めた結果と `source_repo` は
+  vault の note の frontmatter に残るので、別ファイルに記録しない。
 
 ---
 
@@ -360,51 +314,61 @@ AI が「良い」と採点したことと、人間が最終形を承認した�
 人間の最終承認を受けたら、`cleanup_deck.py` を提示する**前**に、vault 公開を行う（契約は
 `own-project-update` の `references/project-contract.md` の Document note、仕様は SPEC-document-publish）。
 紐付けの判定・書き込み・project ノートへの反映は `own-project-update` が持つ。この skill に catalog 照合を複製しない。
+追加の記録ファイルは作らない（素材は一時ディレクトリ、確定値は vault の note が持つ）。
 
-1. `process/deck_meta.json` を読む。
-   - `vault_publish: opted_out` → **vault には何も書かない**。このセクションを終えてクリーンアップへ進む。
-     edit-mode で①相当の確認が再び走る時だけ「前回は出さなかった」と添えて 1 回だけ再度問う。
-   - `deck_meta.json` が無い・`vault_publish` が無い既存デッキ → **記録が無いので、ここで opt-out の 1 問を補って**
-     から記録し、続行する。
-2. 素材をそろえる: `process/digest.md`（outline 変更後なら作り直して人間に見せる）、`process/outline.md`、
-   `python3 <skill>/scripts/export_speaker_notes.py <成果物>.pptx --output process/speaker_notes.md`。
+1. **素材と opt-out の記録を読む**:
+   ```bash
+   M="$(mktemp -d)"   # 一時（システムの temp）。デッキ repo の外・コミットしない
+   python3 <skill>/scripts/prepare_publish_materials.py process/outline.md --out-dir "$M" --fallback-title <yyyymmdd_内容>
+   ```
+   `<yyyymmdd_内容>` はデッキのディレクトリ名（以降の `--name`・`--source-path`・`deck_name` ヒントも同じ文字列）。
+   標準出力の JSON `{"vault_publish", "summary", "source_repo"}` を使う。`$M/summary.txt` には summary が 1 行で入る。`vault_publish` で分岐する:
+   `opted_out` → **vault には何も書かない**（このセクションを終えてクリーンアップへ。すでに vault に note がある場合も
+   この skill は消さない。消すのは人間）。
+   `null`（`outline.md` に行が無い既存デッキ）→ **記録が無いので、ここで opt-out の 1 問を補って**回答を待ち、
+   `outline.md` の先頭に行（`<!-- vault_publish: publish -->` または `opted_out`）を足してからもう一度実行する。
+   `publish` → 続行。`summary` は outline の題（note の frontmatter の 1 行要約になる）、`source_repo` は 4 で使う。
+   **`summary` が題として妥当かを見る**（`# 目次` のような章見出しを拾うことがある。違えば `process/outline.md` の
+   最初の見出しを `# outline.md — <題>` に直してもう一度実行する）。
+   失敗（非 0）はメッセージのとおり: 行が 2 つある・先頭行ではない・値が不正（`process/outline.md` の `vault_publish` 行を直す）、
+   git の外、題が無い（`--fallback-title` を渡し直す）、リポジトリ名を導出できない（日本語・空白・先頭が `_` や `.` の名前。
+   `--source-repo <ASCII 名>` で固定する。vault に既に note があるならその frontmatter の `source_repo` と同じ値にする）。
+2. スピーカーノート: `python3 <skill>/scripts/export_speaker_notes.py <成果物>.pptx --output "$M/speaker_notes.md"`。
+   **ノートが 1 枚も無い pptx は非 0 で止まる。その場合は `--notes-file` を付けずに進める**（ノートは任意の素材）。
 3. 書き込み先の vault は `own-project-update` の「対象 vault を確定する」手順で決める。**場所は人間に確認する**
    （セッション内で 1 回。呼び出し元プロジェクトの AGENTS.md や docs に vault の解決手順があればそれに従う）。
-   `.env` を読まない。vault のパスを `deck_meta.json` や報告・コミットに残さない。
-4. `--source-repo` を決める: `deck_meta.json` に `source_repo` があればそれを使う。無ければ
-   `git remote get-url origin`（無ければ最初の remote）の URL の最後の `/` または `:` より後ろから `.git` を除いた名前
-   （remote が無ければ `git worktree list --porcelain` の先頭＝main チェックアウトのディレクトリ名）で求めて記録する。**git worktree のディレクトリ名を使わない**（別の値で再実行すると vault 側が
-   「別資料」とみなして `CONFLICT` で止まる）。
-5. **`--project` を付けずに** dry-run を実行して提案を取る（`--apply` も付けない）。`--project` を付けると
-   `ASSESS skipped (manual project given)` になり、提案が出ない。値にスペースを含む `--hint` は引用符で囲む。
+   `.env` を読まない。vault のパスを報告・コミットに残さない。
+4. `--source-repo` は 1 の JSON の `source_repo` をそのまま使う（git remote から毎回同じ規則で求める。git worktree の
+   ディレクトリ名ではない。別の値で再実行すると vault 側が「別資料」とみなして `CONFLICT` で止まる）。記録は不要。
+5. **まず `--project` も `--apply` も付けずに dry-run する**:
    ```bash
    python3 <own-project-update>/scripts/project_update.py attach-document --vault <vault-root> \
      --kind presentation --name <yyyymmdd_内容> --source-repo <source_repo> \
      --source-path presentation/<yyyymmdd_内容> \
-     --digest-file process/digest.md --outline-file process/outline.md --notes-file process/speaker_notes.md \
-     --hint "deck_name=<デッキ名>" --hint "audience=<宛先>" --hint "client=<クライアント名>" \
+     --summary-file "$M/summary.txt" --outline-file "$M/outline.md" [--notes-file "$M/speaker_notes.md"] \
+     --hint "deck_name=<yyyymmdd_内容>" --hint "audience=<宛先>" --hint "client=<クライアント名>" \
      --artifact <成果物>.pptx
    ```
-   `--hint` は判定器（assess）へ渡す。assess が未実装・停止中の間は `ASSESS unavailable (no proposals)` と
-   `ASSOCIATION undecided (...)` が出て終了コード 0（dry-run なので書かれていない）。
-6. **提案を人間に 1 回見せて確定する（念のための確認。判定の原則は自動化で、これはこの skill の方針）**。
-   提案（key と確率）と `project_hint` を、assess が未実装なら catalog 一覧（`vault/project/project_*.md` の key と client）を
-   見せ、「この project に紐付けるか／紐付けない」を選んでもらう。確定値を `deck_meta.json` の `project`（紐付けなしは `[]`）に
-   書き、`project_confirmed: true` を立てる。`project_confirmed: true` が既にある再納品は**聞かない**（その値を使う）。
-7. 確定した値で同じコマンドに `--project <key>`（複数可）または `--no-project`、そして `--apply` を付けて実行する。
-   vault への初回実書き込みなので、6 の確認がそのまま実行の承認になる。
+   値にスペースを含む `--hint` は引用符で囲む。`--hint` は判定器（assess）へ渡す。assess が未実装・停止中の間は
+   `ASSESS unavailable (no proposals)` と出る。dry-run は何も書かない（終了コード 0）。
+6. **出力で分岐する**（`CONFLICT`〔終了コード 2〕と `ERROR`〔3〕は dry-run でも出る。**上書きせず**差分と理由を人間に報告して止まる。
+   vault 側を人間が編集していた・出典が別・素材のローカルパス等）。それ以外は `DOCUMENT` 行で:
+   - `DOCUMENT CREATE`（初回）→ `ASSOCIATION undecided` が出る。**提案を人間に 1 回見せて確定する**（念のための確認。判定の原則は自動化で、
+     これはこの skill の方針）。提案（key と確率）を、assess が未実装なら catalog 一覧（`vault/project/project_*.md` の key と client）を見せ、
+     「この project に紐付けるか／紐付けない」を選んでもらう。確定した値を `--project <key>`（複数可）または `--no-project` として 7 で使う。
+   - `DOCUMENT UPDATE` / `DOCUMENT NOOP`（再納品）→ **聞かない**。vault の note が既に紐付けを持っているので、
+     `--project`・`--no-project` を付けずに 7 へ進む（既存の紐付けは保たれる。外すのは note の frontmatter を人間が直す）。
+7. 同じコマンドに（初回は確定値を）付けて **`--apply`** を付けて実行する。vault への初回実書き込みなので、6 の確認がそのまま実行の承認になる。
 8. 出力を確認する。**成功**は終了コード 0 で、次のどちらか: 初回・変更あり = `DOCUMENT CREATE|UPDATE`・`RENDER project=<key> ...`・
    `APPLIED files=N`、再実行で変更なし = `DOCUMENT NOOP`・`NOOP no changes required`（`APPLIED` は出ない。失敗ではない）。
    `CONFLICT`（終了コード 2: 人間が vault 側の note を編集していた・出典が別・紐付け未決定 等）と `ERROR`（3）は、
    **上書きせず**差分と理由を人間に報告する。vault 公開の失敗はデッキ納品とクリーンアップを妨げない。
-   `--no-project` と `--project` の指定は**追加のみ**で、既に vault 側に紐付いている project は外れない（外すのは note の
-   frontmatter を人間が直す）。
    報告・コミットに `ARTIFACT ... -> ...` 行を貼らない（相対でもリポジトリと vault の配置が分かる）。
 9. `--artifact` の symlink は、成果物が git worktree 内にあり main チェックアウトにまだ同じ中身が無い間は作られない
    （出力に `ARTIFACT skipped` と理由が出る。document note は公開される）。マージ後に同じコマンドを再実行すると
-   link が付く（`deck_meta.json` の確定値を使うので質問は無い）。
-10. `process/speaker_notes.md` はローカルパスを含むノートがあると `attach-document` が拒否する（`ERROR notes: ...`）。
-    ノートを直して書き出し直す。`export_speaker_notes.py` 自体はパスを検査しない。
+   link が付く（再納品の扱いなので質問は無い）。
+10. ノートや outline にローカルパスがあると `attach-document` が拒否する（`ERROR ...`）。**元の `process/outline.md`（や pptx のノート）**
+    を直して、1 から（prepare を含めて）やり直す。`$M` の中は一時コピーで、そこだけ直しても残らない。
 
 **承認後のクリーンアップ（必須・承認がトリガー）**: 人間の最終承認を受けたら
 `scripts/cleanup_deck.py <デッキdir>` を dry-run で提示し、承認後に `--apply` で実行する。

@@ -48,7 +48,7 @@ def test_step5_proposal_dry_run_omits_project_and_branches_on_document_line() ->
 
 def test_step5_derives_source_repo_from_remote_not_the_worktree_directory() -> None:
     step5 = section(PIPELINE, "⑤ ")
-    assert "git remote get-url origin" in step5
+    assert "source_repo" in step5 and "git remote" in step5
     assert "worktree" in step5 and "ディレクトリ名" in step5
 
 
@@ -59,8 +59,17 @@ def test_step5_explains_success_outputs_and_missing_notes() -> None:
     assert ".env" in step5 and "人間に確認" in step5
 
 
+def test_step5_passes_the_outline_and_a_summary_not_a_digest_file() -> None:
+    step5 = section(PIPELINE, "⑤ ")
+    assert '--summary "' in step5 and '--outline-file "$M/outline.md"' in step5
+    assert "--digest-file" not in step5
+    assert "--fallback-title" in step5
+    assert "mktemp -d" in step5 and "デッキ repo の外" in step5
+
+
 def test_no_extra_record_files_come_back() -> None:
     for name, text in (("pipeline", PIPELINE), ("skill", SKILL), ("edit-mode", EDIT_MODE)):
+        assert "digest.md" not in text, name
         assert "deck_meta" not in text, name
         assert "process/digest.md" not in text, name
         assert "project_confirmed" not in text, name

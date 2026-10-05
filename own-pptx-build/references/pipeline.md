@@ -50,8 +50,9 @@ title: own-pptx-build パイプライン詳細（⓪〜⑤）
   `<!-- vault_publish: publish -->` または `<!-- vault_publish: opted_out -->`。行が無い既存デッキは未回答で、⑤で補って聞く。
   すでに行があれば聞かない（edit-mode・再開で①に再入しても同じ）。前回 `opted_out` で、①相当の確認が再び走る時だけ
   「前回は出さなかった」と添えて再度問う。opt-out なら⑤で vault には何も書かない。
-- ダイジェストはこれまでどおりチャットで見せて確認を取るだけで、**ファイルとして残さない**。vault 公開用の素材は⑤で
-  `outline.md` から機械的に作る（`scripts/prepare_publish_materials.py`。LLM を使わない）。
+- ダイジェストはこれまでどおりチャットで見せて確認を取るだけで、**ファイルとして残さない**。vault の note には
+  `outline.md` をそのまま載せる（キーメッセージは outline の本文に入っている）。公開用の素材は⑤で
+  `scripts/prepare_publish_materials.py` が作る（LLM を使わず、スライド見出しも解析しない）。
 - project（紐付け先）はここでは聞かない。⑤で提案または catalog を見せて決める。決めた結果と `source_repo` は
   vault の note の frontmatter に残るので、別ファイルに記録しない。
 
@@ -317,27 +318,29 @@ AI が「良い」と採点したことと、人間が最終形を承認した�
 
 1. **素材と opt-out の記録を読む**:
    ```bash
-   M="$(mktemp -d)"   # 一時。コミットしない
-   python3 <skill>/scripts/prepare_publish_materials.py process/outline.md --out-dir "$M"
+   M="$(mktemp -d)"   # 一時（システムの temp）。デッキ repo の外・コミットしない
+   python3 <skill>/scripts/prepare_publish_materials.py process/outline.md --out-dir "$M" --fallback-title <デッキ名>
    ```
-   標準出力の JSON `vault_publish` で分岐する。`opted_out` → **vault には何も書かない**（このセクションを終えてクリーンアップへ）。
-   `null`（`outline.md` に行が無い既存デッキ）→ **記録が無いので、ここで opt-out の 1 問を補って**
-   `outline.md` の先頭に行を足し、もう一度実行する。`publish` → 続行。
-   キーメッセージが 1 つも無い outline は非 0 で止まる（空の公開素材を作らない）。
+   標準出力の JSON `{"vault_publish", "summary", "source_repo"}` を使う。`vault_publish` で分岐する:
+   `opted_out` → **vault には何も書かない**（このセクションを終えてクリーンアップへ。すでに vault に note がある場合も
+   この skill は消さない。消すのは人間）。
+   `null`（`outline.md` に行が無い既存デッキ）→ **記録が無いので、ここで opt-out の 1 問を補って**回答を待ち、
+   `outline.md` の先頭に行（`<!-- vault_publish: publish -->` または `opted_out`）を足してからもう一度実行する。
+   `publish` → 続行。`summary` は outline の題（note の frontmatter の 1 行要約になる）、`source_repo` は 4 で使う。
+   失敗（非 0）はメッセージのとおり: 行が 2 つある・値が不正・git の外・題が無い（`--fallback-title` を渡し直す）。
 2. スピーカーノート: `python3 <skill>/scripts/export_speaker_notes.py <成果物>.pptx --output "$M/speaker_notes.md"`。
    **ノートが 1 枚も無い pptx は非 0 で止まる。その場合は `--notes-file` を付けずに進める**（ノートは任意の素材）。
 3. 書き込み先の vault は `own-project-update` の「対象 vault を確定する」手順で決める。**場所は人間に確認する**
    （セッション内で 1 回。呼び出し元プロジェクトの AGENTS.md や docs に vault の解決手順があればそれに従う）。
    `.env` を読まない。vault のパスを報告・コミットに残さない。
-4. `--source-repo` は毎回同じ規則で求める: `git remote get-url origin`（無ければ最初の remote）の URL の最後の `/` または `:` より
-   後ろから `.git` を除いた名前（remote が無ければ `git worktree list --porcelain` の先頭＝main チェックアウトのディレクトリ名）。
-   **git worktree のディレクトリ名を使わない**（別の値だと vault 側が「別資料」とみなして `CONFLICT` で止まる）。記録は不要。
+4. `--source-repo` は 1 の JSON の `source_repo` をそのまま使う（git remote から毎回同じ規則で求める。git worktree の
+   ディレクトリ名ではない。別の値で再実行すると vault 側が「別資料」とみなして `CONFLICT` で止まる）。記録は不要。
 5. **まず `--project` も `--apply` も付けずに dry-run する**:
    ```bash
    python3 <own-project-update>/scripts/project_update.py attach-document --vault <vault-root> \
      --kind presentation --name <yyyymmdd_内容> --source-repo <source_repo> \
      --source-path presentation/<yyyymmdd_内容> \
-     --digest-file "$M/digest.md" --outline-file "$M/outline.md" [--notes-file "$M/speaker_notes.md"] \
+     --summary "<1 の summary>" --outline-file "$M/outline.md" [--notes-file "$M/speaker_notes.md"] \
      --hint "deck_name=<デッキ名>" --hint "audience=<宛先>" --hint "client=<クライアント名>" \
      --artifact <成果物>.pptx
    ```

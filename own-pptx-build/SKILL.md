@@ -326,7 +326,7 @@ imagegen-prompt-convention.md §10（型スライド=厳格 / 自由形=ブラ�
 - `scripts/inject_template.py` — **④.5（人間の画像確認OK）後の最終成果物化**: template_v3.pptx を土台に生成スライドを移植（人間がマスター準拠スライドを追加できる形にする）
 - `scripts/check_feedback.py` — **③開始前の必須プリフライト**: `feedback.json` の verdict が
   全て ok か確認する（②の人間承認を飛ばして③へ進むのを機械的に防ぐ）
-- `scripts/prepare_publish_materials.py` — **⑤の vault 公開素材**: outline.md から公開用ダイジェスト（`- S<n> <title>: <キーメッセージ>`）と公開用 outline を一時ディレクトリへ機械生成し、先頭の vault_publish 行（opt-out の記録）を JSON で返す（opt-out なら何も作らない・キーメッセージが無ければ非 0 で停止）
+- `scripts/prepare_publish_materials.py` — **⑤の vault 公開素材**: outline.md から公開用 outline（先頭の vault_publish 行を除いたもの）を一時ディレクトリへ作り、opt-out の記録・note の summary（outline の題）・出典リポジトリ名（git remote から）を JSON で返す（スライド見出しは解析しない。opt-out なら何も作らない）
 - `scripts/export_speaker_notes.py` — **⑤の vault 公開の素材**: pptx のスピーカーノートを `## スライド N` 見出しつき Markdown に書き出す（ノートが 1 枚も無い・読めないファイルは非 0 で停止）
 - `scripts/cleanup_deck.py` — **⑤承認後の必須クリーンアップ**（dry-run既定）。役割を終えたmockup/preview/ログ等を削除し、再構築ソース（outline/slides/assets/output.pptx）は残す。承認前に実行しない
 - `scripts/build_template_v3.py` — template_v3.pptx の生成スクリプト（旧会社テンプレ→間引き・v3化。テンプレ更新時に再実行）

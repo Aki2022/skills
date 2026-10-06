@@ -53,8 +53,15 @@ class ValidationError(ProjectUpdateError):
 
 
 _BACKLINK_RE = re.compile(
-    r"^>\s*project:\s*\[project_(?P<label>[^\]]+)\]\(\.\./project/project_(?P<link>[^)]+)\.md\)\s*$"
+    r"^>\s*project:\s*\[project\\?_(?P<label>[^\]]+)\]\(\.\./project/project_(?P<link>[^)]+)\.md\)\s*$"
 )
+
+
+def _backlink_label(match: re.Match[str]) -> str:
+    """The label of a backlink with Markdown's `\\_` escapes undone (`project\\_a\\_b` names the key `a_b`)."""
+    return match.group("label").replace("\\_", "_")
+
+
 _PROJECT_LINE_RE = re.compile(r"^\s*project\s*:")
 _LOCAL_PATH_RE = re.compile(r"(?:^|[\s(])/(?:Users|private|Volumes)/|file://")
 _REQUIRED_HEADINGS = (
@@ -63,10 +70,9 @@ _REQUIRED_HEADINGS = (
     "stakeholders",
     "next actions",
     "open issues / risks",
-    "minutes",
-    "related notes",
-    "documents",
 )
+# 旧 `## minutes` / `## related notes` / `## documents` は移行（migrate）で generated 領域に置き換わる。
+# 移行の前でも後でも通るよう、必須にしない（SPEC-project-association）。
 
 
 @dataclass(frozen=True)
@@ -162,10 +168,10 @@ def _backlink_names(text: str) -> tuple[list[str], bool]:
         if not line.lstrip().startswith("> project:"):
             continue
         match = _BACKLINK_RE.match(line)
-        if match is None or match.group("label") != match.group("link"):
+        if match is None or _backlink_label(match) != match.group("link"):
             malformed = True
             continue
-        names.append(match.group("label"))
+        names.append(_backlink_label(match))
     return names, malformed
 
 
@@ -200,9 +206,9 @@ def _leading_backlink_lines(note: Note) -> list[str]:
         if not line.strip():
             continue
         match = _BACKLINK_RE.match(line)
-        if match is None or match.group("label") != match.group("link"):
+        if match is None or _backlink_label(match) != match.group("link"):
             break
-        found.append(match.group("label"))
+        found.append(_backlink_label(match))
     return found
 
 
@@ -227,7 +233,7 @@ def _body_without_backlinks(note: Note) -> str:
             index += 1
             continue
         match = _BACKLINK_RE.match(stripped)
-        if match is None or match.group("label") != match.group("link"):
+        if match is None or _backlink_label(match) != match.group("link"):
             break
         index += 1
     return "".join(lines[index:])
@@ -719,8 +725,8 @@ def _link_target(vault: Path, path: Path) -> str:
     return f"<{rel}>" if re.search(r"[\s()]", rel) else rel
 
 
-def _collect_associations(vault: Path, overlay: dict[Path, str]) -> dict[str, list[tuple[_Row, str]]]:
-    """Group every associated note by project key, reading each note once."""
+def _walk_markdown(vault: Path) -> list[Path]:
+    """Every `.md` render reads: not hidden, not under project/ or setting/, symlinked directories not followed."""
     paths: list[Path] = []
     for dirpath, dirnames, filenames in os.walk(vault):
         top = Path(dirpath) == vault
@@ -730,6 +736,12 @@ def _collect_associations(vault: Path, overlay: dict[Path, str]) -> dict[str, li
         for filename in sorted(filenames):
             if filename.endswith(".md") and not filename.startswith("."):
                 paths.append(Path(dirpath) / filename)
+    return paths
+
+
+def _collect_associations(vault: Path, overlay: dict[Path, str]) -> dict[str, list[tuple[_Row, str]]]:
+    """Group every associated note by project key, reading each note once."""
+    paths = _walk_markdown(vault)
     known = set(paths)
     for extra in sorted(overlay):
         rel_parts = extra.relative_to(vault).parts
@@ -817,7 +829,8 @@ def _with_region(note: Note, region: list[str] | None) -> str:
     if region is None:
         return note.text
     text = note.text if note.text.endswith(nl) else note.text + nl
-    return text + nl + nl.join(region) + nl
+    gap = "" if text.endswith(nl + nl) else nl  # 末尾がすでに空行なら、空行を重ねない
+    return text + gap + nl.join(region) + nl
 
 
 def _project_note_targets(vault: Path, keys: Sequence[str] | None) -> list[tuple[str, Path]]:
@@ -838,6 +851,13 @@ def _project_note_targets(vault: Path, keys: Sequence[str] | None) -> list[tuple
     return targets
 
 
+def _note_or_overlay(path: Path, overlay: dict[Path, str] | None) -> Note:
+    """A note as it will be after the planned changes (overlay), else as it is on disk."""
+    if overlay and path in overlay:
+        return _parse_note_text(path, overlay[path])
+    return parse_note(path, exact=True)
+
+
 def plan_render(
     vault: Path, keys: Sequence[str] | None, overlay: dict[Path, str] | None = None
 ) -> tuple[list[Change], list[tuple[str, int, bool]], list[tuple[str, str]]]:
@@ -850,13 +870,16 @@ def plan_render(
 
 
 def _plan_regions(
-    vault: Path, keys: Sequence[str] | None, grouped: dict[str, list[tuple[_Row, str]]]
+    vault: Path,
+    keys: Sequence[str] | None,
+    grouped: dict[str, list[tuple[_Row, str]]],
+    overlay: dict[Path, str] | None = None,
 ) -> tuple[list[Change], list[tuple[str, int, bool]], list[tuple[str, str]]]:
     targets = _project_note_targets(vault, keys)
     changes: list[Change] = []
     summary: list[tuple[str, int, bool]] = []
     for key, path in targets:
-        note = parse_note(path, exact=True)
+        note = _note_or_overlay(path, overlay)
         if _project_value(note) != key:
             raise ValidationError(f"{path.name}: YAML project must be {key!r}")
         rows = [row for row, _ in grouped.get(key, [])]
@@ -908,11 +931,13 @@ def _valid_iso_date(text: str) -> bool:
     return True
 
 
-def _project_rows(vault: Path, grouped: dict[str, list[tuple[_Row, str]]]) -> list[_ProjectRow]:
+def _project_rows(
+    vault: Path, grouped: dict[str, list[tuple[_Row, str]]], overlay: dict[Path, str] | None = None
+) -> list[_ProjectRow]:
     """One row per project note, in list order: active first, last meeting newest first, then name."""
     rows: list[_ProjectRow] = []
     for key, path in _project_note_targets(vault, None):
-        note = parse_note(path, exact=True)
+        note = _note_or_overlay(path, overlay)
         if _project_value(note) != key:
             raise ValidationError(f"{path.name}: YAML project must be {key!r}")
         # 最終会議日は record だけから求める。資料（document note）の公開では更新しない（SPEC-document-publish Req 11）。
@@ -992,7 +1017,7 @@ def _list_losses(existing_text: str, rows: list[_ProjectRow]) -> list[str]:
         if cell("status") and cell("status").lower() != row.status.lower():
             losses.append(f"{name}: status {cell('status')!r} is not in the project note frontmatter")
         if cell("partner") and _normalised_set(cell("partner")) != _normalised_set(row.partner):
-            losses.append(f"{name}: partner {cell('partner')!r} is not in the project note frontmatter (run migrate first)")
+            losses.append(f"{name}: partner {cell('partner')!r} is not in the project note frontmatter (set it in the project note frontmatter, or pass --accept-list-changes to drop it)")
         old_date = cell("last meeting")
         if old_date and old_date != row.last_meeting:
             if not _valid_iso_date(old_date):
@@ -1177,9 +1202,9 @@ def _split_body(note: Note) -> tuple[list[str], str]:
             index += 1
             continue
         match = _BACKLINK_RE.match(lines[index])
-        if match is None or match.group("label") != match.group("link"):
+        if match is None or _backlink_label(match) != match.group("link"):
             break
-        names.append(match.group("label"))
+        names.append(_backlink_label(match))
         index += 1
     return names, "\n".join(lines[index:])
 
@@ -1677,6 +1702,24 @@ def build_subcommand_parser() -> argparse.ArgumentParser:
     )
     render.add_argument("--apply", action="store_true", help="Write changes; default is a dry-run")
 
+    migrate_cmd = sub.add_parser(
+        "migrate", help="move an existing vault to the new contract once (dry-run -> reviewed diff -> apply)"
+    )
+    migrate_cmd.add_argument("--vault", type=Path, required=True, help="Obsidian data vault root")
+    migrate_cmd.add_argument("--apply", action="store_true", help="Write the plan; needs --plan-id from the reviewed dry-run")
+    migrate_cmd.add_argument("--plan-id", help="PLAN_ID printed by the dry-run you reviewed; apply refuses a different plan")
+    migrate_cmd.add_argument("--diff-dir", type=Path, help="Write one unified diff per changed file (outside the vault) for review")
+    migrate_cmd.add_argument(
+        "--related-notes",
+        choices=("keep", "associate"),
+        default="keep",
+        help="old `## related notes` entries: keep them as text (default; a mention is not membership) or associate them as legacy",
+    )
+    migrate_cmd.add_argument("--raycast-script", type=Path, help="Also regenerate this Raycast script's dropdown line")
+    migrate_cmd.add_argument(
+        "--accept-list-changes", action="store_true", help="Let the regenerated list_project.md drop what render cannot reproduce"
+    )
+
     attach = sub.add_parser("attach-document", help="publish a generated document as a document note")
     attach.add_argument("--vault", type=Path, required=True, help="Obsidian data vault root")
     attach.add_argument("--kind", required=True, help="Document kind = vault directory name (e.g. presentation)")
@@ -1702,7 +1745,13 @@ def build_subcommand_parser() -> argparse.ArgumentParser:
     return parser
 
 
-_SUBCOMMANDS = {"render": _cmd_render, "attach-document": _cmd_attach_document}
+def _cmd_migrate(args: argparse.Namespace) -> int:
+    import migrate  # 遅延 import: migrate.py は実行中のこのモジュールを受け取って使う（二重 import で例外クラスが別物になるのを避ける）
+
+    return migrate.cmd_migrate(args, sys.modules[__name__])
+
+
+_SUBCOMMANDS = {"render": _cmd_render, "attach-document": _cmd_attach_document, "migrate": _cmd_migrate}
 
 
 def _run_guarded(action) -> int:

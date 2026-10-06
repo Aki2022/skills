@@ -173,8 +173,10 @@ kind 昇順・日付降順の表（kind・日付・リンク・`summary`）に�
   generated 領域は render が作る。`list_project.md` にだけある `partner`・`status` は frontmatter へ移す（key が無い、または空のとき）。frontmatter に別の値があって食い違うときは止まり、`--accept-list-changes` で list 側の値を捨てると決めたときだけ進み、捨てる値は dry-run に `LIST_VALUE_DROPPED` として列挙する。BOM 付きの project ノートは止まる（BOM を外してから）。旧 3 節は `validate` の必須見出しではなくなった。
 - **template_project.md**: 旧 3 節にコメント・placeholder 以外の内容（注意書きの本文等）があるときは自動では書き換えず `TEMPLATE_MANUAL` と報告する（人間が置き場所を決める）。
   コメントだけなら旧 3 節を外し、`partner:`・`scope:` と空の generated 領域を足す。捨てるコメントは `TEMPLATE_COMMENTS_DROPPED` として dry-run に出す。
+- **人が決める入力**: `--placeholder-label`（template の旧 3 節に無い空リンクの label を placeholder と決める）・`--template-from`（template の新しい本文。旧 3 節に人が置き場所を決める本文があって `TEMPLATE_MANUAL` になるときのために使うが、どの template にも使える。旧 3 節が残っているもの・ローカルの絶対パスを含むものは拒否。`partner`・`scope`・generated 領域は足し、`TEMPLATE_REPLACED` と報告）・
+  `--add-frontmatter`（frontmatter の無い note に title・date だけの frontmatter を付ける。path は実体の綴りで読み、symlink を通るものと project/・setting/・隠しディレクトリは拒否する。中身は推測しない。`FRONTMATTER_ADDED` / 既にあれば `FRONTMATTER_PRESENT`）。どれもプランに入り、PLAN_ID が変わる。
 - **render**: 上の結果（generated 領域・`list_project.md`・`--raycast-script`）を同じ batch に含める。適用後に `render` は no-op になる。
-- **書かないもの**: frontmatter の無い note には frontmatter を作らない（行は `## migrated notes` に残す）。project を名乗らない UTF-8 でない note は警告して飛ばす（project を名乗るものは止まる）。
+- **書かないもの**: frontmatter の無い note には、既定では frontmatter を作らない（`--add-frontmatter` で人が名指ししたものだけ、title と date を付ける）（行は `## migrated notes` に残す）。project を名乗らない UTF-8 でない note は警告して飛ばす（project を名乗るものは止まる）。
 
 ## Evidence and uncertainty
 

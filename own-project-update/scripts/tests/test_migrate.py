@@ -1004,3 +1004,249 @@ def test_an_empty_link_label_written_inside_a_template_comment_counts_as_a_place
     edit(note, "## minutes\n", "## documents\n\n- [ローカル資料]()\n\n## minutes\n")
     assert apply_it(old_vault, capsys) == 0
     assert "ローカル資料" not in note.read_text(encoding="utf-8")
+
+
+# ---- 人間が決める入力: --placeholder-label / --template-from / --add-frontmatter -------------------------
+
+
+def test_a_placeholder_label_named_by_the_human_is_dropped(old_vault: Path, capsys) -> None:
+    note = old_vault / "project/project_proj_b.md"
+    edit(note, "## minutes\n", "## documents\n\n- [旧メモ]()\n- [契約書の保管場所]()\n\n## minutes\n")
+    assert migrate(old_vault) == 0  # 決めていないうちは、template に無い label の空リンクは残る
+    capsys.readouterr()
+    assert apply_it(old_vault, capsys, "--placeholder-label", "旧メモ") == 0
+    kept = migrated_notes(note)
+    assert "[旧メモ]()" not in kept and "[契約書の保管場所]()" in kept  # 決めていない label は残る
+
+
+def test_the_placeholder_label_is_part_of_the_plan_so_the_apply_must_repeat_it(old_vault: Path, capsys) -> None:
+    note = old_vault / "project/project_proj_b.md"
+    edit(note, "## minutes\n", "## documents\n\n- [旧メモ]()\n\n## minutes\n")
+    assert migrate(old_vault, "--placeholder-label", "旧メモ") == 0
+    pid = plan_id(capsys)
+    assert migrate(old_vault, "--apply", "--plan-id", pid) == 2  # 付け忘れたら別のプラン（CONFLICT）
+
+
+NEW_TEMPLATE = """---
+title:
+project:
+client:
+client_aliases: []
+status: active
+started:
+last_updated:
+tags:
+  - project
+---
+
+# {{project}}
+
+<!-- ローカルの絶対パスを書かないこと（vibe-guard が vault 全体のバックアップを止める）。資料へのリンクは vault からの相対パス・URL -->
+
+## overview
+
+- 案件の一言説明:
+"""
+
+
+def write_template_source(tmp_path: Path, text: str = NEW_TEMPLATE) -> Path:
+    path = tmp_path / "new_template.md"
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def test_template_from_replaces_the_template_and_still_adds_partner_scope_and_the_region(old_vault: Path, tmp_path: Path, capsys) -> None:
+    tmpl = old_vault / "setting/template/template_project.md"
+    edit(tmpl, "<!-- 他クライアントの議事録 -->", "<!-- 他クライアントの議事録 -->\n\n手で書いた注意書き（旧節の中の本文）")  # 旧節に本文があり TEMPLATE_MANUAL になる状態
+    assert migrate(old_vault) == 0
+    assert "TEMPLATE_MANUAL" in capsys.readouterr().out
+    source = write_template_source(tmp_path)
+    assert apply_it(old_vault, capsys, "--template-from", str(source)) == 0
+    text = tmpl.read_text(encoding="utf-8")
+    assert "ローカルの絶対パスを書かないこと" in text and "## minutes" not in text and "## documents" not in text
+    assert "partner:" in text and "scope:" in text and "generated:associated-notes begin" in text
+    capsys.readouterr()
+    assert migrate(old_vault, "--template-from", str(source)) == 0
+    assert "NOOP no migration changes required" in capsys.readouterr().out
+
+
+def test_template_from_refuses_a_file_that_still_has_the_old_sections_or_a_local_path(old_vault: Path, tmp_path: Path) -> None:
+    before = snapshot(old_vault)
+    assert migrate(old_vault, "--template-from", str(write_template_source(tmp_path, NEW_TEMPLATE + "\n## minutes\n"))) in (2, 3)
+    local = "/" + "Users" + "/someone/doc.md"
+    assert migrate(old_vault, "--template-from", str(write_template_source(tmp_path, NEW_TEMPLATE + f"\n{local}\n"))) in (2, 3)
+    assert snapshot(old_vault) == before
+
+
+def test_template_from_refuses_a_vault_without_a_template(old_vault: Path, tmp_path: Path) -> None:
+    (old_vault / "setting/template/template_project.md").unlink()
+    assert migrate(old_vault, "--template-from", str(write_template_source(tmp_path))) in (2, 3)
+
+
+def test_add_frontmatter_gives_a_frontmatter_less_note_a_title_and_a_date_and_lets_its_row_associate(old_vault: Path, capsys) -> None:
+    (old_vault / "record/20260728_メモ.md").write_text("## 経緯\n\n- 本文。\n", encoding="utf-8")
+    (old_vault / "record/メモ日付なし.md").write_text("本文だけ。\n", encoding="utf-8")
+    note = old_vault / "project/project_proj_b.md"
+    edit(note, "| 2026-05-01 | [r4](../record/r4.md) | B の議題 |", "| 2026-05-01 | [r4](../record/r4.md) | B の議題 |\n| 2026-07-28 | [20260728_メモ](../record/20260728_メモ.md) | メモの議題 |")
+    assert migrate(old_vault) == 0
+    assert "UNLINKED_ROW" in capsys.readouterr().out  # 付けなければ今までどおり残るだけ
+    assert apply_it(old_vault, capsys, "--add-frontmatter", "record/20260728_メモ.md", "--add-frontmatter", "record/メモ日付なし.md") == 0
+    first = old_vault / "record/20260728_メモ.md"
+    data = fm(first)
+    assert data["title"] == "20260728_メモ" and str(data["date"]) == "2026-07-28"
+    assert data["project"] == ["proj_b"] and data["summary"] == "メモの議題"
+    assert body(first).endswith("## 経緯\n\n- 本文。\n")  # 本文はそのまま
+    second = old_vault / "record/メモ日付なし.md"
+    assert fm(second) == {"title": "メモ日付なし"}  # 日付はファイル名に無いので作らない
+    assert second.read_text(encoding="utf-8").endswith("本文だけ。\n")
+    capsys.readouterr()
+    assert migrate(old_vault, "--add-frontmatter", "record/20260728_メモ.md", "--add-frontmatter", "record/メモ日付なし.md") == 0  # 再実行は no-op
+    assert "NOOP no migration changes required" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("bad", ["record/missing.md", "../outside.md", "project/project_proj_a.md", "record"])
+def test_add_frontmatter_refuses_a_note_that_is_missing_or_is_outside(old_vault: Path, bad: str) -> None:
+    before = snapshot(old_vault)
+    assert migrate(old_vault, "--add-frontmatter", bad) in (2, 3)
+    assert snapshot(old_vault) == before
+
+
+def test_add_frontmatter_skips_a_note_that_already_has_one_and_says_so(old_vault: Path, capsys) -> None:
+    assert migrate(old_vault, "--add-frontmatter", "record/r1.md") == 0
+    out = capsys.readouterr().out
+    assert "FRONTMATTER_PRESENT record/r1.md" in out and "FRONTMATTER_ADDED" not in out
+
+
+def test_add_frontmatter_never_touches_an_existing_file_outside_the_vault(old_vault: Path, tmp_path: Path) -> None:
+    outside = tmp_path / "outside.md"
+    outside.write_text("外の note。\n", encoding="utf-8")
+    for arg in ("../outside.md", str(outside)):
+        assert migrate(old_vault, "--add-frontmatter", arg) in (2, 3)
+    assert outside.read_text(encoding="utf-8") == "外の note。\n"
+
+
+# ---- 独立レビュー（PR #34）の指摘 -------------------------------------------------------------------
+
+
+def named(vault: Path, rel: str, content: bytes) -> Path:
+    path = vault / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(content)
+    return path
+
+
+def test_add_frontmatter_refuses_a_path_that_goes_through_a_symlinked_directory(old_vault: Path, tmp_path: Path) -> None:
+    (old_vault / "record/pl").symlink_to(old_vault / "project", target_is_directory=True)
+    named(old_vault, "project/README.md", b"project dir doc\n")
+    outside = tmp_path / "ext"
+    outside.mkdir()
+    (outside / "x.md").write_text("外。\n", encoding="utf-8")
+    (old_vault / "record/ext").symlink_to(outside, target_is_directory=True)
+    for rel in ("record/pl/README.md", "record/ext/x.md"):
+        before = snapshot(old_vault)
+        assert migrate(old_vault, "--add-frontmatter", rel) == 3  # 例外（traceback）にせず、検査で止める
+        assert snapshot(old_vault) == before
+    assert (outside / "x.md").read_text(encoding="utf-8") == "外。\n"
+
+
+@pytest.mark.parametrize("rel", ["Project/README.md", "SETTING/x.md", "record/.hidden/x.md"])
+def test_add_frontmatter_guards_use_the_names_on_disk_not_the_spelling_typed(old_vault: Path, rel: str) -> None:
+    named(old_vault, "project/README.md", b"doc\n")
+    named(old_vault, "setting/x.md", b"doc\n")
+    named(old_vault, "record/.hidden/x.md", b"doc\n")
+    before = snapshot(old_vault)
+    assert migrate(old_vault, "--add-frontmatter", rel) == 3
+    assert snapshot(old_vault) == before
+
+
+def test_add_frontmatter_takes_the_title_and_the_association_from_the_name_on_disk(old_vault: Path, capsys) -> None:
+    named(old_vault, "record/20260728_Memo.md", "本文。\n".encode())
+    note = old_vault / "project/project_proj_b.md"
+    edit(note, "| 2026-05-01 | [r4](../record/r4.md) | B の議題 |", "| 2026-05-01 | [r4](../record/r4.md) | B の議題 |\n| 2026-07-28 | [20260728_Memo](../record/20260728_Memo.md) | メモ |")
+    assert apply_it(old_vault, capsys, "--add-frontmatter", "record/20260728_MEMO.md") == 0  # 綴り（大文字小文字）が違っても同じファイル
+    data = fm(old_vault / "record/20260728_Memo.md")
+    assert data["title"] == "20260728_Memo" and data["project"] == ["proj_b"]
+
+
+def test_a_title_that_cannot_round_trip_through_yaml_is_refused_not_a_crash(old_vault: Path) -> None:
+    named(old_vault, "record/a b.md", "本文。\n".encode())
+    before = snapshot(old_vault)
+    assert migrate(old_vault, "--add-frontmatter", "record/a b.md") == 3
+    assert snapshot(old_vault) == before
+
+
+@pytest.mark.parametrize(
+    "name, content, expect_date",
+    [
+        ("20261340_x.md", "本文\n", None),  # 存在しない日付は付けない
+        ("20260728_crlf.md", "行 1\r\n行 2\r\n", "2026-07-28"),
+        ("20260728_empty.md", "", "2026-07-28"),
+    ],
+)
+def test_add_frontmatter_edge_cases_keep_the_body_byte_for_byte(old_vault: Path, capsys, name: str, content: str, expect_date: str | None) -> None:
+    path = named(old_vault, f"record/{name}", content.encode())
+    assert apply_it(old_vault, capsys, "--add-frontmatter", f"record/{name}") == 0
+    raw = path.read_bytes().decode("utf-8")
+    assert raw.endswith(content)
+    data = yaml.safe_load(raw.split("---", 2)[1])
+    assert (str(data.get("date")) if "date" in data else None) == expect_date
+    if "\r\n" in content:
+        assert "\r\n" in raw.split("---", 2)[1]  # frontmatter も CRLF
+
+
+def test_a_note_that_starts_with_a_horizontal_rule_is_left_alone_with_an_honest_message(old_vault: Path, capsys) -> None:
+    path = named(old_vault, "record/rule.md", "---\n区切り線で始まる本文\n".encode())
+    assert migrate(old_vault, "--add-frontmatter", "record/rule.md") == 0
+    out = capsys.readouterr().out
+    assert "FRONTMATTER_PRESENT record/rule.md" in out and "starts like a frontmatter" in out
+    assert path.read_bytes() == "---\n区切り線で始まる本文\n".encode()
+
+
+@pytest.mark.parametrize("kind", ["bom", "symlink", "non_utf8"])
+def test_add_frontmatter_refuses_a_bom_a_symlinked_note_and_a_non_utf8_note(old_vault: Path, tmp_path: Path, kind: str) -> None:
+    if kind == "bom":
+        named(old_vault, "record/x.md", b"\xef\xbb\xbfbody\n")
+    elif kind == "non_utf8":
+        named(old_vault, "record/x.md", b"\xff\xfe body\n")
+    else:
+        target = tmp_path / "t.md"
+        target.write_text("t\n", encoding="utf-8")
+        (old_vault / "record/x.md").symlink_to(target)
+    before = snapshot(old_vault)
+    assert migrate(old_vault, "--add-frontmatter", "record/x.md") == 3
+    assert snapshot(old_vault) == before
+
+
+def test_template_from_refuses_a_bom_and_unbalanced_region_markers(old_vault: Path, tmp_path: Path) -> None:
+    before = snapshot(old_vault)
+    bom = tmp_path / "bom.md"
+    bom.write_bytes(b"\xef\xbb\xbf" + NEW_TEMPLATE.encode())
+    assert migrate(old_vault, "--template-from", str(bom)) == 3
+    for body in ("<!-- generated:associated-notes begin -->\n", "<!-- generated:associated-notes end -->\n<!-- generated:associated-notes begin -->\n", "<!-- generated:associated-notes begin -->\n<!-- generated:associated-notes end -->\n" * 2):
+        assert migrate(old_vault, "--template-from", str(write_template_source(tmp_path, NEW_TEMPLATE + "\n" + body))) == 3
+    assert snapshot(old_vault) == before
+
+
+def test_template_from_keeps_dropping_the_project_comments_equal_to_the_old_templates_and_reports(old_vault: Path, tmp_path: Path, capsys) -> None:
+    note = old_vault / "project/project_proj_b.md"
+    edit(note, "## minutes\n", "## minutes\n\n<!-- 新しい順。 -->\n")  # 旧 template の旧節にあるコメントと同文
+    assert apply_it(old_vault, capsys, "--template-from", str(write_template_source(tmp_path))) == 0
+    assert "新しい順" not in note.read_text(encoding="utf-8")
+    assert migrate(old_vault, "--template-from", str(write_template_source(tmp_path))) == 0
+
+
+def test_template_replaced_is_reported_and_an_unused_placeholder_label_is_reported(old_vault: Path, tmp_path: Path, capsys) -> None:
+    assert migrate(old_vault, "--template-from", str(write_template_source(tmp_path)), "--placeholder-label", "誤字のラベル") == 0
+    out = capsys.readouterr().out
+    assert "TEMPLATE_REPLACED" in out and "PLACEHOLDER_LABEL_UNUSED 誤字のラベル" in out
+
+
+def test_a_blank_placeholder_label_is_refused(old_vault: Path) -> None:
+    assert migrate(old_vault, "--placeholder-label", "  ") in (2, 3)
+
+
+def test_the_label_is_matched_after_stripping_whitespace(old_vault: Path, capsys) -> None:
+    note = old_vault / "project/project_proj_b.md"
+    edit(note, "## minutes\n", "## documents\n\n- [旧メモ]()\n\n## minutes\n")
+    assert apply_it(old_vault, capsys, "--placeholder-label", " 旧メモ ") == 0
+    assert "旧メモ" not in note.read_text(encoding="utf-8")

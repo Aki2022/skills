@@ -1717,6 +1717,24 @@ def build_subcommand_parser() -> argparse.ArgumentParser:
     )
     migrate_cmd.add_argument("--raycast-script", type=Path, help="Also regenerate this Raycast script's dropdown line")
     migrate_cmd.add_argument(
+        "--placeholder-label",
+        action="append",
+        metavar="LABEL",
+        help="an empty link `[LABEL]()` that is a placeholder, not information (repeatable; the labels the template uses are already known)",
+    )
+    migrate_cmd.add_argument(
+        "--template-from",
+        type=Path,
+        metavar="FILE",
+        help="the new text of template_project.md (no old sections; partner/scope/region are still added); use when the old sections hold text only a human can place",
+    )
+    migrate_cmd.add_argument(
+        "--add-frontmatter",
+        action="append",
+        metavar="REL_PATH",
+        help="give this vault-relative, frontmatter-less note a minimal frontmatter (title from the file name, date from a YYYYMMDD_ prefix) so it can be associated (repeatable)",
+    )
+    migrate_cmd.add_argument(
         "--accept-list-changes", action="store_true", help="Let the regenerated list_project.md drop what render cannot reproduce"
     )
 

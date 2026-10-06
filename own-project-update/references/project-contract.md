@@ -150,24 +150,28 @@ kind 昇順・日付降順の表（kind・日付・リンク・`summary`）に�
 ## Migration (migrate)
 
 既存 vault を新契約へ 1 回で移す。夜間 job では行わない。`migrate` は dry-run が既定で、`--apply` は dry-run が出した `PLAN_ID` を
-`--plan-id` で渡したときだけ書く（人間が見た差分と書く内容を一致させる。vault が変わっていれば CONFLICT）。`--diff-dir <path>`（vault の外）に
-ファイルごとの unified diff と `SUMMARY.md` を出す。変更が無ければ `NOOP`（再実行も no-op）。書く batch は全部元に戻せる（render と同じ）。
+`--plan-id` で渡したときだけ書く（人間が見た差分と書く内容を一致させる。vault が変わっていれば CONFLICT）。`--diff-dir <path>`（vault の外。中や、vault を含む場所は拒否。前回の `.diff` は消す）に
+ファイルごとの unified diff（改行だけの変更も出る）と `SUMMARY.md` を出す。`--plan-id` は `--apply` と一緒のときだけ使える。変更が無ければ `NOOP`（再実行も no-op）。書く batch は全部元に戻せる（render と同じ）。
 
-- **record**（`vault/record/*.md`）: `project` を常にリストにし、出所が無ければ `project_source: legacy` を付ける。project ノートの旧 3 節
+- **record**（vault 内の `.md` で `project` を持つもの。`record/` 直下に限らず、`presentation/` や `record/` の下位ディレクトリも）: `project` を常にリストにし（出所があっても、スカラーなら書き換える）、出所が無ければ `project_source: legacy` を付ける。project ノートの旧 3 節
   （`## minutes` の表・`## documents` の vault 内リンク）に載っている record・資料は、その project に属する証拠として `legacy` で紐付ける（既存の所属は保持して追加）。
-  minutes の topics は、record に summary が無いときだけ `summary` に移す（既存の summary は上書きせず `SUMMARY_KEPT` と報告）。
+  minutes の topics は、record に summary が無いときだけ `summary` に移す（既存の summary は上書きせず `SUMMARY_KEPT` と報告）。summary にならなかった topics（2 つ目以降の行・
+  手書き summary と違うもの）・日付・topics 以外の列がある行、表の日付が record の日付と違う行は、情報を落とさないよう**行ごと** `## migrated notes` に残し `ROW_KEPT` と報告する。
   backlink は所属 project ごとに 1 行・本文の先頭へ正規形で 1 本化する（本文の途中にあるもの・`project\_<key>` のようにエスケープされたものも取り込む）。
-  frontmatter の `project` と backlink が食い違う record（旧運用では backlink だけの record がある）は和集合を `legacy` で補修し、`REPAIRED_RECORD` として必ず報告する。
+  frontmatter の `project` と backlink が食い違う record（旧運用では backlink だけの record がある）は和集合を `legacy` で補修し、`REPAIRED_RECORD` として必ず報告する（backlink が足りないだけなら `ADDED_BACKLINK`）。
   崩れた backlink・YAML コメントのある `project` 行は止まる。
 - **related notes**: `## related notes` の項目は「言及」であって所属ではないので、**既定では紐付けず原文のまま残す**（紐付けると言及しただけの record の日付が
   last meeting に入る）。`--related-notes associate` を選んだときだけ `legacy` で紐付ける。
 - **project ノート**: 旧 3 節を取り除く。表現できない内容（引用メモ・外部リンク・related notes の項目・実体や frontmatter の無い record の行）は消さずに
-  `## migrated notes`（`### from <旧節>`）へ原文のまま移す。空リンク（`[local]()`）・中身のない `-`・template の注釈コメントは placeholder として捨てる。
-  generated 領域は render が作る。`list_project.md` にだけある `partner`・`status` は frontmatter へ移す。旧 3 節は `validate` の必須見出しではなくなった。
-- **template_project.md**: 旧 3 節に placeholder 以外の内容（注意書きのコメント等）があるときは自動では書き換えず `TEMPLATE_MANUAL` と報告する（人間が置き場所を決める）。
-  無ければ旧 3 節を外し、`partner:`・`scope:` と空の generated 領域を足す。
+  `## migrated notes`（`### from <旧節>`）へ原文のまま移す（空行・コードブロックも原文のまま。既に `## migrated notes` があればその末尾に足す）。旧節の見出しは
+  `## minutes (2026)`・`### minutes`・大文字小文字違いも旧節。空リンク（`[local]()`）・中身のない `-` は placeholder として捨てる。HTML コメントは、template の旧 3 節にあるものと
+  同じ文面のときだけ placeholder として捨て、それ以外（人が書いたもの）は残す。旧 3 節に既にある generated 領域は render が作り直す（begin/end が片方だけなら止まる）。
+  リンクの `#anchor`・`?query`・`<…>` 形・ファイル名の `(1)` は解決する。解決できない行は `UNLINKED_ROW` として残す。
+  generated 領域は render が作る。`list_project.md` にだけある `partner`・`status` は frontmatter へ移す（key が無い、または空のとき）。frontmatter に別の値があって食い違うときは止まり、`--accept-list-changes` で list 側の値を捨てると決めたときだけ進む。BOM 付きの project ノートは止まる（BOM を外してから）。旧 3 節は `validate` の必須見出しではなくなった。
+- **template_project.md**: 旧 3 節にコメント・placeholder 以外の内容（注意書きの本文等）があるときは自動では書き換えず `TEMPLATE_MANUAL` と報告する（人間が置き場所を決める）。
+  コメントだけなら旧 3 節を外し、`partner:`・`scope:` と空の generated 領域を足す。捨てるコメントは `TEMPLATE_COMMENTS_DROPPED` として dry-run に出す。
 - **render**: 上の結果（generated 領域・`list_project.md`・`--raycast-script`）を同じ batch に含める。適用後に `render` は no-op になる。
-- **書かないもの**: frontmatter の無い note には frontmatter を作らない（行は `## migrated notes` に残す）。UTF-8 でない note は警告して飛ばす。
+- **書かないもの**: frontmatter の無い note には frontmatter を作らない（行は `## migrated notes` に残す）。project を名乗らない UTF-8 でない note は警告して飛ばす（project を名乗るものは止まる）。
 
 ## Evidence and uncertainty
 

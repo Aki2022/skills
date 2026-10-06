@@ -128,14 +128,15 @@ python3 scripts/project_update.py attach-document --vault <vault-root> \
 ## migrate（既存 vault を新契約へ・1 回だけ）
 
 ```text
-python3 scripts/project_update.py migrate --vault <vault-root> --diff-dir <vault の外のディレクトリ> [--related-notes keep|associate] [--raycast-script <path>]
+python3 scripts/project_update.py migrate --vault <vault-root> --diff-dir <vault の外のディレクトリ> [--related-notes keep|associate] [--raycast-script <path>] [--accept-list-changes]
 # dry-run が既定。出力の PLAN_ID と --diff-dir の差分を人間が確認し、同じ引数で:
 python3 scripts/project_update.py migrate --vault <vault-root> --apply --plan-id <PLAN_ID>
 ```
 
-- 夜間 job では実行しない。`--apply` は人間が見たプラン（`PLAN_ID`）だけを書く。差分は vault の外に出す（vault の内容を含むので git に入れない）。
-- 何をどう移すか・何を残すか・何を止めるかは [references/project-contract.md](references/project-contract.md) の Migration。`REPAIRED_RECORD`・
-  `MISSING_RECORD`・`SUMMARY_KEPT`・`TEMPLATE_MANUAL` は人間が見る項目。
+- 夜間 job では実行しない。`--apply` は人間が見たプラン（`PLAN_ID`）だけを書く。差分は vault の外に出す（vault の内容を含むので git に入れない。vault の中・vault を含む場所・別の用途で使っている空でないディレクトリは拒否し、前回の `.diff` は消す）。
+- `--accept-list-changes` は `list_project.md` にしか無い値（frontmatter と食い違う partner・status・より新しい last meeting）を捨てて render と同じ形に揃える指定。既定では止まる。dry-run で何が落ちるか見てから付ける。
+- 何をどう移すか・何を残すか・何を止めるかは [references/project-contract.md](references/project-contract.md) の Migration。`REPAIRED_RECORD`・`ADDED_BACKLINK`・
+  `UNLINKED_ROW`・`ROW_KEPT`・`SUMMARY_KEPT`・`TEMPLATE_COMMENTS_DROPPED`・`TEMPLATE_MANUAL` は人間が見る項目。
 
 ## 必須の検査
 

@@ -55,6 +55,13 @@ class ValidationError(ProjectUpdateError):
 _BACKLINK_RE = re.compile(
     r"^>\s*project:\s*\[project\\?_(?P<label>[^\]]+)\]\(\.\./project/project_(?P<link>[^)]+)\.md\)\s*$"
 )
+
+
+def _backlink_label(match: re.Match[str]) -> str:
+    """The label of a backlink with Markdown's `\\_` escapes undone (`project\\_a\\_b` names the key `a_b`)."""
+    return match.group("label").replace("\\_", "_")
+
+
 _PROJECT_LINE_RE = re.compile(r"^\s*project\s*:")
 _LOCAL_PATH_RE = re.compile(r"(?:^|[\s(])/(?:Users|private|Volumes)/|file://")
 _REQUIRED_HEADINGS = (
@@ -161,10 +168,10 @@ def _backlink_names(text: str) -> tuple[list[str], bool]:
         if not line.lstrip().startswith("> project:"):
             continue
         match = _BACKLINK_RE.match(line)
-        if match is None or match.group("label") != match.group("link"):
+        if match is None or _backlink_label(match) != match.group("link"):
             malformed = True
             continue
-        names.append(match.group("label"))
+        names.append(_backlink_label(match))
     return names, malformed
 
 
@@ -199,9 +206,9 @@ def _leading_backlink_lines(note: Note) -> list[str]:
         if not line.strip():
             continue
         match = _BACKLINK_RE.match(line)
-        if match is None or match.group("label") != match.group("link"):
+        if match is None or _backlink_label(match) != match.group("link"):
             break
-        found.append(match.group("label"))
+        found.append(_backlink_label(match))
     return found
 
 
@@ -226,7 +233,7 @@ def _body_without_backlinks(note: Note) -> str:
             index += 1
             continue
         match = _BACKLINK_RE.match(stripped)
-        if match is None or match.group("label") != match.group("link"):
+        if match is None or _backlink_label(match) != match.group("link"):
             break
         index += 1
     return "".join(lines[index:])
@@ -718,8 +725,8 @@ def _link_target(vault: Path, path: Path) -> str:
     return f"<{rel}>" if re.search(r"[\s()]", rel) else rel
 
 
-def _collect_associations(vault: Path, overlay: dict[Path, str]) -> dict[str, list[tuple[_Row, str]]]:
-    """Group every associated note by project key, reading each note once."""
+def _walk_markdown(vault: Path) -> list[Path]:
+    """Every `.md` render reads: not hidden, not under project/ or setting/, symlinked directories not followed."""
     paths: list[Path] = []
     for dirpath, dirnames, filenames in os.walk(vault):
         top = Path(dirpath) == vault
@@ -729,6 +736,12 @@ def _collect_associations(vault: Path, overlay: dict[Path, str]) -> dict[str, li
         for filename in sorted(filenames):
             if filename.endswith(".md") and not filename.startswith("."):
                 paths.append(Path(dirpath) / filename)
+    return paths
+
+
+def _collect_associations(vault: Path, overlay: dict[Path, str]) -> dict[str, list[tuple[_Row, str]]]:
+    """Group every associated note by project key, reading each note once."""
+    paths = _walk_markdown(vault)
     known = set(paths)
     for extra in sorted(overlay):
         rel_parts = extra.relative_to(vault).parts
@@ -1004,7 +1017,7 @@ def _list_losses(existing_text: str, rows: list[_ProjectRow]) -> list[str]:
         if cell("status") and cell("status").lower() != row.status.lower():
             losses.append(f"{name}: status {cell('status')!r} is not in the project note frontmatter")
         if cell("partner") and _normalised_set(cell("partner")) != _normalised_set(row.partner):
-            losses.append(f"{name}: partner {cell('partner')!r} is not in the project note frontmatter (run migrate first)")
+            losses.append(f"{name}: partner {cell('partner')!r} is not in the project note frontmatter (set it in the project note frontmatter, or pass --accept-list-changes to drop it)")
         old_date = cell("last meeting")
         if old_date and old_date != row.last_meeting:
             if not _valid_iso_date(old_date):
@@ -1189,9 +1202,9 @@ def _split_body(note: Note) -> tuple[list[str], str]:
             index += 1
             continue
         match = _BACKLINK_RE.match(lines[index])
-        if match is None or match.group("label") != match.group("link"):
+        if match is None or _backlink_label(match) != match.group("link"):
             break
-        names.append(match.group("label"))
+        names.append(_backlink_label(match))
         index += 1
     return names, "\n".join(lines[index:])
 

@@ -114,6 +114,18 @@ class GeneratedBlockTest(unittest.TestCase):
         self.assertEqual(ownership.read_block(updated, "split-issues"), ["- row"])
 
 
+class WorkstreamReadmeOwnershipTest(unittest.TestCase):
+    def test_workstreams_readme_is_not_loaded_as_a_workstream(self):
+        root = make_repo()
+        (root / "docs/workstreams/README.md").write_text(
+            "# Workstreams\n\nThis file explains the directory.\n"
+        )
+
+        model = ownership.load_model(root, VALIDATOR.parse_front_matter)
+
+        self.assertNotIn("README", model.workstreams)
+
+
 class IssueOwnershipValidationTest(unittest.TestCase):
     def test_post_rollout_issue_without_workstream_is_an_error_on_the_issue(self):
         root = make_repo()

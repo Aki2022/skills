@@ -29,8 +29,8 @@ from pathlib import Path
 
 P = None  # project_update モジュール（cmd_migrate が設定する）
 
-_HEADING_RE = re.compile(r"^(#{2,6})\s+(.+?)\s*$")
-_FENCE_RE = re.compile(r"^\s{0,3}(`{3,}|~{3,})")
+_HEADING_RE = re.compile(r"^ {0,3}(#{1,6})\s+(.+?)(?:\s+#+)?\s*$")
+_FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})")  # リスト内のインデントされたコードブロックも fence
 # `[text](target "title")` / `[text](<target with spaces>)` / ファイル名に `(1)` を含む target
 _LINK_RE = re.compile(r"\[([^\]]*)\]\(\s*(?:<([^>]*)>|((?:[^()\s]|\([^()]*\))*))[^)]*\)")
 _LIST_ITEM_RE = re.compile(r"^\s*[-*]\s+(.*)$")
@@ -44,15 +44,29 @@ class _Raw(str):
 
 
 @dataclass
+class _Ref:
+    """行ごと残すかを後で決める 1 行（minutes の行・documents の項目）。reasons が空なら全部表現できたので消える。"""
+
+    row: str
+    reasons: list[str] = field(default_factory=list)
+
+
+@dataclass
+class _Head:
+    """表の見出し行と区切り行。その表の行が 1 つでも残るときだけ、その前に書く。"""
+
+    lines: list[str]
+
+
+@dataclass
 class _Assoc:
     path: Path
     key: str
     topics: str | None
     source: str  # minutes / related notes / documents
-    row: str = ""  # minutes の元の行（残すときに使う）
+    ref: _Ref | None = None
     date: str = ""
-    extra: bool = False  # date / minutes / topics の外に列がある
-    keep: bool = False  # 行ごと `## migrated notes` に残す
+    label: str = ""
 
 
 @dataclass
@@ -89,6 +103,8 @@ def _resolve(vault: Path, base: Path, target: str) -> Path | None:
         relative = path.relative_to(vault.resolve())
     except ValueError:
         return None
+    if any(part.startswith(".") for part in relative.parts):
+        return None  # .trash など。render は隠しディレクトリを読まないので、紐付けても見えない
     if path.suffix.lower() != ".md" or not path.is_file():
         return None
     if relative.parts[0] in ("project", "setting"):
@@ -130,34 +146,56 @@ def _old_title(title: str) -> str | None:
     return base if base in _TARGETS else None
 
 
-def _section_ends(lines: list[str], heads: list[tuple[int, int, str]], n: int) -> int:
-    index, level, _ = heads[n]
+def _section_end(lines: list[str], heads: list[tuple[int, int, str]], n: int) -> int:
+    _, level, _ = heads[n]
     return next((h[0] for h in heads[n + 1 :] if h[1] <= level), len(lines))
 
 
-def _old_sections(lines: list[str], fenced: list[bool]) -> list[tuple[str, int, int]]:
-    """(normalised title, start, end) of the old minutes / related notes / documents sections.
+def _old_sections(lines: list[str], fenced: list[bool]) -> list[tuple[str, int, int, list[tuple[str, int, int]]]]:
+    """(title, start, end, pieces) of the old minutes / related notes / documents sections.
 
-    `## minutes (2026)`・`### minutes`・大文字小文字違いも旧節。別の旧節の中に入れ子になっているものは親の一部として扱う。
+    `## minutes (2026)`・`### minutes`・大文字小文字違い・閉じ `##`・3 桁までのインデントも旧節。`# 見出し`（H1）は節を終わらせる。
+    別の旧節の中に入れ子になった旧節は、親の範囲から切り出した piece として自分の題で分類する（見出し行は捨てる）。
+    pieces は (題, 本文の開始行, 終了行) で、題ごとに分類する。
     """
     heads = _headings(lines, fenced)
-    out: list[tuple[str, int, int]] = []
+    out = []
     covered = 0
-    for n, (index, _level, title) in enumerate(heads):
+    for n, (index, level, title) in enumerate(heads):
         normal = _old_title(title)
-        if normal is None or index < covered:
+        if normal is None or level < 2 or index < covered:
             continue
-        end = _section_ends(lines, heads, n)
-        out.append((normal, index, end))
+        end = _section_end(lines, heads, n)
+        owner = {k: normal for k in range(index + 1, end)}
+        skip = set()
+        for m in range(n + 1, len(heads)):
+            h_index, h_level, h_title = heads[m]
+            if h_index >= end:
+                break
+            nested = _old_title(h_title)
+            if nested is not None and h_level >= 2:
+                skip.add(h_index)
+                for k in range(h_index + 1, _section_end(lines, heads, m)):
+                    owner[k] = nested
+        pieces: list[tuple[str, int, int]] = []
+        for k in range(index + 1, end):
+            if k in skip:
+                continue
+            if pieces and pieces[-1][0] == owner[k] and pieces[-1][2] == k:
+                pieces[-1] = (owner[k], pieces[-1][1], k + 1)
+            else:
+                pieces.append((owner[k], k, k + 1))
+        out.append((normal, index, end, pieces))
         covered = end
     return out
 
 
-def _find_section(lines: list[str], fenced: list[bool], title: str) -> tuple[int, int] | None:
+def _find_section(lines: list[str], fenced: list[bool], title: str, secs) -> tuple[int, int] | None:
+    """The top-level (`##`) section with this title that is not inside an old section."""
     heads = _headings(lines, fenced)
-    for n, (index, _level, text) in enumerate(heads):
-        if text.lower() == title:
-            return index, _section_ends(lines, heads, n)
+    for n, (index, level, text) in enumerate(heads):
+        if level == 2 and text.lower() == title and not any(a <= index < b for _, a, b, _ in secs):
+            return index, _section_end(lines, heads, n)
     return None
 
 
@@ -176,9 +214,21 @@ def _norm_comment(text: str) -> str:
 @dataclass
 class _Classified:
     assoc: list[_Assoc] = field(default_factory=list)
-    preserve: list = field(default_factory=list)  # str / _Raw / _Assoc（行ごと残すかは後で決める）
+    preserve: list = field(default_factory=list)  # str / _Raw / _Ref / _Head
     dropped: int = 0
     comments: list[str] = field(default_factory=list)
+    refs: list[_Ref] = field(default_factory=list)
+
+
+def _is_dash_row(cells: list[str]) -> bool:
+    return bool(cells) and all(c.strip() and set(c.strip()) <= {"-", ":", " "} for c in cells)
+
+
+def _plain_link(match: re.Match[str], text: str) -> bool:
+    """`[label](target)` and nothing else (no title attribute, nothing around it)."""
+    inner = text[match.start() : match.end()]
+    inner = inner[inner.index("](") + 2 : -1].strip()
+    return match.span() == (0, len(text)) and inner == (f"<{match.group(2)}>" if match.group(2) is not None else match.group(3))
 
 
 def _classify_section(
@@ -238,64 +288,89 @@ def _classify_section(
             continue
         cells = P._table_cells(text)
         if cells is not None:
+            following = P._table_cells(body[i + 1].rstrip("\r\n")) if i + 1 < len(body) and not fenced[i + 1] else None
+            if following is not None and _is_dash_row(following) and not _is_dash_row(cells):
+                out.preserve.append(_Head([text, body[i + 1].rstrip("\r\n")]))
+                i += 2
+                continue
             i += 1
             if _is_separator(cells) or _is_empty_row(cells):
                 continue
             if [c.lower() for c in cells[:3]] == ["date", "minutes", "topics"]:
                 continue
-            link = _LINK_RE.search(cells[1]) if title == "minutes" and len(cells) >= 2 else None
-            target = _resolve(vault, note.path.parent, _target_of(link)) if link else None
-            if target is not None and rec_ok(target):
-                assoc = _Assoc(
-                    target, key, cells[2].strip() if len(cells) > 2 else "", "minutes",
-                    row=text, date=cells[0].strip(), extra=any(c.strip() for c in cells[3:]),
-                )
-                out.assoc.append(assoc)
-                out.preserve.append(assoc)
-            else:
+            links = list(_LINK_RE.finditer(cells[1])) if title == "minutes" and len(cells) >= 2 else []
+            found = [(m, _resolve(vault, note.path.parent, _target_of(m))) for m in links]
+            good = [(m, t) for m, t in found if t is not None and rec_ok(t)]
+            if not good:
                 out.preserve.append(text)
+                continue
+            ref = _Ref(text)
+            if any(c.strip() for c in cells[3:]):
+                ref.reasons.append("extra columns")
+            if len(found) != 1 or len(good) != 1 or not _plain_link(links[0], cells[1].strip()):
+                ref.reasons.append("the minutes cell has more than one link or other text")
+            for m, t in good:
+                out.assoc.append(_Assoc(t, key, cells[2].strip() if len(cells) > 2 else "", "minutes", ref, cells[0].strip(), m.group(1)))
+            out.refs.append(ref)
+            out.preserve.append(ref)
             continue
         i += 1
         item = _LIST_ITEM_RE.match(text)
         if item and title in ("related notes", "documents"):
-            link = _LINK_RE.search(item.group(1))
-            if link and not _target_of(link).strip():
-                out.dropped += 1  # `[local]()` のような空リンクのテンプレ placeholder。情報が無い
+            content = item.group(1).strip()
+            links = list(_LINK_RE.finditer(item.group(1)))
+            whole = _LINK_RE.fullmatch(content)
+            if whole is not None and not _target_of(whole).strip() and _plain_link(whole, content):
+                out.dropped += 1  # `[local]()` だけの行はテンプレの placeholder。情報が無い
                 continue
-            target = _resolve(vault, note.path.parent, _target_of(link)) if link else None
             if title == "related notes" and related == "keep":
                 out.preserve.append(text)  # 言及は所属ではない。既定では紐付けず原文のまま残す
                 continue
-            if target is not None and rec_ok(target):
-                out.assoc.append(_Assoc(target, key, None, title))
-                rest = item.group(1)[link.end() :].lstrip(" —–-:：\t").strip()
-                if rest:
-                    out.preserve.append(text)  # 説明文は record の summary ではない。原文のまま残す
+            found = [(m, _resolve(vault, note.path.parent, _target_of(m))) for m in links]
+            good = [(m, t) for m, t in found if t is not None and rec_ok(t)]
+            if good:
+                ref = _Ref(text)
+                if whole is None or not _plain_link(whole, content) or len(good) != 1:
+                    ref.reasons.append("the item has other text or more than one link")
+                for m, t in good:
+                    out.assoc.append(_Assoc(t, key, None, title, ref, "", m.group(1)))
+                out.refs.append(ref)
+                out.preserve.append(ref)
                 continue
         out.preserve.append(text)
     return out
 
 
 def _resolved(items: list) -> list[str]:
-    """The lines to write: kept rows resolved, plain blank runs collapsed, leading/trailing blanks trimmed."""
+    """The lines to write: kept rows resolved, tables headed, plain blank runs collapsed, leading/trailing blanks trimmed."""
     lines: list[str] = []
+    head: list[str] | None = None
     for item in items:
-        if isinstance(item, _Assoc):
-            if item.keep:
-                lines.append(item.row)
+        if isinstance(item, _Head):
+            head = item.lines
             continue
-        if type(item) is str and not item.strip():
+        if isinstance(item, _Ref):
+            if not item.reasons:
+                continue
+            text = item.row
+        elif type(item) is str and not item.strip():
+            head = None  # 表は空行で終わる
             if lines and lines[-1] != "":
                 lines.append("")
             continue
-        lines.append(item)
+        else:
+            text = item
+        if head is not None and text.lstrip().startswith("|"):
+            lines.extend(head)
+            head = None
+        lines.append(text)
     while lines and type(lines[-1]) is str and lines[-1] == "":
         lines.pop()
     return lines
 
 
 def _has_content(items: list) -> bool:
-    return any(isinstance(i, _Assoc) or i.strip() or type(i) is _Raw for i in items)
+    return any(isinstance(i, _Ref) or (not isinstance(i, _Head) and (i.strip() or type(i) is _Raw)) for i in items)
 
 
 def _rebuild_project_note(note, removed: list[tuple[int, int]], block: list[str], existing: tuple[int, int] | None = None) -> list[str]:
@@ -317,6 +392,8 @@ def _rebuild_project_note(note, removed: list[tuple[int, int]], block: list[str]
     ends = {end for _, end in removed}
     for index, line in enumerate(lines):
         if index == insert_at and block:
+            if out and not out[-1].endswith(("\n", "\r")):
+                out[-1] += nl
             if lead:
                 out.append(nl)
             out.extend(line_ + nl for line_ in block)
@@ -327,6 +404,8 @@ def _rebuild_project_note(note, removed: list[tuple[int, int]], block: list[str]
             out.append(nl)  # 取り除いた節の次の見出しの前に空行を 1 つ
         out.append(line)
     if insert_at == len(lines) and block:
+        if out and not out[-1].endswith(("\n", "\r")):
+            out[-1] += nl
         if lead:
             out.append(nl)
         out.extend(line_ + nl for line_ in block)
@@ -351,13 +430,22 @@ def _body_without_any_backlink(note) -> str:
     本文中の backlink 行は取り除き、先頭のブロックに 1 本化する（machine-derived な行で、手書きの本文ではない）。
     """
     kept = []
-    for line in note.lines[note.close_index + 1 :]:
-        match = P._BACKLINK_RE.match(line.strip())
+    fenced = _fenced_lines(note.lines)
+    for index, line in enumerate(note.lines):
+        if index <= note.close_index:
+            continue
+        match = None if fenced[index] else P._BACKLINK_RE.match(line.strip())
         if match is not None and P._backlink_label(match) == match.group("link"):
             continue
         kept.append(line)
     text = "".join(kept)
     return text.lstrip("\r\n") if text.strip() else text
+
+
+def _names_outside_fences(note) -> tuple[list[str], bool]:
+    """Backlink names of a record, ignoring backlink-looking lines inside code fences (examples, not memberships)."""
+    fenced = _fenced_lines(note.lines)
+    return P._backlink_names("".join(line for line, flag in zip(note.lines, fenced) if not flag))
 
 
 def _legacy_record_text(note, new_projects: list[str], source: str | None, summary: str | None, bom: bool = False) -> str:
@@ -446,11 +534,12 @@ def build_plan(vault: Path, raycast_script: Path | None, accept_list_changes: bo
         tsecs = _old_sections(tlines, tfenced)
         manual = False
         tcomments: list[str] = []
-        for title, start, end in tsecs:
-            cl = _classify_section(vault, tnote, None, title, tlines[start + 1 : end], tfenced[start + 1 : end], rec_ok, known_comments=None)
-            if cl.assoc or _has_content(cl.preserve):
-                manual = True
-            tcomments.extend(cl.comments)
+        for _title, _start, _end, pieces in tsecs:
+            for title, a, b in pieces:
+                cl = _classify_section(vault, tnote, None, title, tlines[a:b], tfenced[a:b], rec_ok, known_comments=None)
+                if cl.assoc or _has_content(cl.preserve):
+                    manual = True
+                tcomments.extend(cl.comments)
         known_comments = set(tcomments)
         tmpl = (tnote, tlines, tsecs, manual, tcomments)
 
@@ -471,6 +560,7 @@ def build_plan(vault: Path, raycast_script: Path | None, accept_list_changes: bo
             pass
 
     infos: list[dict] = []
+    refs: list[tuple[str, _Ref]] = []
     dropped_total = comments_total = missing = 0
     for key, path in P._project_note_targets(vault, None):
         _read_note_text(path)
@@ -479,17 +569,19 @@ def build_plan(vault: Path, raycast_script: Path | None, accept_list_changes: bo
         fenced = _fenced_lines(lines)
         secs = _old_sections(lines, fenced)
         preserved: dict[str, list] = {}
-        for title, start, end in secs:
-            cl = _classify_section(vault, note, key, title, lines[start + 1 : end], fenced[start + 1 : end], rec_ok, related, known_comments)
-            assocs.extend(cl.assoc)
-            dropped_total += cl.dropped
-            comments_total += len(cl.comments)
-            preserved.setdefault(title, []).extend(cl.preserve)
-            if title == "minutes":
-                for item in cl.preserve:
-                    if type(item) is str and item.startswith("|"):
-                        missing += 1
-                        report.add(f"UNLINKED_ROW {key}: row kept in migrated notes (record not found, not a note, or the link is not readable): {item.strip()[:80]}")
+        for _title, _start, _end, pieces in secs:
+            for title, a, b in pieces:
+                cl = _classify_section(vault, note, key, title, lines[a:b], fenced[a:b], rec_ok, related, known_comments)
+                assocs.extend(cl.assoc)
+                refs.extend((key, ref) for ref in cl.refs)
+                dropped_total += cl.dropped
+                comments_total += len(cl.comments)
+                preserved.setdefault(title, []).extend(cl.preserve)
+                if title == "minutes":
+                    for item in cl.preserve:
+                        if type(item) is str and item.startswith("|"):
+                            missing += 1
+                            report.add(f"UNLINKED_ROW {key}: row kept in migrated notes (record not found, not a note, or the link is not readable): {item.strip()[:80]}")
         infos.append({"key": key, "path": path, "note": note, "lines": lines, "fenced": fenced, "secs": secs, "preserved": preserved})
 
     # 4. record の更新（既存の所属を保持して追加・legacy・summary）
@@ -497,7 +589,7 @@ def build_plan(vault: Path, raycast_script: Path | None, accept_list_changes: bo
     for assoc in assocs:
         by_record.setdefault(assoc.path.resolve(), []).append(assoc)
     touched = set(by_record) | {p for p, n in records.items() if P._projects_of(n)}
-    updated_records = documents = kept_summaries = kept_rows = 0
+    updated_records = documents = kept_summaries = 0
     for rpath in sorted(touched):
         note = records.get(rpath)
         raw = raw_of.get(rpath)
@@ -511,7 +603,7 @@ def build_plan(vault: Path, raycast_script: Path | None, accept_list_changes: bo
                 report.add(f"WARN {rpath.relative_to(resolved_vault).as_posix()}: no frontmatter; cannot be associated, left alone")
                 continue
         projects = P._projects_of(note)
-        names, malformed = P._backlink_names(note.text)
+        names, malformed = _names_outside_fences(note)
         if malformed:
             raise P.ConflictError(f"{note.path.name}: an existing project backlink is malformed; fix it by hand")
         if len(set(names)) != len(names):
@@ -545,21 +637,19 @@ def build_plan(vault: Path, raycast_script: Path | None, accept_list_changes: bo
             kept_summaries += 1
             report.add(f"SUMMARY_KEPT {rpath.name}")
         final_summary = existing or summary or ""
+        title_of = str(note.data.get("title") or "").strip()
         for assoc in mine:
-            if assoc.source != "minutes":
+            if assoc.ref is None:
                 continue
-            reasons = []
             topic = _clean_topics(assoc.topics or "")
-            if assoc.extra:
-                reasons.append("extra columns")
-            if assoc.date and assoc.date != P._note_date(note):
-                reasons.append("date differs from the record")
-            if topic and topic != final_summary:
-                reasons.append("topic is not the summary")
-            if reasons:
-                assoc.keep = True
-                kept_rows += 1
-                report.add(f"ROW_KEPT {assoc.key}: {rpath.name}: " + ", ".join(reasons))
+            if assoc.source == "minutes":
+                if assoc.date and assoc.date != P._note_date(note):
+                    assoc.ref.reasons.append("date differs from the record")
+                if topic and topic != final_summary:
+                    assoc.ref.reasons.append("topic is not the summary")
+            label = assoc.label.strip()
+            if label and label not in {rpath.stem, title_of}:
+                assoc.ref.reasons.append("link label differs from the file name and the title")
         if (
             new_projects == P._projects_of(note)
             and isinstance(note.data.get("project"), list)
@@ -577,13 +667,19 @@ def build_plan(vault: Path, raycast_script: Path | None, accept_list_changes: bo
             if rpath.relative_to(resolved_vault).parts[0] != "record":
                 documents += 1
 
+    kept_rows = 0
+    for key, ref in refs:
+        if ref.reasons:
+            kept_rows += 1
+            report.add(f"ROW_KEPT {key}: {ref.row.strip()[:80]}: " + "; ".join(dict.fromkeys(ref.reasons)))
+
     # 5. project ノート本体（行ごと残すものが決まってから組み立てる）
     project_notes = len(infos)
     for info in infos:
         key, path, note, lines = info["key"], info["path"], info["note"], info["lines"]
-        removed = [(start, end) for _, start, end in info["secs"]]
+        removed = [(start, end) for _, start, end, _ in info["secs"]]
         block = _migrated_block(info["preserved"])
-        existing = _find_section(lines, info["fenced"], _MIGRATED)
+        existing = _find_section(lines, info["fenced"], _MIGRATED, info["secs"])
         new_lines = _rebuild_project_note(note, removed, block, existing) if removed else lines
         text = "".join(new_lines)
         # frontmatter: list_project.md にだけある partner / status を移す（frontmatter に無い、または空のとき）
@@ -612,7 +708,7 @@ def build_plan(vault: Path, raycast_script: Path | None, accept_list_changes: bo
             template_state = "MANUAL"
             report.add("TEMPLATE_MANUAL template_project.md has content in the old sections; edit it by hand")
         else:
-            lines2 = _rebuild_project_note(tnote, [(a, b) for _, a, b in tsecs], []) if tsecs else tlines
+            lines2 = _rebuild_project_note(tnote, [(a, b) for _, a, b, _ in tsecs], []) if tsecs else tlines
             text = "".join(lines2)
             parsed = P._parse_note_text(template, text)
             fm_lines = list(parsed.lines[1 : parsed.close_index])
@@ -640,6 +736,9 @@ def build_plan(vault: Path, raycast_script: Path | None, accept_list_changes: bo
         originals.setdefault(change.path, change.before)
     rows = P._project_rows(vault, grouped, overlay)
     list_change, list_changed = P._plan_list(vault, rows, accept_list_changes)
+    if accept_list_changes and list_change is not None and not list_change.created:
+        for loss in P._list_losses(list_change.before, rows):
+            report.add(f"LIST_VALUE_DROPPED {loss}")
     created: set[Path] = set()
     if list_change is not None:
         final[list_change.path] = list_change.after
@@ -681,6 +780,9 @@ def _plan_id(vault: Path, changes) -> str:
     return digest.hexdigest()[:16]
 
 
+_SUMMARY_TITLE = "# migrate dry-run summary"
+
+
 def _check_diff_dir(vault: Path, directory: Path) -> Path:
     """The diff directory must be outside the vault (private diffs, and a dry-run writes nothing in the vault)."""
     target = directory.expanduser().resolve()
@@ -690,9 +792,30 @@ def _check_diff_dir(vault: Path, directory: Path) -> Path:
     if target.exists():
         if not target.is_dir():
             raise P.ValidationError("--diff-dir is not a directory")
-        if any(target.iterdir()) and not (target / "SUMMARY.md").is_file():
+        summary = target / "SUMMARY.md"
+        if any(target.iterdir()) and not (
+            summary.is_file() and not summary.is_symlink() and summary.read_text(encoding="utf-8", errors="replace").startswith(_SUMMARY_TITLE)
+        ):
             raise P.ValidationError("--diff-dir is not empty and does not look like a previous migrate diff directory")
     return target
+
+
+def _previous_diffs(directory: Path) -> list[Path]:
+    """The `.diff` files the previous dry-run wrote (from its SUMMARY.md); nothing else in the directory is touched."""
+    summary = directory / "SUMMARY.md"
+    if not summary.is_file():
+        return []
+    out: list[Path] = []
+    in_files = False
+    for line in summary.read_text(encoding="utf-8", errors="replace").splitlines():
+        if line.startswith("## "):
+            in_files = line.strip() == "## files"
+            continue
+        if in_files and line.startswith("- "):
+            rel = Path(line[2:].strip())
+            if not rel.is_absolute() and ".." not in rel.parts:
+                out.append(directory / rel.parent / f"{rel.name}.diff")
+    return out
 
 
 def _unified(rel: Path, before: str, after: str) -> str:
@@ -706,8 +829,9 @@ def _unified(rel: Path, before: str, after: str) -> str:
 
 def _write_diffs(vault: Path, changes, directory: Path, plan: _Plan) -> None:
     directory.mkdir(parents=True, exist_ok=True)
-    for stale in directory.rglob("*.diff"):
-        stale.unlink()  # 前回の dry-run の diff を残さない（今のプランに無いファイルの diff が混ざらないように）
+    for stale in _previous_diffs(directory):
+        if stale.is_file() or stale.is_symlink():
+            stale.unlink()  # 前回の dry-run が書いた diff だけを消す（今のプランに無いファイルの diff が混ざらないように）
     for change in changes:
         try:
             rel = change.path.relative_to(vault)
@@ -716,7 +840,7 @@ def _write_diffs(vault: Path, changes, directory: Path, plan: _Plan) -> None:
         target = directory / rel.parent / f"{rel.name}.diff"
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(_unified(rel, change.before, change.after).encode("utf-8"))
-    summary = ["# migrate dry-run summary", ""] + [f"- {k}: {v}" for k, v in plan.counts.items()]
+    summary = [_SUMMARY_TITLE, ""] + [f"- {k}: {v}" for k, v in plan.counts.items()]
     summary += ["", "## files", ""] + [f"- {c.path.relative_to(vault).as_posix() if c.path.is_relative_to(vault) else c.path.name}" for c in changes]
     summary += ["", "## notes", ""] + [f"- {line}" for line in plan.report.lines]
     (directory / "SUMMARY.md").write_text("\n".join(summary) + "\n", encoding="utf-8")

@@ -666,3 +666,165 @@ def test_a_symlinked_record_directory_does_not_crash(old_vault: Path, tmp_path: 
     (old_vault / "record/linked").symlink_to(outside, target_is_directory=True)
     code = migrate(old_vault)
     assert code in (0, 2, 3)  # traceback（exit 1）にしない
+
+
+# ---- 2 回目の独立レビューの指摘: 行の一部だけが表現できるときは行ごと残す ----------------------------------
+
+
+def test_a_documents_line_with_an_empty_link_and_other_content_is_kept(old_vault: Path, capsys) -> None:
+    note = old_vault / "project/project_proj_b.md"
+    edit(note, "## minutes\n", "## documents\n\n- 旧: [local]() / 新: [deck](https://example.com/d) 重要\n- [local]() 補足: 田中さんへ共有済み\n- [local]()\n\n## minutes\n")
+    assert apply_it(old_vault, capsys) == 0
+    kept = migrated_notes(note)
+    assert "https://example.com/d" in kept and "田中さんへ共有済み" in kept
+    assert kept.count("[local]()") == 2  # 純粋な空リンクだけが placeholder
+
+
+def test_a_minutes_cell_with_two_links_or_surrounding_text_keeps_the_row_and_associates_every_record(old_vault: Path, capsys) -> None:
+    write_note(old_vault / "record/r3.md", "title: r3\ndate: 2026-05-02\n", "本文3。\n")
+    note = old_vault / "project/project_proj_b.md"
+    edit(note, "| 2026-05-01 | [r4](../record/r4.md) | B の議題 |", "| 2026-05-01 | [r4](../record/r4.md) / [r3](../record/r3.md) (draft, 田中さん欠席) | B の議題 |")
+    assert apply_it(old_vault, capsys) == 0
+    assert "(draft, 田中さん欠席)" in migrated_notes(note)
+    assert fm(old_vault / "record/r3.md")["project"] == ["proj_b"] and fm(old_vault / "record/r4.md")["project"] == ["proj_b"]
+
+
+def test_text_before_or_after_the_link_of_a_documents_item_is_kept(old_vault: Path, capsys) -> None:
+    note = old_vault / "project/project_proj_b.md"
+    edit(note, "## minutes\n", '## documents\n\n- 最新版: [deck](../presentation/deck.md "表題")\n- 1. [deck](../presentation/deck.md)\n\n## minutes\n')
+    assert apply_it(old_vault, capsys) == 0
+    kept = migrated_notes(note)
+    assert "最新版:" in kept and '"表題"' in kept and "1. [deck]" in kept
+    assert "proj_b" in fm(old_vault / "presentation/deck.md")["project"]
+
+
+def test_a_link_label_that_is_not_the_filename_or_title_is_kept(old_vault: Path, capsys) -> None:
+    note = old_vault / "project/project_proj_b.md"
+    edit(note, "[r4](../record/r4.md)", "[Kickoff w/ Tanaka](../record/r4.md)")
+    assert apply_it(old_vault, capsys) == 0
+    assert "Kickoff w/ Tanaka" in migrated_notes(note)
+
+
+def test_a_preserved_table_keeps_its_header_and_separator(old_vault: Path, capsys) -> None:
+    note = old_vault / "project/project_proj_b.md"
+    edit(note, "## minutes\n", "## documents\n\n| name | link |\n| --- | --- |\n| 見積 | [x](https://example.com/x) |\n\n## minutes\n")
+    edit(note, "| 2026-05-01 | [r4](../record/r4.md) | B の議題 |", "| 2026-05-01 | [r4](../record/r4.md) | B の議題 | 担当: bob |")
+    edit(note, "| date | minutes | topics |\n| ---- | ------- | ------ |", "| date | minutes | topics | owner |\n| ---- | ------- | ------ | ----- |")
+    assert apply_it(old_vault, capsys) == 0
+    kept = migrated_notes(note)
+    assert "| name | link |\n| --- | --- |\n| 見積 |" in kept
+    assert "| date | minutes | topics | owner |\n| ---- | ------- | ------ | ----- |\n| 2026-05-01 |" in kept
+
+
+def test_a_link_into_a_hidden_directory_is_not_associated_and_the_row_is_kept(old_vault: Path, capsys) -> None:
+    write_note(old_vault / ".trash/r9.md", "title: r9\n", "ごみ箱。\n")
+    before = (old_vault / ".trash/r9.md").read_text(encoding="utf-8")
+    note = old_vault / "project/project_proj_b.md"
+    edit(note, "| 2026-05-01 | [r4](../record/r4.md) | B の議題 |", "| 2026-05-01 | [r4](../record/r4.md) | B の議題 |\n| 2026-04-01 | [r9](../.trash/r9.md) | ごみ箱の議題 |")
+    assert apply_it(old_vault, capsys) == 0
+    assert "ごみ箱の議題" in migrated_notes(note)
+    assert (old_vault / ".trash/r9.md").read_text(encoding="utf-8") == before
+
+
+def test_accept_list_changes_lists_what_it_drops_in_the_dry_run(old_vault: Path, capsys) -> None:
+    edit(old_vault / "project/project_proj_a.md", "status: active\n", "status: active\npartner: 別会社\n")
+    assert migrate(old_vault) == 2  # 既定では止まる
+    capsys.readouterr()
+    assert migrate(old_vault, "--accept-list-changes") == 0
+    out = capsys.readouterr().out
+    assert "LIST_VALUE_DROPPED" in out and "協力会社" in out
+
+
+def test_a_diff_dir_with_a_foreign_summary_file_is_refused_and_foreign_diffs_survive(old_vault: Path, tmp_path: Path) -> None:
+    foreign = tmp_path / "book"
+    foreign.mkdir()
+    (foreign / "SUMMARY.md").write_text("# Summary\n\n- [章](ch1.md)\n", encoding="utf-8")
+    (foreign / "patch.diff").write_text("人の patch\n", encoding="utf-8")
+    assert migrate(old_vault, "--diff-dir", str(foreign)) in (2, 3)
+    assert (foreign / "patch.diff").exists()
+
+
+def test_only_the_diffs_the_previous_dry_run_wrote_are_removed(old_vault: Path, tmp_path: Path) -> None:
+    out = tmp_path / "diffs"
+    assert migrate(old_vault, "--diff-dir", str(out)) == 0
+    (out / "mine.diff").write_text("人の diff\n", encoding="utf-8")
+    assert migrate(old_vault, "--diff-dir", str(out)) == 0
+    assert (out / "mine.diff").exists()
+
+
+def test_a_backlink_example_inside_a_code_fence_is_not_a_membership(old_vault: Path, capsys) -> None:
+    fence = "```\n" + backlink("proj_b") + "\n```\n"
+    write_note(old_vault / "record/r2.md", "title: r2\ndate: 2026-08-20\n", "本文2。\n\n" + fence)
+    assert apply_it(old_vault, capsys) == 0
+    assert fm(old_vault / "record/r2.md")["project"] == ["proj_a"]
+    assert fence in body(old_vault / "record/r2.md")
+
+
+def test_rows_in_an_indented_code_fence_are_not_parsed(old_vault: Path, capsys) -> None:
+    note = old_vault / "project/project_proj_b.md"
+    write_note(old_vault / "record/r7.md", "title: r7\ndate: 2026-07-07\n", "本文7。\n")
+    sample = "- 例:\n\n    ```\n    | 2026-07-07 | [r7](../record/r7.md) | sample |\n    ```\n"
+    edit(note, "| 2026-05-01 | [r4](../record/r4.md) | B の議題 |\n", "| 2026-05-01 | [r4](../record/r4.md) | B の議題 |\n\n" + sample)
+    assert apply_it(old_vault, capsys) == 0
+    assert "    | 2026-07-07 | [r7](../record/r7.md) | sample |" in migrated_notes(note)
+    assert "project" not in fm(old_vault / "record/r7.md")
+
+
+def test_a_mid_body_backlink_of_an_already_converted_record_is_moved_to_the_top(old_vault: Path, capsys) -> None:
+    write_note(
+        old_vault / "record/r4.md",
+        "title: r4\ndate: 2026-05-01\nproject:\n  - proj_b\nproject_source: manual\nsummary: 手書き\n",
+        "# 冒頭\n\n" + backlink("proj_b") + "\n\n本文4。\n",
+    )
+    assert apply_it(old_vault, capsys) == 0
+    assert body(old_vault / "record/r4.md").startswith(backlink("proj_b") + "\n")
+
+
+def test_an_old_section_nested_under_another_old_section_is_migrated_and_rerun_is_a_noop(old_vault: Path, capsys) -> None:
+    note = old_vault / "project/project_proj_b.md"
+    edit(note, "## minutes\n", "## documents\n\n- [deck](../presentation/deck.md)\n\n### minutes\n")
+    assert apply_it(old_vault, capsys) == 0
+    text = note.read_text(encoding="utf-8")
+    assert "### minutes" not in text and "| date | minutes | topics |" not in text
+    assert fm(old_vault / "record/r4.md")["project"] == ["proj_b"]
+    assert "proj_b" in fm(old_vault / "presentation/deck.md")["project"]
+    capsys.readouterr()
+    assert migrate(old_vault) == 0
+    assert "NOOP no migration changes required" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("heading", ["## minutes ##", "   ## minutes"])
+def test_closing_hashes_and_small_indentation_of_an_old_heading_are_recognised(old_vault: Path, capsys, heading: str) -> None:
+    note = old_vault / "project/project_proj_b.md"
+    edit(note, "## minutes\n", f"{heading}\n")
+    assert apply_it(old_vault, capsys) == 0
+    assert "| date | minutes | topics |" not in note.read_text(encoding="utf-8")
+
+
+def test_a_level_one_heading_ends_an_old_section(old_vault: Path, capsys) -> None:
+    note = old_vault / "project/project_proj_b.md"
+    note.write_text(note.read_text(encoding="utf-8") + "\n# 付録\n\n付録の本文。\n", encoding="utf-8")
+    assert apply_it(old_vault, capsys) == 0
+    text = note.read_text(encoding="utf-8")
+    assert "# 付録\n\n付録の本文。" in text
+    assert "migrated notes" not in text  # 付録は旧節の一部ではない
+
+
+def test_a_migrated_notes_heading_nested_in_an_old_section_is_not_taken_as_the_target(old_vault: Path, capsys) -> None:
+    note = old_vault / "project/project_proj_b.md"
+    edit(note, "| date | minutes | topics |", "### migrated notes\n\n> 入れ子のメモ\n\n| date | minutes | topics |")
+    assert apply_it(old_vault, capsys) == 0
+    text = note.read_text(encoding="utf-8")
+    assert "入れ子のメモ" in text
+    capsys.readouterr()
+    assert migrate(old_vault) == 0
+    assert "NOOP no migration changes required" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("cell", ["[r4](../record/r4.md) (draft, 田中さん欠席)", "(draft) [r4](../record/r4.md)", '[r4](../record/r4.md "表題")'])
+def test_a_single_link_with_surrounding_text_or_a_title_in_the_minutes_cell_keeps_the_row(old_vault: Path, capsys, cell: str) -> None:
+    note = old_vault / "project/project_proj_b.md"
+    edit(note, "[r4](../record/r4.md)", cell)
+    assert apply_it(old_vault, capsys) == 0
+    assert cell in migrated_notes(note)
+    assert fm(old_vault / "record/r4.md")["project"] == ["proj_b"]

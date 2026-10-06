@@ -155,8 +155,9 @@ kind 昇順・日付降順の表（kind・日付・リンク・`summary`）に�
 
 - **record**（vault 内の `.md` で `project` を持つもの。`record/` 直下に限らず、`presentation/` や `record/` の下位ディレクトリも）: `project` を常にリストにし（出所があっても、スカラーなら書き換える）、出所が無ければ `project_source: legacy` を付ける。project ノートの旧 3 節
   （`## minutes` の表・`## documents` の vault 内リンク）に載っている record・資料は、その project に属する証拠として `legacy` で紐付ける（既存の所属は保持して追加）。
-  minutes の topics は、record に summary が無いときだけ `summary` に移す（既存の summary は上書きせず `SUMMARY_KEPT` と報告）。行（minutes の行・documents の項目）は、`[ラベル](リンク)` だけの純粋な形で、ラベルが record のファイル名または title と同じで、topics が summary になったときだけ消える。
-  それ以外（summary にならなかった topics・topics 以外の列・表の日付が record と違う・リンクの前後に文字や title 属性がある・リンクが複数・ラベルが違う）は、リンクが解決できる record は紐付けたうえで、
+  minutes の topics は、record に summary が無いときだけ `summary` に移す（既存の summary は上書きせず `SUMMARY_KEPT` と報告）。行（minutes の行・documents の項目）は、`[ラベル](リンク)` だけの純粋な形（リンクに `#anchor`・`?query` が無い）で、ラベルが record のファイル名または title と同じで、topics が summary になったときだけ消える。
+  minutes の表は見出しの名前（`date`・`minutes`・`topics`）で列を読む（列順が違っても可）。見出しが想定外の表は、見出しも行も原文のまま残し紐付けしない。
+  それ以外（summary にならなかった topics・topics 以外の列・表の日付が record と違う・リンクの前後に文字や title 属性がある・リンクが複数・ラベルが違う・項目に字下げした子や続きの行が付く・documents の表の行）は、リンクが解決できる record は紐付けたうえで、
   情報を落とさないよう**行ごと** `## migrated notes` に残し `ROW_KEPT` と報告する（表の見出し行・区切り行も、その表の行が残るときは付ける）。
   backlink は所属 project ごとに 1 行・本文の先頭へ正規形で 1 本化する（本文の途中にあるもの・`project\_<key>` のようにエスケープされたものも取り込む）。
   frontmatter の `project` と backlink が食い違う record（旧運用では backlink だけの record がある）は和集合を `legacy` で補修し、`REPAIRED_RECORD` として必ず報告する（backlink が足りないだけなら `ADDED_BACKLINK`）。
@@ -168,7 +169,7 @@ kind 昇順・日付降順の表（kind・日付・リンク・`summary`）に�
   `## minutes (2026)`・`### minutes`・大文字小文字違い・閉じ `##`・3 桁までのインデントも旧節（別の旧節の中に入れ子のものも、自分の題で分類する）。`# 見出し`（H1）は節を終わらせる。
   `[local]()` だけの行・中身のない `-` は placeholder として捨てる（空リンクに他の文字やリンクが付いた行は残す）。HTML コメントは、template の旧 3 節にあるものと
   同じ文面のときだけ placeholder として捨て、それ以外（人が書いたもの）は残す。旧 3 節に既にある generated 領域は render が作り直す（begin/end が片方だけなら止まる）。
-  リンクの `#anchor`・`?query`・`<…>` 形・ファイル名の `(1)` は解決する。解決できない行（`.trash` など隠しディレクトリへのリンクを含む）は `UNLINKED_ROW` として残す。コードブロックの中の backlink 風の行は所属ではなく、そのまま残す。
+  リンクの `#anchor`・`?query`・`<…>` 形・ファイル名の `(1)` は解決する。解決できない行（`.trash` など隠しディレクトリへのリンクを含む）は `UNLINKED_ROW` として残す。コードブロックの中の backlink 風の行は所属ではなく、そのまま残す。record の `project`（と紐付ける project）に対応する project ノートが無い note は書き換えず `UNKNOWN_PROJECT` と報告し、backlink に書けない key（`[]()|/` など）は dry-run で止める。
   generated 領域は render が作る。`list_project.md` にだけある `partner`・`status` は frontmatter へ移す（key が無い、または空のとき）。frontmatter に別の値があって食い違うときは止まり、`--accept-list-changes` で list 側の値を捨てると決めたときだけ進み、捨てる値は dry-run に `LIST_VALUE_DROPPED` として列挙する。BOM 付きの project ノートは止まる（BOM を外してから）。旧 3 節は `validate` の必須見出しではなくなった。
 - **template_project.md**: 旧 3 節にコメント・placeholder 以外の内容（注意書きの本文等）があるときは自動では書き換えず `TEMPLATE_MANUAL` と報告する（人間が置き場所を決める）。
   コメントだけなら旧 3 節を外し、`partner:`・`scope:` と空の generated 領域を足す。捨てるコメントは `TEMPLATE_COMMENTS_DROPPED` として dry-run に出す。

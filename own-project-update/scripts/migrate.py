@@ -33,7 +33,7 @@ _HEADING_RE = re.compile(r"^ {0,3}(#{1,6})\s+(.+?)(?:\s+#+)?\s*$")
 _FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})")  # リスト内のインデントされたコードブロックも fence
 # `[text](target "title")` / `[text](<target with spaces>)` / ファイル名に `(1)` を含む target
 _LINK_RE = re.compile(r"\[([^\]]*)\]\(\s*(?:<([^>]*)>|((?:[^()\s]|\([^()]*\))*))[^)]*\)")
-_LIST_ITEM_RE = re.compile(r"^\s*[-*]\s+(.*)$")
+_LIST_ITEM_RE = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+(.*)$")
 _TARGETS = ("minutes", "related notes", "documents")
 _MIGRATED = "migrated notes"
 _BOM = "\ufeff"
@@ -228,7 +228,12 @@ def _plain_link(match: re.Match[str], text: str) -> bool:
     """`[label](target)` and nothing else (no title attribute, nothing around it)."""
     inner = text[match.start() : match.end()]
     inner = inner[inner.index("](") + 2 : -1].strip()
-    return match.span() == (0, len(text)) and inner == (f"<{match.group(2)}>" if match.group(2) is not None else match.group(3))
+    target = _target_of(match)
+    return (
+        match.span() == (0, len(text))
+        and inner == (f"<{target}>" if match.group(2) is not None else target)
+        and not re.search(r"[#?]", target)  # アンカー・クエリは region のリンクでは落ちる
+    )
 
 
 def _classify_section(
@@ -238,6 +243,7 @@ def _classify_section(
     """Classify one old section. `known_comments=None` drops every comment (the template itself)."""
     out = _Classified()
     body = list(body)
+    columns: tuple[int, int, int] | None = (0, 1, 2)
     i = 0
     while i < len(body):
         text = body[i].rstrip("\r\n")
@@ -256,6 +262,7 @@ def _classify_section(
             raise P.ConflictError(f"{note.path.name}: a generated-region end marker without a begin is inside an old section; fix it by hand")
         if not stripped:
             out.preserve.append("")
+            columns = (0, 1, 2)
             i += 1
             continue
         if stripped.startswith("<!--"):
@@ -287,30 +294,66 @@ def _classify_section(
             i += 1
             continue
         cells = P._table_cells(text)
+        if cells is None:
+            columns = (0, 1, 2)  # 表の外に出たら、次の表は既定の列順に戻す
         if cells is not None:
+            lowered = [c.lower() for c in cells]
             following = P._table_cells(body[i + 1].rstrip("\r\n")) if i + 1 < len(body) and not fenced[i + 1] else None
-            if following is not None and _is_dash_row(following) and not _is_dash_row(cells):
-                out.preserve.append(_Head([text, body[i + 1].rstrip("\r\n")]))
+            is_header = following is not None and _is_dash_row(following) and not _is_dash_row(cells)
+            named = {"date", "minutes", "topics"} <= set(lowered)
+            if named and title == "minutes":
+                # 列は見出しの名前で読む（列順が違う表の topics 列を link として読まない）
+                columns = (lowered.index("date"), lowered.index("minutes"), lowered.index("topics"))
+                if is_header:
+                    out.preserve.append(_Head([text, body[i + 1].rstrip("\r\n")]))
+                    i += 2
+                else:
+                    i += 1
+                continue
+            if is_header and not (title == "minutes" and any(_LINK_RE.search(c) for c in cells)):
+                # 想定外の見出しの表は、見出しも行も原文のまま残す（紐付けもしない）
+                if title == "minutes":
+                    columns = None
+                out.preserve.append(_Raw(text))
+                out.preserve.append(_Raw(body[i + 1].rstrip("\r\n")))
                 i += 2
                 continue
             i += 1
             if _is_separator(cells) or _is_empty_row(cells):
                 continue
-            if [c.lower() for c in cells[:3]] == ["date", "minutes", "topics"]:
+            if title == "minutes" and columns is None:
+                out.preserve.append(_Raw(text))
                 continue
-            links = list(_LINK_RE.finditer(cells[1])) if title == "minutes" and len(cells) >= 2 else []
+            if title != "minutes":
+                links = list(_LINK_RE.finditer(text)) if not (title == "related notes" and related == "keep") else []
+                good = [(m, _resolve(vault, note.path.parent, _target_of(m))) for m in links]
+                good = [(m, t) for m, t in good if t is not None and rec_ok(t)]
+                if good:
+                    ref = _Ref(text, ["a table row (kept as written)"])
+                    for m, t in good:
+                        out.assoc.append(_Assoc(t, key, None, title, ref, "", m.group(1)))
+                    out.refs.append(ref)
+                    out.preserve.append(ref)
+                else:
+                    out.preserve.append(text)
+                continue
+            d_i, m_i, t_i = columns
+            link_cell = cells[m_i] if m_i < len(cells) else ""
+            links = list(_LINK_RE.finditer(link_cell))
             found = [(m, _resolve(vault, note.path.parent, _target_of(m))) for m in links]
             good = [(m, t) for m, t in found if t is not None and rec_ok(t)]
             if not good:
                 out.preserve.append(text)
                 continue
             ref = _Ref(text)
-            if any(c.strip() for c in cells[3:]):
+            if any(c.strip() for k, c in enumerate(cells) if k not in (d_i, m_i, t_i)):
                 ref.reasons.append("extra columns")
-            if len(found) != 1 or len(good) != 1 or not _plain_link(links[0], cells[1].strip()):
+            if len(found) != 1 or len(good) != 1 or not _plain_link(links[0], link_cell.strip()):
                 ref.reasons.append("the minutes cell has more than one link or other text")
+            topics = cells[t_i].strip() if t_i < len(cells) else ""
+            date = cells[d_i].strip() if d_i < len(cells) else ""
             for m, t in good:
-                out.assoc.append(_Assoc(t, key, cells[2].strip() if len(cells) > 2 else "", "minutes", ref, cells[0].strip(), m.group(1)))
+                out.assoc.append(_Assoc(t, key, topics, "minutes", ref, date, m.group(1)))
             out.refs.append(ref)
             out.preserve.append(ref)
             continue
@@ -332,6 +375,8 @@ def _classify_section(
                 ref = _Ref(text)
                 if whole is None or not _plain_link(whole, content) or len(good) != 1:
                     ref.reasons.append("the item has other text or more than one link")
+                if i < len(body) and body[i].strip() and body[i][0] in " \t":
+                    ref.reasons.append("indented lines follow the item")  # 子の項目・続きの行は親に付けて残す
                 for m, t in good:
                     out.assoc.append(_Assoc(t, key, None, title, ref, "", m.group(1)))
                 out.refs.append(ref)
@@ -590,6 +635,7 @@ def build_plan(vault: Path, raycast_script: Path | None, accept_list_changes: bo
         by_record.setdefault(assoc.path.resolve(), []).append(assoc)
     touched = set(by_record) | {p for p, n in records.items() if P._projects_of(n)}
     updated_records = documents = kept_summaries = 0
+    known_keys = {info["key"] for info in infos}
     for rpath in sorted(touched):
         note = records.get(rpath)
         raw = raw_of.get(rpath)
@@ -624,6 +670,17 @@ def build_plan(vault: Path, raycast_script: Path | None, accept_list_changes: bo
         for assoc in mine:
             if assoc.key not in new_projects:
                 new_projects.append(assoc.key)
+        for k in new_projects:
+            try:
+                P._safe_key(k)  # backlink に書けない key は dry-run で止める（書いた後の次の実行が壊れる）
+            except P.ValidationError as exc:
+                raise P.ValidationError(f"{note.path.name}: project {k!r}: {exc}") from None
+        unknown = [k for k in new_projects if k not in known_keys]
+        if unknown:
+            report.add(f"UNKNOWN_PROJECT {rpath.relative_to(resolved_vault).as_posix()}: no project note for {unknown!r}; left alone")
+            for assoc in mine:
+                assoc.ref.reasons.append("the record was left alone (unknown project)")
+            continue
         source = None if str(note.data.get("project_source") or "").strip() else "legacy"
         summary = None
         existing = " ".join(str(note.data.get("summary") or "").split())
@@ -813,8 +870,10 @@ def _previous_diffs(directory: Path) -> list[Path]:
             continue
         if in_files and line.startswith("- "):
             rel = Path(line[2:].strip())
-            if not rel.is_absolute() and ".." not in rel.parts:
-                out.append(directory / rel.parent / f"{rel.name}.diff")
+            candidate = directory / rel.parent / f"{rel.name}.diff"
+            real = candidate.parent.resolve() / candidate.name
+            if not rel.is_absolute() and ".." not in rel.parts and directory.resolve() in (real.parent, *real.parent.parents):
+                out.append(candidate)  # symlink 経由で diff の外に出るものは消さない
     return out
 
 

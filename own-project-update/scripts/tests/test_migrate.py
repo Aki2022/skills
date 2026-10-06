@@ -828,3 +828,126 @@ def test_a_single_link_with_surrounding_text_or_a_title_in_the_minutes_cell_keep
     assert apply_it(old_vault, capsys) == 0
     assert cell in migrated_notes(note)
     assert fm(old_vault / "record/r4.md")["project"] == ["proj_b"]
+
+
+# ---- 3 回目の独立レビューの指摘 ----------------------------------------------------------------------
+
+
+def test_a_data_row_followed_by_a_dash_row_is_not_swallowed_as_a_header(old_vault: Path, capsys) -> None:
+    write_note(old_vault / "record/r7.md", "title: r7\ndate: 2026-07-07\n", "本文7。\n")
+    note = old_vault / "project/project_proj_b.md"
+    edit(note, "| 2026-05-01 | [r4](../record/r4.md) | B の議題 |", "| 2026-07-07 | [r7](../record/r7.md) | UNIQUE-7 |\n| --- | --- | --- |\n| 2026-05-01 | [r4](../record/r4.md) | B の議題 |")
+    assert apply_it(old_vault, capsys) == 0
+    assert fm(old_vault / "record/r7.md")["project"] == ["proj_b"]
+    assert fm(old_vault / "record/r7.md")["summary"] == "UNIQUE-7"
+
+
+def test_a_custom_header_of_a_minutes_table_is_kept_even_when_every_row_is_pure(old_vault: Path, capsys) -> None:
+    note = old_vault / "project/project_proj_b.md"
+    edit(note, "| date | minutes | topics |\n| ---- | ------- | ------ |", "| 担当 | 期限 |\n| --- | --- |\n| 田中 | 来週 |\n\n| date | minutes | topics |\n| ---- | ------- | ------ |")
+    assert apply_it(old_vault, capsys) == 0
+    assert "| 担当 | 期限 |\n| --- | --- |\n| 田中 | 来週 |" in migrated_notes(note)
+
+
+def test_a_minutes_table_with_another_column_order_is_read_by_header_name(old_vault: Path, capsys) -> None:
+    write_note(old_vault / "record/r7.md", "title: r7\ndate: 2026-07-07\n", "本文7。\n")
+    note = old_vault / "project/project_proj_b.md"
+    edit(note, "| date | minutes | topics |\n| ---- | ------- | ------ |\n| 2026-05-01 | [r4](../record/r4.md) | B の議題 |", "| date | topics | minutes |\n| ---- | ------ | ------- |\n| 2026-07-07 | 順序違いの議題 | [r7](../record/r7.md) |")
+    assert apply_it(old_vault, capsys) == 0
+    assert fm(old_vault / "record/r7.md")["summary"] == "順序違いの議題"
+
+
+def test_a_minutes_table_with_an_unknown_header_is_kept_verbatim_and_nothing_is_associated(old_vault: Path, capsys) -> None:
+    write_note(old_vault / "record/r7.md", "title: r7\ndate: 2026-07-07\n", "本文7。\n")
+    note = old_vault / "project/project_proj_b.md"
+    edit(note, "| date | minutes | topics |\n| ---- | ------- | ------ |\n| 2026-05-01 | [r4](../record/r4.md) | B の議題 |", "| 日付 | 資料 | 備考 |\n| --- | --- | --- |\n| 2026-07-07 | [r7](../record/r7.md) | 備考 |")
+    assert apply_it(old_vault, capsys) == 0
+    assert "| 2026-07-07 | [r7](../record/r7.md) | 備考 |" in migrated_notes(note)
+
+
+@pytest.mark.parametrize("key", ["foo (bar)", "a]b", "x | y", "a/b"])
+def test_a_project_key_that_cannot_be_written_as_a_backlink_stops_the_dry_run(old_vault: Path, key: str) -> None:
+    write_note(old_vault / "record/r8.md", f"title: r8\nproject: '{key}'\n", "本文8。\n")
+    before = snapshot(old_vault)
+    assert migrate(old_vault) in (2, 3)
+    assert snapshot(old_vault) == before
+
+
+def test_a_note_whose_project_has_no_project_note_is_left_alone_and_reported(old_vault: Path, capsys) -> None:
+    write_note(old_vault / "other/memo.md", "title: memo\nproject: プロジェクト管理の進め方について\n", "メモ。\n")
+    before = (old_vault / "other/memo.md").read_text(encoding="utf-8")
+    assert migrate(old_vault) == 0
+    out = capsys.readouterr().out
+    assert "UNKNOWN_PROJECT other/memo.md" in out and "CHANGE other/memo.md" not in out
+    assert apply_it(old_vault, capsys) == 0
+    assert (old_vault / "other/memo.md").read_text(encoding="utf-8") == before
+
+
+@pytest.mark.parametrize("target", ["../presentation/deck.md#決定事項", "../presentation/deck.md?view=x"])
+def test_an_anchor_or_query_in_a_pure_item_keeps_the_line(old_vault: Path, capsys, target: str) -> None:
+    note = old_vault / "project/project_proj_b.md"
+    edit(note, "## minutes\n", f"## documents\n\n- [deck]({target})\n\n## minutes\n")
+    assert apply_it(old_vault, capsys) == 0
+    assert f"[deck]({target})" in migrated_notes(note)
+
+
+def test_children_and_continuation_lines_keep_their_parent_item(old_vault: Path, capsys) -> None:
+    note = old_vault / "project/project_proj_b.md"
+    edit(note, "## minutes\n", "## documents\n\n- [deck](../presentation/deck.md)\n  - 版: v3、提出済\n  続きの説明文\n\n## minutes\n")
+    assert apply_it(old_vault, capsys) == 0
+    assert "- [deck](../presentation/deck.md)\n  - 版: v3、提出済\n  続きの説明文" in migrated_notes(note)
+
+
+def test_a_documents_table_row_and_a_numbered_item_with_a_record_link_associate_and_are_kept(old_vault: Path, capsys) -> None:
+    write_note(old_vault / "record/r7.md", "title: r7\ndate: 2026-07-07\n", "本文7。\n")
+    write_note(old_vault / "record/r8.md", "title: r8\ndate: 2026-07-08\n", "本文8。\n")
+    note = old_vault / "project/project_proj_b.md"
+    edit(note, "## minutes\n", "## documents\n\n| name | link |\n| --- | --- |\n| 議事 | [r7](../record/r7.md) |\n\n1. [r8](../record/r8.md)\n\n## minutes\n")
+    assert apply_it(old_vault, capsys) == 0
+    kept = migrated_notes(note)
+    assert "| 議事 | [r7](../record/r7.md) |" in kept
+    assert "r8" not in kept  # `1. [r8](…)` だけの項目は純粋なので消える（紐付けは残る）
+    assert fm(old_vault / "record/r7.md")["project"] == ["proj_b"] and fm(old_vault / "record/r8.md")["project"] == ["proj_b"]
+
+
+def test_previous_diff_removal_never_leaves_the_diff_directory(old_vault: Path, tmp_path: Path) -> None:
+    out = tmp_path / "diffs"
+    assert migrate(old_vault, "--diff-dir", str(out)) == 0
+    victim_dir = tmp_path / "outside"
+    victim_dir.mkdir()
+    (victim_dir / "victim.md.diff").write_text("外の diff\n", encoding="utf-8")
+    (out / "evil").symlink_to(victim_dir, target_is_directory=True)
+    summary = out / "SUMMARY.md"
+    summary.write_text(summary.read_text(encoding="utf-8").replace("## files\n", "## files\n\n- evil/victim.md\n", 1), encoding="utf-8")
+    assert migrate(old_vault, "--diff-dir", str(out)) == 0
+    assert (victim_dir / "victim.md.diff").exists()
+
+
+# レビューで見つかったテストの穴（変異しても緑だったもの）
+
+
+def test_a_row_whose_table_date_differs_from_the_record_date_is_kept(old_vault: Path, capsys) -> None:
+    write_note(old_vault / "record/r7.md", "title: r7\ndate: 2026-07-07\n", "本文7。\n")
+    note = old_vault / "project/project_proj_b.md"
+    edit(note, "| 2026-05-01 | [r4](../record/r4.md) | B の議題 |", "| 2026-05-01 | [r4](../record/r4.md) | B の議題 |\n| 2026-07-09 | [r7](../record/r7.md) | 日付違い |")
+    assert apply_it(old_vault, capsys) == 0
+    assert "| 2026-07-09 | [r7](../record/r7.md) | 日付違い |" in migrated_notes(note)
+
+
+def test_text_after_a_known_comment_and_an_unclosed_comment_are_kept(old_vault: Path, capsys) -> None:
+    note = old_vault / "project/project_proj_b.md"
+    edit(note, "## minutes\n", "## minutes\n\n<!--  新しい順。  --> 人が書いたメモ\n<!-- 閉じていない手書きの注意\n")
+    assert apply_it(old_vault, capsys) == 0
+    kept = migrated_notes(note)
+    assert "人が書いたメモ" in kept and "閉じていない手書きの注意" in kept
+    assert "新しい順" not in kept  # 空白の違いは同じ文面
+
+
+def test_a_longer_fence_is_not_closed_by_a_shorter_one(old_vault: Path, capsys) -> None:
+    write_note(old_vault / "record/r7.md", "title: r7\ndate: 2026-07-07\n", "本文7。\n")
+    note = old_vault / "project/project_proj_b.md"
+    sample = "````\n```\n| 2026-07-07 | [r7](../record/r7.md) | t |\n````\n"
+    edit(note, "| 2026-05-01 | [r4](../record/r4.md) | B の議題 |\n", "| 2026-05-01 | [r4](../record/r4.md) | B の議題 |\n\n" + sample)
+    assert apply_it(old_vault, capsys) == 0
+    assert sample.rstrip("\n") in migrated_notes(note)
+    assert "project" not in fm(old_vault / "record/r7.md")

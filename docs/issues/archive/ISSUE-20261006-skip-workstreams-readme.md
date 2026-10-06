@@ -1,7 +1,7 @@
 ---
 schema_version: 2
 id: ISSUE-20261006-skip-workstreams-readme
-status: active
+status: archived
 workstream: none
 priority: medium
 due: none
@@ -31,11 +31,11 @@ workstream by validation, ownership routing, or lifecycle hygiene scans.
 
 ## Current Status
 
-as of 2026-10-06 — PR #32 is open. All 350 own-doc-update tests pass; targetTest4 validation is clean, and the installed pre-commit rejects the README on the old validator ref but passes on this branch. No GitHub status checks are configured, so the recorded local gates are the merge gate.
+as of 2026-10-06 — PR #32 landed as 799a33e; all acceptance checks pass, the source branch/worktree are cleaned, and this issue is archived.
 
 ## Next Actions
 
-1. Merge PR #32 after the recorded local gates pass, then clean the branch and archive this issue.
+- None; this issue is archived.
 
 <!-- First bullet = the very next command or step (or what unblocks a blocked issue). Required once work starts; the validator rejects an empty section. -->
 
@@ -54,13 +54,16 @@ as of 2026-10-06 — PR #32 is open. All 350 own-doc-update tests pass; targetTe
 - 2026-10-06 — The complete own-doc-update test suite passes (350 tests). Shared skill lint was run; environment-level failures are confined to an unrelated Python 3.9 incompatibility in own-pptx-build and pre-existing Cloudflare references/symlink drift.
 - 2026-10-06 — Ran the validator against targetTest4; it exited 0 and emitted no diagnostics for docs/workstreams/README.md.
 - 2026-10-06 — The installed pre-commit was tested with a staged README edit: the committed baseline validator rejected it, while this branch's validator passed it.
+- 2026-10-06 — PR #32 merged as 799a33e. The closeout hygiene report found no repair or judgment candidates.
+- 2026-10-06 — Removed the merged source branch/worktree and the temporary baseline worktree; all completion checklist items are now met.
+- 2026-10-06 — Archived the completed issue and removed its active index route.
 
 ## Completion
 
-- [ ] Implementation completed or intentionally not needed
-- [ ] Specs updated if direction or requirements changed
-- [ ] Guide impact classified before implementation
-- [ ] Guides updated in the same slice if implemented behavior changed
-- [ ] Branch merged and cleaned up (or intentionally kept — note why)
-- [ ] 00_index.md updated
-- [ ] Moved to docs/issues/archive/ when complete
+- [x] Implementation completed or intentionally not needed
+- [x] Specs updated if direction or requirements changed
+- [x] Guide impact classified before implementation
+- [x] Guides updated in the same slice if implemented behavior changed
+- [x] Branch merged and cleaned up (or intentionally kept — note why)
+- [x] 00_index.md updated
+- [x] Moved to docs/issues/archive/ when complete

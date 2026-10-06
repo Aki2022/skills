@@ -27,7 +27,6 @@ Read this file first. Do not scan all docs unless needed. Read the active workst
 ## Active Issues
 
 <!-- own-doc-update:generated active-issues begin -->
-- [ISSUE-20261006-skip-workstreams-readme](issues/ISSUE-20261006-skip-workstreams-readme.md) — Exclude the workstreams README from lifecycle validation · medium · due none
 <!-- own-doc-update:generated active-issues end -->
 
 

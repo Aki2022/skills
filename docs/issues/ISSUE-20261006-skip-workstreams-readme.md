@@ -8,7 +8,7 @@ due: none
 created_at: 2026-10-06
 updated_at: 2026-10-06
 branch: "codex/fix-workstreams-readme-validator"
-pr: ""
+pr: "#32"
 related_specs: []
 related_guides: []
 guide_impact: none
@@ -31,11 +31,11 @@ workstream by validation, ownership routing, or lifecycle hygiene scans.
 
 ## Current Status
 
-as of 2026-10-06 — Rebased on the latest main; all 350 own-doc-update tests pass. targetTest4 validation is clean, and the installed pre-commit rejects the README on the old validator ref but passes on this branch.
+as of 2026-10-06 — PR #32 is open. All 350 own-doc-update tests pass; targetTest4 validation is clean, and the installed pre-commit rejects the README on the old validator ref but passes on this branch. No GitHub status checks are configured, so the recorded local gates are the merge gate.
 
 ## Next Actions
 
-1. Push this branch and open a PR; merge after checks pass, then clean the branch and archive this issue.
+1. Merge PR #32 after the recorded local gates pass, then clean the branch and archive this issue.
 
 <!-- First bullet = the very next command or step (or what unblocks a blocked issue). Required once work starts; the validator rejects an empty section. -->
 

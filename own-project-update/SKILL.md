@@ -136,7 +136,7 @@ python3 scripts/project_update.py migrate --vault <vault-root> [dry-run と同�
 - 夜間 job では実行しない。`--apply` は人間が見たプラン（`PLAN_ID`）だけを書く。差分は vault の外に出す（vault の内容を含むので git に入れない。vault の中・vault を含む場所・前回の migrate dry-run が作ったものでない空でないディレクトリは拒否し、前回の dry-run が書いた `.diff` だけを消す）。
 - `--accept-list-changes` は `list_project.md` にしか無い値（frontmatter と食い違う partner・status・より新しい last meeting）を捨てて render と同じ形に揃える指定。既定では止まる。付けた dry-run は、落ちる値を `LIST_VALUE_DROPPED` として列挙する。
 - 何をどう移すか・何を残すか・何を止めるかは [references/project-contract.md](references/project-contract.md) の Migration。`REPAIRED_RECORD`・`ADDED_BACKLINK`・
-  `UNLINKED_ROW`・`UNKNOWN_PROJECT`・`ROW_KEPT`・`LIST_VALUE_DROPPED`・`SUMMARY_KEPT`・`TEMPLATE_COMMENTS_DROPPED`・`TEMPLATE_MANUAL` は人間が見る項目。
+  `UNLINKED_ROW`・`UNKNOWN_PROJECT`・`UNRECOGNIZED_TABLE`・`ROW_KEPT`・`LIST_VALUE_DROPPED`・`SUMMARY_KEPT`・`TEMPLATE_COMMENTS_DROPPED`・`TEMPLATE_MANUAL` は人間が見る項目。
 
 ## 必須の検査
 

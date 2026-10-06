@@ -218,6 +218,8 @@ class _Classified:
     dropped: int = 0
     comments: list[str] = field(default_factory=list)
     refs: list[_Ref] = field(default_factory=list)
+    empty_labels: list[str] = field(default_factory=list)  # 空リンク `[label]()` の label（template の placeholder の物差し）
+    unrecognized: list[str] = field(default_factory=list)  # 想定外の見出しで原文のまま残した minutes の表
 
 
 def _is_dash_row(cells: list[str]) -> bool:
@@ -238,7 +240,7 @@ def _plain_link(match: re.Match[str], text: str) -> bool:
 
 def _classify_section(
     vault: Path, note, key, title: str, body: list[str], fenced: list[bool], rec_ok, related: str = "keep",
-    known_comments: set[str] | None = None,
+    known_comments: set[str] | None = None, known_empty: set[str] = frozenset(),
 ) -> _Classified:
     """Classify one old section. `known_comments=None` drops every comment (the template itself)."""
     out = _Classified()
@@ -314,6 +316,7 @@ def _classify_section(
                 # 想定外の見出しの表は、見出しも行も原文のまま残す（紐付けもしない）
                 if title == "minutes":
                     columns = None
+                    out.unrecognized.append(text.strip())
                 out.preserve.append(_Raw(text))
                 out.preserve.append(_Raw(body[i + 1].rstrip("\r\n")))
                 i += 2
@@ -364,8 +367,13 @@ def _classify_section(
             links = list(_LINK_RE.finditer(item.group(1)))
             whole = _LINK_RE.fullmatch(content)
             if whole is not None and not _target_of(whole).strip() and _plain_link(whole, content):
-                out.dropped += 1  # `[local]()` だけの行はテンプレの placeholder。情報が無い
-                continue
+                label = whole.group(1).strip()
+                if known_comments is None:
+                    out.empty_labels.append(label)  # template の旧節にある空リンク
+                if known_comments is None or label in known_empty:
+                    out.dropped += 1  # template が持つ `[local]()` のような placeholder。情報が無い
+                    continue
+                # template に無い label の空リンクは、label が情報かもしれないので残す
             if title == "related notes" and related == "keep":
                 out.preserve.append(text)  # 言及は所属ではない。既定では紐付けず原文のまま残す
                 continue
@@ -571,6 +579,7 @@ def build_plan(vault: Path, raycast_script: Path | None, accept_list_changes: bo
     template = vault / "setting" / "template" / "template_project.md"
     tmpl = None
     known_comments: set[str] = set()
+    known_empty: set[str] = set()
     if template.is_file():
         _read_note_text(template)
         tnote = P.parse_note(template, exact=True)
@@ -579,13 +588,17 @@ def build_plan(vault: Path, raycast_script: Path | None, accept_list_changes: bo
         tsecs = _old_sections(tlines, tfenced)
         manual = False
         tcomments: list[str] = []
+        tempty: list[str] = []
         for _title, _start, _end, pieces in tsecs:
             for title, a, b in pieces:
                 cl = _classify_section(vault, tnote, None, title, tlines[a:b], tfenced[a:b], rec_ok, known_comments=None)
                 if cl.assoc or _has_content(cl.preserve):
                     manual = True
                 tcomments.extend(cl.comments)
+                # template のコメントの中に例として書いてある `[local]()` も、placeholder の label として数える
+                tempty.extend(m.group(1).strip() for m in re.finditer(r"\[([^\]]*)\]\(\)", "".join(tlines[a:b])))
         known_comments = set(tcomments)
+        known_empty = set(tempty)
         tmpl = (tnote, tlines, tsecs, manual, tcomments)
 
     # 3. project ノートの旧 3 節
@@ -606,7 +619,7 @@ def build_plan(vault: Path, raycast_script: Path | None, accept_list_changes: bo
 
     infos: list[dict] = []
     refs: list[tuple[str, _Ref]] = []
-    dropped_total = comments_total = missing = 0
+    dropped_total = comments_total = missing = unrecognized = 0
     for key, path in P._project_note_targets(vault, None):
         _read_note_text(path)
         note = P.parse_note(path, exact=True)
@@ -616,11 +629,14 @@ def build_plan(vault: Path, raycast_script: Path | None, accept_list_changes: bo
         preserved: dict[str, list] = {}
         for _title, _start, _end, pieces in secs:
             for title, a, b in pieces:
-                cl = _classify_section(vault, note, key, title, lines[a:b], fenced[a:b], rec_ok, related, known_comments)
+                cl = _classify_section(vault, note, key, title, lines[a:b], fenced[a:b], rec_ok, related, known_comments, known_empty)
                 assocs.extend(cl.assoc)
                 refs.extend((key, ref) for ref in cl.refs)
                 dropped_total += cl.dropped
                 comments_total += len(cl.comments)
+                for header in cl.unrecognized:
+                    unrecognized += 1
+                    report.add(f"UNRECOGNIZED_TABLE {key}: header kept verbatim and its rows are not associated: {header[:80]}")
                 preserved.setdefault(title, []).extend(cl.preserve)
                 if title == "minutes":
                     for item in cl.preserve:
@@ -654,33 +670,36 @@ def build_plan(vault: Path, raycast_script: Path | None, accept_list_changes: bo
             raise P.ConflictError(f"{note.path.name}: an existing project backlink is malformed; fix it by hand")
         if len(set(names)) != len(names):
             raise P.ValidationError(f"{note.path.name}: duplicate project backlinks")
+        pending: list[str] = []
         if set(names) != set(projects):
             # 旧運用では backlink だけある・project だけある record がある。どちらも所属の証拠なので和集合を legacy で保つ。
             # 推測を含むので、dry-run に必ず出して人間が見る。
             repaired = projects + [n for n in names if n not in projects]
             if set(names) < set(projects):
-                report.add(f"ADDED_BACKLINK {note.path.name}: backlink added for {sorted(set(projects) - set(names))!r}")
+                pending.append(f"ADDED_BACKLINK {note.path.name}: backlink added for {sorted(set(projects) - set(names))!r}")
             else:
-                report.add(f"REPAIRED_RECORD {note.path.name}: project {projects!r} + backlinks {names!r} -> {repaired!r}")
+                pending.append(f"REPAIRED_RECORD {note.path.name}: project {projects!r} + backlinks {names!r} -> {repaired!r}")
             projects = repaired
         elif names and len(P._leading_backlink_lines(note)) != len(names):
-            report.add(f"MOVED_BACKLINK {note.path.name}: backlink moved to the top of the body")
+            pending.append(f"MOVED_BACKLINK {note.path.name}: backlink moved to the top of the body")
         new_projects = list(projects)
         mine = by_record.get(rpath, [])
         for assoc in mine:
             if assoc.key not in new_projects:
                 new_projects.append(assoc.key)
-        for k in new_projects:
-            try:
-                P._safe_key(k)  # backlink に書けない key は dry-run で止める（書いた後の次の実行が壊れる）
-            except P.ValidationError as exc:
-                raise P.ValidationError(f"{note.path.name}: project {k!r}: {exc}") from None
         unknown = [k for k in new_projects if k not in known_keys]
         if unknown:
             report.add(f"UNKNOWN_PROJECT {rpath.relative_to(resolved_vault).as_posix()}: no project note for {unknown!r}; left alone")
             for assoc in mine:
                 assoc.ref.reasons.append("the record was left alone (unknown project)")
             continue
+        for k in new_projects:
+            try:
+                P._safe_key(k)  # backlink に書けない key は dry-run で止める（書いた後の次の実行が壊れる）
+            except P.ValidationError as exc:
+                raise P.ValidationError(f"{note.path.name}: project {k!r}: {exc}") from None
+        for line in pending:
+            report.add(line)
         source = None if str(note.data.get("project_source") or "").strip() else "legacy"
         summary = None
         existing = " ".join(str(note.data.get("summary") or "").split())
@@ -820,6 +839,7 @@ def build_plan(vault: Path, raycast_script: Path | None, accept_list_changes: bo
         "documents_to_associate": documents,
         "summaries_kept": kept_summaries,
         "rows_kept_in_migrated_notes": missing + kept_rows,
+        "unrecognized_tables": unrecognized,
         "placeholders_dropped": dropped_total,
         "comments_dropped": comments_total,
         "list_rows": len(rows),

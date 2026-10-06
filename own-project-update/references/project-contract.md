@@ -167,9 +167,9 @@ kind 昇順・日付降順の表（kind・日付・リンク・`summary`）に�
 - **project ノート**: 旧 3 節を取り除く。表現できない内容（引用メモ・外部リンク・related notes の項目・実体や frontmatter の無い record の行）は消さずに
   `## migrated notes`（`### from <旧節>`）へ原文のまま移す（空行・コードブロックも原文のまま。既に `## migrated notes` があればその末尾に足す）。旧節の見出しは
   `## minutes (2026)`・`### minutes`・大文字小文字違い・閉じ `##`・3 桁までのインデントも旧節（別の旧節の中に入れ子のものも、自分の題で分類する）。`# 見出し`（H1）は節を終わらせる。
-  `[local]()` だけの行・中身のない `-` は placeholder として捨てる（空リンクに他の文字やリンクが付いた行は残す）。HTML コメントは、template の旧 3 節にあるものと
+  空リンクだけの行は、label が template の旧 3 節の空リンクと同じとき（`[local]()` など）と、中身のない `-` だけ placeholder として捨てる（template に無い label の空リンク・空リンクに他の文字やリンクが付いた行は残す）。見出しが想定外の minutes の表は原文のまま残し、`UNRECOGNIZED_TABLE` と報告する。HTML コメントは、template の旧 3 節にあるものと
   同じ文面のときだけ placeholder として捨て、それ以外（人が書いたもの）は残す。旧 3 節に既にある generated 領域は render が作り直す（begin/end が片方だけなら止まる）。
-  リンクの `#anchor`・`?query`・`<…>` 形・ファイル名の `(1)` は解決する。解決できない行（`.trash` など隠しディレクトリへのリンクを含む）は `UNLINKED_ROW` として残す。コードブロックの中の backlink 風の行は所属ではなく、そのまま残す。record の `project`（と紐付ける project）に対応する project ノートが無い note は書き換えず `UNKNOWN_PROJECT` と報告し、backlink に書けない key（`[]()|/` など）は dry-run で止める。
+  リンクの `#anchor`・`?query`・`<…>` 形・ファイル名の `(1)` は解決する。解決できない行（`.trash` など隠しディレクトリへのリンクを含む）は `UNLINKED_ROW` として残す。コードブロックの中の backlink 風の行は所属ではなく、そのまま残す。record の `project`（と紐付ける project）に対応する project ノートが無い note は書き換えず `UNKNOWN_PROJECT` と報告し、書き換える対象（project ノートがある key）が backlink に書けない key（`[]()|/` など）なら dry-run で止める。
   generated 領域は render が作る。`list_project.md` にだけある `partner`・`status` は frontmatter へ移す（key が無い、または空のとき）。frontmatter に別の値があって食い違うときは止まり、`--accept-list-changes` で list 側の値を捨てると決めたときだけ進み、捨てる値は dry-run に `LIST_VALUE_DROPPED` として列挙する。BOM 付きの project ノートは止まる（BOM を外してから）。旧 3 節は `validate` の必須見出しではなくなった。
 - **template_project.md**: 旧 3 節にコメント・placeholder 以外の内容（注意書きの本文等）があるときは自動では書き換えず `TEMPLATE_MANUAL` と報告する（人間が置き場所を決める）。
   コメントだけなら旧 3 節を外し、`partner:`・`scope:` と空の generated 領域を足す。捨てるコメントは `TEMPLATE_COMMENTS_DROPPED` として dry-run に出す。

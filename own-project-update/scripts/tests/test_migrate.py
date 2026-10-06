@@ -241,7 +241,7 @@ def test_a_minutes_row_for_a_record_without_frontmatter_is_kept_not_dropped(old_
 
 def test_bare_bullets_and_empty_links_are_dropped_as_template_placeholders(old_vault: Path, capsys) -> None:
     note = old_vault / "project/project_proj_b.md"
-    note.write_text(note.read_text(encoding="utf-8") + "\n## related notes\n\n-\n\n## documents\n\n- [その他]()\n", encoding="utf-8")
+    note.write_text(note.read_text(encoding="utf-8") + "\n## related notes\n\n-\n\n## documents\n\n- [local]()\n", encoding="utf-8")
     assert apply_it(old_vault, capsys) == 0
     assert "migrated notes" not in note.read_text(encoding="utf-8")
 
@@ -866,11 +866,55 @@ def test_a_minutes_table_with_an_unknown_header_is_kept_verbatim_and_nothing_is_
 
 
 @pytest.mark.parametrize("key", ["foo (bar)", "a]b", "x | y", "a/b"])
-def test_a_project_key_that_cannot_be_written_as_a_backlink_stops_the_dry_run(old_vault: Path, key: str) -> None:
+def test_a_project_key_that_cannot_be_written_as_a_backlink_is_never_written(old_vault: Path, capsys, key: str) -> None:
     write_note(old_vault / "record/r8.md", f"title: r8\nproject: '{key}'\n", "本文8。\n")
+    before = (old_vault / "record/r8.md").read_text(encoding="utf-8")
+    assert apply_it(old_vault, capsys) == 0  # 対応する project ノートが無いので書き換えず報告する
+    assert (old_vault / "record/r8.md").read_text(encoding="utf-8") == before
+    capsys.readouterr()
+    assert migrate(old_vault) == 0
+    assert "NOOP no migration changes required" in capsys.readouterr().out
+
+
+def test_a_project_note_whose_key_cannot_be_a_backlink_stops_the_dry_run(old_vault: Path) -> None:
+    """key が既存の project ノートのものなら、書くことになるので止める（render も同じ key を拒否する）。"""
+    (old_vault / "project/project_a (b).md").write_text(PROJECT_B.replace("proj_b", "a (b)"), encoding="utf-8")
     before = snapshot(old_vault)
     assert migrate(old_vault) in (2, 3)
     assert snapshot(old_vault) == before
+
+
+def test_the_rows_of_a_record_with_an_unknown_project_are_kept_not_consumed(old_vault: Path, capsys) -> None:
+    write_note(old_vault / "record/r9.md", "title: r9\ndate: 2026-07-09\nproject: ghost\n", "本文9。\n")
+    note = old_vault / "project/project_proj_b.md"
+    edit(note, "| 2026-05-01 | [r4](../record/r4.md) | B の議題 |", "| 2026-05-01 | [r4](../record/r4.md) | B の議題 |\n| 2026-07-09 | [r9](../record/r9.md) | 幽霊の議題 |")
+    edit(note, "## minutes\n", "## documents\n\n- [r9](../record/r9.md)\n\n## minutes\n")
+    before = (old_vault / "record/r9.md").read_text(encoding="utf-8")
+    assert apply_it(old_vault, capsys) == 0
+    kept = migrated_notes(note)
+    assert "| 2026-07-09 | [r9](../record/r9.md) | 幽霊の議題 |" in kept and "- [r9](../record/r9.md)" in kept
+    assert (old_vault / "record/r9.md").read_text(encoding="utf-8") == before
+
+
+def test_a_minutes_table_with_an_unrecognised_header_is_reported(old_vault: Path, capsys) -> None:
+    edit(old_vault / "project/project_proj_b.md", "| date | minutes | topics |\n| ---- | ------- | ------ |", "| 日付 | 議事録 | 議題 |\n| --- | --- | --- |")
+    assert migrate(old_vault) == 0
+    assert "UNRECOGNIZED_TABLE proj_b" in capsys.readouterr().out
+
+
+def test_an_empty_link_with_a_label_the_template_does_not_use_is_kept(old_vault: Path, capsys) -> None:
+    note = old_vault / "project/project_proj_b.md"
+    edit(note, "## minutes\n", "## documents\n\n- [local]()\n- [契約書の保管場所]()\n\n## minutes\n")
+    assert apply_it(old_vault, capsys) == 0
+    kept = migrated_notes(note)
+    assert "- [契約書の保管場所]()" in kept and "[local]()" not in kept
+
+
+def test_a_backlink_report_is_not_emitted_for_a_record_that_is_left_alone(old_vault: Path, capsys) -> None:
+    write_note(old_vault / "record/r9.md", "title: r9\nproject: ghost\n", "本文9。\n")
+    assert migrate(old_vault) == 0
+    out = capsys.readouterr().out
+    assert "UNKNOWN_PROJECT" in out and "ADDED_BACKLINK r9.md" not in out
 
 
 def test_a_note_whose_project_has_no_project_note_is_left_alone_and_reported(old_vault: Path, capsys) -> None:
@@ -951,3 +995,12 @@ def test_a_longer_fence_is_not_closed_by_a_shorter_one(old_vault: Path, capsys) 
     assert apply_it(old_vault, capsys) == 0
     assert sample.rstrip("\n") in migrated_notes(note)
     assert "project" not in fm(old_vault / "record/r7.md")
+
+
+def test_an_empty_link_label_written_inside_a_template_comment_counts_as_a_placeholder(old_vault: Path, capsys) -> None:
+    template = old_vault / "setting/template/template_project.md"
+    edit(template, "## documents\n\n- [local]()\n", "## documents\n\n<!-- 例: [ローカル資料]() の形で書く。\n絶対パスは書かない -->\n")
+    note = old_vault / "project/project_proj_b.md"
+    edit(note, "## minutes\n", "## documents\n\n- [ローカル資料]()\n\n## minutes\n")
+    assert apply_it(old_vault, capsys) == 0
+    assert "ローカル資料" not in note.read_text(encoding="utf-8")

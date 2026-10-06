@@ -20,6 +20,7 @@ SPEC-project-association の「配置と移行」。夜間 job では実行し�
 
 from __future__ import annotations
 
+import datetime
 import difflib
 import hashlib
 import re
@@ -540,7 +541,46 @@ def _read_note_text(path: Path) -> str:
     return text
 
 
-def build_plan(vault: Path, raycast_script: Path | None, accept_list_changes: bool, related: str = "keep") -> _Plan:
+def _synth_frontmatter(vault: Path, rel: str) -> tuple[Path, str, str | None]:
+    """(resolved path, original text, text with a minimal frontmatter) for a frontmatter-less note the human named.
+
+    title はファイル名の stem、date はファイル名が `YYYYMMDD_` で始まるときだけ。中身を推測して作らない。
+    """
+    rel_path = Path(rel)
+    if rel_path.is_absolute() or ".." in rel_path.parts or not rel_path.parts or rel_path.parts[0] in ("project", "setting") or any(p.startswith(".") for p in rel_path.parts):
+        raise P.ValidationError(f"--add-frontmatter {rel}: must be a vault-relative note outside project/, setting/ and hidden directories")
+    path = vault / rel_path
+    if path.is_symlink() or not path.is_file() or path.suffix != ".md":
+        raise P.ValidationError(f"--add-frontmatter {rel}: not a regular .md note in the vault")
+    try:
+        raw = P._read_exact(path)
+    except (OSError, UnicodeDecodeError) as exc:
+        raise P.ValidationError(f"--add-frontmatter {rel}: cannot read as UTF-8: {exc}") from exc
+    if raw.startswith(_BOM):
+        raise P.ValidationError(f"--add-frontmatter {rel}: starts with a BOM; edit it by hand")
+    if raw.lstrip().startswith("---") or P._read_frontmatter(path, raw) is not None:
+        return path.resolve(), raw, None  # 既にある（または frontmatter らしき行で始まる）。再実行しても no-op
+    nl = "\r\n" if "\r\n" in raw else "\n"
+    blocks = P._fm_block("title", path.stem)
+    match = re.match(r"^(\d{4})(\d{2})(\d{2})_", path.stem)
+    if match:
+        try:
+            iso = datetime.date(int(match.group(1)), int(match.group(2)), int(match.group(3))).isoformat()
+            blocks += P._fm_block("date", iso)
+        except ValueError:
+            pass
+    return path.resolve(), raw, "---" + nl + "".join(line.rstrip("\n") + nl for line in blocks) + "---" + nl + raw
+
+
+def build_plan(
+    vault: Path,
+    raycast_script: Path | None,
+    accept_list_changes: bool,
+    related: str = "keep",
+    placeholder_labels: tuple[str, ...] | list[str] = (),
+    template_from: Path | None = None,
+    add_frontmatter: tuple[str, ...] | list[str] = (),
+) -> _Plan:
     plan = _Plan()
     overlay: dict[Path, str] = {}
     originals: dict[Path, str] = {}
@@ -564,10 +604,27 @@ def build_plan(vault: Path, raycast_script: Path | None, accept_list_changes: bo
         records[path.resolve()] = note
         raw_of[path.resolve()] = text
 
+    synthesized: set[Path] = set()
+    for rel in add_frontmatter:
+        resolved, raw, text = _synth_frontmatter(vault, rel)
+        if text is None:
+            report.add(f"FRONTMATTER_PRESENT {resolved.relative_to(resolved_vault).as_posix()}: already has a frontmatter; left as it is")
+            continue
+        if resolved in synthesized:
+            continue
+        synthesized.add(resolved)
+        overlay[resolved] = text
+        originals[resolved] = raw
+        raw_of[resolved] = raw
+        records[resolved] = P._read_frontmatter(resolved, text)
+        report.add(f"FRONTMATTER_ADDED {resolved.relative_to(resolved_vault).as_posix()}: title and date from the file name")
+
     frontmatter_cache: dict[Path, bool] = {}
 
     def rec_ok(target: Path) -> bool:
         """実在する vault 内 md で、frontmatter を読めるものだけ紐付けできる（無いものは行を消さずに残す）。"""
+        if target in synthesized:
+            return True
         if target not in frontmatter_cache:
             try:
                 frontmatter_cache[target] = P._read_frontmatter(target, P._read_exact(target)) is not None
@@ -600,6 +657,8 @@ def build_plan(vault: Path, raycast_script: Path | None, accept_list_changes: bo
         known_comments = set(tcomments)
         known_empty = set(tempty)
         tmpl = (tnote, tlines, tsecs, manual, tcomments)
+
+    known_empty |= {label.strip() for label in placeholder_labels if label.strip()}  # 人が placeholder と決めた label
 
     # 3. project ノートの旧 3 節
     assocs: list[_Assoc] = []
@@ -778,14 +837,32 @@ def build_plan(vault: Path, raycast_script: Path | None, accept_list_changes: bo
 
     # 6. template
     template_state = "NOOP"
+    if template_from is not None and tmpl is None:
+        raise P.ValidationError("--template-from needs setting/template/template_project.md to exist")
     if tmpl is not None:
         tnote, tlines, tsecs, manual, tcomments = tmpl
-        if manual:
+        replaced = None
+        if template_from is not None:
+            try:
+                replaced = P._read_exact(template_from.expanduser())
+            except (OSError, UnicodeDecodeError) as exc:
+                raise P.ValidationError(f"--template-from {template_from.name}: cannot read as UTF-8: {exc}") from exc
+            if replaced.startswith(_BOM):
+                raise P.ValidationError(f"--template-from {template_from.name}: starts with a BOM")
+            if P._has_local_path(replaced):
+                raise P.ValidationError(f"--template-from {template_from.name}: contains a local absolute path or file:// URL")
+            source = P._parse_note_text(template_from, replaced)
+            if _old_sections(list(source.lines), _fenced_lines(list(source.lines))):
+                raise P.ValidationError(f"--template-from {template_from.name}: still has the old minutes / related notes / documents sections")
+        if manual and replaced is None:
             template_state = "MANUAL"
-            report.add("TEMPLATE_MANUAL template_project.md has content in the old sections; edit it by hand")
+            report.add("TEMPLATE_MANUAL template_project.md has content in the old sections; edit it by hand (or give the new text with --template-from)")
         else:
-            lines2 = _rebuild_project_note(tnote, [(a, b) for _, a, b, _ in tsecs], []) if tsecs else tlines
-            text = "".join(lines2)
+            if replaced is not None:
+                text = replaced
+            else:
+                lines2 = _rebuild_project_note(tnote, [(a, b) for _, a, b, _ in tsecs], []) if tsecs else tlines
+                text = "".join(lines2)
             parsed = P._parse_note_text(template, text)
             fm_lines = list(parsed.lines[1 : parsed.close_index])
             for name in ("partner", "scope"):
@@ -800,7 +877,9 @@ def build_plan(vault: Path, raycast_script: Path | None, accept_list_changes: bo
                 overlay[template] = text
                 originals[template] = tnote.text
                 template_state = "CHANGE"
-                for comment in tcomments:
+                if replaced is not None:
+                    report.add("TEMPLATE_REPLACED template_project.md: the new text came from --template-from")
+                for comment in [] if replaced is not None else tcomments:
                     report.add(f"TEMPLATE_COMMENTS_DROPPED template_project.md: {comment[:100]}")
 
     # 7. render（領域・list・Raycast）を、計画後の内容（overlay）に対して
@@ -932,7 +1011,10 @@ def cmd_migrate(args, module) -> int:
     if args.plan_id and not args.apply:
         raise P.ValidationError("--plan-id is only used together with --apply")
     diff_dir = _check_diff_dir(vault, args.diff_dir) if args.diff_dir is not None else None
-    plan = build_plan(vault, args.raycast_script, args.accept_list_changes, args.related_notes)
+    plan = build_plan(
+        vault, args.raycast_script, args.accept_list_changes, args.related_notes,
+        args.placeholder_label or [], args.template_from, args.add_frontmatter or [],
+    )
     changes = plan.changes
     for line in plan.report.lines:
         print(line)

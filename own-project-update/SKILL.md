@@ -125,6 +125,18 @@ python3 scripts/project_update.py attach-document --vault <vault-root> \
 - `--artifact` は worktree 内の成果物を main チェックアウトの同じ相対パスへ解決して相対 symlink を作る。解決できなければ
   link を作らず document note だけ公開する。
 
+## migrate（既存 vault を新契約へ・1 回だけ）
+
+```text
+python3 scripts/project_update.py migrate --vault <vault-root> --diff-dir <vault の外のディレクトリ> [--related-notes keep|associate] [--raycast-script <path>]
+# dry-run が既定。出力の PLAN_ID と --diff-dir の差分を人間が確認し、同じ引数で:
+python3 scripts/project_update.py migrate --vault <vault-root> --apply --plan-id <PLAN_ID>
+```
+
+- 夜間 job では実行しない。`--apply` は人間が見たプラン（`PLAN_ID`）だけを書く。差分は vault の外に出す（vault の内容を含むので git に入れない）。
+- 何をどう移すか・何を残すか・何を止めるかは [references/project-contract.md](references/project-contract.md) の Migration。`REPAIRED_RECORD`・
+  `MISSING_RECORD`・`SUMMARY_KEPT`・`TEMPLATE_MANUAL` は人間が見る項目。
+
 ## 必須の検査
 
 - YAML parse 成功、指定 key との一致、backlink の相対リンクと重複なし

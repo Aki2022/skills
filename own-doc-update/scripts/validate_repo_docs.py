@@ -1160,6 +1160,9 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
     workstreams_dir = root / "docs/workstreams"
     if workstreams_dir.is_dir():
         for path in sorted(workstreams_dir.glob("*.md")):
+            # README explains the directory; it is not a lifecycle workstream.
+            if path.name == "README.md":
+                continue
             rel = str(path.relative_to(root))
             fm = parse_front_matter(path)
             if fm is None:

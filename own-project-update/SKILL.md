@@ -138,7 +138,7 @@ python3 scripts/project_update.py migrate --vault <vault-root> [dry-run と同�
 - 人が決める入力（どれも PLAN_ID に入るので、apply でも同じものを付ける）: `--placeholder-label <label>` は template の旧 3 節に無い空リンク `[label]()` を placeholder と決める。`--template-from <file>` は旧 3 節に人が置き場所を決める本文があって `TEMPLATE_MANUAL` になる template の新しい本文（旧 3 節なし。`partner`・`scope`・generated 領域は足される。ローカルの絶対パスは拒否）。`--add-frontmatter <vault 相対パス>` は frontmatter の無い note に最小の frontmatter（title はファイル名、date は `YYYYMMDD_` で始まるときだけ）を付けて、project ノートの行から紐付けられるようにする（既にあれば `FRONTMATTER_PRESENT` で触らない）。
 - `--accept-list-changes` は `list_project.md` にしか無い値（frontmatter と食い違う partner・status・より新しい last meeting）を捨てて render と同じ形に揃える指定。既定では止まる。付けた dry-run は、落ちる値を `LIST_VALUE_DROPPED` として列挙する。
 - 何をどう移すか・何を残すか・何を止めるかは [references/project-contract.md](references/project-contract.md) の Migration。`REPAIRED_RECORD`・`ADDED_BACKLINK`・
-  `UNLINKED_ROW`・`UNKNOWN_PROJECT`・`UNRECOGNIZED_TABLE`・`ROW_KEPT`・`LIST_VALUE_DROPPED`・`SUMMARY_KEPT`・`TEMPLATE_COMMENTS_DROPPED`・`TEMPLATE_MANUAL` は人間が見る項目。
+  `UNLINKED_ROW`・`UNKNOWN_PROJECT`・`UNRECOGNIZED_TABLE`・`TEMPLATE_REPLACED`・`FRONTMATTER_ADDED`・`FRONTMATTER_PRESENT`・`PLACEHOLDER_LABEL_UNUSED`・`ROW_KEPT`・`LIST_VALUE_DROPPED`・`SUMMARY_KEPT`・`TEMPLATE_COMMENTS_DROPPED`・`TEMPLATE_MANUAL` は人間が見る項目。
 
 ## 必須の検査
 

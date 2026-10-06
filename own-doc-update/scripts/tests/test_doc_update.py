@@ -864,6 +864,23 @@ class SilentPassTest(ValidateRepoDocsV2Test):
             "an unversioned workstream skipped the entire contract and passed",
         )
 
+    def test_workstreams_readme_is_not_validated_as_a_workstream(self):
+        root = self.make_repo()
+        (root / "docs/workstreams/README.md").write_text(
+            "# Workstreams\n\nThis file explains the directory.\n"
+        )
+
+        errors, warnings = MODULE.validate_repo(root)
+
+        self.assertFalse(
+            any("docs/workstreams/README.md:" in message for message in errors),
+            errors,
+        )
+        self.assertFalse(
+            any("docs/workstreams/README.md:" in message for message in warnings),
+            warnings,
+        )
+
     def test_an_issue_without_schema_version_is_not_silently_exempt(self):
         root = self.make_repo()
         (root / "docs/issues/ISSUE-20260803-noschema.md").write_text(

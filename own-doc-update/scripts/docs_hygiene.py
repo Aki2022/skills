@@ -93,7 +93,9 @@ PLACEHOLDER_CHARS = set("<>{}*$")
 def git(root: Path, *args: str) -> Optional[str]:
     try:
         proc = subprocess.run(
-            ["git", "-C", str(root), *args], capture_output=True, text=True, check=False
+            ["git", "-C", str(root), *args], capture_output=True, text=True, check=False,
+            # 結合 diff の hunk ヘッダは関数名を文字の途中で切ることがある。strict だと --fix が落ちる
+            encoding="utf-8", errors="replace",
         )
     except OSError:
         return None

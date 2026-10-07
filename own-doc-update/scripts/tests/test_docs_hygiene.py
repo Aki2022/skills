@@ -801,3 +801,51 @@ class UpdatedAtNoDriftTest(HygieneFixture):
         again = MODULE.run(root, fix=True, report=False, today=date(2026, 9, 25))
         self.assertEqual(again["fixes"]["A5_updated_at_synced"]["count"], 0)
         self.assertIn("updated_at: 2026-09-10", path.read_text())
+
+
+class GitOutputDecodingTest(unittest.TestCase):
+    """merge コミットの結合 diff は、hunk ヘッダの関数名を文字の途中で切ることがある。
+
+    その出力を text=True の strict utf-8 で読むと UnicodeDecodeError で --fix が丸ごと落ちる
+    （2026-10-07 の実リポジトリで、日本語を含む見出しに対する merge コミットで再現）。
+    落とさず、読める部分は返す。
+    """
+
+    def test_a_combined_diff_header_cut_mid_character_does_not_crash_the_helper(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            git(root, "init", "-q", "-b", "main")
+            doc = root / "doc.md"
+            # 関数名の行は英字で始まる必要がある（git の既定パターン）。直前の行が英字で始まると
+            # そちらが関数名になるので、本文の行は `- ` で始める。結合 diff は関数名を 40 バイトで
+            # 切るので、英字 8 バイト + 日本語（3 バイト幅）にして、切れ目を文字の途中に当てる。
+            heading = "Heading " + "あ" * 40
+
+            def write(last: str) -> None:
+                doc.write_text(f"{heading}\n- keep\n- {last}\n", encoding="utf-8")
+
+            write("base")
+            git(root, "add", "."); git(root, "commit", "-q", "-m", "base", when="2026-09-01T00:00:00")
+            git(root, "switch", "-q", "-c", "other")
+            write("theirs")
+            git(root, "commit", "-q", "-am", "theirs", when="2026-09-02T00:00:00")
+            git(root, "switch", "-q", "main")
+            write("mine")
+            git(root, "commit", "-q", "-am", "mine", when="2026-09-03T00:00:00")
+            subprocess.run(["git", "-C", str(root), "merge", "-q", "other"], capture_output=True)  # 衝突する
+            write("resolved")
+            git(root, "add", "."); git(root, "commit", "-q", "-m", "merge", when="2026-09-04T00:00:00")
+            sha = git(root, "rev-parse", "HEAD").strip()
+
+            # 前提: 生の出力は strict utf-8 で読めない（読めるなら、このテストは何も検査していない）
+            raw = subprocess.run(
+                ["git", "-C", str(root), "show", "--format=", "--unified=0", sha, "--", "doc.md"],
+                capture_output=True, check=True,
+            ).stdout
+            with self.assertRaises(UnicodeDecodeError):
+                raw.decode("utf-8")
+
+            out = MODULE.git(root, "show", "--format=", "--unified=0", sha, "--", "doc.md")
+
+            self.assertIsNotNone(out)
+            self.assertIn("resolved", out)

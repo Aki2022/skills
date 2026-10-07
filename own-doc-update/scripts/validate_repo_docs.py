@@ -1110,7 +1110,13 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
                     )
             branch = as_text(fm.get("branch", "")).strip()
             if not branch:
-                warnings.append(f"{rel}: missing branch (no branch recorded to resume/clean up)")
+                # 枝の記録は「作業中の issue を別セッションが再開・掃除するため」のもの。
+                # 起票直後（active）や未着手（pending）はまだ枝を切っていないのが正常で、
+                # そこで警告すると、枝名を先に書く（存在しない枝になり
+                # check_active_issue_branches.py が MISSING と報告する）以外に黙らせる
+                # 方法が無かった（ISSUE-20260903-improve-loop-branch-record-checks-disagree）。
+                if status == "in_progress":
+                    warnings.append(f"{rel}: missing branch (no branch recorded to resume/clean up)")
             elif branch not in ("main", "master"):
                 # Shared trunk branches are never deleted by cleanup, so multiple
                 # direct-to-main issues sharing them is not an ownership conflict.
@@ -1154,6 +1160,9 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
     workstreams_dir = root / "docs/workstreams"
     if workstreams_dir.is_dir():
         for path in sorted(workstreams_dir.glob("*.md")):
+            # README explains the directory; it is not a lifecycle workstream.
+            if path.name == "README.md":
+                continue
             rel = str(path.relative_to(root))
             fm = parse_front_matter(path)
             if fm is None:

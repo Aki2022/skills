@@ -174,7 +174,10 @@ def docs_files(root: Path, *subdirs: str) -> list[Path]:
     for sub in subdirs:
         directory = root / "docs" / sub
         if directory.is_dir():
-            out.extend(sorted(p for p in directory.glob("*.md") if p.is_file()))
+            out.extend(sorted(
+                p for p in directory.glob("*.md")
+                if p.is_file() and not (sub == "workstreams" and p.name == "README.md")
+            ))
     return out
 
 

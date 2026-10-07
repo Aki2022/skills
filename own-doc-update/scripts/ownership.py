@@ -186,6 +186,9 @@ def load_model(root: Path, parse_front_matter: Callable[[Path], Optional[dict]])
         if not folder.is_dir():
             continue
         for path in sorted(folder.glob("*.md")):
+            # README explains the directory; it is not a managed workstream.
+            if kind == "ws" and path.name == "README.md":
+                continue
             fm = parse_front_matter(path) or {}
             content = path.read_text()
             doc = Doc(

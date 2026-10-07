@@ -19,8 +19,8 @@ Obsidian の `vault/project/`、`vault/record/`、`vault/setting/list/list_proje
 
 録音開始時に recorder が `vault_project` を解決した会議は、recorder が次を行う正規経路だよ。
 
-- 議事録 YAML に `project: <key>` を入れる
-- frontmatter 直後に record backlink を入れる
+- 議事録 YAML に `project`（リスト）と `project_source` を入れる
+- frontmatter 直後に record backlink を project ごとに入れる
 - publish 後に既存 project ノートを更新する
 - `list_project.md` の最終会議日を決定論的に更新する
 
@@ -46,7 +46,7 @@ record・一覧の契約を確認するだけなら audit として扱う。い�
 
 - project key の正典は `vault/project/project_<key>.md` の frontmatter `project`
 - project ノートの frontmatter `client` が正典で、`list_project.md` は表示用の写像
-- record は YAML `project` と、次の backlink を両方持つ
+- record は YAML `project`（常にリスト。旧来の文字列も読める）と、所属 project ごとの次の backlink を両方持つ
   `> project: [project_<key>](../project/project_<key>.md)`
 - `client_aliases` は候補発見用で、曖昧な候補を自動確定しない
 
@@ -74,7 +74,7 @@ record・一覧の契約を確認するだけなら audit として扱う。い�
   ノート、record、一覧、入力内容は変更しない。
 - `list_project.md` に既存の project 行がある場合も重複作成せず停止する。client 差分は
   project ノートを正典として示し、確認を得てから一覧を合わせる。
-- 対象 record に別 project の YAML または backlink があれば、既存紐付けを保持して停止する。
+- 対象 record に別 project の YAML または backlink があっても、既存の所属を保持して追加する。リストと backlink が食い違う record は推測せず停止する。
   解除・再割当・明示上書きは別操作であり、bootstrap に含めない。
 - 内容のない会議は `minutes` へのリンク追加に限定し、overview / next actions / risks に
   空振りの「確認する」項目を生成しない。
@@ -91,6 +91,8 @@ python3 scripts/project_update.py --vault <vault-root> --mode bootstrap \
 python3 scripts/project_update.py --vault <vault-root> --mode backfill \
   --project-key <key> --record record/<meeting>.md
 # dry-run が既定。差分確認後だけ --apply を追加する。
+# 既存の所属は保持して追加する（project は常にリスト・project_source: manual・project ごとの backlink）。
+# --summary "<1 行>" は record に summary が無いときだけ書く。
 
 python3 scripts/project_update.py --vault <vault-root> --mode validate \
   --project-key <key> --record record/<meeting>.md
@@ -99,6 +101,44 @@ python3 scripts/project_update.py --vault <vault-root> --mode validate \
 `bootstrap` は新規 project ノートが無いことを確認するだけで、ノート本文は生成しない。
 LLM 草案と人間確認を終えて project ノートを作成した後、`backfill` と `validate` を実行する。
 ヘルパーは preflight を全件終えてから書き込み、書き込み失敗時は変更済み record を復元する。
+
+## render と attach-document
+
+`render` は project ノートの generated 領域（associated-notes view）に加えて、`list_project.md` と（指定時）Raycast 一覧を同じ入力から全体生成する（全部揃えられなければ何も書かない）。`attach-document` は生成資料のテキストを
+document note として公開し、同じ batch で関連 project ノートを render する。どちらも dry-run が既定で、`--apply` で書く。
+契約の詳細は [references/project-contract.md](references/project-contract.md) の Document note と Generated region。
+
+```text
+python3 scripts/project_update.py render --vault <vault-root> [--project-key <key>] [--raycast-script <path>] [--accept-list-changes] [--apply]
+
+python3 scripts/project_update.py attach-document --vault <vault-root> \
+  --kind <kind> --name <yyyymmdd_name> --source-repo <repo> --source-path <relative path> \
+  [--summary "<1 行の要約>" | --summary-file <summary.txt>] [--digest-file <digest.md>] [--outline-file <outline.md>] [--notes-file <notes.md>] \
+  [--hint KEY=VALUE ...] (--project <key> ... | --no-project) [--artifact <original file>] [--apply]
+```
+
+- 公開する中身は `--outline-file` と `--digest-file` の少なくとも一方。`--digest-file` を渡さないときは `--summary` か `--summary-file`（1 行。題に引用符や `$` があるときは後者）が必須で、
+  note に `## digest` 節は作らない（キーメッセージを抜き出す解析を生産者側に持たせず、outline をそのまま載せる使い方）。
+- project は判定器（assess）の提案を人間が確定してから `--project` で渡す。assess は未実装の間「提案なし」を返し、
+  `--apply` は `--project` か `--no-project` のどちらかが無いと停止する（黙って未紐付けにしない）。
+- 既存の document note は、`source_hash` が同じなら本文を書かず、人間が本文を編集していたら上書きせず停止する。
+- `--artifact` は worktree 内の成果物を main チェックアウトの同じ相対パスへ解決して相対 symlink を作る。解決できなければ
+  link を作らず document note だけ公開する。
+
+## migrate（既存 vault を新契約へ・1 回だけ）
+
+```text
+python3 scripts/project_update.py migrate --vault <vault-root> --diff-dir <vault の外のディレクトリ> [--related-notes keep|associate] [--raycast-script <path>] [--accept-list-changes]
+  [--placeholder-label <label>]... [--template-from <file>] [--add-frontmatter <vault 相対パス>]...
+# dry-run が既定。出力の PLAN_ID と --diff-dir の差分を人間が確認し、dry-run と同じオプション（--related-notes・--raycast-script・--accept-list-changes・--placeholder-label・--template-from・--add-frontmatter）を付けて:
+python3 scripts/project_update.py migrate --vault <vault-root> [dry-run と同じオプション] --apply --plan-id <PLAN_ID>
+```
+
+- 夜間 job では実行しない。`--apply` は人間が見たプラン（`PLAN_ID`）だけを書く。差分は vault の外に出す（vault の内容を含むので git に入れない。vault の中・vault を含む場所・前回の migrate dry-run が作ったものでない空でないディレクトリは拒否し、前回の dry-run が書いた `.diff` だけを消す）。
+- 人が決める入力（どれも PLAN_ID に入るので、apply でも同じものを付ける）: `--placeholder-label <label>` は template の旧 3 節に無い空リンク `[label]()` を placeholder と決める。`--template-from <file>` は旧 3 節に人が置き場所を決める本文があって `TEMPLATE_MANUAL` になる template の新しい本文（旧 3 節なし。`partner`・`scope`・generated 領域は足される。ローカルの絶対パスは拒否）。`--add-frontmatter <vault 相対パス>` は frontmatter の無い note に最小の frontmatter（title はファイル名、date は `YYYYMMDD_` で始まるときだけ）を付けて、project ノートの行から紐付けられるようにする（既にあれば `FRONTMATTER_PRESENT` で触らない）。
+- `--accept-list-changes` は `list_project.md` にしか無い値（frontmatter と食い違う partner・status・より新しい last meeting）を捨てて render と同じ形に揃える指定。既定では止まる。付けた dry-run は、落ちる値を `LIST_VALUE_DROPPED` として列挙する。
+- 何をどう移すか・何を残すか・何を止めるかは [references/project-contract.md](references/project-contract.md) の Migration。`REPAIRED_RECORD`・`ADDED_BACKLINK`・
+  `UNLINKED_ROW`・`UNKNOWN_PROJECT`・`UNRECOGNIZED_TABLE`・`TEMPLATE_REPLACED`・`FRONTMATTER_ADDED`・`FRONTMATTER_PRESENT`・`PLACEHOLDER_LABEL_UNUSED`・`ROW_KEPT`・`LIST_VALUE_DROPPED`・`SUMMARY_KEPT`・`TEMPLATE_COMMENTS_DROPPED`・`TEMPLATE_MANUAL` は人間が見る項目。
 
 ## 必須の検査
 

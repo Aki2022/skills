@@ -175,5 +175,112 @@ class CreateIssueBranchTest(unittest.TestCase):
         self.assertEqual(value, "", f"テンプレートが {branch_lines[0]!r} と教えている")
 
 
+class MissingBranchWarningTest(unittest.TestCase):
+    """`missing branch` は「作業中の issue で再開先の枝が分からない」ことへの警告。
+
+    起票直後（active）や未着手（pending）の issue は、まだ枝を切っていないのが正常なので
+    警告しない。警告するのは in_progress だけ。
+    ISSUE-20260903-improve-loop-branch-record-checks-disagree: 空にすると警告、存在しない
+    枝名を書くと MISSING、で未着手の issue に両方が黙る値が無かった。
+    """
+
+    def make_issue(self, status: str, branch: str) -> list[str]:
+        root = CreateIssueBranchTest().make_repo()
+        result = subprocess.run(
+            [sys.executable, str(SCRIPTS / "create_issue.py"), "sample-slug",
+             "--repo", str(root), "--standalone", "--priority", "low", "--due", "none",
+             "--no-guide-reason", "test", "--verify-machine", "true",
+             "--next-action", "run the test"],
+            capture_output=True, text=True, timeout=30,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        issue = next((root / "docs/issues").glob("ISSUE-*-sample-slug.md"))
+        text = issue.read_text(encoding="utf-8")
+        text = text.replace("status: active", f"status: {status}", 1)
+        text = text.replace('branch: ""', f"branch: {branch}" if branch else 'branch: ""', 1)
+        issue.write_text(text, encoding="utf-8")
+        _errors, warnings = VALIDATE.validate_repo(root)
+        return [w for w in warnings if "missing branch" in w]
+
+    def test_in_progress_without_a_branch_is_warned(self):
+        self.assertEqual(len(self.make_issue("in_progress", "")), 1)
+
+    def test_in_progress_with_a_branch_is_not_warned(self):
+        self.assertEqual(self.make_issue("in_progress", "feat/x"), [])
+
+    def test_a_fresh_active_issue_is_not_warned(self):
+        """起票直後に枝が無いのは正常。ここが警告だと、起票のたびに警告が 1 件増える。"""
+        self.assertEqual(self.make_issue("active", ""), [])
+
+    def test_a_pending_issue_is_not_warned(self):
+        self.assertEqual(self.make_issue("pending", ""), [])
+
+    def test_a_blocked_issue_is_not_warned(self):
+        self.assertEqual(self.make_issue("blocked", ""), [])
+
+
+class MissingScopeTest(unittest.TestCase):
+    """MISSING は「作業中のはずの枝が消えた」異常だけを指す（status: in_progress のみ）。
+
+    枝は merge 後に削除する運用なので、枝を記録した issue は完了・保留を含めて全件が
+    MISSING になり、母集団の 100% を指す検査は何も指していなかった
+    （yorisoi_kaigo 2026-10-02: OK 0 件 / MISSING 95 件）。
+    """
+
+    CHECK = SKILLS / "own-git-clean/scripts/check_active_issue_branches.py"
+
+    def make_repo(self, issues: dict, local_branches=()) -> Path:
+        root = Path(tempfile.mkdtemp())
+        git = lambda *a: subprocess.run(["git", "-C", str(root), *a], capture_output=True, text=True, timeout=30)
+        git("init", "-b", "main")
+        git("config", "user.name", "t")
+        git("config", "user.email", "t@example.invalid")
+        (root / "docs/issues").mkdir(parents=True)
+        for iid, (status, branch) in issues.items():
+            (root / f"docs/issues/{iid}.md").write_text(
+                f"---\nschema_version: 2\nid: {iid}\nstatus: {status}\nbranch: {branch}\n---\n\nbody\n",
+                encoding="utf-8")
+        (root / "README").write_text("x\n")
+        git("add", "-A")
+        git("commit", "-m", "base")
+        for b in local_branches:
+            git("branch", b)
+        return root
+
+    def run_check(self, root: Path) -> str:
+        r = subprocess.run([sys.executable, str(self.CHECK), str(root)], capture_output=True, text=True, timeout=30)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return r.stdout
+
+    def test_only_in_progress_is_reported_missing(self):
+        out = self.run_check(self.make_repo({
+            "ISSUE-1-wip": ("in_progress", "feat/gone"),
+            "ISSUE-2-active": ("active", "feat/gone2"),
+            "ISSUE-3-pending": ("pending", "feat/gone3"),
+        }))
+        self.assertIn("MISSING: ISSUE-1-wip", out)
+        self.assertNotIn("MISSING: ISSUE-2-active", out)
+        self.assertNotIn("MISSING: ISSUE-3-pending", out)
+
+    def test_a_live_branch_is_still_ok_for_in_progress(self):
+        out = self.run_check(self.make_repo({"ISSUE-1-wip": ("in_progress", "feat/live")}, ["feat/live"]))
+        self.assertIn("OK: ISSUE-1-wip -> feat/live", out)
+        self.assertNotIn("MISSING", out)
+
+    def test_a_live_branch_recorded_by_an_active_issue_is_not_an_orphan(self):
+        """MISSING だけ絞って、枝の集合まで絞ってはいけない。絞ると生きた枝が孤児候補になる。"""
+        out = self.run_check(self.make_repo({"ISSUE-2-active": ("active", "ISSUE-2-active")}, ["ISSUE-2-active"]))
+        orphan_section = out.split("=== ORPHAN CANDIDATE BRANCHES ===")[1]
+        self.assertNotIn("ISSUE-2-active (looks issue-shaped", orphan_section)
+
+    def test_duplicate_branch_references_still_cover_every_status(self):
+        out = self.run_check(self.make_repo({
+            "ISSUE-1-a": ("active", "feat/shared"),
+            "ISSUE-2-b": ("pending", "feat/shared"),
+        }, ["feat/shared"]))
+        dup = out.split("=== DUPLICATE BRANCH REFERENCES ===")[1].split("===")[0]
+        self.assertIn("feat/shared", dup)
+
+
 if __name__ == "__main__":
     unittest.main()

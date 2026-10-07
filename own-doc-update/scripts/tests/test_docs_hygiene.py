@@ -131,6 +131,17 @@ class ReportPreservationTest(HygieneFixture):
         self.assertEqual(third["report_path"], second["report_path"])
 
 
+class ManagedDocDiscoveryTest(HygieneFixture):
+    def test_workstreams_readme_is_not_discovered_as_a_lifecycle_document(self):
+        root = self.make_repo()
+        readme = root / "docs/workstreams/README.md"
+        readme.write_text("---\nupdated_at: 2026-09-01\n---\n\n# Workstreams\n")
+
+        discovered = MODULE.docs_files(root, "workstreams")
+
+        self.assertNotIn(readme, discovered)
+
+
 class ArchiveCompleteTest(HygieneFixture):
     def test_completed_policy_survives_hygiene_and_second_run(self):
         root = self.make_repo()

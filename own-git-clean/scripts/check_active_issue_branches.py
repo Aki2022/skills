@@ -102,6 +102,7 @@ def main() -> None:
 
     # Collect active issues (exclude archive/) and their recorded branch.
     issue_branches: dict[str, str] = {}  # issue_id -> branch
+    issue_status: dict[str, str] = {}  # issue_id -> status
     branch_owners: dict[str, list[str]] = {}
     for fname in sorted(os.listdir(issues_dir)):
         fpath = os.path.join(issues_dir, fname)
@@ -114,6 +115,7 @@ def main() -> None:
         branch = fm.get("branch", "").strip()
         if branch:
             issue_branches[issue_id] = branch
+            issue_status[issue_id] = fm.get("status", "").strip()
             branch_owners.setdefault(branch, []).append(issue_id)
 
     local_branches = {
@@ -141,11 +143,19 @@ def main() -> None:
     section("ACTIVE ISSUE -> BRANCH STATUS")
     if not issue_branches:
         print("(no active issues record a branch field)")
+    unchecked = 0
     for issue_id, branch in sorted(issue_branches.items()):
         if branch in local_branches or branch in remote_branches:
             print(f"OK: {issue_id} -> {branch}")
+        elif issue_status.get(issue_id) == "in_progress":
+            print(f"MISSING: {issue_id} -> {branch} (not found locally or on remote — the branch of work in progress is gone: resume needs a fresh branch, or it was cleaned up without archiving the issue)")
         else:
-            print(f"MISSING: {issue_id} -> {branch} (not found locally or on remote — resume needs a fresh branch, or it was cleaned up without archiving the issue)")
+            # 枝は merge 後に削除する運用なので、完了・保留・未着手の issue の枝が
+            # 無いのは正常。ここを MISSING にすると、枝を記録した issue は全件が
+            # MISSING になり、母集団の 100% を指す検査は何も指さなくなる。
+            unchecked += 1
+    if unchecked:
+        print(f"(not checked: {unchecked} issue(s) not in_progress record a branch that no longer exists — expected after merge cleanup)")
 
     section("ORPHAN CANDIDATE BRANCHES")
     known_branches = set(issue_branches.values())

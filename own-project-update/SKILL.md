@@ -93,6 +93,9 @@ python3 scripts/project_update.py --vault <vault-root> --mode backfill \
 # dry-run が既定。差分確認後だけ --apply を追加する。
 # 既存の所属は保持して追加する（project は常にリスト・project_source: manual・project ごとの backlink）。
 # --summary "<1 行>" は record に summary が無いときだけ書く。
+# --source model は判定器（assess）の自動適用用: project_source: model で書く。手動・legacy・出所不明の所属がある record は
+#   上書きせず CONFLICT で止まる（何も書かない。人が「所属なし」と決めた＝manual で空の record、同名キーが重複した frontmatter も止まる）。
+#   --source は backfill 専用（validate・bootstrap では拒否）。既定の --source manual は人の採用で、model に勝つ。
 
 python3 scripts/project_update.py --vault <vault-root> --mode validate \
   --project-key <key> --record record/<meeting>.md

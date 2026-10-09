@@ -266,6 +266,8 @@ def prepare_record(path: Path, key: str, summary: str | None = None, source: str
     An existing association is kept and the key is appended (manual beats model).  A record that already lists the key is
     left byte-for-byte alone (a legacy scalar stays a scalar until `migrate`).  Line endings are preserved.
     """
+    if source not in ("manual", "model"):
+        raise ValidationError(f"unknown source {source!r}; expected 'manual' or 'model'")
     note = parse_note(path, exact=True)
     # 書く経路の検査は読む経路（_validate_record）と同じ強さにする。
     # 2026-09-29 以前は backfill だけがこの検査を通らず、validate が拒否する入力を
@@ -277,7 +279,13 @@ def prepare_record(path: Path, key: str, summary: str | None = None, source: str
     changed = False
 
     new_projects = projects if key in projects else projects + [key]
-    current = str(note.data.get("project_source") or "").strip()
+    raw_source = note.data.get("project_source")
+    current = "" if raw_source is None else str(raw_source).strip()  # `0`・`no`（YAML では false）も「出所あり」として守る
+    if source == "model":
+        # 同名キーの重複は、読む（後勝ち）と書き直す（1 つにまとめる）で食い違い、人の行を黙って消す。model は止まる
+        for name in ("project", "project_source"):
+            if sum(1 for line in note.lines[1 : note.close_index] if re.match(rf"^[\"\']?{name}[\"\']?\s*:", line)) > 1:
+                raise ConflictError(f"{path.name}: the {name!r} frontmatter key appears more than once; a model result does not rewrite it")
     if source == "model" and current != "model" and (projects or current):
         # 手動・legacy・出所不明（人が付けたかもしれない）の所属は、model の判定で上書きしない
         raise ConflictError(
@@ -470,6 +478,8 @@ def _preflight(args: argparse.Namespace, paths: list[Path]) -> tuple[Path, list[
     summary = _normalize_summary(getattr(args, "summary", None))
     if summary is not None and args.mode != "backfill":
         raise ValidationError("--summary is for --mode backfill only")
+    if getattr(args, "source", "manual") != "manual" and args.mode != "backfill":
+        raise ValidationError("--source is for --mode backfill only")
     if summary is not None and len(paths) > 1:
         # summary は会議 1 件の要約。複数 record に同じ 1 行を黙って書かない。
         raise ValidationError("--summary can only be used with a single --record")

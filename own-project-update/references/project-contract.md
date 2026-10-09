@@ -62,6 +62,8 @@ frontmatter の直後、本文の先頭に、所属する project ごとに 1 �
   どちらが正しいかを推測せず停止する（backfill/bootstrap は CONFLICT、validate は ERROR）。
 - 明示的な backfill で、既に `project_source: model` の key が載っている record は `manual` に昇格する（人の採用は model に勝つ。
   `legacy`・未記載は触らない）。
+- `--source model`（判定器の自動適用）は、所属が無い record か、`project_source: model` の record にだけ追加する（出所は `model` のまま。既に載っている key は何もしない）。
+  `manual`・`legacy`・出所不明（人が付けたかもしれない）の所属がある record、人が「所属なし」と決めた（`manual` で空の）record は上書きせず CONFLICT で止まる。
 - `project` / `project_source` の行（リストの中を含む）に YAML コメントがあると、書き直しで消えるので CONFLICT で止まる（人間が直す）。
   引用符つきの `"project":` も同じキーとして置き換え、重複キーを作らない。書く前に書いた結果を読み直して検査する。
 - `summary` は既存と違う値なら上書きせず停止する。1 行・ローカルパスなし。`--summary` は backfill だけ・`--record` が 1 件のときだけ

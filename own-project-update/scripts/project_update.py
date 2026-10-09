@@ -257,8 +257,11 @@ def _fm_key_block(fm_lines: list[str], key: str) -> list[str]:
     return block
 
 
-def prepare_record(path: Path, key: str, summary: str | None = None) -> Change:
-    """Plan adding `key` to a record: list-form `project`, `project_source: manual`, per-project backlinks, optional `summary`.
+def prepare_record(path: Path, key: str, summary: str | None = None, source: str = "manual") -> Change:
+    """Plan adding `key` to a record: list-form `project`, `project_source` (`manual` by default), per-project backlinks, optional `summary`.
+
+    `source="model"` is the judge's automatic application: it only writes to a record with no association or one the model itself wrote
+    (`project_source: model`), and refuses (CONFLICT, nothing written) a record whose association is manual, legacy or of unknown origin.
 
     An existing association is kept and the key is appended (manual beats model).  A record that already lists the key is
     left byte-for-byte alone (a legacy scalar stays a scalar until `migrate`).  Line endings are preserved.
@@ -274,8 +277,17 @@ def prepare_record(path: Path, key: str, summary: str | None = None) -> Change:
     changed = False
 
     new_projects = projects if key in projects else projects + [key]
-    source = str(note.data.get("project_source") or "").strip()
-    if key not in projects or source == "model":
+    current = str(note.data.get("project_source") or "").strip()
+    if source == "model" and current != "model" and (projects or current):
+        # 手動・legacy・出所不明（人が付けたかもしれない）の所属は、model の判定で上書きしない
+        raise ConflictError(
+            f"{path.name}: project_source is {current or 'missing'!r}; a model result never overwrites a manual, legacy or unknown association"
+        )
+    if source == "model":
+        write_needed = key not in projects  # 既に自分（model）が書いた key は何もしない
+    else:
+        write_needed = key not in projects or current == "model"
+    if write_needed:
         # 書き直す行に YAML コメントがあると、書き直しで黙って消える。消さずに止める（人間が直す）。
         for name in ("project", "project_source"):
             if any(_YAML_COMMENT_RE.search(line) for line in _fm_key_block(fm_lines, name)):
@@ -284,8 +296,8 @@ def prepare_record(path: Path, key: str, summary: str | None = None) -> Change:
                 )
         if key not in projects:
             fm_lines = _replace_fm_key(fm_lines, "project", _fm_block("project", new_projects))
-        # 人が明示的に採用したら、model の判定に勝つ。legacy・未記載は触らない。
-        fm_lines = _replace_fm_key(fm_lines, "project_source", _fm_block("project_source", "manual"))
+        # 人が明示的に採用したら、model の判定に勝つ。legacy・未記載は触らない。model の自動適用は出所を model にする。
+        fm_lines = _replace_fm_key(fm_lines, "project_source", _fm_block("project_source", source))
         changed = True
     if summary is not None:
         existing = str(note.data.get("summary") or "").strip()
@@ -495,7 +507,7 @@ def _preflight(args: argparse.Namespace, paths: list[Path]) -> tuple[Path, list[
         if args.mode == "validate":
             _validate_record(path, key)
         else:
-            changes.append(prepare_record(path, key, summary))
+            changes.append(prepare_record(path, key, summary, getattr(args, "source", "manual")))
     if args.mode == "validate":
         print(f"VALID_OK project={key} records={len(paths)}")
     return project_path, changes
@@ -1674,6 +1686,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--summary", help="backfill only: one-line summary written to the record's frontmatter when it has none"
+    )
+    parser.add_argument(
+        "--source",
+        choices=("manual", "model"),
+        default="manual",
+        help="backfill only: who decided. `manual` (default, a human adoption; beats a model association) or `model` (the judge's automatic "
+        "application; refused for a record whose association is manual, legacy or of unknown origin)",
     )
     parser.add_argument(
         "--allow-list-client-mismatch",

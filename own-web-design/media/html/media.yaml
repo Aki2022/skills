@@ -19,6 +19,10 @@ rules:
     type: constraint
     summary: セマンティックHTML（見出し階層・main/header/nav/footer ランドマーク）を用いる
     validator: accessibility
+  - id: html-heading-order
+    type: constraint
+    summary: 見出しは h1→h2→h3 の順に飛ばさず入れ子にする
+    validator: accessibility
   - id: html-svg-label
     type: constraint
     summary: 意味を持つ svg/図には role="img" と aria-label（装飾は aria-hidden="true"）
@@ -29,7 +33,11 @@ rules:
     validator: accessibility
   - id: html-alt
     type: constraint
-    summary: 画像・意味を持つアイコンに代替テキストを付ける
+    summary: 画像・意味を持つアイコンに代替テキストを付ける。装飾画像は alt="" にする
+    validator: accessibility
+  - id: html-native-first
+    type: constraint
+    summary: インタラクティブ要素はネイティブ要素（button/a/input）を優先する。div にロールを足すのは最後の手段
     validator: accessibility
   - id: html-keyboard
     type: constraint

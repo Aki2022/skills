@@ -52,11 +52,11 @@ mirrors:
   - dir: fixing-accessibility
     upstream: ibelick/ui-skills
     upstream_path: skills/fixing-accessibility
-    upstream_version: unknown
-    fetched_at: 2026-08-01
+    upstream_version: df4eb34c5dee830e8e36490d6fde3451c187339b
+    fetched_at: 2026-10-12
     license: 記載なし（明示の許諾なし＝既定では全権留保）
     reinstall: npx degit ibelick/ui-skills/skills/fixing-accessibility ~/.agents/skills/fixing-accessibility
-    note: ローカルは古い版
+    note: 2026-10-12 に上流 HEAD へ更新（description と common fixes 節を反映）
   - dir: gemini-api
     upstream: google/skills
     upstream_path: skills/cloud/gemini-api

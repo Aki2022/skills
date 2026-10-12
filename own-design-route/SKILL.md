@@ -34,24 +34,27 @@ description: デザインの検査・レビューの入口。何かのデザイ�
 **この表がこの skill の本体。** 空欄は「担当が存在しない」ことの明示であり、
 検査を実行できない観点は報告にもそのまま**欠落**として書く。
 
-| 観点                             | LP                                            | プロダクト UI                                                        | 資料                                                       |
-| -------------------------------- | --------------------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------- |
-| 審美・レイアウト実測（決定論）   | `own-website-audit` の `measure_lp.mjs`        | 同スクリプト流用可。ただし `fold-cta` 等 LP 前提の検査は解釈を添える | `own-web-design` の validator（自己点検が主・弱い） |
-| マーケ定性（独立レビュアー採点） | `own-website-audit` の rubric                  | **欠落**                                                             | **欠落**                                                   |
-| 広告審査・法務・SEO・計測        | `own-website-audit`                        | `own-website-audit`（該当節のみ）                                 | 対象外                                                     |
-| UI ガイドライン準拠              | `web-design-guidelines`                       | `web-design-guidelines`                                              | 対象外                                                     |
-| アクセシビリティ修正             | `fixing-accessibility`                        | `fixing-accessibility`                                               | **欠落**（validator の自己点検のみ）                       |
-| 表示性能（Core Web Vitals）      | `web-perf`                                    | `web-perf`                                                           | 対象外                                                     |
-| AI 生成様式の検出                | `baseline-ui`                                 | `baseline-ui`                                                        | **欠落**                                                   |
-| ブランド一貫性                   | `own-web-design` validator（自己点検）     | 同左                                                                 | 同左                                                       |
+| 観点                             | LP                                      | プロダクト UI                                                        | 資料                                                |
+| -------------------------------- | --------------------------------------- | -------------------------------------------------------------------- | --------------------------------------------------- |
+| 審美・レイアウト実測（決定論）   | `own-website-audit` の `measure_lp.mjs` | 同スクリプト流用可。ただし `fold-cta` 等 LP 前提の検査は解釈を添える | `own-web-design` の validator（自己点検が主・弱い） |
+| マーケ定性（独立レビュアー採点） | `own-website-audit` の rubric           | **欠落**                                                             | **欠落**                                            |
+| 広告審査・法務・SEO・計測        | `own-website-audit`                     | `own-website-audit`（該当節のみ）                                    | 対象外                                              |
+| UI ガイドライン準拠              | `web-design-guidelines`                 | `web-design-guidelines`                                              | 対象外                                              |
+| アクセシビリティ修正             | `fixing-accessibility`                  | `fixing-accessibility`                                               | **欠落**（validator の自己点検のみ）                |
+| 表示性能（Core Web Vitals）      | `web-perf`                              | `web-perf`                                                           | 対象外                                              |
+| AI 生成様式の検出                | `baseline-ui`                           | `baseline-ui`                                                        | **欠落**                                            |
+| ブランド一貫性                   | `own-web-design` validator（自己点検）  | 同左                                                                 | 同左                                                |
 
 補足:
 
 - `own-website-audit` は LP の「審美実測 + マーケ定性 + ゲート」を 1 つで持つ。
   LP のときは個別に並べず、まず `own-website-audit` を呼ぶ。
-- 重複 skill が既知: `baseline-ui` と `source-command-baseline-ui`、
-  `fixing-accessibility` と `source-command-fixing-accessibility`（内容に差分あり）。
-  ルーターは **`source-command-` 無し側**を使う。統合は `own-skill-commonize` の管轄。
+- 重複 skill の検出は `own-skill-commonize` の `skill_lint.sh`（S7）が担う。
+  `source-command-*` の対応先は現在の正典には存在しない（2026-10-12 確認）。
+  ルーターは常に通常名（`baseline-ui` 等）を使う。
+- 対象外のデザイン系 skill: `dataviz`（チャートの配色・作成指針で、検査ではない）と
+  `artifact-design`（Claude Artifacts の作成指針）は、どちらもこの repo の正典に実体が無く
+  アプリ側で提供される。検査のカバレッジ表には載せない。
 
 ### 3. 実行順序 — 決定論が緑になるまで非決定論へ進まない
 

@@ -246,14 +246,25 @@ mirrors:
     license: "MIT (repo root LICENSE; SKILL.md frontmatter)"
     reinstall: "npx degit nanaism/yomiyasu#30ee6041c328ce21d38a7963f667e079a93d7a12/skills/yomiyasu ~/.agents/skills/yomiyasu"
 
-retired:
   - dir: agents-sdk
     upstream: cloudflare/skills
     upstream_path: skills/agents-sdk
-    upstream_version: ba329ca
+    upstream_version: "unverified-local-snapshot"
     fetched_at: 2026-08-07
     license: Apache-2.0 (repo root LICENSE)
     reinstall: npx degit cloudflare/skills/skills/agents-sdk ~/.agents/skills/agents-sdk
+    note: "Reactivated existing local installation; the historical upstream pin does not match installed bytes. Exact source version remains unverified; skill content was not changed."
+
+  - dir: cloudflare
+    upstream: cloudflare/skills
+    upstream_path: skills/cloudflare
+    upstream_version: "unverified-local-snapshot"
+    fetched_at: 2026-08-07
+    license: Apache-2.0 (repo root LICENSE)
+    reinstall: npx degit cloudflare/skills/skills/cloudflare ~/.agents/skills/cloudflare
+    note: "Reactivated existing local installation; the historical upstream pin does not match installed bytes. Exact source version remains unverified; skill content was not changed."
+
+retired:
   - dir: alloydb-basics
     upstream: google/skills
     upstream_path: skills/cloud/alloydb-basics
@@ -282,13 +293,6 @@ retired:
     fetched_at: 2026-08-01
     license: Apache-2.0 (repo root LICENSE)
     reinstall: git clone https://github.com/google/skills && cp -r skills/skills/cloud/cloud-sql-basics ~/.agents/skills/cloud-sql-basics
-  - dir: cloudflare
-    upstream: cloudflare/skills
-    upstream_path: skills/cloudflare
-    upstream_version: 2b1ffd2
-    fetched_at: 2026-08-07
-    license: Apache-2.0 (repo root LICENSE)
-    reinstall: npx degit cloudflare/skills/skills/cloudflare ~/.agents/skills/cloudflare
   - dir: cloudflare-one
     upstream: cloudflare/skills
     upstream_path: skills/cloudflare-one

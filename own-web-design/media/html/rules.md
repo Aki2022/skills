@@ -14,9 +14,8 @@ title: HTML Media Rules
 
 ## 制約（constraint）
 
-- **コントラスト**（html-contrast）: WCAG AA。`validators/common/contrast.md` で `[自動]` 検証。
-- **セマンティック / ARIA / alt / キーボード**（html-semantic/aria/alt/keyboard）:
-  `validators/common/accessibility.md`。alt・セマンティック・ARIA は `[自動]`、キーボードは `[自己点検]`。
+- **a11y 系**（html-lang / viewport / semantic / heading-order / native-first / svg-label / aria / alt / keyboard / contrast）:
+  ルールの正は `media.yaml`。点検は `validators/common/accessibility.md` と `validators/common/contrast.md`。ここには書き写さない。
 - **レスポンシブ**（html-responsive）: 主要ブレークポイントで破綻しないこと。`[自己点検]`。
 
 ## 推奨（recommendation）

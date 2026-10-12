@@ -1,14 +1,6 @@
 ---
 name: own-web-design
-description: >-
-  web の成果物（HTML 画面・LP・コンポーネント・ダッシュボード）を作る工場。媒体規約（media/）と
-  倉庫から受け取った意匠を合成し、生成規律（HTML MUST）を守って出力し、必要なら実測で点検する。
-  必ず使うこと: 「UI を作って」「HTML を作って」「LP を作って」「ダッシュボードを作って」
-  「web の見た目を整えて」「ブランドに沿ったサイトを作って」と言われた時。
-  使わない場面: スライド・PPTX・提案資料の生成（own-pptx-build が持つ。本 skill は web 専用で、
-  pptx の媒体規約を持たない）／ブランド意匠の選択・値そのもの（own-brand-resolve が持つ）／
-  画像アセットの生成（own-image-gen）／検査の振り分け（own-design-route）／
-  合格まで直して再評価するループ（own-output-eval）。
+description: "web 成果物（HTML 画面・LP・コンポーネント・ダッシュボード）を作る工場。「UI を作って」「HTML を作って」「LP を作って」「ダッシュボードを作って」「web の見た目を整えて」「ブランドに沿ったサイトを作って」で必ず使う。意匠は own-brand-resolve から受け取り、画像は own-image-gen に任せる。スライドは own-pptx-build。"
 ---
 
 # own-web-design — web 成果物の工場
@@ -64,6 +56,7 @@ Validatorで点検する。
      DESIGN.md がある）→ `own-brand-resolve` に文脈と媒体を渡し、解決済みの意匠を受け取る。
    - **(b) 与件なし・発案から**（「かっこいいLPを作って」等）→ 意匠を**この工場が発案してよい**が、
      発案したことを報告に明記する。倉庫の箱を勝手に選んで「ブランド準拠」と名乗らない。
+     発案の美的指針は外部の `frontend-design` skill に従う（この工場は美的規則を持たない）。
 3. 倉庫が返すもの: 箱の id（継承元含む）・値・**出所**・**ライセンス可否**。
    可否が false の箱の実値は使わない（原則プローズのみ参照可）。
 4. Project DESIGN.md（リポジトリローカル）があれば最優先で読む。
@@ -84,15 +77,15 @@ Validatorで点検する。
 
 ## HTML出力前 必須チェックリスト（MUST — 毎回・例外なし）
 
-HTMLを生成するときは、以下を**必ず**満たす。これらは `media/html` の `type: constraint` に対応し、
-省略・後回しにしない（過去に lang / viewport / landmark / SVGラベル / focus の欠落が頻発したため必須化）。
+HTMLを生成するときは、`media/html/media.yaml` の `type: constraint`（`html-*`）を**必ず**満たす。
+ルールの正は media.yaml 一つで、ここには項目を重ねて書かない。省略・後回しにしない（過去に lang / viewport /
+landmark / SVGラベル / focus の欠落が頻発したため必須化）。主な対応は次のとおり:
 
-- [ ] `<html lang="ja">`（日本語UIなら必ず lang を付ける）
-- [ ] `<meta name="viewport" content="width=device-width, initial-scale=1">`
-- [ ] ページ本体を `<main>` で包み、`<header>` / `<nav>` / `<footer>` を適切に使う
-- [ ] 意味を持つ SVG/図に `role="img"` + `aria-label`（装飾なら `aria-hidden="true"`）
-- [ ] キーボードフォーカスを消さず `:focus-visible` を明示
-- [ ] 本文コントラスト 4.5:1 以上（リンク・薄いグレー文字・淡色背景上テキストに特に注意）
+- `html-lang`（`<html lang="ja">`）／ `html-viewport`（viewport meta）
+- `html-semantic`（見出し階層・`main`/`header`/`nav`/`footer`）／ `html-heading-order`（見出しを飛ばさない）
+- `html-svg-label`（意味を持つ図は `role="img"` + `aria-label`、装飾は `aria-hidden="true"`）
+- `html-keyboard`（`:focus-visible` を消さない）／ `html-native-first`（ネイティブ要素優先）
+- `html-contrast`（本文 4.5:1 以上）／ `html-alt`（装飾は `alt=""`）
 
 コピペ可能な骨格:
 
@@ -122,7 +115,7 @@ HTMLを生成するときは、以下を**必ず**満たす。これらは `medi
 </html>
 ```
 
-このチェックリストは**生成時に守る規律**であって、実測validate（後述）とは別。validateを実施しない場合でも
+この MUST は**生成時に守る規律**であって、実測validate（後述）とは別。validateを実施しない場合でも
 MUSTは常に満たす。
 
 ## Validateは人間に聞く（サイトのみ・コスト配慮）

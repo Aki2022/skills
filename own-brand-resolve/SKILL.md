@@ -1,15 +1,6 @@
 ---
 name: own-brand-resolve
-description: >-
-  ブランド意匠の倉庫。文脈（corporate-presentation / public-sector / dashboard 等）と媒体
-  （html / dashboard / pptx 等）を渡すと、解決済みの意匠（値＋出所＋ライセンス可否）を返す窓口。
-  必ず使うこと: 成果物にブランドの配色・タイポ・余白を反映する時、「自社ブランドで」
-  「デジタル庁風に」「このサービスの意匠で」と言われた時、複数ブランドを切り替える時、
-  各工場 skill（own-web-design / own-pptx-build / 将来の印刷）が意匠を必要とする工程。
-  使わない場面: 成果物そのものの生成（各工場 skill が持つ）／媒体固有の制約や
-  レイアウト規約（各工場の media/ が持つ）／画像アセットの生成（own-image-gen）／
-  品質の採点と再評価ループ（own-output-eval）／情報設計・コンテンツ構造・メッセージ設計
-  （スタイリング層の外）。
+description: "ブランド意匠の倉庫。文脈（corporate-presentation / public-sector / dashboard 等）と媒体（html / dashboard / pptx 等）を渡すと、解決済みの意匠（値・出所・ライセンス可否）を返す。「自社ブランドで」「デジタル庁風に」「このサービスの意匠で」と言われた時、配色・タイポ・余白をブランドに合わせる時、工場 skill が意匠を必要とする時に使う。成果物そのものは作らない。"
 ---
 
 # Own Brand Resolve

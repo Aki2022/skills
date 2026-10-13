@@ -256,13 +256,13 @@ mirrors:
     note: "Reactivated existing local installation; the historical upstream pin does not match installed bytes. Exact source version remains unverified; skill content was not changed."
 
   - dir: cloudflare
-    upstream: cloudflare/skills
-    upstream_path: skills/cloudflare
-    upstream_version: "unverified-local-snapshot"
-    fetched_at: 2026-08-07
-    license: Apache-2.0 (repo root LICENSE)
-    reinstall: npx degit cloudflare/skills/skills/cloudflare ~/.agents/skills/cloudflare
-    note: "Reactivated existing local installation; the historical upstream pin does not match installed bytes. Exact source version remains unverified; skill content was not changed."
+    upstream: "cloudflare/skills"
+    upstream_path: "skills/cloudflare"
+    upstream_version: "2b1ffd2"
+    fetched_at: 2026-10-13
+    license: "Apache-2.0 (repo root LICENSE)"
+    reinstall: "npx degit cloudflare/skills/skills/cloudflare ~/.agents/skills/cloudflare"
+    note: "Reinstalled from the pinned upstream commit 2b1ffd2 (2026-08-04) after the local snapshot was found not to match any upstream version (dangling web-perf reference). Verified: all 63 SKILL.md references resolve in this tree."
 
 retired:
   - dir: alloydb-basics

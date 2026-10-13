@@ -31,6 +31,8 @@ FULL_CROSS = re.compile(
     rf"/(?P<skill>[A-Za-z0-9][A-Za-z0-9._-]*)/(?P<resource>(?:{GROUPS})/[A-Za-z0-9._/-]+)"
 )
 SKILL_TOKEN = re.compile(r"/(?P<skill>[A-Za-z0-9][A-Za-z0-9._-]*)")
+# 散文の「`skill` skill」形（例: `agents-sdk` skill, its `references/mcp.md`）も skill トークンとして扱う。
+PROSE_SKILL_TOKEN = re.compile(r"`(?P<skill>[A-Za-z0-9][A-Za-z0-9._-]*)`\s+skill\b")
 
 
 def canonical_skill_names(root: Path) -> set[str]:
@@ -78,11 +80,14 @@ def scan(root: Path, markdown: Path) -> None:
         # For the suite's `/skill` → `references/file` spelling, associate a
         # resource with the nearest canonical skill token to its left.  A full
         # path span is skipped so it is not emitted twice.
-        skill_tokens = [
-            (match.start(), match.group("skill"))
-            for match in SKILL_TOKEN.finditer(line)
-            if match.group("skill") in names
-        ]
+        skill_tokens = sorted(
+            [
+                (match.start(), match.group("skill"))
+                for pattern in (SKILL_TOKEN, PROSE_SKILL_TOKEN)
+                for match in pattern.finditer(line)
+                if match.group("skill") in names
+            ]
+        )
         for match in RESOURCE.finditer(line):
             if any(match.start() >= start and match.end() <= end for start, end in full_spans):
                 continue

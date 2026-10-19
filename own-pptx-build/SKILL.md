@@ -191,6 +191,7 @@ python3 <skill>/scripts/set_fonts.py output.pptx        # 必須: BIZ UDPGothic 
 # ④.5（人間の画像OK）後・⑤の最終成果物化（テンプレ注入 Phase 1）:
 python3 <skill>/scripts/inject_template.py output.pptx <skill>/style-guide/template_v3.pptx 最終成果物.pptx
 python3 <skill>/scripts/set_fonts.py 最終成果物.pptx     # 必須: テンプレ由来部品もBIZ UDPGothicに統一
+python3 <skill>/scripts/xsd_validate_pptx.py 最終成果物.pptx  # 必須: XSD で全部品 VALID（exit 0）を確認してから PDF 化・納品
 ```
 
 **`sanitize_pptx.py` はビルドの必須最終工程**（冪等）。pptxgenjs 4.0.1 は折れ線/散布図/レーダーの
@@ -312,6 +313,7 @@ imagegen-prompt-convention.md §10（型スライド=厳格 / 自由形=ブラ�
 - `scripts/normalize_icons.py` — image_gen産**イラスト**の透過処理（`--illustrations`。ラインアイコンには使わない——material-icons.md）
 - `scripts/set_fonts.py` — **ビルド後必須**のフォント統一（全XMLの a:latin/a:ea/a:cs を BIZ UDPGothic に書き換え。ビルド直後と inject後の最終ファイルの2回実行・冪等）
 - `scripts/sanitize_pptx.py` — **ビルド後必須**のPowerPoint修復エラー矯正（チャートXMLスキーマ違反・負extentの修正。gotchas §15-17）
+- `scripts/xsd_validate_pptx.py` — **⑤納品前必須**: 全 XML 部品を ISO 29500-4 の XSD で検証（exit 0 以外は納品しない。LibreOffice と python-pptx は違反を黙って通し、PowerPoint だけが「修復」を出す。2026-10-19 実測）
 - `scripts/inject_template.py` — **④.5（人間の画像確認OK）後の最終成果物化**: template_v3.pptx を土台に生成スライドを移植（人間がマスター準拠スライドを追加できる形にする）
 - `scripts/check_feedback.py` — **③開始前の必須プリフライト**: `feedback.json` の verdict が
   全て ok か確認する（②の人間承認を飛ばして③へ進むのを機械的に防ぐ）

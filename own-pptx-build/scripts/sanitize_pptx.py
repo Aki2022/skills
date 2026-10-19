@@ -13,7 +13,9 @@ sanitize_pptx.py — pptxgenjs 産 pptx の「PowerPoint 修復エラー」要�
   5) defineSlideMaster の slideNumber オプションは idx="4294967295" の不正プレース
      ホルダを吐く（deck_helpers v3 は不使用。検出したら警告のみ＝手動対応）
   6) スライド内で <p:cNvPr id> が重複する（表＋図形の組合せで発生）→ 2 回目以降を振り直す
-  7) pptxgenjs はプリセット図形の adjustment 値（吹き出しの尻尾位置等）を公開しないため、
+  7) <a:p> の途中に 2 つ目の <a:pPr>（ラン単位の pPr）→ 先頭 1 つだけ残す。<p:bgPr> に <a:effectLst/> が無ければ補う
+  8) round2SameRect 等の a:gd name="adj" → adj1。p:cNvPr の descr の絶対パスをファイル名だけに
+  9) pptxgenjs はプリセット図形の adjustment 値（吹き出しの尻尾位置等）を公開しないため、
      deck_helpers.speechBubble() 等は shape 名に `<名前>@adj1=..,adj2=..` とエンコードする。
      本スクリプトが <a:avLst> へ <a:gd> を注入して印を除去する（2026-08-27 追加。
      --check は未注入の印を NG として検出する）
@@ -164,6 +166,73 @@ def fix_duplicate_shape_ids(data: bytes, name: str):
     return text.encode("utf-8"), n
 
 
+A_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
+P_NS = "http://schemas.openxmlformats.org/presentationml/2006/main"
+
+
+def fix_paragraph_props(data: bytes, name: str):
+    """スライド XML の段落修正（(fixed_bytes, n_fixes)）。
+    1) <a:p> の途中に 2 つ目以降の <a:pPr> が出る（pptxgenjs 4.0.1 がラン単位に pPr を出す）。
+       CT_TextParagraph は pPr? が先頭に 1 回だけなので、先頭以外の pPr を落とし、先頭に無ければ最初の pPr を先頭へ移す。
+    2) <p:bgPr> に <a:effectLst/> が無い（既知良品には必ずある）。fill の直後に空の effectLst を補う。
+    PowerPoint はどちらでも「修復」を要求し得る（2026-10-19 実測、豊橋デッキ slide2/4/7/12）。"""
+    _reject_dtd(data, name)
+    root = _fromstring(data)
+    n = 0
+    for para in root.iter(f"{{{A_NS}}}p"):
+        children = list(para)
+        pprs = [c for c in children if c.tag == f"{{{A_NS}}}pPr"]
+        if not pprs:
+            continue
+        if children[0] is not pprs[0]:
+            para.remove(pprs[0])
+            para.insert(0, pprs[0])
+            n += 1
+        for extra in pprs[1:]:
+            para.remove(extra)
+            n += 1
+    for bgpr in root.iter(f"{{{P_NS}}}bgPr"):
+        if bgpr.find(f"{{{A_NS}}}effectLst") is None and bgpr.find(f"{{{A_NS}}}effectDag") is None:
+            # fill 系の直後（extLst があればその前）に入れる
+            idx = len(list(bgpr))
+            for i, c in enumerate(list(bgpr)):
+                if c.tag == f"{{{A_NS}}}extLst":
+                    idx = i
+                    break
+            bgpr.insert(idx, ET.Element(f"{{{A_NS}}}effectLst"))
+            n += 1
+    if n == 0:
+        return data, 0
+    return ET.tostring(root, encoding="UTF-8", xml_declaration=True), n
+
+
+# プリセット図形のうち調整ハンドル名が adj1/adj2 のもの（pptxgenjs は rectRadius を name="adj" で出す）
+_ADJ1_SHAPES = {"round2SameRect", "round2DiagRect", "snip2SameRect", "snip2DiagRect", "snipRoundRect"}
+
+
+def fix_shape_misc(data: bytes, name: str):
+    """スライド XML の図形まわりの修正（(fixed_bytes, n_fixes)）。
+    1) a:prstGeom prst が round2SameRect 等なのに a:gd name="adj" → name="adj1"（その形状に adj は無い）。
+    2) p:cNvPr の descr に絶対パス（/ または ドライブ文字始まり）が入っている → ファイル名だけにする（個人情報・ローカルパスの流出防止）。"""
+    _reject_dtd(data, name)
+    root = _fromstring(data)
+    n = 0
+    for geom in root.iter(f"{{{A_NS}}}prstGeom"):
+        if geom.get("prst") in _ADJ1_SHAPES:
+            for gd in geom.iter(f"{{{A_NS}}}gd"):
+                if gd.get("name") == "adj":
+                    gd.set("name", "adj1")
+                    n += 1
+    for cnv in root.iter(f"{{{P_NS}}}cNvPr"):
+        d = cnv.get("descr")
+        if d and (d.startswith("/") or re.match(r"^[A-Za-z]:[\\/]", d)):
+            cnv.set("descr", d.replace("\\", "/").rsplit("/", 1)[-1])
+            n += 1
+    if n == 0:
+        return data, 0
+    return ET.tostring(root, encoding="UTF-8", xml_declaration=True), n
+
+
 def fix_chart_xml(data: bytes, name: str = "chart.xml"):
     """(fixed_bytes, n_fixes) を返す。修正不要なら n_fixes=0。"""
     _reject_dtd(data, name)
@@ -257,6 +326,16 @@ def main():
                     issues += n
                     fixes[name] = fixed
                     print(f"shape-id fix: {name} ({n} duplicate ids)")
+                fixed, n = fix_paragraph_props(fixes.get(name, data), name)
+                if n:
+                    issues += n
+                    fixes[name] = fixed
+                    print(f"paragraph fix: {name} ({n} issues: 途中の pPr / bgPr の effectLst)")
+                fixed, n = fix_shape_misc(fixes.get(name, data), name)
+                if n:
+                    issues += n
+                    fixes[name] = fixed
+                    print(f"shape-misc fix: {name} ({n} issues: adj→adj1 / descr のパス)")
             if name.endswith(".xml") and b'idx="4294967295"' in data:
                 # 情報表示のみ（issues に数えない）: 実ファイルで PowerPoint が dt ph の
                 # idx=4294967295 を許容する反例を確認済み（2026-07-13）。修復トリガーとしては

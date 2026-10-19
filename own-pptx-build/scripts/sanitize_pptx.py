@@ -14,7 +14,7 @@ sanitize_pptx.py — pptxgenjs 産 pptx の「PowerPoint 修復エラー」要�
      ホルダを吐く（deck_helpers v3 は不使用。検出したら警告のみ＝手動対応）
   6) スライド内で <p:cNvPr id> が重複する（表＋図形の組合せで発生）→ 2 回目以降を振り直す
   7) <a:p> の途中に 2 つ目の <a:pPr>（ラン単位の pPr）→ 先頭 1 つだけ残す。<p:bgPr> に <a:effectLst/> が無ければ補う
-  8) round2SameRect 等の a:gd name="adj" → adj1。p:cNvPr の descr の絶対パスをファイル名だけに
+  8) round2SameRect 等の a:gd name="adj" → adj1。角丸系の adj 値を 0〜50000 に収める（超えると PowerPoint が以降の図形を捨てる）。p:cNvPr の descr の絶対パスをファイル名だけに
   9) pptxgenjs はプリセット図形の adjustment 値（吹き出しの尻尾位置等）を公開しないため、
      deck_helpers.speechBubble() 等は shape 名に `<名前>@adj1=..,adj2=..` とエンコードする。
      本スクリプトが <a:avLst> へ <a:gd> を注入して印を除去する（2026-08-27 追加。
@@ -208,6 +208,7 @@ def fix_paragraph_props(data: bytes, name: str):
 
 # プリセット図形のうち調整ハンドル名が adj1/adj2 のもの（pptxgenjs は rectRadius を name="adj" で出す）
 _ADJ1_SHAPES = {"round2SameRect", "round2DiagRect", "snip2SameRect", "snip2DiagRect", "snipRoundRect"}
+_ROUND_SHAPES = {"roundRect", "round1Rect", "snip1Rect"}
 
 
 def fix_shape_misc(data: bytes, name: str):
@@ -218,11 +219,23 @@ def fix_shape_misc(data: bytes, name: str):
     root = _fromstring(data)
     n = 0
     for geom in root.iter(f"{{{A_NS}}}prstGeom"):
-        if geom.get("prst") in _ADJ1_SHAPES:
+        prst = geom.get("prst")
+        if prst in _ADJ1_SHAPES:
             for gd in geom.iter(f"{{{A_NS}}}gd"):
                 if gd.get("name") == "adj":
                     gd.set("name", "adj1")
                     n += 1
+        # 3) 角丸系の調整値は 0〜50000（min(w,h) に対する割合の半分まで）。pptxgenjs の rectRadius が min(w,h)/2 を
+        #    超えると val が 50000 を超え、PowerPoint はその図形で解析を止めて以降の図形を全て捨てる
+        #    （2026-10-19 実測: round2SameRect adj1=60000/100000 で S2 の 26 個・S17 の 36 個が消えた。XSD は値域を見ない）
+        if prst in _ADJ1_SHAPES or prst in _ROUND_SHAPES:
+            for gd in geom.iter(f"{{{A_NS}}}gd"):
+                m = re.match(r"val (-?\d+)$", gd.get("fmla", ""))
+                if m and gd.get("name", "").startswith("adj"):
+                    v = int(m.group(1))
+                    if v > 50000 or v < 0:
+                        gd.set("fmla", f"val {min(max(v, 0), 50000)}")
+                        n += 1
     for cnv in root.iter(f"{{{P_NS}}}cNvPr"):
         d = cnv.get("descr")
         if d and (d.startswith("/") or re.match(r"^[A-Za-z]:[\\/]", d)):

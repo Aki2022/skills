@@ -8,9 +8,10 @@ sanitize_pptx.py — pptxgenjs 産 pptx の「PowerPoint 修復エラー」要�
      要素）が混入する → スキーマ違反で PowerPoint が修復を要求（LibreOffice/python-pptx
      は許容するため④のレンダリング検証では検出できない）
   2) <c:marker> が <c:dLbls> の後に出力される（CT_LineSer 等の子要素順序は marker が先）
-  3) defineSlideMaster の slideNumber オプションは idx="4294967295" の不正プレース
+  3) bar 系で chartColors を点ごとに指定すると <c:dPt> が <c:dLbls> の後に出力される（dPt が先・全チャート種）
+  4) defineSlideMaster の slideNumber オプションは idx="4294967295" の不正プレース
      ホルダを吐く（deck_helpers v3 は不使用。検出したら警告のみ＝手動対応）
-  4) pptxgenjs はプリセット図形の adjustment 値（吹き出しの尻尾位置等）を公開しないため、
+  5) pptxgenjs はプリセット図形の adjustment 値（吹き出しの尻尾位置等）を公開しないため、
      deck_helpers.speechBubble() 等は shape 名に `<名前>@adj1=..,adj2=..` とエンコードする。
      本スクリプトが <a:avLst> へ <a:gd> を注入して印を除去する（2026-08-27 追加。
      --check は未注入の印を NG として検出する）
@@ -154,6 +155,18 @@ def fix_chart_xml(data: bytes, name: str = "chart.xml"):
                         ser.remove(marker)
                         ser.insert(list(ser).index(dlbls), marker)
                         n += 1
+    # 3) dPt（点ごとの書式。bar の chartColors を点ごとに指定すると出る）は dLbls より前が正
+    #    （CT_BarSer 等: …invertIfNegative, pictureOptions, dPt*, dLbls…）。pptxgenjs は dLbls の後に出力し、
+    #    PowerPoint が「修復」を要求する（2026-10-19 実測。LibreOffice は黙って描く）。全チャート種の ser が対象
+    for ser in root.iter(f"{{{C}}}ser"):
+        dlbls = ser.find(f"{{{C}}}dLbls")
+        if dlbls is None:
+            continue
+        late = [d for d in ser.findall(f"{{{C}}}dPt") if list(ser).index(d) > list(ser).index(dlbls)]
+        for d in late:
+            ser.remove(d)
+            ser.insert(list(ser).index(dlbls), d)
+            n += 1
     if n == 0:
         return data, 0
     out = ET.tostring(root, encoding="UTF-8", xml_declaration=True)
@@ -174,7 +187,8 @@ def main():
         names = z.namelist()
         for name in names:
             data = z.read(name)
-            if name.startswith("ppt/charts/chart") and name.endswith(".xml"):
+            # inject_template.py 後は chart1 が g_chart1.xml 等に改名されるため、charts/ 直下の .xml を全て対象にする
+            if name.startswith("ppt/charts/") and "/_rels/" not in name and name.endswith(".xml"):
                 fixed, n = fix_chart_xml(data, name)
                 if n:
                     issues += n

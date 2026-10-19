@@ -9,9 +9,10 @@ sanitize_pptx.py — pptxgenjs 産 pptx の「PowerPoint 修復エラー」要�
      は許容するため④のレンダリング検証では検出できない）
   2) <c:marker> が <c:dLbls> の後に出力される（CT_LineSer 等の子要素順序は marker が先）
   3) bar 系で chartColors を点ごとに指定すると <c:dPt> が <c:dLbls> の後に出力される（dPt が先・全チャート種）
-  4) defineSlideMaster の slideNumber オプションは idx="4294967295" の不正プレース
+  4) 2D の bar/line/area/radar にも 3 つ目の <c:axId>（系列軸）が出るが <c:serAx> が無い → 3 つ目を落とす
+  5) defineSlideMaster の slideNumber オプションは idx="4294967295" の不正プレース
      ホルダを吐く（deck_helpers v3 は不使用。検出したら警告のみ＝手動対応）
-  5) pptxgenjs はプリセット図形の adjustment 値（吹き出しの尻尾位置等）を公開しないため、
+  6) pptxgenjs はプリセット図形の adjustment 値（吹き出しの尻尾位置等）を公開しないため、
      deck_helpers.speechBubble() 等は shape 名に `<名前>@adj1=..,adj2=..` とエンコードする。
      本スクリプトが <a:avLst> へ <a:gd> を注入して印を除去する（2026-08-27 追加。
      --check は未注入の印を NG として検出する）
@@ -167,6 +168,17 @@ def fix_chart_xml(data: bytes, name: str = "chart.xml"):
             ser.remove(d)
             ser.insert(list(ser).index(dlbls), d)
             n += 1
+    # 4) 2D の bar/line/area/radar に 3 つ目の <c:axId>（系列軸 ID）が出るが、対応する <c:serAx> が無い
+    #    （pptxgenjs 4.0.1 は bar3D 以外でも無条件に 3 つ出す。CT_BarChart 等の axId は 2 つ固定で、
+    #    PowerPoint が「修復」を要求する。2026-10-19 実測）。serAx が無ければ 3 つ目以降の axId を落とす
+    ser_ax_ids = {ax.find(f"{{{C}}}axId").get("val") for ax in root.iter(f"{{{C}}}serAx") if ax.find(f"{{{C}}}axId") is not None}
+    for tag in ("barChart", "bar3DChart", "lineChart", "areaChart", "radarChart"):
+        for chart in root.iter(f"{{{C}}}{tag}"):
+            ax_ids = chart.findall(f"{{{C}}}axId")
+            for extra in ax_ids[2:]:
+                if extra.get("val") not in ser_ax_ids:
+                    chart.remove(extra)
+                    n += 1
     if n == 0:
         return data, 0
     out = ET.tostring(root, encoding="UTF-8", xml_declaration=True)

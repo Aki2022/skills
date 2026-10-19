@@ -12,7 +12,8 @@ sanitize_pptx.py — pptxgenjs 産 pptx の「PowerPoint 修復エラー」要�
   4) 2D の bar/line/area/radar にも 3 つ目の <c:axId>（系列軸）が出るが <c:serAx> が無い → 3 つ目を落とす
   5) defineSlideMaster の slideNumber オプションは idx="4294967295" の不正プレース
      ホルダを吐く（deck_helpers v3 は不使用。検出したら警告のみ＝手動対応）
-  6) pptxgenjs はプリセット図形の adjustment 値（吹き出しの尻尾位置等）を公開しないため、
+  6) スライド内で <p:cNvPr id> が重複する（表＋図形の組合せで発生）→ 2 回目以降を振り直す
+  7) pptxgenjs はプリセット図形の adjustment 値（吹き出しの尻尾位置等）を公開しないため、
      deck_helpers.speechBubble() 等は shape 名に `<名前>@adj1=..,adj2=..` とエンコードする。
      本スクリプトが <a:avLst> へ <a:gd> を注入して印を除去する（2026-08-27 追加。
      --check は未注入の印を NG として検出する）
@@ -135,6 +136,34 @@ def fix_callout_adjustments(data: bytes, name: str):
     return ET.tostring(root, encoding="UTF-8", xml_declaration=True), n
 
 
+def fix_duplicate_shape_ids(data: bytes, name: str):
+    """スライド内で重複する <p:cNvPr id> を振り直す（(fixed_bytes, n_fixes)）。
+    PowerPoint はスライド内の図形 ID の重複で「修復」を要求する（2026-10-19 実測、pptxgenjs 4.0.1 の表＋図形の組合せで発生）。
+    最大 ID + 1 から順に、2 回目以降の出現だけを書き換える。ID は同スライド内でしか参照されない。"""
+    _reject_dtd(data, name)
+    text = data.decode("utf-8")
+    ids = re.findall(r'<p:cNvPr id="(\d+)"', text)
+    if len(ids) == len(set(ids)):
+        return data, 0
+    next_id = max(int(i) for i in ids) + 1
+    seen = set()
+    n = 0
+
+    def _sub(m):
+        nonlocal next_id, n
+        cur = m.group(1)
+        if cur in seen:
+            new = str(next_id)
+            next_id += 1
+            n += 1
+            return f'<p:cNvPr id="{new}"'
+        seen.add(cur)
+        return m.group(0)
+
+    text = re.sub(r'<p:cNvPr id="(\d+)"', _sub, text)
+    return text.encode("utf-8"), n
+
+
 def fix_chart_xml(data: bytes, name: str = "chart.xml"):
     """(fixed_bytes, n_fixes) を返す。修正不要なら n_fixes=0。"""
     _reject_dtd(data, name)
@@ -223,6 +252,11 @@ def main():
                     issues += n
                     fixes[name] = fixed
                     print(f"callout-adj fix: {name} ({n} shapes)")
+                fixed, n = fix_duplicate_shape_ids(fixes.get(name, data), name)
+                if n:
+                    issues += n
+                    fixes[name] = fixed
+                    print(f"shape-id fix: {name} ({n} duplicate ids)")
             if name.endswith(".xml") and b'idx="4294967295"' in data:
                 # 情報表示のみ（issues に数えない）: 実ファイルで PowerPoint が dt ph の
                 # idx=4294967295 を許容する反例を確認済み（2026-07-13）。修復トリガーとしては

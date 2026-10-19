@@ -249,6 +249,18 @@ def main():
 
     ensure_default("png", "image/png")
     ensure_default("jpeg", "image/jpeg")
+    # 生成側が .jpg / .gif / .svg 等のまま持ち込んだ media にも Default を補う。
+    # 補わないと python-pptx が開けず、PowerPoint が修復を要求する（2026-10-19 実測）。
+    MEDIA_CT = {
+        "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "gif": "image/gif",
+        "svg": "image/svg+xml", "bmp": "image/bmp", "tif": "image/tiff", "tiff": "image/tiff",
+        "emf": "image/x-emf", "wmf": "image/x-wmf",
+    }
+    for name in base:
+        if name.startswith("ppt/media/") and "." in name:
+            ext = name.rsplit(".", 1)[1].lower()
+            if ext in MEDIA_CT:
+                ensure_default(ext, MEDIA_CT[ext])
 
     # presentation.xml: sldIdLst へ挿入（空になったリストにも対応）
     if "</p:sldIdLst>" in pres_xml:

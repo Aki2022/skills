@@ -80,6 +80,10 @@ def main():
                 for e in list(s.error_log)[:5]:
                     print(f"   line {e.line}: {e.message[:200]}")
     print(f"xsd_validate: checked={checked} invalid={invalid} skipped={len(skipped)} schemas={sdir}")
+    if checked == 0:
+        # 対象 0 件は合格ではない（壊れた・空のパッケージが緑になる）
+        print("xsd_validate: 検証できた部品が 0 件。pptx として読めていない", file=sys.stderr)
+        return 2
     return 1 if invalid else 0
 
 

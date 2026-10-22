@@ -18,7 +18,6 @@ from html.parser import HTMLParser
 
 import numeric
 
-CLAIM_ATTR = 'data-ia-claim'
 HTML_SUFFIXES = {'.html', '.htm'}
 MD_SUFFIXES = {'.md', '.qmd', '.markdown'}
 VOID = {'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr'}
@@ -121,7 +120,7 @@ class _HTML(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.stack = []  # (tag, own claim)
         self.buf = _Buf()
-        self.blocks, self.uncovered, self.anchor_ids = [], [], []
+        self.blocks, self.uncovered, self.anchor_ids, self.problems = [], [], [], []
         self.skip_depth = 0
 
     def _claim(self):
@@ -154,13 +153,13 @@ class _HTML(HTMLParser):
         a = {k: (v or '') for k, v in attrs}
         if tag == 'script' and a.get('type', '').lower() in {'application/ld+json', 'application/json'}:
             self.uncovered.append(f'<script type="{a["type"]}">（構造化データの文言は抽出しない）')
+        own_claim = check_anchor_attrs(attrs, self.getpos()[0], self.problems)
+        if own_claim:  # validated even when the element carries no text or is skipped
+            self.anchor_ids.append((own_claim, self.getpos()[0]))
         if tag in SKIP:
             self.skip_depth += 1
             return
         self._implicit_close(tag)
-        own_claim = a.get(CLAIM_ATTR, '').strip() or None
-        if own_claim:  # validated even when the element carries no text
-            self.anchor_ids.append((own_claim, self.getpos()[0]))
         if tag in BLOCK:
             self.flush()
         claim = own_claim or self._claim()
@@ -200,19 +199,49 @@ def html_blocks(text):
     p.feed(text)
     p.close()
     p.flush()
-    return [b for b in p.blocks if b], p.uncovered, p.anchor_ids
+    return [b for b in p.blocks if b], p.uncovered, p.anchor_ids, p.problems
+
+
+ANCHOR_ATTRS = {'data-ia-claim': 'clm', 'data-ia-msg': 'msg', 'data-ia-problem': 'prb', 'data-ia-local': None}
+_ANCHOR_ID = re.compile(r'(clm|msg|prb)-[0-9]{4,}')
+
+
+def check_anchor_attrs(pairs, line, problems):
+    """pairs: [(lowercase name, value)] of one element. Returns the valid claim id or None, and appends a
+    problem for anything that is not exactly one well-formed anchor per kind (fail closed, never guess)."""
+    names = [n for n, _ in pairs if n.startswith('data-ia-')]
+    claim = None
+    for n in sorted(set(names)):
+        if names.count(n) > 1:
+            problems.append(('IA_L1_ANCHOR_MALFORMED', f'{n} が同じ要素に複数ある', line))
+    for n, v in pairs:
+        if not n.startswith('data-ia-'):
+            continue
+        if n not in ANCHOR_ATTRS:
+            problems.append(('IA_L1_ANCHOR_MALFORMED', f'未知のアンカー属性 {n}', line))
+            continue
+        prefix = ANCHOR_ATTRS[n]
+        if prefix is None:
+            continue
+        v = (v or '').strip()
+        m = _ANCHOR_ID.fullmatch(v)
+        if not m or m.group(1) != prefix:
+            problems.append(('IA_L1_ANCHOR_MALFORMED', f'{n}="{v}" は {prefix}-NNNN 1 つの形でない', line))
+        elif prefix == 'clm' and names.count(n) == 1:
+            claim = v
+    return claim
 
 
 _FENCE = re.compile(r'^\s*(```|~~~)')
 _DIV_OPEN = re.compile(r'^\s*:{3,}\s*\{([^}]*)\}\s*$')
 _DIV_CLOSE = re.compile(r'^\s*:{3,}\s*$')
 _SPAN = re.compile(r'\[([^\[\]]*)\]\{([^}]*)\}')
-_ATTR_CLAIM = re.compile(r'data-ia-claim\s*=\s*"?([A-Za-z0-9-]+)"?')
+_ATTR_PAIR = re.compile(r'''([A-Za-z][\w:-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'}]+))''')
 _LINK = re.compile(r'!?\[([^\[\]]*)\]\([^)]*\)')
 _CODE = re.compile(r'`[^`]*`')
 _COMPUTED = re.compile(r'\{\{<.*?>\}\}|`\{[a-z]+\}[^`]*`')
 _TAG = re.compile(r'<[^>]+>')
-_TAG_ATTR = re.compile(r'''\b(alt|title|aria-label|aria-description|placeholder)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'<>=`]+))''')
+_TAG_ATTR = re.compile(r'''\b(alt|title|aria-label|aria-description|placeholder)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'<>=`]+))''', re.I)
 _HEADING = re.compile(r'^\s{0,3}#{1,6}\s+')
 _ITEM = re.compile(r'^\s*(?:[-*+]|\d+[.)])\s+')
 _QUOTE = re.compile(r'^\s*(?:>\s?)+')
@@ -229,8 +258,8 @@ def _md_front_matter(lines, blocks):
     data = safe_load_text('\n'.join(lines[1:end])) or {}
     if isinstance(data, dict):
         for key in _FRONT_KEYS:
-            if isinstance(data.get(key), str):
-                b = _attr_block(data[key], None, 1, f'attr:front-matter.{key}')
+            if isinstance(data.get(key), (str, int, float)) and not isinstance(data.get(key), bool):
+                b = _attr_block(str(data[key]), None, 1, f'attr:front-matter.{key}')
                 if b:
                     blocks.append(b)
     return end + 1
@@ -238,8 +267,20 @@ def _md_front_matter(lines, blocks):
 
 def markdown_blocks(text):
     lines = text.split('\n')
-    blocks, uncovered, anchor_ids = [], [], []
+    blocks, uncovered, anchor_ids, problems = [], [], [], []
+    seen_attrs, mentions = 0, 0
     start = _md_front_matter(lines, blocks)
+    mentions += sum(len(re.findall(r'data-ia-', lines[j], re.I)) for j in range(start))
+
+    def read_attrs(attr_text, lineno):
+        nonlocal seen_attrs
+        pairs = [(mm.group(1).lower(), next(g for g in mm.groups()[1:] if g is not None))
+                 for mm in _ATTR_PAIR.finditer(attr_text)]
+        seen_attrs += sum(1 for n, _ in pairs if n.startswith('data-ia-'))
+        claim = check_anchor_attrs(pairs, lineno, problems)
+        if claim:
+            anchor_ids.append((claim, lineno))
+        return claim
     fence, divs, buf = None, [], _Buf()
 
     def flush():
@@ -255,6 +296,7 @@ def markdown_blocks(text):
             if line.strip().startswith(fence):
                 fence = None
             continue
+        mentions += len(re.findall(r'data-ia-', _CODE.sub(' ', line), re.I))
         m = _FENCE.match(line)
         if m:
             flush()
@@ -263,10 +305,7 @@ def markdown_blocks(text):
         m = _DIV_OPEN.match(line)
         if m:
             flush()
-            cm = _ATTR_CLAIM.search(m.group(1))
-            if cm:
-                anchor_ids.append((cm.group(1), lineno))
-            divs.append(cm.group(1) if cm else None)
+            divs.append(read_attrs(m.group(1), lineno))
             continue
         if _DIV_CLOSE.match(line):
             flush()
@@ -301,20 +340,22 @@ def markdown_blocks(text):
         pos = 0
         for sm in _SPAN.finditer(line):
             buf.add(_TAG.sub(' ', line[pos:sm.start()]), outer, lineno)
-            cm = _ATTR_CLAIM.search(sm.group(2))
-            if cm:
-                anchor_ids.append((cm.group(1), lineno))
-            buf.add(_TAG.sub(' ', sm.group(1)), cm.group(1) if cm else outer, lineno)
+            claim = read_attrs(sm.group(2), lineno)
+            buf.add(_TAG.sub(' ', sm.group(1)), claim or outer, lineno)
             pos = sm.end()
         buf.add(_TAG.sub(' ', line[pos:]) + '\n', outer, lineno)
         if _HEADING.match(lines[n]) or lines[n].lstrip().startswith('|'):
             flush()
     flush()
-    return blocks, uncovered, anchor_ids
+    if mentions > seen_attrs:
+        problems.append(('IA_L1_ANCHOR_UNPARSED',
+                         f'data-ia-* の記述 {mentions} 個のうち {seen_attrs} 個しかアンカーとして読めなかった'
+                         '（行をまたぐ span・リンク属性・生 HTML などは読まない。1 行の Pandoc span か fenced div で書く）', 1))
+    return blocks, uncovered, anchor_ids, problems
 
 
 def blocks_for(path):
-    """(blocks, uncovered constructs, claim anchor (id, line) list), or None when no adapter exists. Raises UnicodeDecodeError."""
+    """(blocks, uncovered constructs, claim anchor (id, line) list, anchor problems), or None when no adapter exists. Raises UnicodeDecodeError."""
     suffix = path.suffix.lower()
     if suffix not in HTML_SUFFIXES | MD_SUFFIXES:
         return None

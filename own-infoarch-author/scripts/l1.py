@@ -59,7 +59,9 @@ def check(root, date):
                 report.uncovered.append({'path': str(frel), 'reason': f'形式 {f.suffix or "(なし)"} の抽出アダプタが無い'})
                 report.add('warn', 'IA_L1_UNCOVERED_FORMAT', f'{frel} は抽出アダプタの無い形式（未カバー）', frel)
                 continue
-            blocks, constructs, anchor_ids = result
+            blocks, constructs, anchor_ids, problems = result
+            for code, msg, line in problems:
+                report.add('fail', code, f'{frel}: {msg}', frel, line)
             valid = _valid_claims(report, m, frel, anchor_ids)
             for c in constructs:
                 report.uncovered.append({'path': str(frel), 'reason': c})

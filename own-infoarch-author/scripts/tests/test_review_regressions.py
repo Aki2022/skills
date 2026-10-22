@@ -286,3 +286,39 @@ def test_unexpected_files_in_channels_dir_fail(tmp_path, name):
     f.write_text('media: ship\n', encoding='utf-8')
     rc, report = run(tmp_path)
     assert rc == 2 and 'IA_CHANNEL_FILE' in codes(report), report['findings']
+
+
+# ---- 2026-10-22 third review (critical): anchor syntax the parser did not fully read passed with exit 0 ----
+
+@pytest.mark.parametrize('line,code', [
+    ('[導入]{data-ia-claim=clm-0001_old}', 'IA_L1_ANCHOR_MALFORMED'),
+    ('[導入]{data-ia-claim="clm-0001 clm-0099"}', 'IA_L1_ANCHOR_MALFORMED'),
+    ('[導入\n件]{data-ia-claim=clm-0099}', 'IA_L1_ANCHOR_UNPARSED'),
+    ('[導入](https://example.com){data-ia-claim=clm-0099}', 'IA_L1_ANCHOR_UNPARSED'),
+    ('<span DATA-IA-CLAIM="clm-0099">導入</span>', 'IA_L1_ANCHOR_UNPARSED'),
+])
+def test_markdown_anchor_syntax_is_read_fully_or_fails(tmp_path, line, code):
+    rc, report = l1_codes(tmp_path, md=MD + '\n' + line + '\n')
+    assert rc == 2 and code in codes(report), report['findings']
+
+
+def test_uppercase_alt_in_markdown_raw_html_is_read(tmp_path):
+    rc, report = l1_codes(tmp_path, md=MD + '\n本文。\n\n<img src="a.png" ALT="100社の画面">\n')
+    assert rc == 2 and 'IA_L1_UNANCHORED_NUMBER' in codes(report), report['findings']
+
+
+def test_unquoted_numeric_front_matter_is_read(tmp_path):
+    rc, report = l1_codes(tmp_path, md='---\ntitle: 2026\ndescription: 100\n---\n' + MD)
+    assert rc == 2 and 'IA_L1_UNANCHORED_NUMBER' in codes(report), report['findings']
+
+
+@pytest.mark.parametrize('snippet,code', [
+    ('<template data-ia-claim="clm-0099"><p>導入</p></template>', 'IA_L1_UNKNOWN_CLAIM'),
+    ('<p data-ia-claim="clm-0099" data-ia-claim="clm-0001">導入</p>', 'IA_L1_ANCHOR_MALFORMED'),
+    ('<p data-ia-claim="">導入</p>', 'IA_L1_ANCHOR_MALFORMED'),
+    ('<p><span data-ia-claim="clm-0001 clm-0099">導入</span></p>', 'IA_L1_ANCHOR_MALFORMED'),
+    ('<p data-ia-clam="clm-0001">導入</p>', 'IA_L1_ANCHOR_MALFORMED'),
+])
+def test_html_anchor_attributes_are_strict(tmp_path, snippet, code):
+    rc, report = l1_codes(tmp_path, html=add_html(HTML, snippet))
+    assert rc == 2 and code in codes(report), report['findings']

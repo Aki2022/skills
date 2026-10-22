@@ -47,7 +47,7 @@
   （image:alt を含む）。`script` `style` `template` は除く。JSON-LD は未カバーとして報告する。
 - Markdown / Quarto: 段落・見出し・リスト項目・表の行・引用、Pandoc span `[…]{data-ia-claim=…}`、fenced div
   `::: {data-ia-claim=…}`、生 HTML の `alt` 等の属性、front matter（YAML として読む）の title / subtitle / description。
-  コードは除く。Markdown 内の生 HTML の `data-ia-*` は読まないので未カバーとして報告する（Pandoc 属性で書く）。Quarto のショートコード `{{< … >}}` とインラインコード `` `{r} …` `` は計算される値なので未カバー。
+  コードは除く。Markdown 内の生 HTML の `data-ia-*` は読まない（未カバーとして報告し、IA_L1_ANCHOR_UNPARSED で失格にする。Pandoc 属性で書く）。生 HTML の `alt` 等は大文字小文字を問わず読む。front matter の数値の値も読む。HTML の `template` 等に付いたアンカーも検証する。Quarto のショートコード `{{< … >}}` とインラインコード `` `{r} …` `` は計算される値なので未カバー。
 - それ以外の形式（TSX・pptx・PDF 等）は未カバー。CSS の `content` は抽出しない（既知の限界）。
 
 | code | 内容 |
@@ -57,6 +57,8 @@
 | IA_L1_UNCOVERED_FORMAT / IA_L1_UNCOVERED_CONSTRUCT（warn） | 抽出アダプタの無い形式・計算される値や構造化データ |
 | IA_L1_UNANCHORED_NUMBER | 有効な主張アンカー（存在し proposed）の外にある主張候補の数値 |
 | IA_L1_UNKNOWN_CLAIM / IA_L1_CLAIM_EMPTY / IA_L1_CLAIM_NO_VALUE | アンカーの主張が無い・空欄・正規化値が無い。本文を持たないアンカー（画像だけの要素・空の span・空の div）も検証する。無効なアンカーの中身は未アンカーとして扱う |
+| IA_L1_ANCHOR_MALFORMED | アンカー属性の値が `clm-NNNN` などちょうど 1 つの id の形でない（`clm-0001_old`・id を 2 つ並べる・空）、同じ要素に同じアンカー属性が複数、未知の `data-ia-*` 属性 |
+| IA_L1_ANCHOR_UNPARSED | Markdown の `data-ia-*` の記述（大文字小文字を問わない。コードは除く）が、読めたアンカー属性より多い。行をまたぐ span・リンク属性・生 HTML などは読まないので、推測せず失格にする |
 | IA_L1_REQUIRED_CLAIM_MISSING | チャネルの `required_claims` のアンカーが outputs に無い |
 | IA_L1_CLAIM_VALUE_MISMATCH / IA_L1_CLAIM_QUALIFIER_MISMATCH | 値・単位の不一致、修飾（qualifier）の不一致 |
 | IA_L1_LEXICON_HIT | 有効な主張アンカーの外の語彙ヒット |

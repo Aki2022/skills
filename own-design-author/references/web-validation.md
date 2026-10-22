@@ -19,15 +19,38 @@ axe-coreは実行環境のモジュール解決か `AXE_CORE_PATH` で既存フ�
 
 ## L1とTailwind
 
-L0は `.resolved/tailwind.config.cjs` と、そのcontent / SHA256をマニフェストに生成する。
-利用するtailwind.configはこの生成物のバイト一致コピーとする。色は解決済みtokenパスのdotをhyphenに変えたキー。
-L1は解決済み値から期待contentを再構成し、ハッシュと実ファイルを照合する。自己申告のハッシュだけを信用しない。
-`--tailwind` を省略するとrepo内のtailwind.config群を探索し、node_modules等を除外して全て照合する。
-Tailwindを使わないrepoはHTML構造検査のみ。空のHTMLは失格。
+既定ではL0が `.resolved/tailwind.config.cjs` を生成する。プロジェクトごとの設定は
+`design/tailwind.json` に `schema_version: 1` と `configs` を置く。各行は repo 相対の
+`target`（tailwind.config.js/cjs）・`content`・`theme`・`plugins` を持つ。
+`theme` の末端は `{"$token":"color.primary"}`。構造上のCSS文字列は
+`{"$format":[{"$token":"duration.fast"}," ease"]}` のように組み立てる。
+数値・色の直書きは禁止。fontFamily/number/fontWeightは値、他はCSS表現を出力する。
 
-生成形式はデータだけのCommonJS（content / theme.colors / plugins空配列）に限定する。
-手書きの拡張・実行関数・プラグインはまだ扱わない。既存プロジェクトへ適用する時はこの制約と既存機能を確認し、
-対応を実装・検証してから切り替える。既存configを消して準拠を装わない。
+pluginsは `{"module":"@tailwindcss/forms","options":{"strategy":"class"}}` のような宣言だけ。
+L0はpluginを実行せずCommonJSのrequireを生成する。任意の関数や手書きコードは扱わない。
+利用側に既存pluginの依存が必要で、自動導入しない。既存content・theme項目・pluginオプションを
+比較し、実TailwindでのCSS生成を確認してから切り替える。
+
+```sh
+design-author sync --repo .
+```
+
+syncは実L0の失格時に配置先を変更しない。整合が通れば宣言したconfigとassetコピーを配置する。
+repo外・design内・隠しpath・symlink先への配置を拒否し、途中の書込み失敗は既存バイトへ復元する。
+生成contentとSHA256はwebマニフェストに入り、L1は解決値から期待contentを再構成して照合する。
+自己申告のhashだけを信用しない。宣言したconfigは全て存在必須。
+`--tailwind` を省略すると追加のconfigも探索する。Tailwindを使わないrepoはHTML構造検査のみ。
+空のHTMLは失格。`asset-exports.json` の全配布先も正典と同じSHA256であることを確認する。
+
+## 一括実行
+
+`design-check --repo .` は実L0→L1→L2を順に呼ぶ。L0失格なら後段へ進まない。
+`design/validation.json` は `schema_version: 1`、非空の `html`（repo相対path）、
+`urls`（`{"env":"DESIGN_WEB_URL"}`等）、正の整数の `viewports`、`schemes`（light/dark）を持つ。
+URLは実行時の環境変数で渡す。既存Nodeは `DESIGN_AUDIT_NODE`、Pythonは
+`DESIGN_AUTHOR_PYTHON` で選ぶ。L2を含むため、人間の実施確認を得てから実行する。
+各L2のJSONは `.resolved/l2-<index>.json` に保存し、未カバーを集約出力する。
+対象欠落・実行不能を成功にしない。未承認nice値だけのL0警告は集約後もexit 1に残す。
 
 ## L2と範囲
 

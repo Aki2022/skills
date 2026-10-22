@@ -530,3 +530,191 @@ def test_vanilla_design_without_color_tokens_does_not_require_tailwind(project):
     assert result['exit_code'] == 1
     assert result['manifest']['web']['artifacts'] == {}
     assert not (root / 'design/.resolved/tailwind.config.cjs').exists()
+
+
+def test_project_tailwind_templates_keep_content_and_plugin(project):
+    root, _ = project
+    write(root / 'design/tailwind.json', {'schema_version':1,'configs':[{
+        'target':'apps/web/tailwind.config.js','content':['./src/**/*.tsx'],
+        'theme':{'extend':{'colors':{'primary':{'$token':'color.primary'}}}},
+        'plugins':[{'module':'@tailwindcss/forms','options':{'strategy':'class'}}]}]})
+    result = check(project)
+    assert result['exit_code'] == 1
+    manifest = result['manifest']['web']
+    artifact = manifest['artifacts']['apps/web/tailwind.config.js']
+    assert './src/**/*.tsx' in artifact['content']
+    assert 'require("@tailwindcss/forms")({"strategy": "class"})' in artifact['content']
+    assert '"primary": "#000000"' in artifact['content']
+    assert (root / 'design/.resolved' / artifact['file']).read_text() == artifact['content']
+    from resolved_contract import check_tailwind
+    config = root / 'apps/web/tailwind.config.js'
+    config.parent.mkdir(parents=True)
+    config.write_text(artifact['content'])
+    check_tailwind(config, manifest, repo=root)
+    config.write_text(artifact['content'].replace('#000000','#ffffff'))
+    with pytest.raises(ValueError):
+        check_tailwind(config, manifest, repo=root)
+    write(root / 'design/tailwind.json', {'schema_version':1,'configs':[{
+        'target':'apps/web/tailwind.config.js','content':['./src/**/*.tsx'],
+        'theme':{'colors':{'primary':'#000000'}},'plugins':[]}]})
+    assert check(project)['exit_code'] == 2
+
+
+def test_item_approval_binds_referenced_token_values(project):
+    root, _ = project
+    result = check(project)
+    digest = result['manifest']['web']['items']['dads-000001']['value_hash']
+    write(root / 'design/approvals.yaml', [{'item_id':'dads-000001','value_hash':digest,
+                                          'approver':'fixture-owner','date':'2026-10-22'}])
+    result = check(project, ship=True)
+    assert result['exit_code'] == 0
+    assert result['counts']['proposed'] == 0
+    assert result['manifest']['web']['tokens']['color.primary']['state'] == 'approved'
+    data=json.loads((root / 'design/tokens/brand.tokens.json').read_text())
+    data['color']['primary']['$value']={'colorSpace':'srgb','components':[1,1,1],'hex':'#ffffff'}
+    write(root / 'design/tokens/brand.tokens.json',data)
+    assert check(project, ship=True)['exit_code'] == 2
+
+
+def test_asset_hash_rule_is_measured_and_approval_binds_actual_bytes(project):
+    import hashlib
+    root, _ = project
+    asset = root / 'design/assets/logo.png'
+    asset.write_bytes(b'fixture-logo-a')
+    digest = hashlib.sha256(asset.read_bytes()).hexdigest()
+    write(root / 'design/checks/assets.yaml',{'rules':[{'id':'logo-bytes','kind':'source-hash',
+          'targets':['design/assets/logo.png'],'allowlist':[digest]}]})
+    config=json.loads((root / 'design/design.yaml').read_text())
+    config['items']['dads-000001']['evidence'].append('rule:logo-bytes')
+    write(root / 'design/design.yaml',config)
+    result=check(project)
+    assert result['counts']['uncovered'] == 0
+    assert check(project,ship=True)['exit_code'] == 2
+    item_hash=result['manifest']['web']['items']['dads-000001']['value_hash']
+    write(root / 'design/approvals.yaml',[{'item_id':'dads-000001','value_hash':item_hash,
+          'approver':'fixture-owner','date':'2026-10-22'}])
+    assert check(project,ship=True)['exit_code'] == 0
+    asset.write_bytes(b'fixture-logo-b')
+    result=check(project,ship=True)
+    assert result['exit_code'] == 2
+    assert any('source hash' in e for e in result['errors'])
+
+
+def test_sync_checks_l0_before_writing_configs_and_asset_copies(project):
+    root,catalogs=project
+    (root / 'design/assets/logo.png').write_bytes(b'fixture-logo')
+    write(root / 'design/asset-exports.json',{'schema_version':1,'exports':[
+          {'source':'assets/logo.png','targets':['public/logo.png']}]})
+    argv=[sys.executable,str(SKILL / 'scripts/design_author.py'),'sync','--repo',str(root),
+          '--catalog-dir',str(catalogs)]
+    run=subprocess.run(argv,capture_output=True,text=True)
+    assert run.returncode == 1
+    assert (root / 'public/logo.png').read_bytes() == b'fixture-logo'
+    assert (root / 'tailwind.config.cjs').read_bytes() == (root / 'design/.resolved/tailwind.config.cjs').read_bytes()
+    from resolved_contract import load_manifest,check_asset_exports
+    manifest=load_manifest(root / 'design/.resolved/web.json')
+    check_asset_exports(root,manifest)
+    (root / 'public/logo.png').write_bytes(b'wrong-logo')
+    with pytest.raises(ValueError):check_asset_exports(root,manifest)
+    config=json.loads((root / 'design/design.yaml').read_text());config['items']={}
+    write(root / 'design/design.yaml',config)
+    run=subprocess.run(argv,capture_output=True,text=True)
+    assert run.returncode == 2
+    assert (root / 'public/logo.png').read_bytes() == b'wrong-logo'
+
+
+def test_web_check_stops_on_failed_l0_and_empty_validation_targets(project):
+    root,catalogs=project
+    config=json.loads((root / 'design/design.yaml').read_text());config['items']={}
+    write(root / 'design/design.yaml',config)
+    argv=[sys.executable,str(SKILL / 'scripts/web_check.py'),'--repo',str(root),'--catalog-dir',str(catalogs)]
+    run=subprocess.run(argv,capture_output=True,text=True)
+    assert run.returncode==2
+    assert [s['stage'] for s in json.loads(run.stdout)['stages']]==['L0']
+    config['items']={'dads-000001':{'state':'defined','evidence':['token:color.primary']}}
+    write(root / 'design/design.yaml',config)
+    write(root / 'design/validation.json',{'schema_version':1,'html':[],'urls':[],'viewports':[375],'schemes':['light']})
+    run=subprocess.run(argv,capture_output=True,text=True)
+    assert run.returncode==2
+    assert [s['stage'] for s in json.loads(run.stdout)['stages']]==['L0']
+
+
+@pytest.mark.skipif(os.environ.get('DESIGN_BROWSER_TEST') != '1',reason='explicit browser fixture run required')
+def test_web_check_runs_real_l1_and_l2_and_detects_palette_mutation(project):
+    from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
+    from functools import partial
+    from threading import Thread
+    root,catalogs=project
+    tokens=json.loads((root / 'design/tokens/brand.tokens.json').read_text())
+    for name,components,hex_value,alpha in [('white',[1,1,1],'#ffffff',1),('clear',[0,0,0],'#000000',0)]:
+        tokens['color'][name]={'$value':{'colorSpace':'srgb','components':components,'hex':hex_value,'alpha':alpha},
+                               '$extensions':{'org.own.design':{'origin':'proposal'}}}
+    tokens['font']={'$type':'fontFamily','$value':['sans-serif'],'$extensions':{'org.own.design':{'origin':'proposal'}}}
+    tokens['radius']={'$type':'dimension','$value':{'value':0,'unit':'px'},'$extensions':{'org.own.design':{'origin':'proposal'}}}
+    write(root / 'design/tokens/brand.tokens.json',tokens)
+    result=check(project)
+    write(root / 'design/approvals.yaml',[{'token_path':path,'value_hash':t['value_hash'],
+          'approver':'fixture-owner','date':'2026-10-22'} for path,t in result['manifest']['web']['tokens'].items()])
+    write(root / 'design/validation.json',{'schema_version':1,'html':['index.html'],
+          'urls':[{'env':'DESIGN_FIXTURE_URL'}],'viewports':[375],'schemes':['light']})
+    normal=('<html lang="en"><head><title>Fixture</title><meta name="viewport" content="width=device-width">'
+            '<style>body{font:16px/1.5 sans-serif;background:white;color:black}'
+            '*{border-radius:0;border-color:black;outline-color:black;text-decoration-color:black}'
+            ':focus-visible{outline:2px solid black}@media(min-width:1px){}</style></head>'
+            '<body><main><h1>Fixture</h1></main></body></html>')
+    (root / 'index.html').write_text(normal)
+    class Handler(SimpleHTTPRequestHandler):
+        def log_message(self,*args):pass
+    server=ThreadingHTTPServer(('127.0.0.1',0),partial(Handler,directory=str(root)))
+    thread=Thread(target=server.serve_forever,daemon=True);thread.start()
+    env=dict(os.environ,DESIGN_FIXTURE_URL='http://127.0.0.1:'+str(server.server_port),
+             DESIGN_AUDIT_NODE=os.environ['DESIGN_TEST_NODE'])
+    if os.environ.get('DESIGN_TEST_NODE_MODULES'):env['NODE_PATH']=os.environ['DESIGN_TEST_NODE_MODULES']
+    argv=[sys.executable,str(SKILL / 'scripts/web_check.py'),'--repo',str(root),'--catalog-dir',str(catalogs)]
+    try:
+        run=subprocess.run(argv,env=env,capture_output=True,text=True)
+        result=json.loads(run.stdout)
+        assert run.returncode==0,result
+        assert [s['stage'] for s in result['stages']]==['L0','L1','L2']
+        assert {'pseudo-elements','shadow-dom','iframe-documents'} <= set(result['uncovered'])
+        (root / 'index.html').write_text(normal.replace('<h1>','<h1 style="color:red">'))
+        run=subprocess.run(argv,env=env,capture_output=True,text=True)
+        result=json.loads(run.stdout)
+        assert run.returncode==1,result
+        assert result['stages'][-1]=={'stage':'L2','exit_code':1,'target_env':'DESIGN_FIXTURE_URL'}
+    finally:
+        server.shutdown();server.server_close();thread.join()
+
+
+def test_l1_rejects_missing_declared_tailwind_target(project):
+    root,_=project
+    write(root/'design/tailwind.json',{'schema_version':1,'configs':[{
+        'target':'app/tailwind.config.cjs','content':['./src/**/*.tsx'],
+        'theme':{'colors':{'primary':{'$token':'color.primary'}}},'plugins':[]}]})
+    check(project)
+    (root/'index.html').write_text('<html lang="en"><meta name="viewport" content="width=device-width">'
+        '<style>:focus-visible{outline:auto}@media(min-width:1px){}</style><main><h1>Fixture</h1></main></html>')
+    run=subprocess.run([sys.executable,str(SKILL.parent/'own-web-design/scripts/audit_html.py'),
+        str(root/'index.html'),'--manifest',str(root/'design/.resolved/web.json')],capture_output=True,text=True)
+    assert run.returncode==2,run.stdout
+
+
+def test_sync_rejects_symlinked_targets_and_rolls_back_partial_failure(project,monkeypatch):
+    from design_author import sync_artifacts
+    root,_=project
+    original=root/'original.cjs';original.write_text('original')
+    target=root/'tailwind.config.cjs';target.symlink_to(original)
+    manifest=check(project)['manifest']['web']
+    with pytest.raises(ValueError):sync_artifacts(root,manifest)
+    assert target.is_symlink() and original.read_text()=='original'
+    target.unlink();target.write_text('before')
+    other=root/'app/tailwind.config.cjs';other.parent.mkdir();other.write_text('other-before')
+    manifest['artifacts']['app/tailwind.config.cjs']={'content':'after'}
+    replace=Path.replace
+    def fail_second(path,dest):
+        if dest==other:raise OSError('fixture disk failure')
+        return replace(path,dest)
+    monkeypatch.setattr(Path,'replace',fail_second)
+    with pytest.raises(OSError):sync_artifacts(root,manifest)
+    assert target.read_text()=='before' and other.read_text()=='other-before'
+    assert list(root.rglob('*.design-tmp'))==[]

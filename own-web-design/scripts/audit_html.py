@@ -28,7 +28,7 @@ import sys
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'own-design-author/scripts'))
-from resolved_contract import load_manifest, check_tailwind
+from resolved_contract import load_manifest, check_tailwind, check_asset_exports
 
 
 class Targets(HTMLParser):
@@ -248,14 +248,17 @@ def main(argv):
     args = parser.parse_args(argv[1:])
     try:
         manifest = load_manifest(args.manifest)
-        configs = list(args.tailwind)
+        check_asset_exports(args.manifest.resolve().parents[2], manifest)
+        repo = args.manifest.resolve().parents[2]
+        configs = [repo / row['target'] for row in (manifest.get('tailwind_templates') or {}).get('configs', [])]
+        configs.extend(args.tailwind)
         if not configs:
             repo = args.manifest.resolve().parents[2]
             for directory, dirs, files in os.walk(repo):
                 dirs[:] = [d for d in dirs if d not in ('.git', 'node_modules', '.resolved', '.venv')]
                 configs.extend(Path(directory) / name for name in files if name.startswith('tailwind.config.'))
         for config in configs:
-            check_tailwind(config, manifest)
+            check_tailwind(config, manifest, repo=args.manifest.resolve().parents[2])
         all_ok = all([audit(p, manifest) for p in args.files])
     except (OSError, ValueError, KeyError, TypeError) as exc:
         print(json.dumps({'exit_code': 2, 'errors': [type(exc).__name__ + ': invalid or unavailable input']}, ensure_ascii=False))

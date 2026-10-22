@@ -208,6 +208,33 @@ def _rules(design):
     return rules
 
 
+def _asset_rule_evidence(root, rules, errors):
+    measured = {}
+    for ident, rule in rules.items():
+        targets = rule.get('targets',rule.get('paths',[]))
+        if rule['kind'] != 'source-hash' or not all(t.startswith('design/assets/') for t in targets):
+            continue
+        allowed = rule.get('allowlist')
+        if not isinstance(allowed,list) or not allowed or any(not isinstance(v,str) or not re.fullmatch('[0-9a-f]{64}',v) for v in allowed):
+            raise ValueError('asset source hash allowlist must contain SHA256 values')
+        files = {}
+        for target in targets:
+            if '..' in Path(target).parts or Path(target).is_absolute():
+                raise ValueError('invalid asset source hash path')
+            matches = sorted(Path(root).glob(target))
+            if not matches:
+                errors.append(f'zero asset source hash targets: {ident}')
+            for path in matches:
+                if not path.is_file() or not path.resolve().is_relative_to((Path(root)/'design/assets').resolve()):
+                    raise ValueError('asset source hash target escapes assets')
+                digest = hashlib.sha256(path.read_bytes()).hexdigest()
+                files[path.relative_to(root).as_posix()] = digest
+                if digest not in allowed:
+                    errors.append(f'asset source hash mismatch: {ident}')
+        measured[ident] = {'rule':rule,'files':files}
+    return measured
+
+
 def _approvals(design):
     rows = read_data(design / 'approvals.yaml')
     if not isinstance(rows, list):
@@ -328,7 +355,9 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
             if token['state'] == 'proposed':
                 counts['proposed'] += 1
         rules = _rules(design)
-        counts['uncovered'] = len(rules)
+        measured_rules = _asset_rule_evidence(root,rules,errors)
+        uncovered_rules = set(rules) - set(measured_rules)
+        counts['uncovered'] = len(uncovered_rules)
         item_states, must_proposed, must_uncovered = {}, [], []
         classification_policy = load_policy()
         used_item_approvals = set()
@@ -403,15 +432,20 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
                         if target not in rules:
                             errors.append(f'missing rule evidence: {ident}')
                         else:
-                            evidence_values[ref] = rules[target]
+                            evidence_values[ref] = measured_rules.get(target,rules[target])
                             if must:
-                                must_uncovered.append(ident)
+                                must_proposed.append(ident)
+                                if target in uncovered_rules:
+                                    must_uncovered.append(ident)
                 if ('item_id',ident) in approvals:
                     used_item_approvals.add(ident)
                     if approvals[('item_id',ident)] != value_hash(evidence_values):
                         errors.append(f'item approval hash mismatch: {ident}')
                     else:
                         must_proposed = [i for i in must_proposed if i != ident]
+                        for ref in evidence:
+                            if ref.startswith('token:') and ref[6:] in tokens:
+                                tokens[ref[6:]]['state'] = 'approved'
                 item_states[ident]['value_hash'] = value_hash(evidence_values)
             else:
                 errors.append(f'blank/unknown item state: {ident}')
@@ -421,12 +455,17 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
         prose = inside(design,'DESIGN.md').read_text()
         if re.search(r'(?<!\w)#[0-9a-fA-F]{3,8}\b', prose):
             errors.append('DESIGN.md contains a literal color; reference tokens instead')
+        counts['proposed'] = sum(t['state'] != 'approved' for t in tokens.values())
+        must_proposed = [ident for ident in must_proposed if not (
+            item_states[ident].get('evidence') and all(
+                ref.startswith('token:') and ref[6:] in tokens and tokens[ref[6:]]['state'] == 'approved'
+                for ref in item_states[ident]['evidence']))]
         if must_proposed:
             warnings.append(f'proposed must items: {len(set(must_proposed))}')
         if counts['proposed']:
             warnings.append(f'proposed values: {counts["proposed"]}')
-        if rules:
-            warnings.append(f'uncovered rules: {len(rules)}; L1/L2 evidence required')
+        if uncovered_rules:
+            warnings.append(f'uncovered rules: {len(uncovered_rules)}; L1/L2 evidence required')
         if ship and (must_proposed or must_uncovered):
             errors.append(f'ship gate: proposed must {len(set(must_proposed))}, uncovered must {len(set(must_uncovered))}')
         assets = []
@@ -438,26 +477,27 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
             for p in sorted(design.rglob('*')) if p.is_file() and '.resolved' not in p.relative_to(design).parts
             and p.name not in ('assets.json','migration.json')}
         source_hash = value_hash(input_hashes)
-        from tailwind_contract import tailwind_artifact
-        artifacts = ({'tailwind.config.cjs': tailwind_artifact(tokens)}
-                     if any(t['type'] == 'color' for t in tokens.values()) else {})
-        tailwind_content = artifacts.get('tailwind.config.cjs', {}).get('content')
+        asset_exports = _asset_exports(root,design)
+        from tailwind_contract import build_artifacts
+        tailwind_templates = read_data(inside(design,'tailwind.json')) if (design/'tailwind.json').exists() else None
+        artifacts = build_artifacts(tokens,tailwind_templates)
         for medium, profile in profiles.items():
             result['manifest'][medium] = {'schema_version':1, 'skill_version':VERSION,
                 'catalog_version':catalog['version'], 'catalog_hash':value_hash(catalog), 'source_hash':source_hash,
                 'input_hashes':input_hashes, 'media':medium, 'profile':profile,
                 'minimums':profile['minimums'], 'tokens':tokens, 'items':item_states,
                 'css_variables':{t['css_name']:t['css'] for t in tokens.values()},
-                'artifacts':artifacts, 'rules':list(rules.values()), 'coverage':{'uncovered':sorted(rules)},
+                'tailwind_templates':tailwind_templates, 'artifacts':artifacts, 'rules':list(rules.values()), 'coverage':{'uncovered':sorted(uncovered_rules)},
                 'palette':{kind: sorted({t['css'] for t in tokens.values() if t['type']==kind})
-                           for kind in ('color','fontFamily','dimension')}, 'assets':assets}
+                           for kind in ('color','fontFamily','dimension')}, 'assets':assets, 'asset_exports':asset_exports}
         result['exit_code'] = 2 if errors else (1 if warnings else 0)
         counts['fulfillment'] = (counts['defined']+counts['na'])/counts['items']
         if not errors:
-            write_data(design/'assets.json', {'schema_version':1,'assets':assets})
-            if tailwind_content is not None:
-                (design/'.resolved'/'tailwind.config.cjs').parent.mkdir(parents=True, exist_ok=True)
-                (design/'.resolved'/'tailwind.config.cjs').write_text(tailwind_content)
+            write_data(design/'assets.json', {'schema_version':1,'assets':assets, 'asset_exports':asset_exports})
+            for name, artifact in artifacts.items():
+                generated = design/'.resolved'/artifact.get('file',name)
+                generated.parent.mkdir(parents=True,exist_ok=True)
+                generated.write_text(artifact['content'])
             for medium, manifest in result['manifest'].items():
                 write_data(design/'.resolved'/f'{medium}.json',manifest)
                 css = ':root {\n' + ''.join(f'  {key}: {value};\n' for key,value in manifest['css_variables'].items()) + '}\n'
@@ -473,6 +513,72 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
     return result
 
 
+def _deployment_path(root, target):
+    if not isinstance(target,str) or not target or Path(target).is_absolute() or '..' in Path(target).parts or '\\' in target:
+        raise ValueError('invalid deployment target')
+    path = Path(root)/target
+    if any(p.is_symlink() for p in (path, *path.parents) if p.is_relative_to(Path(root))):
+        raise ValueError('symlinked deployment target is unsupported')
+    if not path.resolve().is_relative_to(Path(root).resolve()) or path.resolve().is_relative_to((Path(root)/'design').resolve()) or any(p.startswith('.') for p in Path(target).parts):
+        raise ValueError('deployment target escapes artifact directories')
+    return path
+
+
+def _asset_exports(root, design):
+    path = design/'asset-exports.json'
+    if not path.exists():
+        return []
+    data = read_data(inside(design,'asset-exports.json'))
+    if not isinstance(data,dict) or set(data) != {'schema_version','exports'} or data['schema_version'] != 1 or not isinstance(data['exports'],list):
+        raise ValueError('invalid asset export schema')
+    rows, seen = [], set()
+    for row in data['exports']:
+        if not isinstance(row,dict) or set(row) != {'source','targets'} or not isinstance(row['source'],str) or not row['source'].startswith('assets/'):
+            raise ValueError('asset export source must be a design asset')
+        source = inside(design,row['source'])
+        targets = row['targets']
+        if not isinstance(targets,list) or not targets:
+            raise ValueError('zero asset export targets')
+        for target in targets:
+            output = _deployment_path(root,target)
+            if target in seen or output.suffix.lower() not in ('.png','.jpg','.jpeg','.webp','.svg','.ico') or output.suffix.lower() != source.suffix.lower():
+                raise ValueError('invalid or duplicate asset export target')
+            seen.add(target)
+        rows.append({**row,'sha256':hashlib.sha256(source.read_bytes()).hexdigest()})
+    return rows
+
+
+def sync_artifacts(root, manifest):
+    writes = {}
+    for target, artifact in manifest.get('artifacts',{}).items():
+        writes[_deployment_path(root,target)] = artifact['content'].encode()
+    for row in manifest.get('asset_exports',[]):
+        content = inside(Path(root)/'design',row['source']).read_bytes()
+        for target in row['targets']:
+            output = _deployment_path(root,target)
+            if output in writes:
+                raise ValueError('duplicate artifact output')
+            writes[output] = content
+    before = {path:path.read_bytes() if path.exists() else None for path in writes}
+    applied = []
+    try:
+        for path,content in writes.items():
+            path.parent.mkdir(parents=True,exist_ok=True)
+            temporary = path.with_name(path.name+'.design-tmp')
+            try:
+                temporary.write_bytes(content)
+                temporary.replace(path)
+            finally:
+                if temporary.exists(): temporary.unlink()
+            applied.append(path)
+    except OSError:
+        for path in reversed(applied):
+            if before[path] is None: path.unlink()
+            else: path.write_bytes(before[path])
+        raise
+    return [path.relative_to(root).as_posix() for path in writes]
+
+
 def git_root(path):
     run = subprocess.run(['git','-C',str(path),'rev-parse','--show-toplevel'],capture_output=True,text=True)
     if run.returncode:
@@ -483,7 +589,7 @@ def git_root(path):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='command',required=True)
-    for command in ('init','check','migrate'):
+    for command in ('init','check','migrate','sync'):
         p = sub.add_parser(command)
         p.add_argument('--repo',default='.')
         p.add_argument('--catalog-dir',type=Path,default=CATALOG)
@@ -497,9 +603,11 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         root = git_root(args.repo)
-        if args.command == 'check':
-            result = check_design(root,catalog_dir=args.catalog_dir,ship=args.ship)
-            if not args.include_manifest:
+        if args.command in ('check','sync'):
+            result = check_design(root,catalog_dir=args.catalog_dir,ship=getattr(args,'ship',False))
+            if args.command == 'sync' and result['exit_code'] != 2:
+                result['synced'] = sync_artifacts(root,result['manifest']['web'])
+            if not getattr(args,'include_manifest',False):
                 result.pop('manifest',None)
             print(json.dumps(result,ensure_ascii=False,sort_keys=True))
             return result['exit_code']

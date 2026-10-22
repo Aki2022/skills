@@ -3,7 +3,7 @@ import hashlib
 import json
 import math
 from pathlib import Path
-from tailwind_contract import tailwind_artifact
+from tailwind_contract import build_artifacts
 
 
 def load_manifest(path):
@@ -39,12 +39,33 @@ def load_manifest(path):
     return data
 
 
-def check_tailwind(path, manifest):
-    artifact = manifest.get('artifacts', {}).get('tailwind.config.cjs')
-    if artifact != tailwind_artifact(manifest['tokens']):
-        raise ValueError('manifest has no generated Tailwind contract')
+def check_tailwind(path, manifest, repo=None):
+    expected = build_artifacts(manifest['tokens'],manifest.get('tailwind_templates'))
+    target = 'tailwind.config.cjs'
+    if manifest.get('tailwind_templates') is not None:
+        if repo is None:
+            raise ValueError('repository root required for project Tailwind contract')
+        try:
+            target = Path(path).resolve().relative_to(Path(repo).resolve()).as_posix()
+        except ValueError:
+            raise ValueError('Tailwind config escapes repository')
+    artifact = manifest.get('artifacts', {}).get(target)
+    if not artifact or artifact != expected.get(target):
+        raise ValueError('manifest has no matching generated Tailwind contract')
     content = artifact['content'].encode()
     digest = hashlib.sha256(content).hexdigest()
     if digest != artifact['sha256'] or Path(path).read_bytes() != content:
         raise ValueError('Tailwind config differs from generated contract')
     return digest
+
+
+def check_asset_exports(repo, manifest):
+    root=Path(repo).resolve()
+    for row in manifest.get('asset_exports',[]):
+        source=root/'design'/row['source']
+        if not source.resolve().is_relative_to(root/'design/assets') or hashlib.sha256(source.read_bytes()).hexdigest() != row['sha256']:
+            raise ValueError('asset source differs from manifest')
+        for target in row['targets']:
+            path=root/target
+            if not path.resolve().is_relative_to(root) or hashlib.sha256(path.read_bytes()).hexdigest() != row['sha256']:
+                raise ValueError('deployed asset differs from design source')

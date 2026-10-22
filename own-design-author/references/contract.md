@@ -16,6 +16,9 @@ Python 3.10以上と、既存環境に導入済みの PyYAML / jsonschema（refe
 - `assets/`: ファイルのsha256から `assets.json` を生成する。別の手書き台帳を正典にしない。
 - `approvals.yaml`: 人間確認を根拠にした行の配列。
 - `NOTICE`: JSON互換YAML、`sources` 配列。各参照のid / url / commit / license / copyright / editedを必須とする。`edited`は真偽値。
+- `tailwind.json`: 任意の生成設定。対象別content・宣言的plugin・tokenを参照するthemeを持つ。詳細は `web-validation.md`。
+- `asset-exports.json`: `schema_version: 1` と `exports` 配列。各行にassets/以下のsourceとrepo相対targetsを置き、syncで配置、L1で実バイトを照合する。
+- `validation.json`: design-checkのL1/L2対象とviewport/scheme。詳細は `web-validation.md`。
 - `.resolved/tailwind.config.cjs`: 解決済みの色から生成するCommonJS設定。contentとSHA256はwebマニフェストのartifactsにも保存。
 - `.resolved/web.json` / `.resolved/web.css`: L0の生成物。入力ハッシュ・解決値・CSS・承認状態・媒体下限・項目・未カバー・アセットを持つ。これらを手で直しても正典は変わらない。
 
@@ -50,7 +53,11 @@ group `$extends`、カスタムdash配列のstrokeStyle、srgb以外のCSS変換
 - defined item行は `{evidence-reference: resolved-evidence-value}` の辞書を束縛する。
 - n-a item行は `{state: "n-a", reason: <理由>}` を束縛する。
 
-行は `token_path` または `item_id` のどちらか一つ、`value_hash`、`approver`、ISO `date` を持つ。重複行・存在しない対象・ハッシュ不一致は失格。台帳の作成コマンドは提供しない。自己テスト内の承認行は人工フィクスチャで、実プロジェクトの承認ではない。
+行は `token_path` または `item_id` のどちらか一つ、`value_hash`、`approver`、ISO `date` を持つ。重複行・存在しない対象・ハッシュ不一致は失格。一致するdefined item行は、その証拠が直接参照するtokenの承認にもなる。token変更時はitem hashも不一致になり停止する。間接的な散文のtoken文字列だけでは承認しない。
+
+source-hash規則のうちtargetsが全てdesign/assets/以下の場合はL0で実SHA256とallowlistを検証する。itemの証拠hashには規則と実測ファイルhashを含める。その他の宣言規則を自己申告で対応済みにはしない。
+
+台帳の作成コマンドは提供しない。自己テスト内の承認行は人工フィクスチャで、実プロジェクトの承認ではない。
 
 ## 終了コードと境界
 

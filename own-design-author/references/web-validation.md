@@ -49,7 +49,7 @@ repo外・design内・隠しpath・symlink先への配置を拒否し、途中�
 `urls`（`{"env":"DESIGN_WEB_URL"}`等）、正の整数の `viewports`、`schemes`（light/dark）を持つ。
 URLは実行時の環境変数で渡す。既存Nodeは `DESIGN_AUDIT_NODE`、Pythonは
 `DESIGN_AUTHOR_PYTHON` で選ぶ。L2を含むため、人間の実施確認を得てから実行する。
-各L2のJSONは `.resolved/l2-<index>.json` に保存し、未カバーを集約出力する。
+各L2はdesign/render-environment.jsonを必須とし、固定環境で2回実行する。JSONは `.resolved/l2-<index>.json` に保存し、未カバーを集約出力する。実行前に前回の同名レポートを削除し、環境不一致や新規レポート欠落を古い成功で埋めない。
 reportはexecuted / skipped / missing / uncovered / screenedの5配列。実行したL1/L2はskippedから除き、L0のscreenedとholdout指標を引き継ぐ。
 対象欠落・実行不能を成功にしない。未承認nice値だけのL0警告は集約後もexit 1に残す。
 
@@ -61,8 +61,9 @@ bodyと子孫の各要素のcolor/background/border/outline/text-decoration、fo
 コントラストとターゲットサイズは媒体minimumsを読む。axeのcolor-contrastと従来の実効コントラスト検査を併用し、
 axeで測れない対象は未検証として残す。失敗したaxe実行を合格にしない。
 
-擬似要素・shadow DOM・iframe内・任意の宣言的追加規則は未カバー。CSSの使用宣言と実際のfallback fontの区別は
-既存のfont-silent-fallback警告で報告する。画像上のコントラスト近似等、従来検査の限界を準拠合格に読み替えない。
+擬似要素・shadow DOM・iframe内・任意の宣言的追加規則は未カバー。
+固定検査はCDPの実描画glyph情報でfont fallbackを失格にする。
+環境指定のないmeasure_lp.mjs単独計測では従来のfont-silent-fallback警告を維持し、fixed-render-environmentを未カバーへ残す。この単独計測は固定L2の代用にしない。画像上のコントラスト近似等、従来検査の限界を準拠合格に読み替えない。
 L1/L2が通っても、未カバー規則が消えたとは扱わない。出荷時のmust未カバーはL0 --shipで停止する。
 
 ## 検証
@@ -71,3 +72,52 @@ L1/L2が通っても、未カバー規則が消えたとは扱わない。出荷
 ブラウザ試験は `DESIGN_BROWSER_TEST=1` と `DESIGN_TEST_NODE` を指定して実行する。
 `DESIGN_BASELINE_MEASURE` は同じフィクスチャを改修前スクリプトにも渡す回帰用。
 通常実行のskipを実ブラウザ検証済みと報告しない。
+
+
+## 固定環境
+
+`design/render-environment.json`をrepoに置き、既存のPlaywright/Chromiumと同梱フォントをpinする。
+新規インストールは行わない。環境・フォント変更時はこのpinを更新し、L0から再生成する。
+環境に合わせて黙ってpinを書き換えない。
+
+```json
+{
+  "schema_version": 1,
+  "runtime": {"browser_version":"<exact-version>","browser_sha256":"<sha256>",
+    "playwright_version":"<exact-version>","node_version":"<exact-version>",
+    "platform":"<platform>","arch":"<arch>","os_release":"<exact-release>"},
+  "clock":"2020-01-01T00:00:00.000Z","locale":"ja-JP","timezone":"UTC",
+  "device_scale_factor":1,"reduced_motion":"reduce",
+  "viewports":[{"width":375,"height":812},{"width":1280,"height":900}],
+  "schemes":["light","dark"],
+  "fonts":[{"path":"public/fonts/example.woff2","url_path":"/fonts/example.woff2",
+    "family":"<actual-font-family>","sha256":"<sha256>"}]
+}
+```
+
+runtimeはfixed_render.mjsのprobe(chromium, playwrightVersion)で実測する。runtimeのbrowser hashは、
+chromium.executablePath()から解決し、実際のlaunchにも明示指定する同じ実行ファイルのSHA256。
+これはブラウザ同梱の全資源やOS全体の完全性証明ではない。OS版・arch・Node版・Playwright版も照合する。
+個別端末の実行ファイルの絶対パスは保存しない。
+
+fontsのpathはrepo相対の通常ファイル。SHA256を実測し、同一originのurl_pathへの要求へそのバイトを配信する。
+未登録のfontリクエストを拒否し、可視要素の実glyphにOSフォントや未登録familyが使われたら失格。
+フォントを1つも読み込まない、glyphを1つも検査しない場合も失格。ページを別の字体へ強制置換して合格させない。
+shadow DOM・iframe内のglyphは未カバーのまま。読み込み前からCDPのfontsUpdatedも記録し、実familyのsrcが登録URLに結び付かない場合は失格。同名のdata URI・local()・インライン生成FontFaceでpinを迂回しない。
+フォントのライセンス・配布可否はプロジェクトが確認し、必要なNOTICEを同梱する。
+
+時計はページ遷移前にPlaywrightのsetFixedTimeを適用し、Dateを固定する。タイマーは動作を続ける。
+DPR・viewport・reduced-motion・locale・timezoneはcontextで指定し、ページ側の実値も照合する。
+service workerはブロックし、各組合せを新しいcontextで実行する。
+同じURL・viewport・schemeを2回測り、全測定結果とPNG画素のhashが同じ場合だけrepeat_equalをtrueにする。
+不一致は失格かつrender-repeat-mismatchの未カバー。乱数や動的データを検査側で偽装せず、プロジェクトの再現可能な入力を用意する。
+環境指紋・実字体・glyph件数・時計・画素hashを結果JSONへ残し、終了時に環境設定とフォント・runtimeを再照合する。
+
+```sh
+node <own-website-audit>/scripts/measure_lp.mjs <url> --manifest design/.resolved/web.json --environment design/render-environment.json --viewports 375,1280 --schemes light,dark --json design/.resolved/l2.json
+```
+
+viewports/schemesの順序と集合もpinに一致必須。ブラウザ版・フォントhash・環境欠落はexit 2、
+測定の不一致や実fallbackはexit 1。API一次資料は[時計](https://playwright.dev/docs/clock)と
+[CDP字体情報](https://chromedevtools.github.io/devtools-protocol/tot/CSS/#method-getPlatformFontsForNode)。
+実ブラウザfixtureの追加条件はDESIGN_TEST_FONTに既存Inter woff2のパスを渡すこと。通常lintのskipを実測と報告しない。

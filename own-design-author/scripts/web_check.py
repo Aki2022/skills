@@ -48,6 +48,8 @@ def main():
             raise ValueError('zero or invalid viewport targets')
         if not isinstance(config['schemes'],list) or not config['schemes'] or any(v not in ('light','dark') for v in config['schemes']):
             raise ValueError('zero or invalid scheme targets')
+        environment=inside(root/'design','render-environment.json')
+        if not environment.is_file():raise ValueError('fixed rendering environment missing')
         uncovered=set(l0['manifest']['web']['coverage']['uncovered'])
         for index,row in enumerate(urls):
             if not isinstance(row,dict) or set(row)!={'env'} or not isinstance(row['env'],str):
@@ -55,11 +57,21 @@ def main():
             url=os.environ.get(row['env'],'')
             if not url.startswith(('http://','https://')):
                 raise ValueError('missing or invalid rendering URL: '+row['env'])
+            output=inside(root/'design/.resolved','l2-'+str(index)+'.json')
+            output.unlink(missing_ok=True)
             l2=subprocess.run([os.environ.get('DESIGN_AUDIT_NODE','node'),
                 str(skills/'own-website-audit/scripts/measure_lp.mjs'),url,'--manifest',str(resolved),
+                '--environment',str(environment),
                 '--viewports',','.join(map(str,config['viewports'])),'--schemes',','.join(config['schemes']),
-                '--json',str(root/'design/.resolved'/('l2-'+str(index)+'.json'))],cwd=root,capture_output=True,text=True)
-            measured=read_data(root/'design/.resolved'/('l2-'+str(index)+'.json'))
+                '--json',str(output)],cwd=root,capture_output=True,text=True)
+            if not output.is_file():
+                report['report']['missing'].append({'id':'L2:'+row['env'],'reason':'no fresh fixed rendering report'})
+                raise ValueError('fresh fixed rendering report missing')
+            measured=read_data(output)
+            fixed=measured.get('environment')
+            if not isinstance(fixed,dict) or type(fixed.get('repeat_equal')) is not bool:
+                raise ValueError('missing fixed rendering evidence')
+            if l2.returncode==0 and not fixed['repeat_equal']:raise ValueError('inconsistent rendering result')
             if not isinstance(measured.get('uncovered'),list):
                 raise ValueError('missing L2 coverage report')
             uncovered.update(measured['uncovered'])

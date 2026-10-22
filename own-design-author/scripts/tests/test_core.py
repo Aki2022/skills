@@ -645,12 +645,16 @@ def test_web_check_runs_real_l1_and_l2_and_detects_palette_mutation(project):
     from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
     from functools import partial
     from threading import Thread
+    from test_fixed_render import pin
     root,catalogs=project
+    env=dict(os.environ,DESIGN_AUDIT_NODE=os.environ['DESIGN_TEST_NODE'])
+    if os.environ.get('DESIGN_TEST_NODE_MODULES'):env['NODE_PATH']=os.environ['DESIGN_TEST_NODE_MODULES']
+    write(root/'design/render-environment.json',pin(root,env))
     tokens=json.loads((root / 'design/tokens/brand.tokens.json').read_text())
     for name,components,hex_value,alpha in [('white',[1,1,1],'#ffffff',1),('clear',[0,0,0],'#000000',0)]:
         tokens['color'][name]={'$value':{'colorSpace':'srgb','components':components,'hex':hex_value,'alpha':alpha},
                                '$extensions':{'org.own.design':{'origin':'proposal'}}}
-    tokens['font']={'$type':'fontFamily','$value':['sans-serif'],'$extensions':{'org.own.design':{'origin':'proposal'}}}
+    tokens['font']={'$type':'fontFamily','$value':['Inter','sans-serif'],'$extensions':{'org.own.design':{'origin':'proposal'}}}
     tokens['radius']={'$type':'dimension','$value':{'value':0,'unit':'px'},'$extensions':{'org.own.design':{'origin':'proposal'}}}
     write(root / 'design/tokens/brand.tokens.json',tokens)
     result=check(project)
@@ -658,7 +662,7 @@ def test_web_check_runs_real_l1_and_l2_and_detects_palette_mutation(project):
     write(root / 'design/validation.json',{'schema_version':1,'html':['index.html'],
           'urls':[{'env':'DESIGN_FIXTURE_URL'}],'viewports':[375],'schemes':['light']})
     normal=('<html lang="en"><head><title>Fixture</title><meta name="viewport" content="width=device-width">'
-            '<style>body{font:16px/1.5 sans-serif;background:white;color:black}'
+            '<style>@font-face{font-family:Inter;src:url(/fixture.woff2)}body{font:16px/1.5 Inter,sans-serif;background:white;color:black}'
             '*{border-radius:0;border-color:black;outline-color:black;text-decoration-color:black}'
             ':focus-visible{outline:2px solid black}@media(min-width:1px){}</style></head>'
             '<body><main><h1>Fixture</h1></main></body></html>')
@@ -667,9 +671,7 @@ def test_web_check_runs_real_l1_and_l2_and_detects_palette_mutation(project):
         def log_message(self,*args):pass
     server=ThreadingHTTPServer(('127.0.0.1',0),partial(Handler,directory=str(root)))
     thread=Thread(target=server.serve_forever,daemon=True);thread.start()
-    env=dict(os.environ,DESIGN_FIXTURE_URL='http://127.0.0.1:'+str(server.server_port),
-             DESIGN_AUDIT_NODE=os.environ['DESIGN_TEST_NODE'])
-    if os.environ.get('DESIGN_TEST_NODE_MODULES'):env['NODE_PATH']=os.environ['DESIGN_TEST_NODE_MODULES']
+    env['DESIGN_FIXTURE_URL']='http://127.0.0.1:'+str(server.server_port)
     argv=[sys.executable,str(SKILL / 'scripts/web_check.py'),'--repo',str(root),'--catalog-dir',str(catalogs)]
     try:
         run=subprocess.run(argv,env=env,capture_output=True,text=True)
@@ -686,6 +688,15 @@ def test_web_check_runs_real_l1_and_l2_and_detects_palette_mutation(project):
         result=json.loads(run.stdout)
         assert run.returncode==1,result
         assert result['stages'][-1]=={'stage':'L2','exit_code':1,'target_env':'DESIGN_FIXTURE_URL'}
+        (root/'index.html').write_text(normal)
+        fixed=json.loads((root/'design/render-environment.json').read_text())
+        fixed['runtime']['browser_version']='wrong-version'
+        write(root/'design/render-environment.json',fixed)
+        stale=root/'design/.resolved/l2-0.json';assert stale.exists()
+        run=subprocess.run(argv,env=env,capture_output=True,text=True)
+        result=json.loads(run.stdout)
+        assert run.returncode==2 and not stale.exists(),result
+        assert any(row['id']=='L2:DESIGN_FIXTURE_URL' for row in result['report']['missing'])
     finally:
         server.shutdown();server.server_close();thread.join()
 

@@ -20,7 +20,9 @@
  * 終了コード: 0 = 失格なし / 1 = 失格あり / 2 = 実行不能
  */
 
-import { writeFileSync, existsSync } from "node:fs";
+import { writeFileSync, existsSync, realpathSync, unlinkSync } from "node:fs";
+import {dirname} from "node:path";
+import {loadEnvironment,verifyRuntime,configureFonts,trackFonts,renderEvidence,compareRepeats} from "../../own-design-author/scripts/fixed_render.mjs";
 import { loadManifest, collectDesign } from "../../own-design-author/scripts/resolved_contract.mjs";
 import { createRequire } from "node:module";
 
@@ -55,7 +57,10 @@ const viewports = flag("viewports", "375,1280")
 const jsonOut = flag("json", null);
 const schemes = flag("schemes", "dark,light").split(",").filter(Boolean);
 let manifest;
-try { manifest = loadManifest(flag('manifest', 'design/.resolved/web.json')); }
+try {
+  if(jsonOut && flag('environment',null) && existsSync(jsonOut))unlinkSync(jsonOut);
+  manifest = loadManifest(flag('manifest', 'design/.resolved/web.json'));
+}
 catch { console.error('resolved manifest unavailable, invalid or stale; rerun L0'); process.exit(2); }
 if (!viewports.length || !schemes.length) { console.error('zero measurement runs'); process.exit(2); }
 let axePath = process.env.AXE_CORE_PATH;
@@ -529,24 +534,40 @@ async function measureRegion(page, region) {
 }
 
 const { chromium } = loadPlaywright();
-const browser = await chromium.launch();
+let fixed=null,environment=null;
+try {
+  if(flag('environment',null)){
+    const root=dirname(dirname(dirname(realpathSync(flag('manifest','design/.resolved/web.json')))));
+    fixed=loadEnvironment(flag('environment',null),root,viewports,schemes);
+
+  }
+} catch {console.error('fixed rendering environment unavailable or mismatched');process.exit(2);}
+let browser;
+try{browser=await chromium.launch(fixed?{executablePath:chromium.executablePath()}:{});}
+catch{console.error('browser runtime unavailable');process.exit(2);}
+try{if(fixed)environment=await verifyRuntime(fixed,chromium,require('playwright/package.json').version,browser);}
+catch{await browser.close();console.error('fixed runtime mismatch');process.exit(2);}
 const report = {
   url,
-  measuredAt: new Date().toISOString(),
+  measuredAt: fixed?fixed.config.clock:new Date().toISOString(),
+  environment,
   runs: [],
   failures: [],
-  uncovered: [...(manifest.coverage?.uncovered || []), 'pseudo-elements', 'shadow-dom', 'iframe-documents'],
+  uncovered: [...(manifest.coverage?.uncovered || []), 'pseudo-elements', 'shadow-dom', 'iframe-documents',...(fixed?[]:['fixed-render-environment'])],
 };
 
 try {
+for(let repeat=0;repeat<(fixed?2:1);repeat++){
 for (const scheme of schemes) {
   for (const width of viewports) {
-    const context = await browser.newContext({
-      viewport: { width, height: width < 500 ? 812 : 900 },
-      colorScheme: scheme,
-      deviceScaleFactor: 1,
-    });
+    const context = await browser.newContext(fixed?{
+      viewport:fixed.config.viewports.find(v=>v.width===width),colorScheme:scheme,
+      deviceScaleFactor:fixed.config.device_scale_factor,reducedMotion:fixed.config.reduced_motion,
+      locale:fixed.config.locale,timezoneId:fixed.config.timezone,serviceWorkers:'block',
+    }:{viewport:{width,height:width<500?812:900},colorScheme:scheme,deviceScaleFactor:1});
+    const requests=fixed?await configureFonts(context,fixed,url):null;
     const page = await context.newPage();
+    if(fixed){await trackFonts(page,context,requests);await page.clock.setFixedTime(new Date(fixed.config.clock));}
     const consoleErrors = [];
     page.on(
       "console",
@@ -652,13 +673,23 @@ for (const scheme of schemes) {
         });
       }
     }
-    report.runs.push({ scheme, width, ...data });
+    if(fixed)data.render_evidence=await renderEvidence(page,context,fixed,requests);
+    report.runs.push({ scheme, width, ...(fixed?{repeat}:{}), ...data });
     await context.close();
   }
 }
+}
+if(fixed){
+  const reloaded=loadEnvironment(fixed.path,fixed.root,viewports,schemes);
+  if(reloaded.config_sha256!==fixed.config_sha256)throw Error('environment changed');
+  await verifyRuntime(reloaded,chromium,require('playwright/package.json').version,browser);
+}
+} catch {
+  console.error('rendering failed or fixed inputs changed');process.exitCode=2;
 } finally {
   await browser.close();
 }
+if(process.exitCode===2)process.exit(2);
 
 const fail = (id, detail) => report.failures.push({ id, ...detail });
 // 校正が足りない / 環境差が出る項目は警告に置く。失格に混ぜると
@@ -725,6 +756,15 @@ for (const r of report.runs) {
       min: T.bodyLineHeightMin,
     });
   if (r.headJumps.length) fail("heading-jump", { at, jumps: r.headJumps });
+  if(fixed && (r.render_evidence.fallbacks.length || r.render_evidence.rejected_font_requests))
+    fail('font-fallback',{at,families:r.render_evidence.fallbacks,rejected_requests:r.render_evidence.rejected_font_requests});
+  if(fixed){
+    const actual=r.render_evidence,expected=fixed.config;
+    if(actual.clock!==expected.clock||actual.dpr!==expected.device_scale_factor||!actual.reduced_motion||
+      actual.locale!==expected.locale||actual.timezone!==expected.timezone||
+      actual.viewport.width!==r.width||actual.viewport.height!==expected.viewports.find(v=>v.width===r.width).height)
+      fail('render-environment-mismatch',{at});
+  }
   if (r.fontFallbacks.length)
     // headless では webfont の subset 読み込みが実ブラウザと揺れる。
     // 実ブラウザで確認するまで失格にしない。
@@ -770,6 +810,7 @@ for (const r of report.runs) {
   }
 }
 
+if(fixed)compareRepeats(report);
 const out = JSON.stringify(report, null, 2);
 if (jsonOut) writeFileSync(jsonOut, out);
 

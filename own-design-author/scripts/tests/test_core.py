@@ -357,3 +357,14 @@ def test_export_failure_leaves_no_partial_generated_contract(project,monkeypatch
     assert check(project)['exit_code']==2
     assert not (root/'design/assets.json').exists()
     assert not (root/'design/.resolved/web.json').exists()
+
+
+def test_fresh_init_reports_empty_must_even_before_first_token(project):
+    root,catalogs=project
+    import shutil
+    shutil.rmtree(root/'design')
+    init_design(root,'product-ui','test-v1',catalog_dir=catalogs)
+    result=check(project)
+    assert result['exit_code']==2
+    assert result['counts']['deferred']==1
+    assert any('must item is empty' in e for e in result['errors'])

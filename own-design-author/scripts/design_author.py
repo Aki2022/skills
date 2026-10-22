@@ -296,7 +296,13 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
             profiles[medium] = {**profile, 'minimums': {**floor, **supplied}}
         documents = [read_data(inside(design, str(p.relative_to(design))))
                      for p in sorted((design / 'tokens').glob('*.tokens.json'))]
-        tokens = resolve_tokens(documents)
+        try:
+            tokens = resolve_tokens(documents)
+        except ValueError as exc:
+            if str(exc) != 'zero token targets':
+                raise
+            tokens = {}
+            errors.append('zero token targets')
         counts['tokens'] = len(tokens)
         approvals = _approvals(design)
         notice = read_data(inside(design, 'NOTICE'))

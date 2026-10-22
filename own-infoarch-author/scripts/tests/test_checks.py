@@ -96,7 +96,7 @@ def test_green_fixture_passes_with_real_targets(tmp_path):
     write_repo(tmp_path)
     rc, report = run(tmp_path)
     assert rc == 0, report['findings']
-    assert report['targets']['files'] == 2 and report['targets']['segments'] >= 6
+    assert report['targets']['files'] == 2 and report['targets']['blocks'] >= 6
 
 
 def add_html(html, snippet):

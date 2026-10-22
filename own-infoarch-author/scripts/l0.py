@@ -12,7 +12,7 @@ from pathlib import Path
 
 import numeric
 import prh
-from common import INFO_ARCH_DIR, Report, load_ref, load_yaml, validator_for
+from common import INFO_ARCH_DIR, Report, YamlError, load_ref, load_yaml, safe_load_text, validator_for
 
 KINDS = {'audiences': 'aud', 'problems': 'prb', 'messages': 'msg', 'claims': 'clm', 'entities': 'ent'}
 PLACEHOLDER = re.compile(r'\{\{\s*(clm-[0-9]{4,})\s*\}\}')
@@ -49,7 +49,11 @@ def load(root, report):
     if not main.is_file():
         report.add('fail', 'IA_MISSING', 'design/info_arch/info_arch.yaml がない', main.relative_to(root))
         return m
-    data = load_yaml(main)
+    try:
+        data = load_yaml(main)
+    except YamlError as exc:
+        report.add('fail', 'IA_YAML', f'YAML として読めない: {exc}', 'design/info_arch/info_arch.yaml')
+        return m
     errs = _schema_errors(validator_for('info_arch.v1.schema.json'), data)
     for e in errs:
         report.add('fail', 'IA_SCHEMA', e.message, 'design/info_arch/info_arch.yaml',
@@ -63,8 +67,12 @@ def load(root, report):
     if not files:
         report.add('fail', 'IA_NO_CHANNELS', 'channels/*.yaml が 0 件（検査対象が無いことを合格にしない）', 'design/info_arch/channels')
     for f in files:
-        cdata = load_yaml(f)
         rel = f.relative_to(root)
+        try:
+            cdata = load_yaml(f)
+        except YamlError as exc:
+            report.add('fail', 'IA_YAML', f'YAML として読めない: {exc}', rel)
+            continue
         cerrs = _schema_errors(chan_validator, cdata)
         for e in cerrs:
             report.add('fail', 'IA_SCHEMA', e.message, rel, pointer='/' + '/'.join(map(str, e.absolute_path)))
@@ -74,7 +82,10 @@ def load(root, report):
             m.channels[f.stem] = (rel, cdata)
     terms = base / 'terms.prh.yml'
     if terms.is_file():
-        m.terms_text = terms.read_text(encoding='utf-8')
+        try:
+            m.terms_text = terms.read_bytes().decode('utf-8')
+        except UnicodeDecodeError as exc:
+            report.add('fail', 'IA_YAML', f'UTF-8 として読めない: {exc}', 'design/info_arch/terms.prh.yml')
     return m
 
 
@@ -88,13 +99,25 @@ def _check_ledger(m, report):
             if aid in tomb:
                 report.add('fail', 'IA_ID_TOMBSTONED', f'{aid} は墓標にある（id は再利用しない）', 'design/info_arch/info_arch.yaml')
     for old, new in tomb.items():
-        if new is not None and m.atom(new) is None:
+        o = ID_RE.match(old)
+        if int(o.group(2)) >= nxt[o.group(1)]:
+            report.add('fail', 'IA_ID_NOT_ISSUED', f'墓標 {old} は台帳が発行していない番号', 'design/info_arch/info_arch.yaml')
+        if new is None:
+            continue
+        n = ID_RE.match(new)
+        if n.group(1) == 'trm':  # terms live in terms.prh.yml; the ledger can only vouch that the id was issued
+            if int(n.group(2)) >= nxt['trm']:
+                report.add('fail', 'IA_TOMBSTONE_TARGET', f'墓標 {old} → {new} の先は台帳が発行していない', 'design/info_arch/info_arch.yaml')
+        elif m.atom(new) is None:
             report.add('fail', 'IA_TOMBSTONE_TARGET', f'墓標 {old} → {new} の先が無い', 'design/info_arch/info_arch.yaml')
 
 
-def _ref(m, report, src, aid, where):
-    if m.atom(aid) is not None:
-        return m.atom(aid)
+def _ref(m, report, src, aid, where, *, from_proposed=False):
+    atom = m.atom(aid)
+    if atom is not None:
+        if from_proposed and atom.get('state') == 'empty':
+            report.add('fail', 'IA_EMPTY_REFERENCED', f'proposed の {src} が空欄の {aid} を参照している', where)
+        return atom
     t = m.tombstone(aid)
     hint = f'（墓標: {t} を使う）' if t not in ('__live__', None) else ''
     report.add('fail', 'IA_REF_BROKEN', f'{src} が存在しない {aid} を参照している{hint}', where)
@@ -105,18 +128,22 @@ def _check_refs(m, report, date):
     path = 'design/info_arch/info_arch.yaml'
     d = m.data
     for pid, p in d['problems'].items():
+        if p['state'] != 'proposed':
+            continue
         if 'audience' in p:
-            _ref(m, report, pid, p['audience'], path)
+            _ref(m, report, pid, p['audience'], path, from_proposed=True)
         for c in p.get('evidence_claims', []):
-            claim = _ref(m, report, pid, c, path)
+            claim = _ref(m, report, pid, c, path, from_proposed=True)
             _scope(report, pid, p.get('audience'), c, claim, path)
     for mid, msg in d['messages'].items():
+        if msg['state'] != 'proposed':
+            continue
         if 'audience' in msg:
-            _ref(m, report, mid, msg['audience'], path)
+            _ref(m, report, mid, msg['audience'], path, from_proposed=True)
         for x in msg.get('addresses', []):
-            _ref(m, report, mid, x, path)
+            _ref(m, report, mid, x, path, from_proposed=True)
         for c in msg.get('supports', []):
-            claim = _ref(m, report, mid, c, path)
+            claim = _ref(m, report, mid, c, path, from_proposed=True)
             _scope(report, mid, msg.get('audience'), c, claim, path)
         for media, text in (msg.get('renditions') or {}).items():
             for c in PLACEHOLDER.findall(text):
@@ -182,8 +209,10 @@ def _check_terms(m, report):
     elif block != want:
         report.add('fail', 'IA_TERMS_GENERATED_DRIFT', '生成区間が entity から再生成した内容と違う（手編集か entity の変更。gen-terms で直す）', rel)
     try:
-        import yaml
-        m.rules = prh.load_rules(yaml.safe_load(m.terms_text), where=rel)
+        m.rules = prh.load_rules(safe_load_text(m.terms_text), where=rel)
+    except YamlError as exc:
+        report.add('fail', 'IA_YAML', f'YAML として読めない: {exc}', rel)
+        return
     except prh.PrhError as exc:
         report.add('fail', 'IA_TERMS_INVALID', str(exc), rel)
         return

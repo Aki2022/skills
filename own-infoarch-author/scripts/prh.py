@@ -63,6 +63,33 @@ class Rule:
         return ''.join(out) + text[last:]
 
 
+_JS_SPACE = r'\s   -     　﻿'
+
+
+def _js_to_python(body):
+    r"""Under re.ASCII, \s is ASCII-only; JS \s is Unicode. Widen \s and \S to the JS set."""
+    out, i, in_class = [], 0, False
+    while i < len(body):
+        c = body[i]
+        if c == '\\' and i + 1 < len(body):
+            nxt = body[i + 1]
+            if nxt == 's':
+                out.append(_JS_SPACE if in_class else f'[{_JS_SPACE}]')
+            elif nxt == 'S':
+                out.append(f'[^{_JS_SPACE}]')
+            else:
+                out.append(c + nxt)
+            i += 2
+            continue
+        if c == '[' and not in_class:
+            in_class = True
+        elif c == ']' and in_class:
+            in_class = False
+        out.append(c)
+        i += 1
+    return ''.join(out)
+
+
 def _compile(pattern, word_boundary, where):
     if not isinstance(pattern, str) or not pattern:
         raise PrhError(f'{where}: pattern must be a non-empty string')
@@ -74,13 +101,16 @@ def _compile(pattern, word_boundary, where):
             raise PrhError(f'{where}: unsupported regexp flags {sorted(bad)}')
         if re.search(r'\(\?<(?![=!])', body) or r'\k<' in body:
             raise PrhError(f'{where}: named groups are not supported')
-        f = 0
+        if re.search(r'\[[^\]]*\\S', body):
+            raise PrhError(f'{where}: \\S inside a character class is not supported')
+        f = re.ASCII  # JS \d \w \b are ASCII; \s is widened below
         for c in flags:
             f |= JS_FLAGS[c]
+        body = _js_to_python(body)
     else:
-        body, f = re.escape(pattern), 0
-    if word_boundary:
-        body = rf'\b(?:{body})\b'
+        body, f = re.escape(pattern), re.ASCII
+    if word_boundary:  # JS \b is ASCII-word based: Japanese next to a word counts as a boundary
+        body = rf'(?<![A-Za-z0-9_])(?:{body})(?![A-Za-z0-9_])'
     try:
         return re.compile(body, f)
     except re.error as exc:
@@ -114,6 +144,8 @@ def load_rules(data, *, where='terms.prh.yml'):
         if pats is None:
             raise PrhError(f'{w}: patterns omitted (prh derives them; this reader does not approximate that)')
         pats = pats if isinstance(pats, list) else [pats]
+        if not pats:
+            raise PrhError(f'{w}: patterns is empty (a rule that can never fire)')
         opts = r.get('options') or {}
         if set(opts) - OPTION_KEYS:
             raise PrhError(f'{w}: unsupported options {sorted(set(opts) - OPTION_KEYS)}')

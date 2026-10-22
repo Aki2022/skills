@@ -30,10 +30,11 @@ class Token:
 def _tables():
     num = load_ref('numeric.json')
     nonclaim = load_ref('non-claim-patterns.json')
-    digits = ''.join(num['kanji_digits']) + ''.join(num['kanji_small_units'])
+    small = ''.join(num['kanji_small_units'])
+    digits = ''.join(num['kanji_digits']) + small + ''.join(num['vague_digits'])
     large = ''.join(num['kanji_large_units'])
     arabic = r'(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?'
-    part = rf'(?:{arabic}|[{digits}]+)'
+    part = rf'(?:{arabic}[{small}]?|[{digits}]+)'
     compound = rf'(?:(?:{part}\s*[{large}]\s*)+{part}?|{part})'
     unit_aliases = sorted(((a, u['unit'], u.get('factor', 1)) for u in num['units'] for a in u['aliases']),
                           key=lambda x: -len(x[0]))
@@ -51,8 +52,10 @@ def _tables():
         'units': {a: (u, Decimal(f)) for a, u, f in unit_aliases},
         'prefixes': prefixes, 'suffixes': suffixes,
         'kanji_only': re.compile(rf'^[{digits}{large}\s]+$'),
-        'kanji_scaled': re.compile(rf'[{"".join(num["kanji_small_units"])}{large}]'),
-        'arabic_part': re.compile(arabic), 'large': large,
+        'kanji_scaled': re.compile(rf'[{small}{large}]'),
+        'arabic_part': re.compile(arabic), 'arabic_small': re.compile(rf'({arabic})([{small}])'), 'large': large,
+        'single_units': set(num['single_kanji_units']), 'vague': set(num['vague_digits']),
+        'not_after': num.get('prefix_not_after', {}),
         'nonclaim': [(p['id'], re.compile(p['regex'])) for p in nonclaim['patterns']],
     }
 
@@ -80,6 +83,8 @@ def mask_non_claims(norm):
 
 def _kanji_number(s, t):
     digits, small = t['num']['kanji_digits'], t['num']['kanji_small_units']
+    if any(ch in t['vague'] for ch in s):
+        return Decimal('NaN')  # 数万・何百: a number nobody can match against a registered value
     total, current = 0, 0
     for ch in s:
         if ch in digits:
@@ -111,16 +116,24 @@ def _part_value(part, t):
         return Decimal(1)
     if t['arabic_part'].fullmatch(part):
         return Decimal(part.replace(',', ''))
+    m = t['arabic_small'].fullmatch(part)
+    if m:
+        return Decimal(m.group(1).replace(',', '')) * Decimal(t['num']['kanji_small_units'][m.group(2)])
     return _kanji_number(part, t)
 
 
 def _qualifiers(masked, start, end, t):
     quals = set()
     before = masked[:start].rstrip()
-    for p, q in t['prefixes']:
-        if before.endswith(p):
-            quals.add(q)
-            before = before[:-len(p)].rstrip()
+    progress = True
+    while progress:  # stacked prefixes: 最大約100社
+        progress = False
+        for p, q in t['prefixes']:
+            if before.endswith(p) and before[:-len(p)][-1:] not in t['not_after'].get(p, []):
+                quals.add(q)
+                before = before[:-len(p)].rstrip()
+                progress = True
+                break
     after = masked[end:]
     consumed = 0
     progress = True
@@ -145,23 +158,30 @@ def candidate_tokens(text, *, normalized=False):
     out = []
     for m in t['token_re'].finditer(masked):
         n1, u1, n2, u2 = m.group('n1'), m.group('u1'), m.group('n2'), m.group('u2')
-        if t['kanji_only'].match(n1) and not (u1 or u2) :
-            continue  # kanji words (一緒・千葉) are numbers only when a unit follows
-        if t['kanji_only'].match(n1) and not t['kanji_scaled'].search(n1) and len(n1.strip()) == 1:
-            continue  # a single kanji digit with a unit (一人) is too ambiguous; reported as a limit
         unit_alias = u2 or u1 or ''
+        if t['kanji_only'].match(n1) and not unit_alias:
+            continue  # kanji words (一緒・千葉) are numbers only when a unit follows
+        if (t['kanji_only'].match(n1) and not t['kanji_scaled'].search(n1) and len(n1.strip()) == 1
+                and unit_alias not in t['single_units'] and n1.strip() not in t['vague']):
+            continue  # a single kanji digit with a unit (一人) is too ambiguous; reported as a limit
+        if not unit_alias and (_ascii_letter(masked, m.start() - 1) or _ascii_letter(masked, m.end())):
+            continue  # part of an identifier (B2B, 5G, Windows11), not a quantity
         unit, factor = t['units'].get(unit_alias, ('', Decimal(1)))
         lo = parse_number(n1) * factor
         hi = parse_number(n2) * factor if n2 else lo
         quals, consumed = _qualifiers(masked, m.start(), m.end(), t)
         out.append(Token(m.start(), m.end() + consumed, norm[m.start():m.end() + consumed].strip(),
-                         (lo.normalize() if lo == lo.to_integral() else lo, hi.normalize() if hi == hi.to_integral() else hi),
+                         (lo, hi),
                          unit, quals))
     return [_canon(tok) for tok in out]
 
 
+def _ascii_letter(s, i):
+    return 0 <= i < len(s) and s[i].isascii() and s[i].isalpha()
+
+
 def _canon(tok):
-    lo, hi = (Decimal(int(v)) if v == v.to_integral() else v for v in tok.value)
+    lo, hi = (Decimal(int(v)) if v.is_finite() and v == v.to_integral() else v for v in tok.value)
     return Token(tok.start, tok.end, tok.text, (lo, hi), tok.unit, tok.qualifiers)
 
 

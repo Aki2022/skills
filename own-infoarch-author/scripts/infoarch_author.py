@@ -13,11 +13,12 @@ import l0  # noqa: E402
 import l1  # noqa: E402
 import numeric  # noqa: E402
 import prh  # noqa: E402
-from common import INFO_ARCH_DIR, DependencyMissing, load_yaml  # noqa: E402
+from common import INFO_ARCH_DIR, load_yaml  # noqa: E402
 
 
 def cmd_check(args):
     date = args.date or dt.date.today().isoformat()
+    dt.date.fromisoformat(date)  # ValueError -> exit 2 in main
     report = l0.check(args.root, date)[0] if args.level == 'l0' else l1.check(args.root, date)
     print(json.dumps(report.to_dict(), ensure_ascii=False, indent=2, default=str))
     return report.exit_code
@@ -62,8 +63,8 @@ def main(argv=None):
     args = ap.parse_args(argv)
     try:
         return args.fn(args)
-    except DependencyMissing as exc:
-        print(json.dumps({'exit_code': 2, 'error': str(exc)}, ensure_ascii=False))
+    except Exception as exc:  # noqa: BLE001 - any crash must be a failure (2), never the warning code (1)
+        print(json.dumps({'exit_code': 2, 'error': f'{type(exc).__name__}: {exc}'}, ensure_ascii=False))
         return 2
 
 

@@ -22,13 +22,50 @@ def load_ref(name):
     return json.loads((REFS / name).read_text(encoding='utf-8'))
 
 
-def load_yaml(path):
+class YamlError(ValueError):
+    pass
+
+
+def _loader():
     try:
         import yaml
     except ImportError as exc:  # same runtime contract as own-design-author: never auto-install
         raise DependencyMissing('PyYAML is required; set DESIGN_AUTHOR_PYTHON to an interpreter that has it') from exc
-    with open(path, encoding='utf-8') as fh:
-        return yaml.safe_load(fh)
+
+    class StrictLoader(yaml.SafeLoader):
+        """Rejects duplicate keys (PyYAML keeps the last one silently) and keeps dates as strings."""
+
+    StrictLoader.yaml_implicit_resolvers = {
+        k: [(tag, rx) for tag, rx in v if tag != 'tag:yaml.org,2002:timestamp']
+        for k, v in yaml.SafeLoader.yaml_implicit_resolvers.items()}
+
+    def construct_mapping(loader, node, deep=False):
+        seen = set()
+        for key_node, _ in node.value:
+            key = loader.construct_object(key_node, deep=deep)
+            if key in seen:
+                raise yaml.constructor.ConstructorError(None, None, f'duplicate key {key!r}', key_node.start_mark)
+            seen.add(key)
+        return yaml.SafeLoader.construct_mapping(loader, node, deep)
+
+    StrictLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, construct_mapping)
+    return yaml, StrictLoader
+
+
+def safe_load_text(text):
+    yaml, loader = _loader()
+    try:
+        return yaml.load(text, Loader=loader)  # noqa: S506 - StrictLoader derives from SafeLoader
+    except yaml.YAMLError as exc:
+        raise YamlError(str(exc).replace('\n', ' ')) from exc
+
+
+def load_yaml(path):
+    try:
+        text = Path(path).read_bytes().decode('utf-8')
+    except UnicodeDecodeError as exc:
+        raise YamlError(f'not UTF-8: {exc}') from exc
+    return safe_load_text(text)
 
 
 def validator_for(schema_name):

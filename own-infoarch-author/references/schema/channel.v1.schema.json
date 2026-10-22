@@ -5,32 +5,146 @@
   "description": "手書きの版 1。出典: SPEC-information-architecture-standardization（Domain Language「チャネル定義」）。チャネル種別（media）は開集合。出荷チャネルは ship_command 必須。",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "media", "preset", "outputs", "ship", "messages", "order"],
+  "required": [
+    "schema_version",
+    "media",
+    "preset",
+    "outputs",
+    "ship",
+    "messages",
+    "order"
+  ],
   "properties": {
-    "schema_version": {"const": 1},
-    "media": {"type": "string", "pattern": "^[a-z][a-z0-9_-]*$"},
-    "preset": {"enum": ["lp", "product_ui", "document", "print"]},
-    "outputs": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1, "not": {"pattern": "^(/|~|\\.\\./)"}}, "uniqueItems": true},
-    "ship": {"type": "boolean"},
-    "ship_command": {"type": "string", "minLength": 1},
-    "messages": {"type": "array", "items": {"type": "string", "pattern": "^msg-[0-9]{4,}$"}, "uniqueItems": true},
-    "required_claims": {"type": "array", "items": {"type": "string", "pattern": "^clm-[0-9]{4,}$"}, "uniqueItems": true},
+    "schema_version": {
+      "const": 1
+    },
+    "media": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]*$"
+    },
+    "preset": {
+      "enum": [
+        "lp",
+        "product_ui",
+        "document",
+        "print"
+      ]
+    },
+    "outputs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "not": {
+          "pattern": "^(/|~)|(^|/)\\.\\.(/|$)"
+        }
+      },
+      "uniqueItems": true
+    },
+    "ship": {
+      "type": "boolean"
+    },
+    "ship_command": {
+      "type": "string",
+      "minLength": 1
+    },
+    "messages": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^msg-[0-9]{4,}$"
+      },
+      "uniqueItems": true
+    },
+    "required_claims": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^clm-[0-9]{4,}$"
+      },
+      "uniqueItems": true
+    },
     "order": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["mode"],
+      "required": [
+        "mode"
+      ],
       "properties": {
-        "mode": {"enum": ["strict", "pattern", "external"]},
-        "pattern": {"type": "array", "items": {"enum": ["benefit", "proof", "how", "objection", "cta", "vision"]}}
+        "mode": {
+          "enum": [
+            "strict",
+            "pattern",
+            "external"
+          ]
+        },
+        "pattern": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "benefit",
+              "proof",
+              "how",
+              "objection",
+              "cta",
+              "vision"
+            ]
+          }
+        }
       },
-      "if": {"properties": {"mode": {"enum": ["strict", "pattern"]}}},
-      "then": {"required": ["pattern"]}
+      "if": {
+        "properties": {
+          "mode": {
+            "enum": [
+              "strict",
+              "pattern"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "pattern"
+        ]
+      }
     },
-    "viewports": {"type": "array", "items": {
-      "type": "object", "additionalProperties": false, "required": ["name", "width", "height"],
-      "properties": {"name": {"type": "string"}, "width": {"type": "integer", "minimum": 1}, "height": {"type": "integer", "minimum": 1}}
-    }}
+    "viewports": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "width",
+          "height"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "width": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "height": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    }
   },
-  "if": {"properties": {"ship": {"const": true}}},
-  "then": {"required": ["ship_command"]}
+  "if": {
+    "properties": {
+      "ship": {
+        "const": true
+      }
+    }
+  },
+  "then": {
+    "required": [
+      "ship_command"
+    ]
+  }
 }

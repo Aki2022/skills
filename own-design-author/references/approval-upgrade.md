@@ -41,6 +41,8 @@ design-author approve --request request.json --approver owner --repo .
 自己テストは実CLI・実consumer・既存scannerを通るhookとmise入口で承認前の赤と承認後の緑を検証する。
 これは人間が内容を判断した証明ではない。実パイロットの台帳は対象承認まで空のままにする。
 
-判定台帳・5区分・IAモジュール境界、固定L2 2回、出荷SHA/成果物hash、ship_command/doctor、
+判定台帳の読取・記録/移行、5区分報告、IA接続口はjudgments-and-modules.md。
+実パイロットのモデル回答と人間ラベル付きholdoutはまだ未投入。
+固定L2 2回、出荷SHA/成果物hash、ship_command/doctor、
 維持モードとA/B/Cはまだ追加受入として残る。現在のL0-only shipを正式な出荷ゲートと呼ばない。
 署名は、AIから独立した承認者の認証を必要とする運用になった時に再検討する。

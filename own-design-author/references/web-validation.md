@@ -12,7 +12,7 @@ python3 <own-web-design>/scripts/audit_html.py index.html --manifest design/.res
 node <own-website-audit>/scripts/measure_lp.mjs <url> --manifest design/.resolved/web.json --viewports 375,1280 --schemes dark,light --json <report.json>
 ```
 
-consumerはマニフェストの入力ハッシュを現行のdesign/と照合する。変更・追加・削除後の古い生成物を使わない。
+consumerはマニフェストの入力ハッシュを現行のdesign/と照合し、中央の判定policyと宣言したIA resolverのdigestも照合する。変更・追加・削除後の古い生成物を使わない。
 DTCGの再解決はしない。L1はブラウザを使わず、L2は既存のPlaywright環境を使う。
 axe-coreは実行環境のモジュール解決か `AXE_CORE_PATH` で既存ファイルを指定する。
 依存を自動導入しない。axeが無い・実行不能なら準拠を名乗らず失格を残す。
@@ -50,6 +50,7 @@ repo外・design内・隠しpath・symlink先への配置を拒否し、途中�
 URLは実行時の環境変数で渡す。既存Nodeは `DESIGN_AUDIT_NODE`、Pythonは
 `DESIGN_AUTHOR_PYTHON` で選ぶ。L2を含むため、人間の実施確認を得てから実行する。
 各L2のJSONは `.resolved/l2-<index>.json` に保存し、未カバーを集約出力する。
+reportはexecuted / skipped / missing / uncovered / screenedの5配列。実行したL1/L2はskippedから除き、L0のscreenedとholdout指標を引き継ぐ。
 対象欠落・実行不能を成功にしない。未承認nice値だけのL0警告は集約後もexit 1に残す。
 
 ## L2と範囲

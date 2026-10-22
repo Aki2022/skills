@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Run real L0 -> L1 -> L2. Rendering requires caller authorization before invocation."""
 import argparse
+import copy
 import json
 import os
 from pathlib import Path
 import subprocess
 import sys
 from design_author import check_design, git_root, inside, read_data, CATALOG
+from reporting import empty_report,stage,skip
 
 
 def main():
@@ -14,10 +16,13 @@ def main():
     parser.add_argument('--repo',default='.')
     parser.add_argument('--catalog-dir',type=Path,default=CATALOG)
     args=parser.parse_args()
-    report={'exit_code':2,'stages':[],'errors':[]}
+    report={'exit_code':2,'stages':[],'errors':[],'report':empty_report()}
     try:
         root=git_root(args.repo)
         l0=check_design(root,catalog_dir=args.catalog_dir)
+        report['report']=copy.deepcopy(l0['report'])
+        skip(report['report'],'L1','not reached after L0 or unavailable validation inputs')
+        skip(report['report'],'L2','not reached after L0/L1 or unavailable rendering inputs')
         report['stages'].append({'stage':'L0','exit_code':l0['exit_code'],'counts':l0['counts']})
         if l0['exit_code']==2:
             report['errors']=l0['errors']
@@ -34,6 +39,7 @@ def main():
         l1=subprocess.run([sys.executable,str(skills/'own-web-design/scripts/audit_html.py'),
                            *map(str,files),'--manifest',str(resolved)],cwd=root,capture_output=True,text=True)
         report['stages'].append({'stage':'L1','exit_code':l1.returncode,'targets':len(files)})
+        stage(report['report'],'L1',l1.returncode,len(files))
         if l1.returncode:
             report['exit_code']=l1.returncode
             report['errors'].append('L1 failed; rendering was not run')
@@ -58,6 +64,8 @@ def main():
                 raise ValueError('missing L2 coverage report')
             uncovered.update(measured['uncovered'])
             report['uncovered']=sorted(uncovered)
+            report['report']['uncovered'].extend({'id':'L2:'+row['env']+':'+ident,'reason':'rendering scope not covered'} for ident in measured['uncovered'])
+            stage(report['report'],'L2',l2.returncode,index+1)
             report['stages'].append({'stage':'L2','exit_code':l2.returncode,'target_env':row['env']})
             if l2.returncode:
                 report['exit_code']=l2.returncode
@@ -67,6 +75,7 @@ def main():
         report['uncovered']=sorted(uncovered)
     except (ValueError,OSError,KeyError,TypeError):
         report['errors'].append('validation input, runtime dependency or rendering endpoint unavailable')
+        report['report']['missing'].append({'id':'validation','reason':'input, runtime dependency or rendering endpoint unavailable'})
     print(json.dumps(report,ensure_ascii=False))
     return report['exit_code']
 

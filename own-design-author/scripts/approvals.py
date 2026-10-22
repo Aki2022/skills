@@ -23,7 +23,7 @@ def verify_rows(rows,root):
             raise ValueError('approval fields required: key, value_hash, approver, date')
         if any(not isinstance(row[k],str) or not row[k].strip() for k in row):
             raise ValueError('invalid approval row')
-        if not re.fullmatch(r'(ds|ia):[a-z][a-z0-9-]*:(item|token):.+',row['key']):
+        if not re.fullmatch(r'(ds:[a-z][a-z0-9-]*:(item|token):.+|ia:[a-z][a-z0-9-]*:[A-Za-z0-9_.:/-]+)',row['key']):
             raise ValueError('invalid approval key namespace')
         if not re.fullmatch('[0-9a-f]{64}',row['value_hash']):
             raise ValueError('invalid approval hash')

@@ -13,15 +13,7 @@ def _snapshot(root,catalog_dir):
     allowed=('must n-a approval hash missing/mismatch:','approval hash mismatch:')
     if any(not error.startswith(allowed) for error in result['errors']) or not result['manifest']:
         raise ValueError('repair structural or approval errors before preparing approval')
-    values,must={},[]
-    for media,manifest in result['manifest'].items():
-        for kind,rows in [('token',manifest['tokens']),('item',manifest['items'])]:
-            for target,row in rows.items():
-                if 'value_hash' not in row:continue
-                key=f'ds:{media}:{kind}:{target}'
-                values[key]=row['value_hash']
-                if kind=='item' and row['must']:must.append(key)
-    return values,sorted(must)
+    return result['approval_targets'],sorted(set(result['approval_required']))
 
 
 def prepare(root,catalog_dir,targets=None,all_must=False,when=None):

@@ -2,6 +2,7 @@
 import {readFileSync, readdirSync, realpathSync, statSync} from 'node:fs';
 import {dirname, basename, join, relative, resolve, sep} from 'node:path';
 import {createHash} from 'node:crypto';
+import {fileURLToPath} from 'node:url';
 
 export function loadManifest(path) {
   path = realpathSync(path);
@@ -12,6 +13,16 @@ export function loadManifest(path) {
   if (data.schema_version !== 1 || data.media !== 'web' || !Object.keys(data.tokens || {}).length)
     throw new Error('unsupported or empty manifest');
   if (data.approval_scheme !== 'hash-jcs-v1') throw new Error('unsupported approval scheme; rerun L0');
+  const policyFile = fileURLToPath(new URL('../references/judgment-policy.json', import.meta.url));
+  if (data.judgment_policy_sha256 !== createHash('sha256').update(readFileSync(policyFile)).digest('hex'))
+    throw new Error('judgment policy changed; rerun L0');
+  const modules = data.modules || {};
+  if (Object.keys(modules).some(key => key !== 'ia')) throw new Error('unsupported resolved module');
+  if (modules.ia) {
+    const file = fileURLToPath(new URL('../../own-infoarch-author/scripts/ia_module.py', import.meta.url));
+    if (realpathSync(file) !== file || createHash('sha256').update(readFileSync(file)).digest('hex') !== modules.ia.implementation_sha256)
+      throw new Error('IA resolver changed; rerun L0');
+  }
   const actual = {};
   function walk(dir) {
     for (const name of readdirSync(dir).sort()) {

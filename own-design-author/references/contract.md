@@ -15,6 +15,7 @@ Python 3.10以上と、既存環境に導入済みの PyYAML / jsonschema（refe
 - `checks/*.yaml`: `rules` 配列。id / kind / targetsまたはpaths / allowlist / minimum / pattern の宣言だけ。任意コマンドやコードを実行しない。実際のL1/L2実行を持たない規則は未カバー。
 - `assets/`: ファイルのsha256から `assets.json` を生成する。別の手書き台帳を正典にしない。
 - `approvals.yaml`: 人間確認を根拠にした行の配列。
+- `judgments.json`: 任意。doc証拠とn-a理由への保存済み確率判定、pinされたpolicyと人間ラベル付きholdout。未登録入力は未カバー。
 - `NOTICE`: JSON互換YAML、`sources` 配列。各参照のid / url / commit / license / copyright / editedを必須とする。`edited`は真偽値。
 - `tailwind.json`: 任意の生成設定。対象別content・宣言的plugin・tokenを参照するthemeを持つ。詳細は `web-validation.md`。
 - `asset-exports.json`: `schema_version: 1` と `exports` 配列。各行にassets/以下のsourceとrepo相対targetsを置き、syncで配置、L1で実バイトを照合する。
@@ -55,7 +56,7 @@ group `$extends`、カスタムdash配列のstrokeStyle、srgb以外のCSS変換
 - n-a itemはstate/reasonを束縛する。mustのn-aは承認行が必須。
 
 行はkey / value_hash / approver / ISO dateを持つ。
-keyはds:web:item:<id> またはds:web:token:<path>。IA用namespaceは予約し、DSのL0では未登録対象を拒否する。
+keyはds:web:item:<id> またはds:web:token:<path>。IAのキーは固定の信頼されたIA resolverが現在hashを返した場合だけ登録対象に含める。実装がないIA入力は失格。
 旧token_path/item_id行や署名行を自動移行しない。現在のJCS hashを確認して新しい記録を作る。
 署名・鍵・allowed_signersは要求しない。承認者の真正性は技術的に証明せず、人間の明示承認を運用上の根拠とする。
 AIは提案までを自律で行い、実台帳は書かない。オーナー自身が確認後に記録する。詳細はapproval-upgrade.md。
@@ -64,6 +65,8 @@ consumerはapproval_schemeと全入力hashを検査し、承認台帳の削除�
 一致するdefined item行は直接参照するtokenの承認にもなる。散文内のtoken文字列だけでは伝播しない。
 source-hash規則で全targetsがdesign/assets/以下なら実SHA256とallowlistをL0で検証し、
 item証拠hashに規則と実測を含める。他の宣言規則を自己申告で対応済みにしない。
+
+判定台帳・5区分報告とIA接続は `judgments-and-modules.md`。design.yamlのmodules.iaに実装版をpinする。
 
 ## 終了コードと境界
 

@@ -21,6 +21,11 @@ def load_manifest(path):
         raise ValueError('empty manifest')
     if data.get('approval_scheme')!='hash-jcs-v1':
         raise ValueError('unsupported approval scheme; rerun L0')
+    from judgment_ledger import POLICY
+    if data.get('judgment_policy_sha256')!=hashlib.sha256(POLICY.read_bytes()).hexdigest():
+        raise ValueError('judgment policy changed; rerun L0')
+    from design_modules import validate_module_state
+    validate_module_state(data.get('modules',{}))
     expected = data['input_hashes']
     actual = {}
     for source in sorted(design.rglob('*')):

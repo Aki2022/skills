@@ -47,6 +47,13 @@ L0 はモデルを使わず、対象項目数・充足率・未判定・提案�
 `design-author sync` はL0通過後に宣言したTailwindとassetコピーを配置する。`design-check` はL0/L1/L2を順に実行するためL2実施確認後に呼ぶ。
 L1/L2と生成Tailwindの使い方・制約は `references/web-validation.md` を読む。
 
+## 判定台帳と共有runner
+
+散文のdoc証拠とn-a理由は、保存済みの判定だけを読む。未登録入力は未カバー、mustなら出荷失格。
+閾値未満はscreenedで、holdoutのrecallを併記して合格やcleanと混同しない。モデルを検査中に呼ばない。
+記録・移行と5区分報告、IA接続の詳細は `references/judgments-and-modules.md`。
+IA入力を見つけても対応実装を黙って無視しない。IA本体は兄弟WSが担当する。
+
 ## 上流更新
 
 上流の再取得は人間が起動する。`references/catalog-maintenance.md` の手順でカタログを生成し、差分と判定の使用量を確認する。推測で見出しを改名扱いにしない。元の版を残したまま新しい版を追加する。

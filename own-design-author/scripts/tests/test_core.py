@@ -676,6 +676,9 @@ def test_web_check_runs_real_l1_and_l2_and_detects_palette_mutation(project):
         result=json.loads(run.stdout)
         assert run.returncode==1,result
         assert [stage['exit_code'] for stage in result['stages']]==[1,0,0]
+        assert set(result['report'])=={'executed','skipped','missing','uncovered','screened'}
+        assert {'L0','L1','L2'}<=set(row['id'] for row in result['report']['executed'])
+        assert not {'L1','L2'}&set(row['id'] for row in result['report']['skipped'])
         assert [s['stage'] for s in result['stages']]==['L0','L1','L2']
         assert {'pseudo-elements','shadow-dom','iframe-documents'} <= set(result['uncovered'])
         (root / 'index.html').write_text(normal.replace('<h1>','<h1 style="color:red">'))

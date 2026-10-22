@@ -17,6 +17,9 @@ from dtcg import resolve_tokens, value_hash
 from classify import ClassificationError, classify_response, load_policy
 from approvals import SCHEME,verify_rows
 from jcs import media_hashes
+from judgment_ledger import candidate as judgment_candidate,evaluate as evaluate_judgments,read_policy as read_judgment_policy,POLICY as JUDGMENT_POLICY
+from reporting import empty_report,stage,skip
+from design_modules import resolve_ia
 
 VERSION = '1.0.0'
 SKILL = Path(__file__).resolve().parents[1]
@@ -246,16 +249,20 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
     result = {'evaluated_at':datetime.now(timezone.utc).isoformat(),
         'environment':{'python':sys.version.split()[0],
             'jcs_sha256':hashlib.sha256((SKILL/'scripts/jcs.cjs').read_bytes()).hexdigest()},
+        'report':empty_report(), 'judgment_candidates':[], 'approval_targets':{}, 'approval_required':[],
         'exit_code': 2, 'errors': [], 'warnings': [], 'counts': {
         'items': 0, 'defined': 0, 'na': 0, 'deferred': 0, 'unclassified': 0,
         'proposed': 0, 'uncovered': 0, 'tokens': 0, 'fulfillment': 0.0}, 'manifest': {}}
     errors, warnings, counts = result['errors'], result['warnings'], result['counts']
+    report=result['report']
+    skip(report,'L1','L0 command does not execute source validation')
+    skip(report,'L2','L0 command does not execute rendering')
     try:
         if not design.is_dir() or design.is_symlink():
             raise ValueError('design/ missing or symlink; run own-design-author init at git toplevel')
         _clear_manifests(design)
         config = read_data(inside(design, 'design.yaml'))
-        if not isinstance(config, dict) or set(config) - {'schema_version','skill_version','catalog_version','preset','media','items','retired_items','checks'}:
+        if not isinstance(config, dict) or set(config) - {'schema_version','skill_version','catalog_version','preset','media','items','retired_items','checks','modules'}:
             raise ValueError('unknown design configuration fields')
         if config.get('schema_version') != 1:
             raise ValueError('unknown design schema version')
@@ -327,7 +334,13 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
                 for k in ('id','url','commit','license','copyright')) or not isinstance(row['edited'],bool):
                 raise ValueError('invalid NOTICE source')
             sources[row['id']] = row
+        ia=resolve_ia(Path(root),config,approvals,profiles,report)
+        if ia:
+            errors.extend(ia['errors']);warnings.extend(ia['warnings'])
+            for key,digest in ia['approval_hashes'].items():
+                if key in approvals and approvals[key]!=digest:errors.append('approval hash mismatch: '+key)
         valid_targets = {f'ds:{m}:token:{path}' for m in media for path in tokens} | {f'ds:{m}:item:{ident}' for m in media for ident in items}
+        if ia:valid_targets.update(ia['approval_hashes'])
         if set(approvals) - valid_targets:
             raise ValueError('approval target absent from catalog/tokens')
         for path, token in tokens.items():
@@ -340,6 +353,8 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
         uncovered_rules = set(rules) - set(measured_rules)
         counts['uncovered'] = len(uncovered_rules)
         item_states, item_values, must_proposed, must_uncovered = {}, {}, [], []
+        judgment_must={}
+        judgment_policy,judgment_policy_sha256=read_judgment_policy()
         classification_policy = load_policy()
         for ident, item in items.items():
             classification = item.get('classification')
@@ -355,6 +370,7 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
                 counts['unclassified'] += 1
                 errors.append(f'stale/invalid catalog classification: {ident}')
                 continue
+            item_context={key:item[key] for key in ('document','title','headings','text','source_url') if key in item}
             must = classification['grade'] == 'must' or preset in classification.get('preset_must', [])
             state = copy.deepcopy(overrides.get(ident, {'state': 'deferred'}))
             if not isinstance(state, dict) or set(state) - {'state','evidence','reason'}:
@@ -375,6 +391,8 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
                     errors.append(f'n-a needs a reason: {ident}')
                     continue
                 evidence_values = {'state': 'n-a', 'reason': reason}
+                row=judgment_candidate('na-rationale',ident,reason,{'item':item_context,'preset':preset},policy=judgment_policy)
+                result['judgment_candidates'].append(row);judgment_must[row['judgment_hash']]=must
             elif status == 'defined':
                 counts['defined'] += 1
                 evidence = state.get('evidence')
@@ -399,6 +417,9 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
                         if not body or re.fullmatch(r'(TODO|TBD|未決定|未定)[.!。\s]*',body,re.I):
                             errors.append(f'missing/empty doc evidence: {ident}')
                         evidence_values[ref] = body
+                        if body:
+                            row=judgment_candidate('doc-relevance',ident,body,{'item':item_context,'reference':ref,'preset':preset},policy=judgment_policy)
+                            result['judgment_candidates'].append(row);judgment_must[row['judgment_hash']]=must
                     elif kind == 'rule':
                         if target not in rules:
                             errors.append(f'missing rule evidence: {ident}')
@@ -410,6 +431,15 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
             else:
                 errors.append(f'blank/unknown item state: {ident}')
             item_values[ident] = evidence_values
+        ledger=read_data(inside(design,'judgments.json')) if (design/'judgments.json').exists() else None
+        judged=evaluate_judgments(result['judgment_candidates'],ledger,policy=judgment_policy)
+        errors.extend(judged['errors'])
+        report['uncovered'].extend(judged['uncovered']);report['screened'].extend(judged['screened'])
+        for row in judged['uncovered']:
+            if judgment_must[row['judgment_hash']]:must_uncovered.append(row['id'])
+        report['uncovered'].extend({'id':ident,'reason':'rule requires L1/L2 evidence'} for ident in sorted(uncovered_rules))
+        counts['uncovered']=len(report['uncovered'])
+        if not result['judgment_candidates']:skip(report,'semantic-evidence','no doc or n-a spans were flagged')
         prose = inside(design,'DESIGN.md').read_text()
         if re.search(r'(?<!\w)#[0-9a-fA-F]{3,8}\b', prose):
             errors.append('DESIGN.md contains a literal color; reference tokens instead')
@@ -445,13 +475,15 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
                     must_proposed.append(medium+':'+ident)
             proposed_paths.update(path for path,t in media_tokens.items() if t['state']!='approved')
             resolved_by_media[medium]=(media_tokens,media_items)
+        if ia:
+            must_proposed.extend(key for key in ia['must_approval_keys'] if approvals.get(key)!=ia['approval_hashes'][key])
         counts['proposed']=len(proposed_paths)
         if must_proposed:
             warnings.append(f'proposed must items: {len(set(must_proposed))}')
         if counts['proposed']:
             warnings.append(f'proposed values: {counts["proposed"]}')
-        if uncovered_rules:
-            warnings.append(f'uncovered rules: {len(uncovered_rules)}; L1/L2 evidence required')
+        if counts['uncovered']:
+            warnings.append(f'uncovered rules/spans: {counts["uncovered"]}; recorded or measured evidence required')
         if ship and (must_proposed or must_uncovered):
             errors.append(f'ship gate: proposed must {len(set(must_proposed))}, uncovered must {len(set(must_uncovered))}')
         assets = []
@@ -467,18 +499,34 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
         from tailwind_contract import build_artifacts
         tailwind_templates = read_data(inside(design,'tailwind.json')) if (design/'tailwind.json').exists() else None
         artifacts = build_artifacts(tokens,tailwind_templates)
+        if hashlib.sha256(JUDGMENT_POLICY.read_bytes()).hexdigest()!=judgment_policy_sha256:
+            raise ValueError('judgment policy changed during validation')
         for medium, profile in profiles.items():
             result['manifest'][medium] = {'schema_version':1, 'skill_version':VERSION,
-                'approval_scheme':SCHEME,
+                'approval_scheme':SCHEME,'judgment_policy_sha256':judgment_policy_sha256,
                 'catalog_version':catalog['version'], 'catalog_hash':value_hash(catalog), 'source_hash':source_hash,
                 'input_hashes':input_hashes, 'media':medium, 'profile':profile,
                 'minimums':profile['minimums'], 'tokens':resolved_by_media[medium][0], 'items':resolved_by_media[medium][1],
                 'css_variables':{t['css_name']:t['css'] for t in tokens.values()},
-                'tailwind_templates':tailwind_templates, 'artifacts':artifacts, 'rules':list(rules.values()), 'coverage':{'uncovered':sorted(uncovered_rules)},
+                'tailwind_templates':tailwind_templates, 'artifacts':artifacts, 'rules':list(rules.values()), 'coverage':{'uncovered':sorted(uncovered_rules | {row['id'] for row in judged['uncovered']})},
+                'modules':({'ia':{'version':config['modules']['ia'],'implementation_sha256':ia['_implementation_sha256'],
+                    'resolved':ia['media'][medium]}} if ia else {}),
                 'palette':{kind: sorted({t['css'] for t in tokens.values() if t['type']==kind})
                            for kind in ('color','fontFamily','dimension')}, 'assets':assets, 'asset_exports':asset_exports}
+        for medium,manifest in result['manifest'].items():
+            for kind,rows in [('item',manifest['items']),('token',manifest['tokens'])]:
+                for ident,row in rows.items():
+                    if 'value_hash' not in row:continue
+                    key=f'ds:{medium}:{kind}:{ident}'
+                    result['approval_targets'][key]=row['value_hash']
+                    if kind=='item' and row['must']:result['approval_required'].append(key)
+        if ia:
+            result['approval_targets'].update(ia['approval_hashes'])
+            result['approval_required'].extend(ia['must_approval_keys'])
         result['exit_code'] = 2 if errors else (1 if warnings else 0)
         counts['fulfillment'] = (counts['defined']+counts['na'])/counts['items']
+        stage(report,'L0',result['exit_code'],counts['items'])
+        for manifest in result['manifest'].values():manifest['report']=copy.deepcopy(report)
         if not errors:
             write_data(design/'assets.json', {'schema_version':1,'assets':assets, 'asset_exports':asset_exports})
             for name, artifact in artifacts.items():
@@ -497,6 +545,8 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
             except (OSError, ValueError):
                 errors.append('generated output cleanup failed; do not consume generated files')
         result['exit_code'] = 2
+    stage(report,'L0',result['exit_code'],counts['items'])
+    for manifest in result['manifest'].values():manifest['report']=copy.deepcopy(report)
     return result
 
 
@@ -587,6 +637,7 @@ def main(argv=None):
         if command == 'check':
             p.add_argument('--ship',action='store_true')
             p.add_argument('--include-manifest',action='store_true')
+            p.add_argument('--include-candidates',action='store_true')
         if command == 'approve':
             p.add_argument('--prepare',action='store_true')
             p.add_argument('--must',action='store_true')
@@ -611,6 +662,8 @@ def main(argv=None):
             result = check_design(root,catalog_dir=args.catalog_dir,ship=getattr(args,'ship',False))
             if args.command == 'sync' and result['exit_code'] != 2:
                 result['synced'] = sync_artifacts(root,result['manifest']['web'])
+            for key in ('approval_targets','approval_required'):result.pop(key,None)
+            if not getattr(args,'include_candidates',False):result.pop('judgment_candidates',None)
             if not getattr(args,'include_manifest',False):
                 result.pop('manifest',None)
             print(json.dumps(result,ensure_ascii=False,sort_keys=True))

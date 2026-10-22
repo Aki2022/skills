@@ -383,3 +383,150 @@ def test_factory_preflight_preserves_warning_and_failure(project):
     run = subprocess.run(argv, env=env, capture_output=True, text=True)
     assert run.returncode == 2
     assert not (root / 'design/.resolved/web.json').exists()
+
+
+def test_l0_generates_tailwind_contract_from_resolved_values(project):
+    root, _ = project
+    result = check(project)
+    manifest = result['manifest']['web']
+    artifact = manifest['artifacts']['tailwind.config.cjs']
+    generated = root / 'design/.resolved/tailwind.config.cjs'
+    assert generated.read_text() == artifact['content']
+    assert 'color-primary' in generated.read_text()
+    # Generated contracts must not survive failed validation.
+    write(root / 'design/design.yaml', {})
+    assert check(project)['exit_code'] == 2
+    assert not generated.exists()
+
+
+def test_l1_checks_real_generated_config_and_zero_targets(project):
+    root, _ = project
+    assert check(project)['exit_code'] == 1
+    audit = SKILL.parent / 'own-web-design/scripts/audit_html.py'
+    html = root / 'index.html'
+    html.write_text('<html lang="ja"><meta name="viewport"><main><h1>fixture</h1></main>'
+                    '<style>:focus-visible{} @media(min-width:1px){}</style></html>')
+    config = root / 'tailwind.config.cjs'
+    config.write_bytes((root / 'design/.resolved/tailwind.config.cjs').read_bytes())
+    argv = [sys.executable, str(audit), str(html), '--manifest', str(root / 'design/.resolved/web.json'),
+            '--tailwind', str(config)]
+    assert subprocess.run(argv, capture_output=True).returncode == 0
+    config.write_text('module.exports = {theme: {colors: {primary: "black"}}}')
+    assert subprocess.run(argv, capture_output=True).returncode == 2
+    config.write_bytes((root / 'design/.resolved/tailwind.config.cjs').read_bytes())
+    html.write_text('<html><body></body></html>')
+    assert subprocess.run(argv, capture_output=True).returncode == 1
+    # Change an input outside the validator: a stale generated manifest must fail.
+    (root / 'design/DESIGN.md').write_text('changed')
+    assert subprocess.run(argv, capture_output=True).returncode == 2
+
+
+@pytest.mark.skipif(os.environ.get('DESIGN_BROWSER_TEST') != '1', reason='explicit browser fixture run required')
+def test_real_l2_palette_empty_targets_and_layout_regression(project, tmp_path):
+    root, _ = project
+    node = os.environ['DESIGN_TEST_NODE']
+    tokens = {
+        'color': {'$type':'color', 'black':{'$value':{'colorSpace':'srgb','components':[0,0,0],'hex':'#000000'}},
+                  'white':{'$value':{'colorSpace':'srgb','components':[1,1,1],'hex':'#ffffff'}},
+                  'clear':{'$value':{'colorSpace':'srgb','components':[0,0,0],'hex':'#000000','alpha':0}}},
+        'font': {'$type':'fontFamily', '$value':['sans-serif']},
+        'radius': {'$type':'dimension', '$value':{'value':0,'unit':'px'}}}
+    for group in tokens.values():
+        if '$value' in group:
+            group['$extensions']={'org.own.design':{'origin':'proposal'}}
+        else:
+            for name, token in group.items():
+                if not name.startswith('$'):
+                    token['$extensions']={'org.own.design':{'origin':'proposal'}}
+    # Keep fixture catalog evidence valid.
+    tokens['color']['primary'] = tokens['color']['black']
+    write(root / 'design/tokens/brand.tokens.json', tokens)
+    assert check(project)['exit_code'] == 1
+    manifest = root / 'design/.resolved/web.json'
+    page = root / 'index.html'
+    normal = ('<!doctype html><html lang="en"><head><title>Fixture</title>'
+              '<style>body{background:white;font:16px/1.5 sans-serif}'
+              '*{color:black;border-color:black;outline-color:black;text-decoration-color:black;'
+              'background-color:transparent;border-radius:0}body{background-color:white}'
+              '</style></head><body><main><h1>Fixture</h1><p>Readable fixture text.</p>'
+              '</main></body></html>')
+    script = SKILL.parent / 'own-website-audit/scripts/measure_lp.mjs'
+    def measure(source, html, name):
+        page.write_text(html)
+        output = tmp_path / (name + '.json')
+        run = subprocess.run([node,str(source),page.as_uri(),'--manifest',str(manifest),
+                              '--viewports','375','--schemes','light','--json',str(output)],
+                             cwd=SKILL.parent, capture_output=True, text=True)
+        assert run.returncode in (0,1), run.stderr
+        return json.loads(output.read_text())
+    green = measure(script, normal, 'green')
+    assert green['runs'][0]['design']['targetCount'] == 3
+    assert green['runs'][0]['design']['failures'] == []
+    assert not any(f['id'] == 'zero-targets' for f in green['failures'])
+    if os.environ.get('AXE_CORE_PATH'):
+        assert green['failures'] == [], green['failures']
+    bad = measure(script, normal.replace('Readable fixture text.',
+                  '<span style="color:rgb(255,0,0)">Outside palette</span>'), 'outside')
+    assert any(f['id'] == 'design-palette' for f in bad['failures'])
+    empty = measure(script, '<html><head><title>Empty</title></head><body></body></html>', 'empty')
+    assert any(f['id'] == 'zero-targets' for f in empty['failures'])
+    before = os.environ.get('DESIGN_BASELINE_MEASURE')
+    if before:
+        import base64
+        svg = '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="120"><rect width="300" height="120" fill="white"/></svg>'
+        image = 'data:image/svg+xml;base64,' + base64.b64encode(svg.encode()).decode()
+        overlap = ('<div style="position:relative;width:300px;height:120px">'
+                   '<img alt="fixture" src="' + image + '" width="300" height="120" '
+                   'style="position:absolute;top:0;left:0">'
+                   '<p style="position:relative;z-index:1">Text over fixture image.</p></div>')
+        layout = normal.replace('</main>', overlap + '<div style="width:2000px">Overflow</div></main>')
+        old = measure(before, layout, 'before')
+        new = measure(script, layout, 'after')
+        assert old['runs'][0]['overflow']
+        assert old['runs'][0]['imageRegions']
+        assert old['runs'][0]['imageLightness']
+        for key in ('overflow','horizontalScroll','imageRegions','imageLightness','contrastFails'):
+            assert old['runs'][0][key] == new['runs'][0][key]
+
+
+def test_ship_entrypoint_rejects_proposed_and_allows_approved(project):
+    root, catalogs = project
+    env = dict(os.environ, DESIGN_AUTHOR_PYTHON=sys.executable)
+    argv = [str(SKILL / 'scripts/design-ship'), '--repo', str(root), '--catalog-dir', str(catalogs)]
+    run = subprocess.run(argv, env=env, capture_output=True, text=True)
+    assert run.returncode == 2
+    assert json.loads(run.stdout)['errors']
+    approve(project)
+    run = subprocess.run(argv, env=env, capture_output=True, text=True)
+    assert run.returncode == 0
+    assert json.loads(run.stdout)['exit_code'] == 0
+
+
+def test_ship_allows_warning_on_unapproved_nice_token(project):
+    approve(project)
+    root, catalogs = project
+    p = root / 'design/tokens/brand.tokens.json'
+    data = json.loads(p.read_text())
+    data['color']['optional'] = {'$value':{'colorSpace':'srgb','components':[1,1,1],'hex':'#ffffff'},
+                                  '$extensions':{'org.own.design':{'origin':'proposal'}}}
+    write(p, data)
+    result = check(project, ship=True)
+    assert result['exit_code'] == 1
+    assert result['counts']['proposed'] == 1
+    run = subprocess.run([str(SKILL / 'scripts/design-ship'),'--repo',str(root),'--catalog-dir',str(catalogs)],
+                         env=dict(os.environ, DESIGN_AUTHOR_PYTHON=sys.executable),capture_output=True,text=True)
+    assert run.returncode == 0
+    assert json.loads(run.stdout)['exit_code'] == 1
+
+
+def test_vanilla_design_without_color_tokens_does_not_require_tailwind(project):
+    root, _ = project
+    write(root / 'design/tokens/brand.tokens.json', {'size':{'$type':'dimension',
+          '$value':{'value':1,'unit':'rem'},'$extensions':{'org.own.design':{'origin':'proposal'}}}})
+    config = json.loads((root / 'design/design.yaml').read_text())
+    config['items']['dads-000001']['evidence'] = ['token:size']
+    write(root / 'design/design.yaml', config)
+    result = check(project)
+    assert result['exit_code'] == 1
+    assert result['manifest']['web']['artifacts'] == {}
+    assert not (root / 'design/.resolved/tailwind.config.cjs').exists()

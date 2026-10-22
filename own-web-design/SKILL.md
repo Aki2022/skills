@@ -25,7 +25,7 @@ repo の git toplevel の `design/` を正典として HTML / dashboard を生�
    ブランド値をAIが承認しない。
 6. `media/<media>/media.yaml` / `rules.md` と必要なassetを読み、
    `references/context-composer.md` に従って生成する。媒体最低値はマニフェストを読む。
-7. 生成後の L1（`scripts/audit_html.py`）は確認せず毎回実行する。
+7. 生成後の L1（`scripts/audit_html.py <html> --manifest design/.resolved/web.json`）は確認せず毎回実行する。
    描画の L2 は `references/validator.md` / `site-validation.md` に従い人間へ実施可否を確認する。
    ブラウザ利用時は `own-browser-route` と `playwright-cli` を使う。
 8. 決定論の失格は修正して再検査する。修正は最大2回。失格や未実施が残れば準拠を名乗らない。

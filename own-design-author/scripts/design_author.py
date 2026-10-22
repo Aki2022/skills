@@ -152,7 +152,7 @@ def _clear_manifests(design):
         raise ValueError('.resolved symlink was unlinked; its target was not modified')
     if resolved.is_dir():
         for path in resolved.iterdir():
-            if path.is_file() and path.suffix in ('.json', '.css'):
+            if path.is_file() and path.suffix in ('.json', '.css', '.cjs'):
                 path.unlink()
 
 
@@ -438,19 +438,26 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
             for p in sorted(design.rglob('*')) if p.is_file() and '.resolved' not in p.relative_to(design).parts
             and p.name not in ('assets.json','migration.json')}
         source_hash = value_hash(input_hashes)
+        from tailwind_contract import tailwind_artifact
+        artifacts = ({'tailwind.config.cjs': tailwind_artifact(tokens)}
+                     if any(t['type'] == 'color' for t in tokens.values()) else {})
+        tailwind_content = artifacts.get('tailwind.config.cjs', {}).get('content')
         for medium, profile in profiles.items():
             result['manifest'][medium] = {'schema_version':1, 'skill_version':VERSION,
                 'catalog_version':catalog['version'], 'catalog_hash':value_hash(catalog), 'source_hash':source_hash,
                 'input_hashes':input_hashes, 'media':medium, 'profile':profile,
                 'minimums':profile['minimums'], 'tokens':tokens, 'items':item_states,
                 'css_variables':{t['css_name']:t['css'] for t in tokens.values()},
-                'rules':list(rules.values()), 'coverage':{'uncovered':sorted(rules)},
+                'artifacts':artifacts, 'rules':list(rules.values()), 'coverage':{'uncovered':sorted(rules)},
                 'palette':{kind: sorted({t['css'] for t in tokens.values() if t['type']==kind})
                            for kind in ('color','fontFamily','dimension')}, 'assets':assets}
         result['exit_code'] = 2 if errors else (1 if warnings else 0)
         counts['fulfillment'] = (counts['defined']+counts['na'])/counts['items']
         if not errors:
             write_data(design/'assets.json', {'schema_version':1,'assets':assets})
+            if tailwind_content is not None:
+                (design/'.resolved'/'tailwind.config.cjs').parent.mkdir(parents=True, exist_ok=True)
+                (design/'.resolved'/'tailwind.config.cjs').write_text(tailwind_content)
             for medium, manifest in result['manifest'].items():
                 write_data(design/'.resolved'/f'{medium}.json',manifest)
                 css = ':root {\n' + ''.join(f'  {key}: {value};\n' for key,value in manifest['css_variables'].items()) + '}\n'

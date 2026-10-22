@@ -32,9 +32,12 @@ If context is missing, continue with generic website best practices and mark ass
 2. Inspect the rendered experience when a URL is available. Test mobile, tablet, desktop, and wide desktop where practical.
 3. Read source files only as needed to validate findings or propose concrete fixes.
 4. **決定論を先に実測する（LP・単一ページのとき必須）。**
+   repoのdesign/と今回のL0生成物を確認する。不在・失格ならown-design-authorへ戻す。
+   L2は人間の実施確認後に実行する。依存を自動導入しない。
+   実行環境・範囲は `own-design-author/references/web-validation.md`。
 
    ```bash
-   node <skill>/scripts/measure_lp.mjs <url> --viewports 375,1280 --schemes dark,light --json /tmp/lp.json
+   node <skill>/scripts/measure_lp.mjs <url> --manifest design/.resolved/web.json --viewports 375,1280 --schemes dark,light --json /tmp/lp.json
    ```
 
    合格閾値は `references/aesthetic-thresholds.md`。溢れ・重なり・切れ・コントラスト・

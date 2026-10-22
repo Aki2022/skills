@@ -15,12 +15,13 @@
  * 反映されず「実際にどう見えているか」を測れない（v1 でこの誤りを踏んだ）。
  *
  * 使い方:
- *   node measure_lp.mjs <url> [--viewports 375,1280] [--schemes dark,light] [--json out.json]
+ *   node measure_lp.mjs <url> --manifest design/.resolved/web.json [--viewports 375,1280] [--schemes dark,light] [--json out.json]
  *
  * 終了コード: 0 = 失格なし / 1 = 失格あり / 2 = 実行不能
  */
 
-import { writeFileSync } from "node:fs";
+import { writeFileSync, existsSync } from "node:fs";
+import { loadManifest, collectDesign } from "../../own-design-author/scripts/resolved_contract.mjs";
 import { createRequire } from "node:module";
 
 const require = createRequire(`${process.cwd()}/`);
@@ -40,7 +41,7 @@ function loadPlaywright() {
 const args = process.argv.slice(2);
 const url = args.find((a) => !a.startsWith("--"));
 if (!url) {
-  console.error("使い方: node measure_lp.mjs <url> [--viewports 375,1280]");
+  console.error("使い方: node measure_lp.mjs <url> --manifest design/.resolved/web.json [--viewports 375,1280]");
   process.exit(2);
 }
 const flag = (name, fallback) => {
@@ -53,6 +54,13 @@ const viewports = flag("viewports", "375,1280")
   .filter(Boolean);
 const jsonOut = flag("json", null);
 const schemes = flag("schemes", "dark,light").split(",").filter(Boolean);
+let manifest;
+try { manifest = loadManifest(flag('manifest', 'design/.resolved/web.json')); }
+catch { console.error('resolved manifest unavailable, invalid or stale; rerun L0'); process.exit(2); }
+if (!viewports.length || !schemes.length) { console.error('zero measurement runs'); process.exit(2); }
+let axePath = process.env.AXE_CORE_PATH;
+if (!axePath) { try { axePath = require.resolve('axe-core/axe.min.js'); } catch {} }
+
 
 /**
  * 閾値。根拠と、緩めた履歴は references/aesthetic-thresholds.md に残すこと。
@@ -66,8 +74,9 @@ const T = {
   bodyFontSizeMin: 15, // 本文（最頻サイズ）
   textFontSizeFloor: 12, // 注記も含めた絶対下限
   measureMaxCh: 48, // 和文の全角基準
-  contrastMin: 4.5,
-  tapTargetMin: 44,
+  contrastMin: manifest.minimums.text_contrast,
+  largeContrastMin: manifest.minimums.large_text_contrast,
+  tapTargetMin: manifest.minimums.target_size_px,
   orphanMinChars: 3,
   imageStandoutArea: 200, // 焦点画素の面積(CSS px²)。14x14 相当を下回れば絵が沈んでいる
   imageCropMax: 0.45, // object-fit: cover の切り取り率。意図した構図が壊れる境
@@ -224,7 +233,7 @@ function collect(T) {
         const r = ratio(fg, bg);
         const bold = Number(s.fontWeight) >= 700;
         const large = size >= 24 || (size >= 18.66 && bold);
-        const min = large ? 3 : T.contrastMin;
+        const min = large ? T.largeContrastMin : T.contrastMin;
         if (r < min) {
           contrastFails.push({
             tag: el.tagName.toLowerCase(),
@@ -526,8 +535,10 @@ const report = {
   measuredAt: new Date().toISOString(),
   runs: [],
   failures: [],
+  uncovered: [...(manifest.coverage?.uncovered || []), 'pseudo-elements', 'shadow-dom', 'iframe-documents'],
 };
 
+try {
 for (const scheme of schemes) {
   for (const width of viewports) {
     const context = await browser.newContext({
@@ -566,6 +577,16 @@ for (const scheme of schemes) {
     await page.waitForTimeout(700);
 
     const data = await page.evaluate(collect, T);
+    data.design = await page.evaluate(collectDesign, manifest);
+    data.axe = {violations:[], incomplete:[], unavailable:false};
+    if (axePath && existsSync(axePath)) {
+      await page.addScriptTag({path:axePath});
+      data.axe = await page.evaluate(async () => {
+        const result = await window.axe.run(document, {runOnly:{type:'rule', values:['color-contrast']}});
+        return {violations:result.violations.map(v => ({id:v.id, count:v.nodes.length})),
+          incomplete:result.incomplete.map(v => ({id:v.id, count:v.nodes.length})), unavailable:false};
+      });
+    } else data.axe.unavailable = true;
     // 404 等はテキストに URL が出ないので、favicon を除いた実リクエストで置き換える。
     data.consoleErrors = [
       ...consoleErrors.filter((t) => !/Failed to load resource/.test(t)),
@@ -589,7 +610,7 @@ for (const scheme of schemes) {
         const [hi, lo] = [fgY, Y].sort((a, b) => b - a);
         const ratio = (hi + 0.05) / (lo + 0.05);
         const large = t.fontSize >= 24 || (t.fontSize >= 18.66 && t.bold);
-        const min = large ? 3 : T.contrastMin;
+        const min = large ? T.largeContrastMin : T.contrastMin;
         if (ratio < min) {
           data.contrastFails.push({
             tag: t.tag,
@@ -635,7 +656,9 @@ for (const scheme of schemes) {
     await context.close();
   }
 }
-await browser.close();
+} finally {
+  await browser.close();
+}
 
 const fail = (id, detail) => report.failures.push({ id, ...detail });
 // 校正が足りない / 環境差が出る項目は警告に置く。失格に混ぜると
@@ -644,6 +667,11 @@ report.warnings = [];
 const warn = (id, detail) => report.warnings.push({ id, ...detail });
 for (const r of report.runs) {
   const at = `${r.scheme}/${r.width}px`;
+  if (!r.design.targetCount) fail('zero-targets', {at});
+  if (r.design.failures.length) fail('design-palette', {at, count:r.design.failures.length, sample:r.design.failures.slice(0, 8)});
+  if (r.axe.unavailable) fail('axe-unavailable', {at, note:'axe-core not available; unverified'});
+  if (r.axe.violations.length) fail('axe-contrast', {at, violations:r.axe.violations});
+  if (r.axe.incomplete.length) fail('axe-incomplete', {at, note:'unverified contrast', incomplete:r.axe.incomplete});
   if (r.kinds.fontSize > T.fontSizeKinds)
     fail("type-scale", { at, got: r.kinds.fontSize, max: T.fontSizeKinds });
   if (r.kinds.lineHeight > T.lineHeightKinds)
@@ -777,5 +805,6 @@ if (report.warnings.length) {
   }
   console.log("");
 }
+if (report.uncovered.length) console.log(`  未カバー: ${report.uncovered.join(", ")}（準拠合格の対象外）`);
 if (jsonOut) console.log(`  詳細: ${jsonOut}\n`);
 process.exit(report.failures.length ? 1 : 0);

@@ -41,7 +41,8 @@ design-author check --repo <repo> --ship
 
 L0 はモデルを使わず、対象項目数・充足率・未判定・提案値・未カバーを出す。整合が通った時だけ `design/.resolved/<media>.json` と CSS、`assets.json` を生成する。失格時は古いマニフェストを残さない。L1/L2 はマニフェストだけを読む。L0だけで成果物の準拠合格を名乗らない。
 
-`--ship` は未承認mustと未カバーmust規則を失格にする。hook/mise への接続は WS の出荷ゲート slice が担当し、既存hookを置き換えない。
+`--ship` は未承認mustと未カバーmust規則を失格にする。hook/miseへの接続は `references/ship-gates.md`。既存hookを置き換えない。
+L1/L2と生成Tailwindの使い方・制約は `references/web-validation.md` を読む。
 
 ## 上流更新
 

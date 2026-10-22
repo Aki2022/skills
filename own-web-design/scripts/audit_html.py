@@ -5,7 +5,7 @@ media/html の type: constraint を機械検証する。LLMの自己申告に頼
 生成したHTMLファイルを実際に解析してPASS/FAILを出す。手順10で必ず実行する。
 
 使い方:
-    python3 scripts/audit_html.py <file.html> [file2.html ...]
+    python3 scripts/audit_html.py <file.html> --manifest design/.resolved/web.json [--tailwind tailwind.config.cjs]
 
 終了コード: 全PASSなら0、FAILが1つでもあれば1。
 純標準ライブラリのみ（外部依存なし・system python3で動く）。
@@ -18,9 +18,27 @@ media/html の type: constraint を機械検証する。LLMの自己申告に頼
 コントラストは画像上テキスト・グラデーション・CSS変数のテーマ切替(data-theme)・JS動的スタイルは判定不能。
 その分は [自己点検]（validators/common/contrast.md）に委ねる旨を出力する。
 """
+import argparse
+import json
+from pathlib import Path
+from html.parser import HTMLParser
 import os
 import re
 import sys
+
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'own-design-author/scripts'))
+from resolved_contract import load_manifest, check_tailwind
+
+
+class Targets(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.count = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag not in ('html', 'head', 'body', 'meta', 'link', 'title', 'script', 'style'):
+            self.count += 1
 
 
 # ---------- contrast ----------
@@ -98,7 +116,7 @@ def resolve_vars(text):
     return re.sub(r"var\(\s*(--[\w-]+)\s*(?:,\s*([^)]*))?\)", sub, text)
 
 
-def literal_color_pairs(css_text, source="css"):
+def literal_color_pairs(css_text, minimum, source="css"):
     """CSSテキストのルール単位で color+background の両指定を探し、解決可能なら判定を返す。
     <style>ブロックでも外部CSSでも共通で使う。"""
     results = []
@@ -111,8 +129,8 @@ def literal_color_pairs(css_text, source="css"):
             bgc = parse_color(bg.group(1))
             if fgc and bgc:
                 r = round(contrast_ratio(fgc, bgc), 2)
-                results.append((r >= 4.5,
-                                f"[{source}] contrast {fg.group(1).strip()} on {bg.group(1).strip()} = {r}:1 (min 4.5)"))
+                results.append((r >= minimum,
+                                f"[{source}] contrast {fg.group(1).strip()} on {bg.group(1).strip()} = {r}:1 (min {minimum})"))
     return results
 
 
@@ -139,13 +157,13 @@ def load_linked_css(html, base_dir):
     return "\n".join(css_parts)
 
 
-def check_contrast(html, linked_css=""):
+def check_contrast(html, minimum, linked_css=""):
     """同一CSSルール内で color と background が両方指定された箇所を判定。
     <style>ブロック・インライン style・外部リンクCSS を対象にする。"""
     results = []
     # <style> ブロック
     for style in re.findall(r"<style[^>]*>(.*?)</style>", html, re.S | re.I):
-        results += literal_color_pairs(style, source="style")
+        results += literal_color_pairs(style, minimum, source="style")
     # インライン style="color:..;background:.."
     resolved = resolve_vars(html)
     for st in re.findall(r'style\s*=\s*"([^"]*)"', resolved):
@@ -155,10 +173,10 @@ def check_contrast(html, linked_css=""):
             fgc, bgc = parse_color(fg.group(1)), parse_color(bg.group(1))
             if fgc and bgc:
                 r = round(contrast_ratio(fgc, bgc), 2)
-                results.append((r >= 4.5, f"[inline] contrast = {r}:1 (min 4.5)"))
+                results.append((r >= minimum, f"[inline] contrast = {r}:1 (min {minimum})"))
     # 外部リンクCSS（:root のCSS変数も resolve_vars で解決）
     if linked_css:
-        results += literal_color_pairs(linked_css, source="linked-css")
+        results += literal_color_pairs(linked_css, minimum, source="linked-css")
     return results
 
 
@@ -195,42 +213,56 @@ def check_structure(html, linked_css=""):
     return res
 
 
-def audit(path):
+def audit(path, manifest):
     with open(path, encoding="utf-8") as f:
         html = f.read()
     base_dir = os.path.dirname(os.path.abspath(path))
     linked_css = load_linked_css(html, base_dir)
     results = check_structure(html, linked_css)
-    contrast = check_contrast(html, linked_css)
+    contrast = check_contrast(html, manifest["minimums"]["text_contrast"], linked_css)
+    targets = Targets()
+    targets.feed(html)
+    results.append((targets.count > 0, f"HTML targets: {targets.count}"))
     results += contrast
 
-    print(f"\n=== audit: {path} ===")
+    print(f"\n=== audit: {Path(path).name} ===")
     failed = 0
     for ok, label in results:
         print(f"  [{'PASS' if ok else 'FAIL'}] {label}")
         if not ok:
             failed += 1
     if not contrast:
-        print("  [note] 判定可能なcolor+backgroundペアなし。コントラストは[自己点検]で確認すること")
+        print("  [note] 判定可能なcolor+backgroundペアなし。未カバー: コントラストはL2実測が必要")
+    print("  [未カバー] computed palette / axe / dynamic themes: L2 required")
+    for ident in manifest.get("coverage", {}).get("uncovered", []):
+        print(f"  [未カバー] {ident}: no executed rule runner")
     print(f"  -> {len(results) - failed}/{len(results)} passed, {failed} failed")
     return failed == 0
 
 
 def main(argv):
-    if len(argv) < 2:
-        print("usage: python3 audit_html.py <file.html> [more.html ...]", file=sys.stderr)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('files', nargs='+')
+    parser.add_argument('--manifest', required=True, type=Path)
+    parser.add_argument('--tailwind', action='append', type=Path, default=[])
+    args = parser.parse_args(argv[1:])
+    try:
+        manifest = load_manifest(args.manifest)
+        configs = list(args.tailwind)
+        if not configs:
+            repo = args.manifest.resolve().parents[2]
+            for directory, dirs, files in os.walk(repo):
+                dirs[:] = [d for d in dirs if d not in ('.git', 'node_modules', '.resolved', '.venv')]
+                configs.extend(Path(directory) / name for name in files if name.startswith('tailwind.config.'))
+        for config in configs:
+            check_tailwind(config, manifest)
+        all_ok = all([audit(p, manifest) for p in args.files])
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        print(json.dumps({'exit_code': 2, 'errors': [type(exc).__name__ + ': invalid or unavailable input']}, ensure_ascii=False))
         return 2
-    all_ok = True
-    for p in argv[1:]:
-        try:
-            if not audit(p):
-                all_ok = False
-        except FileNotFoundError:
-            print(f"  [ERROR] file not found: {p}", file=sys.stderr)
-            all_ok = False
-    print("\nRESULT:", "ALL PASS" if all_ok else "FAIL (手順11で修正)")
+    print("RESULT:", "L1 PASS (L2 required)" if all_ok else "FAIL")
     return 0 if all_ok else 1
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     sys.exit(main(sys.argv))

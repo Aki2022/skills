@@ -1,0 +1,8 @@
+# Merge these tasks into the repository mise configuration after approval.
+[tasks."design:check"]
+description = "Validate the design directory (L0)"
+run = "design-author check --repo ."
+
+[tasks."design:ship"]
+description = "Block shipment on unapproved or uncovered must items"
+run = "design-ship --repo ."

@@ -16,6 +16,7 @@ Python 3.10以上と、既存環境に導入済みの PyYAML / jsonschema（refe
 - `assets/`: ファイルのsha256から `assets.json` を生成する。別の手書き台帳を正典にしない。
 - `approvals.yaml`: 人間確認を根拠にした行の配列。
 - `NOTICE`: JSON互換YAML、`sources` 配列。各参照のid / url / commit / license / copyright / editedを必須とする。`edited`は真偽値。
+- `.resolved/tailwind.config.cjs`: 解決済みの色から生成するCommonJS設定。contentとSHA256はwebマニフェストのartifactsにも保存。
 - `.resolved/web.json` / `.resolved/web.css`: L0の生成物。入力ハッシュ・解決値・CSS・承認状態・媒体下限・項目・未カバー・アセットを持つ。これらを手で直しても正典は変わらない。
 
 項目の例:
@@ -57,6 +58,6 @@ group `$extends`、カスタムdash配列のstrokeStyle、srgb以外のCSS変換
 - 1: 提案値、未カバー規則、skill版の不一致などの警告。生成は可能だが警告を報告する。
 - 2: 欠落・未知版/id・空のmust・証拠不在・台帳不一致・下限緩和・対象0件など。生成しない。
 
-`--ship` は提案状態のmustと未カバーmustも2にする。未カバーに対応済みという自己申告を書いて合格にする経路はない。L1/L2との接続は後続sliceが実装する。散文が意味的に適切かはL0の決定論では判定しない。
+`--ship` は提案状態のmustと未カバーmustも2にする。未カバーに対応済みという自己申告を書いて合格にする経路はない。L1/L2の実行方法と制約は `web-validation.md`、hook/miseは `ship-gates.md`。散文が意味的に適切かはL0の決定論では判定しない。
 
 `presentation` presetはwebプレビューを選ぶ。pptxの媒体規約とconsumerは従属WSで実装する。

@@ -15,15 +15,12 @@ context: [japanese-ui, landing-page]
 
 ## 期待される Runtime 挙動
 
-1. **ユーザーが参考にする個別サイトを指示する**（Skillは自律探索しない）。
-2. Media Resolver が `html` を選ぶ。
-3. `awesome-design-md-jp-import` プラグインが、指示された DESIGN.md を取得し内部形式に正規化する。
-4. Context Composer:
-   - 参照 DESIGN.md は**優先度6**。抽象化した方針・密度・CJKトーンのみ取り込み、具体値はコピーしない。
-   - 実際の色・フォント・レイアウトは自社 Plugin（例: my_company, 優先度3）から採る。
-5. `[自動]`（コントラスト・セマンティック・alt）→ `[自己点検]`（CJK可読性、参照元コピーの有無）で点検。
-   Brand Consistency Validator で「参照元ブランドをコピーしていないか」を必ず確認。
-6. 出力に参照元と自社ブランドの差分説明を含める。
+1. `scripts/preflight.py` でL0を実行する。design/不在なら生成せずown-design-authorへ渡す。
+2. 指示された個別サイトだけを参照し、import-policyの権利確認を行う。
+3. 方針と値をdesign/へproposedとして写し、reference出所とNOTICEを付ける。
+4. L0を再実行してから、解決済みマニフェストで生成する。倉庫の値を継承しない。
+5. L1は必ず実行し、L2は人間へ実施可否を確認する。
+6. 提案状態・出所・未カバー・実施しなかった工程と理由を報告する。
 
 ## 期待される出力
 

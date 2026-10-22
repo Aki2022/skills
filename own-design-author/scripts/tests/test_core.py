@@ -368,3 +368,18 @@ def test_fresh_init_reports_empty_must_even_before_first_token(project):
     assert result['exit_code']==2
     assert result['counts']['deferred']==1
     assert any('must item is empty' in e for e in result['errors'])
+
+
+def test_factory_preflight_preserves_warning_and_failure(project):
+    root, catalogs = project
+    entry = SKILL.parent / 'own-web-design/scripts/preflight.py'
+    env = dict(os.environ, DESIGN_AUTHOR_PYTHON=sys.executable)
+    argv = [sys.executable, str(entry), '--repo', str(root), '--catalog-dir', str(catalogs)]
+    run = subprocess.run(argv, env=env, capture_output=True, text=True)
+    assert run.returncode == 1
+    assert json.loads(run.stdout)['counts']['proposed'] == 1
+    assert (root / 'design/.resolved/web.json').is_file()
+    write(root / 'design/design.yaml', {})
+    run = subprocess.run(argv, env=env, capture_output=True, text=True)
+    assert run.returncode == 2
+    assert not (root / 'design/.resolved/web.json').exists()

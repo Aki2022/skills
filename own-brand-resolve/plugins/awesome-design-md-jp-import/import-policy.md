@@ -1,30 +1,26 @@
-# DESIGN.md — awesome-design-md-jp Import Policy
+# DESIGN.md — Reference Import Policy
 
-日本語UI向けの第三者 DESIGN.md を**参照デザインライブラリ**として安全に利用するためのポリシー。
-参照元は `awesome-design-md-jp`（https://github.com/kzhrknt/awesome-design-md-jp）に限定する。
+ユーザーが指示した個別サイトだけを参照する。許可元は `kzhrknt/awesome-design-md-jp` と
+`VoltAgent/awesome-design-md`。自律的な探索・全件スキャンはしない。
 
-## 目的
+## 写す手順
 
-日本語UIの雰囲気・レイアウト密度・CJKタイポグラフィ・コンポーネント表現を**抽象化して**参考にする。
-自社/指定 Plugin と合成し、直接コピーはしない。
+1. 指定された DESIGN.md の URL・commit と、その版のライセンス実物・著作権表示を確認する。
+   確認できなければ値を写さず、不足を報告する。過去の取得メタを今回の確認の代用にしない。
+2. `mapping.md` に従い、方針と色・余白・角・影の値を repo の `design/` へ写す。
+   値は DTCG トークンにし、出所を `reference:<id>`、状態を `proposed` とする。
+3. 同じ repo の `design/NOTICE` に id・URL・commit・ライセンス・著作権表示・編集有無を記録する。
+4. -jp またはオーナー指定から和文フォントを提案できる。本家の英語UIからは typography の値を
+   写さず、空のまま「和文フォント未決定」と報告する。
+5. `own-design-author` の L0 で整合を確認する。ブランド値の承認は人間が行う。
+   `approvals.yaml` にAIが自律的に書き込まない。
 
-## 使い方
+参照は初期提案の材料。repo の `design/` が唯一の正典で、倉庫や参照元との継承はしない。
+工場の Context Composer へ直接値を渡さない。
 
-1. **ユーザーが参考にする個別サイトを指示する**（Skillが自律的に探索・全件スキャンしない）。
-2. 指示されたサイトの DESIGN.md を取得する。
-3. 内部形式（Visual Theme / Color Roles / Typography / Spacing / Layout / Components /
-   Iconography / Motion / Accessibility / Content Tone / Do-Don't / Examples）に正規化する（mapping.md）。
-4. 抽象化されたデザイン特性として扱い、自社 Plugin または指定 Plugin と合成する。
-5. Context Composer 上では**優先度6（参照 DESIGN.md）**。具体値はコピーせず、方針・密度・トーンのみ反映。
+## コピーしないもの
 
-## 禁止事項（spec §15.3）
-
-- 既存サービスの UI コピー
-- ロゴ・商標・固有ビジュアルの再利用
-- 競合サービスと誤認される表現
-- 著作権・商標権を侵害するアセット利用
-
-## ライセンス/権利
-
-- 各サイトの DESIGN.md の権利は各提供元に帰属する。参照利用に限定し、`references.md` に出典を記録する。
-- 具体資産は取り込まないため `allow_asset_copy: false`。
+ロゴ・商標・固有ビジュアル、画像・アイコン・フォント等の実アセット、既存サービスの画面・実装、
+固有のコピー文言を写さない。フォント名の提案はフォントファイルの再配布許可を意味しない。
+`allow_asset_copy: false` は実アセットを指す。数値トークンの提案は別の `allow_token_copy` で表す。
+ライセンス記録とブランド値の承認は別の確認である。

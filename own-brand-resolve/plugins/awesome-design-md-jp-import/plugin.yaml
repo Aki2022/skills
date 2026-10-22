@@ -5,17 +5,17 @@ source:
   upstream: https://github.com/kzhrknt/awesome-design-md-jp
   upstream_version: unrecorded    # 取得時の commit を記録していなかった
   fetched_at: 2026-07-04
-name: awesome-design-md-jp Import Plugin
-version: 0.1.0
+name: Design Reference Import Plugin
+version: 0.2.0
 status: experimental
-license: "参照利用のみ。各サイトDESIGN.mdの権利は各提供元に帰属。"
+license: "取得した版のライセンス実物を確認し、repo の design/NOTICE に記録する。"
 design_md_version: draft
 language:
   primary: ja
   supported: [ja]
 extends: []
 
-# 参照専用プラグイン。単体で成果物のブランドにはならず、他プラグインと合成して使う。
+# 指示制の参照入口。repo の design/ への提案専用で、工場へ継承しない。
 supported_media: [html, pptx, dashboard]
 
 priority:
@@ -33,8 +33,13 @@ validators: []
 
 usage_policy:
   allow_reference: true
-  allow_asset_copy: false
-  require_attribution: true
+  allowed_repositories:
+    - kzhrknt/awesome-design-md-jp
+    - VoltAgent/awesome-design-md
+  require_user_selected_site: true
+  allow_token_copy: true # 確認したライセンスの範囲で proposed として design/ へ写す
+  allow_asset_copy: false # ロゴ・画像・アイコン・フォント等の実ファイル
+  require_attribution: true # 写した値と同じ repo の design/NOTICE
   prohibit_font_redistribution: true
-  # 参照利用のみ（抽象化した方針の取り込み）。具体ビジュアルのコピーはしないため資産埋め込みは行わない。
-  license_gate_approved: false
+  upstream_typography_copy: false # 本家の英語UIから typography の値を写さない
+  license_gate_approved: false # 実アセットの利用許可やブランド値の承認は付与しない

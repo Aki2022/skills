@@ -62,6 +62,6 @@
 
 ## 参照の扱い
 
-- awesome-design-md-jp からの**抽象参照のみ**（Context Composer 優先度6相当）。具体値はコピーせず、
-  方針・密度・トーンを反映した独自トークンとして `tokens/` に格納する。
-- ライセンスゲート未承認（`license_gate_approved: false`）。実ブランドアセットは出力に使わない。
+この箱は過去の観察メモ。web工場へ値を直接合成しない。指示された参照はimport-policyに従って
+repoの `design/` にproposedとして写し、出所・権利情報を `design/NOTICE` に記録する。
+実ブランドアセットは出力に使わない。`license_gate_approved: false` を維持する。

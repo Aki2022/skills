@@ -1,79 +1,45 @@
 ---
 name: own-web-design
-description: "web 成果物（HTML 画面・LP・コンポーネント・ダッシュボード）を作る工場。「UI を作って」「HTML を作って」「LP を作って」「ダッシュボードを作って」「web の見た目を整えて」「ブランドに沿ったサイトを作って」で必ず使う。意匠は own-brand-resolve から受け取り、画像は own-image-gen に任せる。スライドは own-pptx-build。"
+description: "web 成果物（HTML 画面・LP・コンポーネント・ダッシュボード）を作る工場。「UI を作って」「HTML を作って」「LP を作って」「ダッシュボードを作って」「web の見た目を整えて」「ブランドに沿ったサイトを作って」で必ず使う。意匠は repo の design/ と解決済みマニフェストから読み、生成前に L0 を必ず実行する。design/ が無ければ own-design-author へ渡す。画像は own-image-gen に任せる。スライドは own-pptx-build。"
 ---
 
 # own-web-design — web 成果物の工場
 
-このSkillは**デザインルールそのものを持たない**。媒体（`media/`）と、倉庫
-（`own-brand-resolve`）から受け取った意匠を合成し、コンテキストを組み立て、成果物を生成し、
-Validatorで点検する。
-
-**web 専用である。** `media/` は `html` と `dashboard` だけを持つ。pptx の媒体規約は持たない —
-過去に「web 向けの依頼で pptx 用の実装が動き、媒体規約が誤適用された」実失敗があり、
-その土台（呼ばれない pptx 媒体ルール）を退役させたのが今の形。
-スライド・資料は `own-pptx-build` が持つ。
-
-## 重要ルール（常に守ること）
-
-- **Skillはデザインを持たない**。配色・余白・フォント等の実体は倉庫 `own-brand-resolve` の
-  DESIGN.md / tokens にある。**本 skill は倉庫に問い合わせるだけで、意匠の選択規則を自前で持たない**
-  （同じ規則が2実装になった時点でズレが始まる。実測済み）。
-- **ライセンスゲートは倉庫が持つ**（`own-brand-resolve`）。門を工場側に置くと、工場は門を通らずに
-  第三者資産の実値を取得できてしまう。**本 skill はゲートの結果（可否）を受け取るだけで、
-  自分で判定しない。**
-- **第三者DESIGN.mdの参照元の限定も倉庫の所掌。** 本 skill が自律的に外部サイトを
-  探索・スクレイピングしない。
-- **このSkillはスタイリング層に徹する**。情報設計・コンテンツ構造・メッセージ設計といった「設計判断」は
-  スコープ外（DESIGN.md フォーマット自体がスタイリング記述であり、上流の Google design.md /
-  awesome-design-md-jp も同様）。重要なのは、選んだ配色・タイポ・余白・a11y制約が**成果物に確実に反映される**こと。
-- **生成時のMUST（authoring）は毎回・無料で守る**が、**validate（実測点検）の実行はコストがかかるので自動発火しない**。
-  サイト（HTML/web）の場合は生成後に**人間に「validateするか」を必ず聞いてから**実行する（後述「Validateは人間に聞く」）。
-- **適用範囲（Tier）**: HTML / dashboard（web）＝**完全対応**（生成＋実測validate可）。PPTX・その他＝**参考Tier**
-  （DESIGN.md/tokens を参考に生成方針は出すが、機械validateはしない。実生成は `pptx` Skill 等に委譲してよい）。
-- 出力には使用したPlugin・主要制約・validate実施の有無/結果を必ず記録する。
-
-## 参照ファイルと役割
-
-| パス                                         | 役割                                        | いつ読むか                      |
-| -------------------------------------------- | ------------------------------------------- | ------------------------------- |
-| `references/architecture.md`                 | Runtime/Media/Plugin/Validator の境界       | 全体像を確認する時              |
-| `references/media-spec.md`                   | `media.yaml` の正式スキーマ                 | Media を追加・検証する時        |
-| `references/context-composer.md`             | コンフリクト解決アルゴリズム                | 手順8（コンテキスト合成）で必ず |
-| `references/validator.md`                    | Validator 仕様（[静的]/[実測]/[自己点検]）  | 手順10（検証）で必ず            |
-| `references/site-validation.md`              | playwright実測の手順書                      | サイト実測validateを実施する時  |
-| `media/<media>/media.yaml` + `rules.md`      | 媒体固有の制約・推奨                        | 手順6                           |
-| `own-brand-resolve/plugins` の各箱                 | 意匠の実体（倉庫が解決して渡す）            | 手順5・7                        |
-| `validators/common/*`                        | 媒体横断の点検項目                          | 手順10                          |
+repo の git toplevel の `design/` を正典として HTML / dashboard を生成する。
+値の定義・参照の写しは `own-design-author`、画像生成は `own-image-gen`、スライドは
+`own-pptx-build` が担当する。情報設計・メッセージ設計はこの工場の範囲外。
 
 ## 処理手順
 
-```text
-1. User Taskを読み、成果物の媒体（media）を判定する。→ Media Resolver（下記）
-   **web 以外（スライド等）と判定したら、ここで own-pptx-build へ渡して止まる。**
-2. **意匠の与件があるかを分岐する。**
-   - **(a) ブランド与件あり**（「自社ブランドで」「デジタル庁風に」等 / リポジトリローカルの
-     DESIGN.md がある）→ `own-brand-resolve` に文脈と媒体を渡し、解決済みの意匠を受け取る。
-   - **(b) 与件なし・発案から**（「かっこいいLPを作って」等）→ 意匠を**この工場が発案してよい**が、
-     発案したことを報告に明記する。倉庫の箱を勝手に選んで「ブランド準拠」と名乗らない。
-     発案の美的指針は外部の `frontend-design` skill に従う（この工場は美的規則を持たない）。
-3. 倉庫が返すもの: 箱の id（継承元含む）・値・**出所**・**ライセンス可否**。
-   可否が false の箱の実値は使わない（原則プローズのみ参照可）。
-4. Project DESIGN.md（リポジトリローカル）があれば最優先で読む。
-5. 倉庫が解決した意匠（継承元があれば親も。1階層まで）を読む。
-6. Media Rule（media/<media>/rules.md, media.yaml）を読む。
-7. 必要なAsset / Template / Exampleだけを読む（全部は読まない）。
-8. 生成用コンテキストを組み立てる。競合は references/context-composer.md の優先度順で解決する。
-9. 成果物を生成する。HTMLを出力する場合は、後述の「HTML出力前 必須チェックリスト（MUST）」を
-   雛形どおり満たしてから出力する（＝生成規律。ここは毎回・無料で守る）。
-10. **サイト（HTML/web）なら、ユーザーに「validateするか」を聞く**（後述「Validateは人間に聞く」）。
-    - 実施する場合のみ references/validator.md に従い点検する（静的 → 必要ならレンダリング実測）。
-    - PPTX・その他（参考Tier）は機械validateしない。生成方針とチェックリストの提示に留める。
-11. validate実施時に不合格があれば修正する。修正は最大2回まで。2回で不合格なら打ち切り、未解決項目を明示して報告する。
-12. 出力時に次を必ず記録する — 使用した箱と継承元／主要制約／validate実施の有無と結果／
-    **通さなかった工程とその理由**（例: 「工程2は与件が無く発案した」「実測validateは
-    ユーザーが skip を選んだ」）。**省略を黙って行わない**のが本 skill の報告契約。
-```
+1. 媒体を判定する。web以外は `own-pptx-build` など該当工場へ渡す。
+2. **生成前に毎回、`python3 <このskill>/scripts/preflight.py --repo <repo>` を実行する。**
+   この入口は同梱 `own-design-author` のL0を実行する。PATHの別配布を使う場合だけ
+   `DESIGN_AUTHOR_COMMAND` に単一の実行ファイルを指定できる。文字列をshell展開しない。
+   PythonはL0の既存依存環境を使い、必要なら `DESIGN_AUTHOR_PYTHON` で指定する。
+3. 終了コード2・起動失敗・結果不明なら生成しない。`design/` が無ければ
+   `own-design-author` を案内し、そこで定義を充填してL0を再実行する。1なら警告を記録して続行できる。
+4. `design/DESIGN.md` と L0 が今回生成した `design/.resolved/web.json` / CSS を読む。
+   DTCGを工場で再解決しない。倉庫・別のDESIGN.md・既定値から補完しない。
+5. 値の発案や参照が必要なら `own-design-author` へ戻す。指示された参照の権利確認は
+   `own-brand-resolve` の方針に従い、`proposed` と出所を `design/` に記録する。
+   ブランド値をAIが承認しない。
+6. `media/<media>/media.yaml` / `rules.md` と必要なassetを読み、
+   `references/context-composer.md` に従って生成する。媒体最低値はマニフェストを読む。
+7. 生成後の L1（`scripts/audit_html.py`）は確認せず毎回実行する。
+   描画の L2 は `references/validator.md` / `site-validation.md` に従い人間へ実施可否を確認する。
+   ブラウザ利用時は `own-browser-route` と `playwright-cli` を使う。
+8. 決定論の失格は修正して再検査する。修正は最大2回。失格や未実施が残れば準拠を名乗らない。
+9. 出力にL0/L1/L2の結果・提案値数・主要制約・未カバー規則・通さなかった工程と理由を残す。
+   フォールバック由来の値を発見したら欠陥として報告し、`design/` へ戻して修正する。
+
+## 参照ファイル
+
+- `references/architecture.md`: 正典と工場の境界。
+- `references/context-composer.md`: design/ と媒体制約の合成時に読む。
+- `references/validator.md`: L1/L2の実行と報告。
+- `references/site-validation.md`: L2実施時のブラウザ手順。
+- `references/media-spec.md`: 媒体を追加する場合だけ読む。
+- `media/<media>/` / `validators/common/`: 媒体の構造規約と点検項目。
 
 ## HTML出力前 必須チェックリスト（MUST — 毎回・例外なし）
 
@@ -98,8 +64,8 @@ landmark / SVGラベル / focus の欠落が頻発したため必須化）。主
     <title>…</title>
     <style>
       :focus-visible {
-        outline: 3px solid var(--color-primary, #0017c1);
-        outline-offset: 2px;
+        outline: var(--focus-width) solid var(--color-primary);
+        outline-offset: var(--focus-offset);
       }
     </style>
   </head>
@@ -118,31 +84,12 @@ landmark / SVGラベル / focus の欠落が頻発したため必須化）。主
 この MUST は**生成時に守る規律**であって、実測validate（後述）とは別。validateを実施しない場合でも
 MUSTは常に満たす。
 
-## Validateは人間に聞く（サイトのみ・コスト配慮）
+## 検査の実施境界
 
-サイト（HTML/web）を生成したら、実測validateを**勝手に走らせず、まずユーザーに聞く**。理由: レンダリング
-実測（ブラウザ起動）はコストがかかり、毎回自動でやると煩わしいため。次の3択を提示する:
-
-1. **静的チェック（軽量・ほぼ無コスト）** — `python3 scripts/audit_html.py <file>`（＋リンクCSSも追跡）。
-   lang / viewport / landmark / SVGラベル / focus-visible / リテラル色のコントラストを静的に判定。
-2. **レンダリング実測（コストあり）** — `playwright-cli` Skill でブラウザ起動し、
-   実際のcomputedスタイルでコントラスト・フォーカス可視・ランドマーク・（テーマ切替があれば）各テーマを実測。
-   ブラウザ操作は `browser-automation-policy` Skill に従う。詳細手順は `references/site-validation.md`。
-3. **skip** — 今回はvalidateしない（生成時MUSTは満たしている前提）。
-
-デフォルトの薦めは「まず1の静的、必要なら2のレンダリング実測」。ユーザーが明示的に「毎回自動でvalidateして」
-と言った場合に限り、都度確認を省いてよい。
-
-## 適用範囲とTier
-
-| 媒体                    | 対応         | 生成 | validate                   |
-| ----------------------- | ------------ | ---- | -------------------------- |
-| html / dashboard（web） | **完全対応** | ○    | ○（人間に聞いて静的/実測） |
-| pptx / スライド         | **対象外**   | ×    | ×                          |
-
-**pptx の「参考Tier」は廃止した**（2026-09-09）。方針だけ出せる状態が、
-「web 向けの依頼で pptx 用の実装が動く」経路を残していた。スライドは `own-pptx-build` が持ち、
-本 skill は媒体判定で web 以外と分かった時点で渡して止まる。
+L0とL1は確認せず必ず実行する。L2の描画検査だけ人間に実施可否を確認する。
+L2を省略した場合は「未実施」と報告し、静的検査だけで準拠を名乗らない。
+コントラスト・ターゲットサイズ等の値は解決済みマニフェストの媒体最低値を読む。
+このskillはweb専用。pptxの検査・生成は担当しない。
 
 ## Media Resolver（手順1の判断基準）
 
@@ -156,25 +103,15 @@ MUSTは常に満たす。
 `media/*/media.yaml` をスキャンして利用可能な媒体一覧を得る（ディレクトリ追加だけで増える）。
 現在あるのは `html` と `dashboard` の2つだけ。
 
-## 意匠の選択は倉庫が行う（本 skill は持たない）
-
-Plugin Resolver・`extends` の1階層解決・ライセンスゲートは **`own-brand-resolve`** が持つ。
-規則は `own-brand-resolve/references/resolver.md`。
-
-**ここに規則を再掲しない。** 再掲した時点で2実装になり、`extends` の解釈がズレる余地ができる
-（同一ブランドの値が2箇所で別物だった実測がこの決定の根拠）。
-
 ## 起動条件
 
 UIを作る / HTMLを作る / LPを作る / ダッシュボードを作る / web の見た目を整える /
 ブランドに沿ったサイトを作る — これらの依頼で起動する。
 
 **起動しない**: スライド・PPTX・提案資料（`own-pptx-build`）。意匠の値そのものの問い合わせ
-（`own-brand-resolve`）。
+（`own-design-author`。指示された参照元の問い合わせは `own-brand-resolve`）。
 
-## 失敗時のフォールバック
+## 前提検査が失敗した時
 
-- 倉庫が候補を1つも返さない → 既定方針（`references/architecture.md`）で生成し、
-  **意匠なしで生成した旨を明示する**（工程2(b) の発案として報告する）。
-- 倉庫の問い合わせ自体が失敗 → 参照なしで続行し、参照不可だった旨を報告する（生成全体は止めない）。
-- 検証ループ2回で不合格 → 手順11に従い打ち切り、未解決項目を添えて成果物とともに報告する。
+`design/` の欠落・L0失格・マニフェスト不在は `own-design-author` へ戻す。
+倉庫やRuntime既定値による代替生成はしない。生成後に見つけた既定値へのフォールバックも欠陥として報告する。

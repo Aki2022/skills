@@ -1,0 +1,688 @@
+{
+  "schema_version": 1,
+  "attempted_judgments": 610,
+  "batches": [
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "failed",
+      "duration_seconds": 0.396957,
+      "input_tokens": null,
+      "output_tokens": null,
+      "usage_derived_usd": null
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 1,
+      "status": "succeeded",
+      "duration_seconds": 0.211538,
+      "input_tokens": 1718,
+      "output_tokens": 307,
+      "usage_derived_usd": 7.2156e-05
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 9,
+      "status": "succeeded",
+      "duration_seconds": 0.27601,
+      "input_tokens": 14106,
+      "output_tokens": 2739,
+      "usage_derived_usd": 0.000592452
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.259235,
+      "input_tokens": 14854,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.0006238680000000001
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.2744,
+      "input_tokens": 16076,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.000675192
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 6,
+      "status": "succeeded",
+      "duration_seconds": 0.267415,
+      "input_tokens": 19936,
+      "output_tokens": 1827,
+      "usage_derived_usd": 0.000837312
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.301293,
+      "input_tokens": 21585,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.0009065700000000001
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 4,
+      "status": "failed",
+      "duration_seconds": 0.243308,
+      "input_tokens": 7646,
+      "output_tokens": 1219,
+      "usage_derived_usd": 0.000321132,
+      "failure_signature": "ClassificationError"
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 4,
+      "status": "succeeded",
+      "duration_seconds": 0.264031,
+      "input_tokens": 7646,
+      "output_tokens": 1219,
+      "usage_derived_usd": 0.000321132
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "failed",
+      "duration_seconds": 0.368581,
+      "input_tokens": 17888,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.000751296,
+      "failure_signature": "ClassificationError"
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.335602,
+      "input_tokens": 17888,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.000751296
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.278063,
+      "input_tokens": 17125,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.00071925
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.272879,
+      "input_tokens": 17353,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.000728826
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.2824,
+      "input_tokens": 17498,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.0007349160000000001
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.27451,
+      "input_tokens": 22026,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.0009250920000000001
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.299392,
+      "input_tokens": 20879,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.000876918
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.263822,
+      "input_tokens": 14809,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.000621978
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.259367,
+      "input_tokens": 15450,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.0006489000000000001
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.303174,
+      "input_tokens": 18095,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.00075999
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.265926,
+      "input_tokens": 15521,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.0006518820000000001
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.412893,
+      "input_tokens": 14576,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.000612192
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.523159,
+      "input_tokens": 16993,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.000713706
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.27571,
+      "input_tokens": 18547,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.0007789740000000001
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.313746,
+      "input_tokens": 17318,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.000727356
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.283566,
+      "input_tokens": 16147,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.0006781740000000001
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "failed",
+      "duration_seconds": 0.263618,
+      "input_tokens": 15533,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.0006523860000000001,
+      "failure_signature": "ClassificationError"
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.326534,
+      "input_tokens": 15533,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.0006523860000000001
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.284581,
+      "input_tokens": 14214,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.000596988
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.262645,
+      "input_tokens": 15078,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.0006332760000000001
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.282509,
+      "input_tokens": 19149,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.0008042580000000001
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.315912,
+      "input_tokens": 16964,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.000712488
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.272331,
+      "input_tokens": 16421,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.0006896820000000001
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.256734,
+      "input_tokens": 15436,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.0006483120000000001
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.273801,
+      "input_tokens": 15297,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.0006424740000000001
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.389915,
+      "input_tokens": 17251,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.000724542
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.318504,
+      "input_tokens": 20030,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.0008412600000000001
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.253977,
+      "input_tokens": 15945,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.00066969
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.275892,
+      "input_tokens": 22657,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.000951594
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.274073,
+      "input_tokens": 14838,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.000623196
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.251265,
+      "input_tokens": 15942,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.0006695640000000001
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.279988,
+      "input_tokens": 15484,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.000650328
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.251702,
+      "input_tokens": 14851,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.000623742
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.304033,
+      "input_tokens": 14590,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.00061278
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.757158,
+      "input_tokens": 16028,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.000673176
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "failed",
+      "duration_seconds": 0.465091,
+      "input_tokens": 18562,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.000779604,
+      "failure_signature": "ClassificationError",
+      "failure_diagnostics": [
+        {
+          "id": "dads-000381",
+          "type": "choice",
+          "choice_known": true,
+          "confidence": 0.21,
+          "probability_count": 16,
+          "probability_sum": 1.0000000000000002,
+          "chosen_probability": 0.26,
+          "max_probability": 0.26
+        },
+        {
+          "id": "dads-000382",
+          "type": "choice",
+          "choice_known": true,
+          "confidence": 0.58,
+          "probability_count": 16,
+          "probability_sum": 1.0,
+          "chosen_probability": 0.61,
+          "max_probability": 0.61
+        },
+        {
+          "id": "dads-000383",
+          "type": "choice",
+          "choice_known": true,
+          "confidence": 0.26,
+          "probability_count": 16,
+          "probability_sum": 1.0,
+          "chosen_probability": 0.31,
+          "max_probability": 0.31
+        },
+        {
+          "id": "dads-000384",
+          "type": "choice",
+          "choice_known": true,
+          "confidence": 0.71,
+          "probability_count": 16,
+          "probability_sum": 1.0,
+          "chosen_probability": 0.73,
+          "max_probability": 0.73
+        },
+        {
+          "id": "dads-000385",
+          "type": "choice",
+          "choice_known": true,
+          "confidence": 0.35,
+          "probability_count": 16,
+          "probability_sum": 1.0,
+          "chosen_probability": 0.38,
+          "max_probability": 0.39
+        },
+        {
+          "id": "dads-000386",
+          "type": "choice",
+          "choice_known": true,
+          "confidence": 0.26,
+          "probability_count": 16,
+          "probability_sum": 1.0,
+          "chosen_probability": 0.31,
+          "max_probability": 0.31
+        },
+        {
+          "id": "dads-000387",
+          "type": "choice",
+          "choice_known": true,
+          "confidence": 0.49,
+          "probability_count": 16,
+          "probability_sum": 1.0000000000000002,
+          "chosen_probability": 0.52,
+          "max_probability": 0.52
+        },
+        {
+          "id": "dads-000388",
+          "type": "choice",
+          "choice_known": true,
+          "confidence": 0.45,
+          "probability_count": 16,
+          "probability_sum": 1.0,
+          "chosen_probability": 0.48,
+          "max_probability": 0.48
+        },
+        {
+          "id": "dads-000389",
+          "type": "choice",
+          "choice_known": true,
+          "confidence": 0.51,
+          "probability_count": 16,
+          "probability_sum": 0.9900000000000002,
+          "chosen_probability": 0.54,
+          "max_probability": 0.54
+        },
+        {
+          "id": "dads-000390",
+          "type": "choice",
+          "choice_known": true,
+          "confidence": 0.4,
+          "probability_count": 16,
+          "probability_sum": 1.0,
+          "chosen_probability": 0.44,
+          "max_probability": 0.44
+        }
+      ]
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.341951,
+      "input_tokens": 18562,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.000779604
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.272531,
+      "input_tokens": 17101,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.0007182420000000001
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.325796,
+      "input_tokens": 18123,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.0007611660000000001
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.275212,
+      "input_tokens": 18449,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.000774858
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.281679,
+      "input_tokens": 17214,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.000722988
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.349696,
+      "input_tokens": 17699,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.0007433580000000001
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.634094,
+      "input_tokens": 18353,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.0007708260000000001
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.37719,
+      "input_tokens": 18930,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.0007950600000000001
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.31133,
+      "input_tokens": 24177,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.0010154340000000002
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.278946,
+      "input_tokens": 16955,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.0007121100000000001
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.346661,
+      "input_tokens": 18213,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.0007649460000000001
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.321559,
+      "input_tokens": 18928,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.000794976
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.363932,
+      "input_tokens": 18289,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.000768138
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.300188,
+      "input_tokens": 18702,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.000785484
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.301184,
+      "input_tokens": 20835,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.00087507
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.273634,
+      "input_tokens": 18834,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.000791028
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.251506,
+      "input_tokens": 14100,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.0005922000000000001
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "duration_seconds": 0.295546,
+      "input_tokens": 16019,
+      "output_tokens": 3043,
+      "usage_derived_usd": 0.000672798
+    },
+    {
+      "model": "jev-1.13.0",
+      "questions": 6,
+      "status": "succeeded",
+      "duration_seconds": 0.227236,
+      "input_tokens": 7773,
+      "output_tokens": 1827,
+      "usage_derived_usd": 0.00032646600000000003
+    }
+  ]
+}

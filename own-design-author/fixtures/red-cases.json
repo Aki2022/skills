@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "runner": "scripts/tests/test_core.py::test_five_required_red_cases",
+  "cases": [
+    {"id": "must-empty", "mutation": "remove must item evidence", "expected_exit": 2},
+    {"id": "approval-mismatch", "mutation": "change approval value_hash", "expected_exit": 2},
+    {"id": "relaxed-minimum", "mutation": "lower profile text_contrast below immutable floor", "expected_exit": 2},
+    {"id": "zero-target", "mutation": "empty catalog item population", "expected_exit": 2},
+    {"id": "unknown-id", "mutation": "add unregistered item id", "expected_exit": 2}
+  ]
+}

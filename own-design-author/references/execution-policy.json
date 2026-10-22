@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "classify": {"provider":"typesafe", "model":"jev-1.13.0", "max_judgments":2000},
+  "propose": {"tier":"sonnet", "generation_token_ceiling":100000, "enforcement":"workstream ledger; no automatic invocation"},
+  "l0": {"model":null, "network":false},
+  "l1": {"model":null},
+  "l2": {"model":null},
+  "review": {"policy":"own-output-eval", "automatic_invocation":false}
+}

@@ -1,0 +1,2836 @@
+{
+  "schema_version": 1,
+  "next_id": 567,
+  "entries": [
+    {
+      "id": "dads-000001",
+      "match_key": "[\"components/accordion/index.md\",[[2,\"ユースケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000002",
+      "match_key": "[\"components/accordion/index.md\",[[2,\"注意が必要なケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000003",
+      "match_key": "[\"components/accordion/index.md\",[[2,\"関連コンポーネント\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000004",
+      "match_key": "[\"components/accordion/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000005",
+      "match_key": "[\"components/accordion/index.md\",[[2,\"コンポーネント要素\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000006",
+      "match_key": "[\"components/accordion/index.md\",[[2,\"コンポーネント要素\",1],[3,\"サイズバリエーション\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000007",
+      "match_key": "[\"components/accordion/index.md\",[[2,\"コンポーネント要素\",1],[3,\"リターンリンクの使い方\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000008",
+      "match_key": "[\"components/accordion/index.md\",[[2,\"配置\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000009",
+      "match_key": "[\"components/accordion/index.md\",[[2,\"配置\",1],[3,\"良い例\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000010",
+      "match_key": "[\"components/accordion/index.md\",[[2,\"配置\",1],[3,\"悪い例\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000011",
+      "match_key": "[\"components/accordion/index.md\",[[2,\"コンテンツ\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000012",
+      "match_key": "[\"components/accordion/index.md\",[[2,\"コンテンツ\",1],[3,\"ヘッダーは概要文にする\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000013",
+      "match_key": "[\"components/accordion/index.md\",[[2,\"コンテンツ\",1],[3,\"ボディ内にはさまざまなコンポーネントを配置できる\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000014",
+      "match_key": "[\"components/accordion/index.md\",[[2,\"コンテンツ\",1],[3,\"リターンリンクのラベルはヘッダーと揃える\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000015",
+      "match_key": "[\"components/accordion/index.md\",[[2,\"ふるまい\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000016",
+      "match_key": "[\"components/accordion/index.md\",[[2,\"ふるまい\",1],[3,\"ページ読み込み時に開いておくか閉じておくかを設定する\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000017",
+      "match_key": "[\"components/accordion/index.md\",[[2,\"ふるまい\",1],[3,\"リターンリンクはヘッダーへのページ内リンクとする\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000018",
+      "match_key": "[\"components/accordion/index.md\",[[2,\"実装\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000019",
+      "match_key": "[\"components/accordion/index.md\",[[2,\"実装\",1],[3,\"details要素を使って実装する\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000020",
+      "match_key": "[\"components/accordion/index.md\",[[2,\"実装\",1],[3,\"カスタムコンポーネントとして実装する場合\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000021",
+      "match_key": "[\"components/blockquote/index.md\",[[2,\"ユースケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000022",
+      "match_key": "[\"components/blockquote/index.md\",[[2,\"注意が必要なケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000023",
+      "match_key": "[\"components/blockquote/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000024",
+      "match_key": "[\"components/bottom-navigation/index.md\",[[2,\"\\\\[エラー]このコンポーネントの使用は非推奨です（deprecated）\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000025",
+      "match_key": "[\"components/bottom-navigation/index.md\",[[2,\"本コンポーネントの非推奨理由\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000026",
+      "match_key": "[\"components/bottom-navigation/index.md\",[[2,\"関連コンポーネント\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000027",
+      "match_key": "[\"components/bottom-navigation/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000028",
+      "match_key": "[\"components/breadcrumb/index.md\",[[2,\"使い方\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000029",
+      "match_key": "[\"components/breadcrumb/index.md\",[[2,\"使い方\",1],[3,\"配置と仕様\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000030",
+      "match_key": "[\"components/breadcrumb/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000031",
+      "match_key": "[\"components/button/index.md\",[[2,\"仕様\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000032",
+      "match_key": "[\"components/button/index.md\",[[2,\"仕様\",1],[3,\"ボタンのサイズ（最小サイズの目安）\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000033",
+      "match_key": "[\"components/button/index.md\",[[2,\"仕様\",1],[3,\"ボタンの幅\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000034",
+      "match_key": "[\"components/button/index.md\",[[2,\"仕様\",1],[3,\"ボタンのターゲット領域\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000035",
+      "match_key": "[\"components/button/index.md\",[[2,\"使い方\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000036",
+      "match_key": "[\"components/button/index.md\",[[2,\"使い方\",1],[3,\"ボタンの重要度に合わせたスタイルの使用\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000037",
+      "match_key": "[\"components/button/index.md\",[[2,\"使い方\",1],[3,\"ボタン配置の考え方\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000038",
+      "match_key": "[\"components/button/index.md\",[[2,\"使い方\",1],[3,\"ボタンの配置と順序\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000039",
+      "match_key": "[\"components/button/index.md\",[[2,\"使い方\",1],[3,\"ボタンの無効化（disabled）における注意点\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000040",
+      "match_key": "[\"components/button/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000041",
+      "match_key": "[\"components/button/index.md\",[[2,\"コントラスト要件\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000042",
+      "match_key": "[\"components/button/index.md\",[[2,\"コントラスト要件\",1],[3,\"ボタンとラベルのコントラスト比\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000043",
+      "match_key": "[\"components/button/index.md\",[[2,\"コントラスト要件\",1],[3,\"ボタンと背景のコントラスト比\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000044",
+      "match_key": "[\"components/button/index.md\",[[2,\"コントラスト要件\",1],[3,\"参考情報\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000045",
+      "match_key": "[\"components/button/index.md\",[[2,\"ボタンの重要度を色の違いのみで区別しない\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000046",
+      "match_key": "[\"components/button/index.md\",[[2,\"ボタンの重要度を色の違いのみで区別しない\",1],[3,\"参考情報\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000047",
+      "match_key": "[\"components/button/index.md\",[[2,\"無効ボタン（disabled）はタブフォーカスでアクセスできない\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000048",
+      "match_key": "[\"components/button/index.md\",[[2,\"無効ボタン（disabled）はタブフォーカスでアクセスできない\",1],[3,\"aria-disabledを用いる際の注意点\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000049",
+      "match_key": "[\"components/button/index.md\",[[2,\"ページ遷移をもたらすボタンのhover時に指のカーソル（pointer）に変更する\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000050",
+      "match_key": "[\"components/button/index.md\",[[2,\"ページ遷移をもたらすボタンのhover時に指のカーソル（pointer）に変更する\",1],[3,\"参考情報\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000051",
+      "match_key": "[\"components/button/index.md\",[[2,\"ラベルがアイコンだけのボタンに代替テキストを必ず指定する\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000052",
+      "match_key": "[\"components/button/index.md\",[[2,\"ラベルがアイコンだけのボタンに代替テキストを必ず指定する\",1],[3,\"\\\\[インフォメーション]aria-labelを用いる際の注意点\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000053",
+      "match_key": "[\"components/button/index.md\",[[2,\"ラベルがアイコンだけのボタンに代替テキストを必ず指定する\",1],[3,\"参考情報\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000054",
+      "match_key": "[\"components/button/index.md\",[[2,\"ボタンのフォーカス順序と表示順序に気をつける\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000055",
+      "match_key": "[\"components/button/index.md\",[[2,\"ボタンのフォーカス順序と表示順序に気をつける\",1],[3,\"\\\\[警告]フォーカスの順序を変更することを目的としてtabindex属性を使わないでください\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000056",
+      "match_key": "[\"components/button/index.md\",[[2,\"ボタンのフォーカス順序と表示順序に気をつける\",1],[3,\"参考情報\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000057",
+      "match_key": "[\"components/button/index.md\",[[2,\"ターゲットサイズの確保\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000058",
+      "match_key": "[\"components/button/index.md\",[[2,\"ターゲットサイズの確保\",1],[3,\"参考情報\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000059",
+      "match_key": "[\"components/card/index.md\",[[2,\"ユースケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000060",
+      "match_key": "[\"components/card/index.md\",[[2,\"注意が必要なケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000061",
+      "match_key": "[\"components/card/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000062",
+      "match_key": "[\"components/card/index.md\",[[2,\"構成\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000063",
+      "match_key": "[\"components/card/index.md\",[[2,\"外観\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000064",
+      "match_key": "[\"components/card/index.md\",[[2,\"外観\",1],[3,\"背景色\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000065",
+      "match_key": "[\"components/card/index.md\",[[2,\"外観\",1],[3,\"外周\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000066",
+      "match_key": "[\"components/card/index.md\",[[2,\"外観\",1],[3,\"角の形状\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000067",
+      "match_key": "[\"components/card/index.md\",[[2,\"外観\",1],[3,\"エレベーション\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000068",
+      "match_key": "[\"components/card/index.md\",[[2,\"コンテンツ\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000069",
+      "match_key": "[\"components/card/index.md\",[[2,\"コンテンツ\",1],[3,\"メインエリア\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000070",
+      "match_key": "[\"components/card/index.md\",[[2,\"コンテンツ\",1],[3,\"イメージエリア\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000071",
+      "match_key": "[\"components/card/index.md\",[[2,\"コンテンツ\",1],[3,\"サブエリア\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000072",
+      "match_key": "[\"components/card/index.md\",[[2,\"ふるまい\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000073",
+      "match_key": "[\"components/card/index.md\",[[2,\"ふるまい\",1],[3,\"クリッカブルエリア\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000074",
+      "match_key": "[\"components/card/index.md\",[[2,\"テキストのみで構成されたカード\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000075",
+      "match_key": "[\"components/card/index.md\",[[2,\"画像とテキストの組み合わせのカード\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000076",
+      "match_key": "[\"components/card/index.md\",[[2,\"ダッシュボードのようなカード\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000077",
+      "match_key": "[\"components/card/index.md\",[[2,\"ボタンのようなカード\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000078",
+      "match_key": "[\"components/carousel/index.md\",[[2,\"ユースケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000079",
+      "match_key": "[\"components/carousel/index.md\",[[2,\"ユースケース\",1],[3,\"ウェブサイト自体を象徴するグラフィックをファーストビューで展開したいとき\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000080",
+      "match_key": "[\"components/carousel/index.md\",[[2,\"ユースケース\",1],[3,\"見出しをともなうトピックのコンテナとして使用するとき\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000081",
+      "match_key": "[\"components/carousel/index.md\",[[2,\"注意が必要なケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000082",
+      "match_key": "[\"components/carousel/index.md\",[[2,\"注意が必要なケース\",1],[3,\"きちんと読んで欲しい情報を格納しない\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000083",
+      "match_key": "[\"components/carousel/index.md\",[[2,\"注意が必要なケース\",1],[3,\"スライドを自動再生させない\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000084",
+      "match_key": "[\"components/carousel/index.md\",[[2,\"注意が必要なケース\",1],[3,\"複数の異なるトピックを同居させない\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000085",
+      "match_key": "[\"components/carousel/index.md\",[[2,\"注意が必要なケース\",1],[3,\"ユースケース以外の目的で使用しない\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000086",
+      "match_key": "[\"components/carousel/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000087",
+      "match_key": "[\"components/carousel/index.md\",[[2,\"カルーセルのタイプ\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000088",
+      "match_key": "[\"components/carousel/index.md\",[[2,\"カルーセルのタイプ\",1],[3,\"打ち出しタイプ\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000089",
+      "match_key": "[\"components/carousel/index.md\",[[2,\"カルーセルのタイプ\",1],[3,\"コンテナタイプ\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000090",
+      "match_key": "[\"components/carousel/index.md\",[[2,\"仕様\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000091",
+      "match_key": "[\"components/carousel/index.md\",[[2,\"仕様\",1],[3,\"ページ内でのカルーセル配置方法\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000092",
+      "match_key": "[\"components/carousel/index.md\",[[2,\"仕様\",1],[3,\"スライド画像の作り方\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000093",
+      "match_key": "[\"components/carousel/index.md\",[[2,\"マルチ\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000094",
+      "match_key": "[\"components/carousel/index.md\",[[2,\"マルチ\",1],[3,\"標準サイズ\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000095",
+      "match_key": "[\"components/carousel/index.md\",[[2,\"マルチ\",1],[3,\"幅狭サイズ\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000096",
+      "match_key": "[\"components/carousel/index.md\",[[2,\"マルチ\",1],[3,\"確保しているアクセシビリティ\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000097",
+      "match_key": "[\"components/carousel/index.md\",[[2,\"シングル\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000098",
+      "match_key": "[\"components/carousel/index.md\",[[2,\"シングル\",1],[3,\"コンポーネント要素\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000099",
+      "match_key": "[\"components/carousel/index.md\",[[2,\"シングル\",1],[3,\"基本的な仕様\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000100",
+      "match_key": "[\"components/carousel/index.md\",[[2,\"シングル\",1],[3,\"幅および画像のふるまい\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000101",
+      "match_key": "[\"components/carousel/index.md\",[[2,\"カルーセルを使用するべきかを慎重に検討する\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000102",
+      "match_key": "[\"components/carousel/index.md\",[[2,\"カルーセルが必要な場合は本コンポーネントを使用する\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000103",
+      "match_key": "[\"components/carousel/index.md\",[[2,\"カルーセルが必要な場合は本コンポーネントを使用する\",1],[3,\"参考情報\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000104",
+      "match_key": "[\"components/carousel/index.md\",[[2,\"スライド内のテキストを短くする\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000105",
+      "match_key": "[\"components/carousel/index.md\",[[2,\"スライドの数を少なくする\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000106",
+      "match_key": "[\"components/checkbox/index.md\",[[2,\"仕様\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000107",
+      "match_key": "[\"components/checkbox/index.md\",[[2,\"仕様\",1],[3,\"パーツ\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000108",
+      "match_key": "[\"components/checkbox/index.md\",[[2,\"使い方\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000109",
+      "match_key": "[\"components/checkbox/index.md\",[[2,\"使い方\",1],[3,\"設計の原則\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000110",
+      "match_key": "[\"components/checkbox/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000111",
+      "match_key": "[\"components/chip-label/index.md\",[[2,\"ユースケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000112",
+      "match_key": "[\"components/chip-label/index.md\",[[2,\"注意が必要なケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000113",
+      "match_key": "[\"components/chip-label/index.md\",[[2,\"関連コンポーネント\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000114",
+      "match_key": "[\"components/chip-label/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000115",
+      "match_key": "[\"components/chip-tag/index.md\",[[2,\"ユースケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000116",
+      "match_key": "[\"components/chip-tag/index.md\",[[2,\"注意が必要なケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000117",
+      "match_key": "[\"components/chip-tag/index.md\",[[2,\"関連コンポーネント\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000118",
+      "match_key": "[\"components/chip-tag/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000119",
+      "match_key": "[\"components/combobox/index.md\",[[2,\"ユースケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000120",
+      "match_key": "[\"components/combobox/index.md\",[[2,\"注意が必要なケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000121",
+      "match_key": "[\"components/combobox/index.md\",[[2,\"関連コンポーネント\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000122",
+      "match_key": "[\"components/combobox/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000123",
+      "match_key": "[\"components/date-picker/index.md\",[[2,\"ユースケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000124",
+      "match_key": "[\"components/date-picker/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000125",
+      "match_key": "[\"components/date-picker/index.md\",[[2,\"コンポーネント要素\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000126",
+      "match_key": "[\"components/date-picker/index.md\",[[2,\"コンポーネント要素\",1],[3,\"入力フィールド\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000127",
+      "match_key": "[\"components/date-picker/index.md\",[[2,\"コンポーネント要素\",1],[3,\"入力フィールド（エラー）\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000128",
+      "match_key": "[\"components/date-picker/index.md\",[[2,\"コンポーネント要素\",1],[3,\"カレンダー\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000129",
+      "match_key": "[\"components/date-picker/index.md\",[[2,\"外観\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000130",
+      "match_key": "[\"components/date-picker/index.md\",[[2,\"外観\",1],[3,\"入力フィールドの表示タイプ\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000131",
+      "match_key": "[\"components/date-picker/index.md\",[[2,\"外観\",1],[3,\"入力フィールドのカスタマイズ\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000132",
+      "match_key": "[\"components/date-picker/index.md\",[[2,\"外観\",1],[3,\"カレンダーを使用するとき\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000133",
+      "match_key": "[\"components/date-picker/index.md\",[[2,\"コンテンツ\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000134",
+      "match_key": "[\"components/date-picker/index.md\",[[2,\"コンテンツ\",1],[3,\"ラベル\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000135",
+      "match_key": "[\"components/date-picker/index.md\",[[2,\"コンテンツ\",1],[3,\"サポートテキスト\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000136",
+      "match_key": "[\"components/date-picker/index.md\",[[2,\"ふるまい\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000137",
+      "match_key": "[\"components/date-picker/index.md\",[[2,\"ふるまい\",1],[3,\"入力フィールド\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000138",
+      "match_key": "[\"components/date-picker/index.md\",[[2,\"ふるまい\",1],[3,\"入力フィールドのキーボード操作支援\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000139",
+      "match_key": "[\"components/date-picker/index.md\",[[2,\"ふるまい\",1],[3,\"カレンダー\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000140",
+      "match_key": "[\"components/date-picker/index.md\",[[2,\"`<select>`要素および`<input type=\\\"date\\\">`要素の使用を避ける\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000141",
+      "match_key": "[\"components/date-picker/index.md\",[[2,\"文脈に応じて`autocomplete`を使用する\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000142",
+      "match_key": "[\"components/date-picker/index.md\",[[2,\"文脈に応じて`autocomplete`を使用する\",1],[3,\"参考情報\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000143",
+      "match_key": "[\"components/description-list/index.md\",[[2,\"ユースケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000144",
+      "match_key": "[\"components/description-list/index.md\",[[2,\"注意が必要なケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000145",
+      "match_key": "[\"components/description-list/index.md\",[[2,\"関連コンポーネント\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000146",
+      "match_key": "[\"components/description-list/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000147",
+      "match_key": "[\"components/disclosure/index.md\",[[2,\"ユースケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000148",
+      "match_key": "[\"components/disclosure/index.md\",[[2,\"注意が必要なケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000149",
+      "match_key": "[\"components/disclosure/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000150",
+      "match_key": "[\"components/disclosure/index.md\",[[2,\"コンポーネント要素\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000151",
+      "match_key": "[\"components/disclosure/index.md\",[[2,\"コンポーネント要素\",1],[3,\"リターンリンクの使い方\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000152",
+      "match_key": "[\"components/disclosure/index.md\",[[2,\"配置\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000153",
+      "match_key": "[\"components/disclosure/index.md\",[[2,\"配置\",1],[3,\"良い例\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000154",
+      "match_key": "[\"components/disclosure/index.md\",[[2,\"配置\",1],[3,\"悪い例\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000155",
+      "match_key": "[\"components/disclosure/index.md\",[[2,\"コンテンツ\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000156",
+      "match_key": "[\"components/disclosure/index.md\",[[2,\"コンテンツ\",1],[3,\"タイトルは簡潔で説明的にする\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000157",
+      "match_key": "[\"components/disclosure/index.md\",[[2,\"コンテンツ\",1],[3,\"タイトルでアクションを示唆することは避ける\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000158",
+      "match_key": "[\"components/disclosure/index.md\",[[2,\"コンテンツ\",1],[3,\"開閉状態にかかわらずタイトルは一定にする\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000159",
+      "match_key": "[\"components/disclosure/index.md\",[[2,\"コンテンツ\",1],[3,\"リターンリンクのラベルはタイトルと揃える\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000160",
+      "match_key": "[\"components/disclosure/index.md\",[[2,\"ふるまい\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000161",
+      "match_key": "[\"components/disclosure/index.md\",[[2,\"ふるまい\",1],[3,\"リターンリンクはタイトルへのページ内リンクとする\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000162",
+      "match_key": "[\"components/disclosure/index.md\",[[2,\"実装\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000163",
+      "match_key": "[\"components/disclosure/index.md\",[[2,\"実装\",1],[3,\"`<details>`要素を使って実装する\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000164",
+      "match_key": "[\"components/disclosure/index.md\",[[2,\"実装\",1],[3,\"カスタムコンポーネントとして実装する場合\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000165",
+      "match_key": "[\"components/divider/index.md\",[[2,\"使い方\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000166",
+      "match_key": "[\"components/divider/index.md\",[[2,\"使い方\",1],[3,\"ディバイダータイプ\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000167",
+      "match_key": "[\"components/divider/index.md\",[[2,\"使い方\",1],[3,\"マージン\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000168",
+      "match_key": "[\"components/divider/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000169",
+      "match_key": "[\"components/drawer/index.md\",[[2,\"仕様\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000170",
+      "match_key": "[\"components/drawer/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000171",
+      "match_key": "[\"components/emergency-banner/index.md\",[[2,\"仕様\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000172",
+      "match_key": "[\"components/emergency-banner/index.md\",[[2,\"仕様\",1],[3,\"バナーのクリッカブルエリア\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000173",
+      "match_key": "[\"components/emergency-banner/index.md\",[[2,\"使い方\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000174",
+      "match_key": "[\"components/emergency-banner/index.md\",[[2,\"使い方\",1],[3,\"緊急時バナーの配置\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000175",
+      "match_key": "[\"components/emergency-banner/index.md\",[[2,\"使い方\",1],[3,\"緊急時バナーのタイトル\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000176",
+      "match_key": "[\"components/emergency-banner/index.md\",[[2,\"使い方\",1],[3,\"緊急時バナーを長期間に渡って掲示しない\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000177",
+      "match_key": "[\"components/emergency-banner/index.md\",[[2,\"使い方\",1],[3,\"緊急性の高い情報以外に使わない\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000178",
+      "match_key": "[\"components/emergency-banner/index.md\",[[2,\"使い方\",1],[3,\"長すぎるバナーデスクリプションを避ける\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000179",
+      "match_key": "[\"components/emergency-banner/index.md\",[[2,\"使い方\",1],[3,\"バナーデスクリプションの構成\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000180",
+      "match_key": "[\"components/emergency-banner/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000181",
+      "match_key": "[\"components/file-upload/index.md\",[[2,\"ユースケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000182",
+      "match_key": "[\"components/file-upload/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000183",
+      "match_key": "[\"components/file-upload/index.md\",[[2,\"外観\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000184",
+      "match_key": "[\"components/file-upload/index.md\",[[2,\"外観\",1],[3,\"コンポーネント要素：通常時（ファイル未選択）\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000185",
+      "match_key": "[\"components/file-upload/index.md\",[[2,\"外観\",1],[3,\"コンポーネント要素：ファイル選択時、エラー\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000186",
+      "match_key": "[\"components/file-upload/index.md\",[[2,\"ドラッグ＆ドロップの範囲の拡大\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000187",
+      "match_key": "[\"components/file-upload/index.md\",[[2,\"必ずファイル選択ボタンを配置し、ドロップエリアのみで展開しない\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000188",
+      "match_key": "[\"components/file-upload/index.md\",[[2,\"必ずファイル選択ボタンを配置し、ドロップエリアのみで展開しない\",1],[3,\"参考情報\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000189",
+      "match_key": "[\"components/hamburger-menu-button/index.md\",[[2,\"仕様\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000190",
+      "match_key": "[\"components/hamburger-menu-button/index.md\",[[2,\"仕様\",1],[3,\"デスクトップ・モバイル共通コンポーネント\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000191",
+      "match_key": "[\"components/hamburger-menu-button/index.md\",[[2,\"仕様\",1],[3,\"モバイル条件付きコンポーネント\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000192",
+      "match_key": "[\"components/hamburger-menu-button/index.md\",[[2,\"使い方\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000193",
+      "match_key": "[\"components/hamburger-menu-button/index.md\",[[2,\"使い方\",1],[3,\"配置\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000194",
+      "match_key": "[\"components/hamburger-menu-button/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000195",
+      "match_key": "[\"components/header-container/index.md\",[[2,\"仕様\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000196",
+      "match_key": "[\"components/header-container/index.md\",[[2,\"仕様\",1],[3,\"ワイド\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000197",
+      "match_key": "[\"components/header-container/index.md\",[[2,\"仕様\",1],[3,\"ミディアム\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000198",
+      "match_key": "[\"components/header-container/index.md\",[[2,\"仕様\",1],[3,\"コンパクト\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000199",
+      "match_key": "[\"components/header-container/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000200",
+      "match_key": "[\"components/heading/index.md\",[[2,\"ユースケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000201",
+      "match_key": "[\"components/heading/index.md\",[[2,\"注意が必要なケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000202",
+      "match_key": "[\"components/heading/index.md\",[[2,\"関連コンポーネント\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000203",
+      "match_key": "[\"components/heading/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000204",
+      "match_key": "[\"components/heading/index.md\",[[2,\"コンポーネント要素\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000205",
+      "match_key": "[\"components/heading/index.md\",[[2,\"仕様\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000206",
+      "match_key": "[\"components/heading/index.md\",[[2,\"見出しによる構造化\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000207",
+      "match_key": "[\"components/heading/index.md\",[[2,\"文字サイズとスタイル\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000208",
+      "match_key": "[\"components/heading/index.md\",[[2,\"ショルダーとサブタイトル\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000209",
+      "match_key": "[\"components/heading/index.md\",[[2,\"見出しレベルを飛ばさない\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000210",
+      "match_key": "[\"components/heading/index.md\",[[2,\"箇条書きリストと使い分ける\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000211",
+      "match_key": "[\"components/heading/index.md\",[[2,\"箇条書きリストと使い分ける\",1],[3,\"不適切な例\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000212",
+      "match_key": "[\"components/heading/index.md\",[[2,\"箇条書きリストと使い分ける\",1],[3,\"適切な例\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000213",
+      "match_key": "[\"components/heading/index.md\",[[2,\"箇条書きリストと使い分ける\",1],[3,\"関連コンポーネント\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000214",
+      "match_key": "[\"components/heading/index.md\",[[2,\"説明リストと使い分ける\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000215",
+      "match_key": "[\"components/heading/index.md\",[[2,\"説明リストと使い分ける\",1],[3,\"不適切な例\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000216",
+      "match_key": "[\"components/heading/index.md\",[[2,\"説明リストと使い分ける\",1],[3,\"適切な例\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000217",
+      "match_key": "[\"components/heading/index.md\",[[2,\"説明リストと使い分ける\",1],[3,\"関連コンポーネント\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000218",
+      "match_key": "[\"components/heading/index.md\",[[2,\"見出しを伴うコンポーネントを動的に挿入する場合に見出しのレベルをセクション構造に合わせる\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000219",
+      "match_key": "[\"components/heading/index.md\",[[2,\"無理に見出しを挿入しない\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000220",
+      "match_key": "[\"components/heading/index.md\",[[2,\"無理に見出しを挿入しない\",1],[3,\"参考情報\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000221",
+      "match_key": "[\"components/horizontal-menu/index.md\",[[2,\"\\\\[インフォメーション]名称変更について\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000222",
+      "match_key": "[\"components/horizontal-menu/index.md\",[[2,\"ユースケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000223",
+      "match_key": "[\"components/horizontal-menu/index.md\",[[2,\"注意が必要なケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000224",
+      "match_key": "[\"components/horizontal-menu/index.md\",[[2,\"関連コンポーネント\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000225",
+      "match_key": "[\"components/horizontal-menu/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000226",
+      "match_key": "[\"components/image/index.md\",[[2,\"ユースケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000227",
+      "match_key": "[\"components/image/index.md\",[[2,\"注意が必要なケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000228",
+      "match_key": "[\"components/image/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000229",
+      "match_key": "[\"components/input-text/index.md\",[[2,\"ユースケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000230",
+      "match_key": "[\"components/input-text/index.md\",[[2,\"関連コンポーネント\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000231",
+      "match_key": "[\"components/input-text/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000232",
+      "match_key": "[\"components/input-text/index.md\",[[2,\"外観\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000233",
+      "match_key": "[\"components/input-text/index.md\",[[2,\"外観\",1],[3,\"コンポーネント要素\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000234",
+      "match_key": "[\"components/input-text/index.md\",[[2,\"外観\",1],[3,\"サイズ\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000235",
+      "match_key": "[\"components/input-text/index.md\",[[2,\"外観\",1],[3,\"横幅\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000236",
+      "match_key": "[\"components/input-text/index.md\",[[2,\"外観\",1],[3,\"整列\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000237",
+      "match_key": "[\"components/input-text/index.md\",[[2,\"コンテンツ\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000238",
+      "match_key": "[\"components/input-text/index.md\",[[2,\"コンテンツ\",1],[3,\"要否ラベル\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000239",
+      "match_key": "[\"components/input-text/index.md\",[[2,\"コンテンツ\",1],[3,\"サポートテキスト\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000240",
+      "match_key": "[\"components/input-text/index.md\",[[2,\"コンテンツ\",1],[3,\"エラーテキスト\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000241",
+      "match_key": "[\"components/input-text/index.md\",[[2,\"コンテンツ\",1],[3,\"穴埋め文章ではなく、項目ごとに入力する\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000242",
+      "match_key": "[\"components/input-text/index.md\",[[2,\"入力値の文字種を限定しない\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000243",
+      "match_key": "[\"components/input-text/index.md\",[[2,\"プレースホルダーテキストを使わない\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000244",
+      "match_key": "[\"components/input-text/index.md\",[[2,\"無効フィールド（`disabled`）を使わない\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000245",
+      "match_key": "[\"components/input-text/index.md\",[[2,\"無効フィールド（`disabled`）を使わない\",1],[3,\"参考情報\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000246",
+      "match_key": "[\"components/input-text/index.md\",[[2,\"編集不可フィールド（`readonly`）を使わない\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000247",
+      "match_key": "[\"components/input-text/index.md\",[[2,\"編集不可フィールド（`readonly`）を使わない\",1],[3,\"編集不可フィールドが許容される場合\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000248",
+      "match_key": "[\"components/input-text/index.md\",[[2,\"編集不可フィールド（`readonly`）を使わない\",1],[3,\"編集不可フィールドを使う場合の留意点\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000249",
+      "match_key": "[\"components/input-text/index.md\",[[2,\"最大長の制限に`maxlength`属性を使用しない\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000250",
+      "match_key": "[\"components/input-text/index.md\",[[2,\"コピー＆ペーストを無効にしない\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000251",
+      "match_key": "[\"components/input-text/index.md\",[[2,\"コピー＆ペーストを無効にしない\",1],[3,\"参考情報\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000252",
+      "match_key": "[\"components/input-text/index.md\",[[2,\"メールアドレスの前半と後半を分割されたフィールドにしない\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000253",
+      "match_key": "[\"components/input-text/index.md\",[[2,\"メールアドレスの前半と後半を分割されたフィールドにしない\",1],[3,\"参考情報\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000254",
+      "match_key": "[\"components/input-text/index.md\",[[2,\"値の変更で予測できない変化を引き起こさない\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000255",
+      "match_key": "[\"components/input-text/index.md\",[[2,\"値の変更で予測できない変化を引き起こさない\",1],[3,\"参考情報\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000256",
+      "match_key": "[\"components/input-text/index.md\",[[2,\"エラーテキストの読み上げに`aria-live`を使わない\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000257",
+      "match_key": "[\"components/language-selector/index.md\",[[2,\"使い方\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000258",
+      "match_key": "[\"components/language-selector/index.md\",[[2,\"使い方\",1],[3,\"配置\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000259",
+      "match_key": "[\"components/language-selector/index.md\",[[2,\"使い方\",1],[3,\"言語表示\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000260",
+      "match_key": "[\"components/language-selector/index.md\",[[2,\"使い方\",1],[3,\"デザインスタイルのバリエーション\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000261",
+      "match_key": "[\"components/language-selector/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000262",
+      "match_key": "[\"components/list/index.md\",[[2,\"ユースケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000263",
+      "match_key": "[\"components/list/index.md\",[[2,\"注意が必要なケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000264",
+      "match_key": "[\"components/list/index.md\",[[2,\"関連コンポーネント\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000265",
+      "match_key": "[\"components/list/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000266",
+      "match_key": "[\"components/list/index.md\",[[2,\"リストマークタイプ\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000267",
+      "match_key": "[\"components/list/index.md\",[[2,\"リストマークタイプ\",1],[3,\"階層と表示\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000268",
+      "match_key": "[\"components/list/index.md\",[[2,\"項番タイプ\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000269",
+      "match_key": "[\"components/list/index.md\",[[2,\"項番タイプ\",1],[3,\"階層と表示\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000270",
+      "match_key": "[\"components/list/index.md\",[[2,\"項番タイプ\",1],[3,\"項番の記載\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000271",
+      "match_key": "[\"components/list/index.md\",[[2,\"リストアイテム間の間隔\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000272",
+      "match_key": "[\"components/list/index.md\",[[2,\"実装\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000273",
+      "match_key": "[\"components/list/index.md\",[[2,\"実装\",1],[3,\"`<ul>`要素および`<li>`要素を使って実装する\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000274",
+      "match_key": "[\"components/list/index.md\",[[2,\"箇条書きをテキストで表現せず、箇条書きリストを使う\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000275",
+      "match_key": "[\"components/list/index.md\",[[2,\"`<ol>`要素は使わず、`<ul>`要素として実装する\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000276",
+      "match_key": "[\"components/list/index.md\",[[2,\"適切な入れ子としてマークアップする\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000277",
+      "match_key": "[\"components/mega-menu/index.md\",[[2,\"ユースケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000278",
+      "match_key": "[\"components/mega-menu/index.md\",[[2,\"注意が必要なケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000279",
+      "match_key": "[\"components/mega-menu/index.md\",[[2,\"関連コンポーネント\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000280",
+      "match_key": "[\"components/mega-menu/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000281",
+      "match_key": "[\"components/menu-list-box/index.md\",[[2,\"使い方\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000282",
+      "match_key": "[\"components/menu-list-box/index.md\",[[2,\"使い方\",1],[3,\"表示位置\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000283",
+      "match_key": "[\"components/menu-list-box/index.md\",[[2,\"使い方\",1],[3,\"メニューリストボックスの開き方\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000284",
+      "match_key": "[\"components/menu-list-box/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000285",
+      "match_key": "[\"components/menu-list/index.md\",[[2,\"使い方\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000286",
+      "match_key": "[\"components/menu-list/index.md\",[[2,\"使い方\",1],[3,\"リンクの強調\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000287",
+      "match_key": "[\"components/menu-list/index.md\",[[2,\"使い方\",1],[3,\"CTA（Call‐to‐action）の挙動表示を明確に\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000288",
+      "match_key": "[\"components/menu-list/index.md\",[[2,\"使い方\",1],[3,\"セクションの明確化\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000289",
+      "match_key": "[\"components/menu-list/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000290",
+      "match_key": "[\"components/mobile-menu/index.md\",[[2,\"仕様\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000291",
+      "match_key": "[\"components/mobile-menu/index.md\",[[2,\"仕様\",1],[3,\"スタンダードタイプ\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000292",
+      "match_key": "[\"components/mobile-menu/index.md\",[[2,\"仕様\",1],[3,\"アコーディオンタイプ\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000293",
+      "match_key": "[\"components/mobile-menu/index.md\",[[2,\"使い方\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000294",
+      "match_key": "[\"components/mobile-menu/index.md\",[[2,\"使い方\",1],[3,\"メニューのユーザビリティ\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000295",
+      "match_key": "[\"components/mobile-menu/index.md\",[[2,\"使い方\",1],[3,\"リンクの強調\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000296",
+      "match_key": "[\"components/mobile-menu/index.md\",[[2,\"使い方\",1],[3,\"CTA（Call-to-action）の挙動表示を明確に\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000297",
+      "match_key": "[\"components/mobile-menu/index.md\",[[2,\"使い方\",1],[3,\"セクションの明確化\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000298",
+      "match_key": "[\"components/mobile-menu/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000299",
+      "match_key": "[\"components/modal-dialog/index.md\",[[2,\"ユースケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000300",
+      "match_key": "[\"components/modal-dialog/index.md\",[[2,\"注意が必要なケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000301",
+      "match_key": "[\"components/modal-dialog/index.md\",[[2,\"関連コンポーネント\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000302",
+      "match_key": "[\"components/modal-dialog/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000303",
+      "match_key": "[\"components/notice-block/index.md\",[[2,\"ユースケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000304",
+      "match_key": "[\"components/notice-block/index.md\",[[2,\"注意が必要なケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000305",
+      "match_key": "[\"components/notice-block/index.md\",[[2,\"関連コンポーネント\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000306",
+      "match_key": "[\"components/notice-block/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000307",
+      "match_key": "[\"components/notification-banner/index.md\",[[2,\"ノティフィケーションバナータイプ\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000308",
+      "match_key": "[\"components/notification-banner/index.md\",[[2,\"ノティフィケーションバナータイプ\",1],[3,\"サクセス\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000309",
+      "match_key": "[\"components/notification-banner/index.md\",[[2,\"ノティフィケーションバナータイプ\",1],[3,\"エラー\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000310",
+      "match_key": "[\"components/notification-banner/index.md\",[[2,\"ノティフィケーションバナータイプ\",1],[3,\"警告\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000311",
+      "match_key": "[\"components/notification-banner/index.md\",[[2,\"ノティフィケーションバナータイプ\",1],[3,\"情報提示(Info)のタイプ\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000312",
+      "match_key": "[\"components/notification-banner/index.md\",[[2,\"ノティフィケーションバナータイプ\",1],[3,\"デザインスタイル\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000313",
+      "match_key": "[\"components/notification-banner/index.md\",[[2,\"仕様\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000314",
+      "match_key": "[\"components/notification-banner/index.md\",[[2,\"仕様\",1],[3,\"ノティフィケーションバナーのパーツ\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000315",
+      "match_key": "[\"components/notification-banner/index.md\",[[2,\"仕様\",1],[3,\"ノティフィケーションバナーのリンクやアクション\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000316",
+      "match_key": "[\"components/notification-banner/index.md\",[[2,\"仕様\",1],[3,\"ノティフィケーションバナーにリンクがある場合\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000317",
+      "match_key": "[\"components/notification-banner/index.md\",[[2,\"使い方\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000318",
+      "match_key": "[\"components/notification-banner/index.md\",[[2,\"使い方\",1],[3,\"ノティフィケーションバナーの配置場所\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000319",
+      "match_key": "[\"components/notification-banner/index.md\",[[2,\"使い方\",1],[3,\"スタイルのバリエーション\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000320",
+      "match_key": "[\"components/notification-banner/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000321",
+      "match_key": "[\"components/page-navigation/index.md\",[[2,\"ユースケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000322",
+      "match_key": "[\"components/page-navigation/index.md\",[[2,\"注意が必要なケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000323",
+      "match_key": "[\"components/page-navigation/index.md\",[[2,\"関連コンポーネント\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000324",
+      "match_key": "[\"components/page-navigation/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000325",
+      "match_key": "[\"components/progress-indicator/index.md\",[[2,\"ユースケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000326",
+      "match_key": "[\"components/progress-indicator/index.md\",[[2,\"注意が必要なケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000327",
+      "match_key": "[\"components/progress-indicator/index.md\",[[2,\"関連コンポーネント\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000328",
+      "match_key": "[\"components/progress-indicator/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000329",
+      "match_key": "[\"components/radio/index.md\",[[2,\"仕様\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000330",
+      "match_key": "[\"components/radio/index.md\",[[2,\"仕様\",1],[3,\"パーツ\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000331",
+      "match_key": "[\"components/radio/index.md\",[[2,\"使い方\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000332",
+      "match_key": "[\"components/radio/index.md\",[[2,\"使い方\",1],[3,\"設計の原則\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000333",
+      "match_key": "[\"components/radio/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000334",
+      "match_key": "[\"components/resource-list/index.md\",[[2,\"ユースケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000335",
+      "match_key": "[\"components/resource-list/index.md\",[[2,\"注意が必要なケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000336",
+      "match_key": "[\"components/resource-list/index.md\",[[2,\"関連コンポーネント\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000337",
+      "match_key": "[\"components/resource-list/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000338",
+      "match_key": "[\"components/scroll-top-button/index.md\",[[2,\"\\\\[エラー]このコンポーネントの使用は非推奨です（deprecated）\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000339",
+      "match_key": "[\"components/scroll-top-button/index.md\",[[2,\"本コンポーネントの非推奨理由\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000340",
+      "match_key": "[\"components/scroll-top-button/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000341",
+      "match_key": "[\"components/search-box/index.md\",[[2,\"ユースケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000342",
+      "match_key": "[\"components/search-box/index.md\",[[2,\"注意が必要なケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000343",
+      "match_key": "[\"components/search-box/index.md\",[[2,\"関連コンポーネント\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000344",
+      "match_key": "[\"components/search-box/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000345",
+      "match_key": "[\"components/select/index.md\",[[2,\"仕様\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000346",
+      "match_key": "[\"components/select/index.md\",[[2,\"仕様\",1],[3,\"パーツ\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000347",
+      "match_key": "[\"components/select/index.md\",[[2,\"仕様\",1],[3,\"オプションリストの実装\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000348",
+      "match_key": "[\"components/select/index.md\",[[2,\"使い方\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000349",
+      "match_key": "[\"components/select/index.md\",[[2,\"使い方\",1],[3,\"設計の原則\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000350",
+      "match_key": "[\"components/select/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000351",
+      "match_key": "[\"components/step-navigation/index.md\",[[2,\"ユースケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000352",
+      "match_key": "[\"components/step-navigation/index.md\",[[2,\"注意が必要なケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000353",
+      "match_key": "[\"components/step-navigation/index.md\",[[2,\"関連コンポーネント\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000354",
+      "match_key": "[\"components/step-navigation/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000355",
+      "match_key": "[\"components/switch/index.md\",[[2,\"ユースケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000356",
+      "match_key": "[\"components/switch/index.md\",[[2,\"注意が必要なケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000357",
+      "match_key": "[\"components/switch/index.md\",[[2,\"関連コンポーネント\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000358",
+      "match_key": "[\"components/switch/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000359",
+      "match_key": "[\"components/tab/index.md\",[[2,\"ユースケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000360",
+      "match_key": "[\"components/tab/index.md\",[[2,\"注意が必要なケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000361",
+      "match_key": "[\"components/tab/index.md\",[[2,\"関連コンポーネント\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000362",
+      "match_key": "[\"components/tab/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000363",
+      "match_key": "[\"components/table-control/index.md\",[[2,\"ユースケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000364",
+      "match_key": "[\"components/table-control/index.md\",[[2,\"注意が必要なケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000365",
+      "match_key": "[\"components/table-control/index.md\",[[2,\"関連コンポーネント\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000366",
+      "match_key": "[\"components/table-control/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000367",
+      "match_key": "[\"components/table/index.md\",[[2,\"ユースケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000368",
+      "match_key": "[\"components/table/index.md\",[[2,\"注意が必要なケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000369",
+      "match_key": "[\"components/table/index.md\",[[2,\"関連コンポーネント\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000370",
+      "match_key": "[\"components/table/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000371",
+      "match_key": "[\"components/table/index.md\",[[2,\"コンポーネント要素\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000372",
+      "match_key": "[\"components/table/index.md\",[[2,\"外観\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000373",
+      "match_key": "[\"components/table/index.md\",[[2,\"外観\",1],[3,\"サイズ\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000374",
+      "match_key": "[\"components/table/index.md\",[[2,\"外観\",1],[3,\"テーブルヘッダー、ヘッダーセル\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000375",
+      "match_key": "[\"components/table/index.md\",[[2,\"外観\",1],[3,\"セルの結合\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000376",
+      "match_key": "[\"components/table/index.md\",[[2,\"外観\",1],[3,\"テキストの配置\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000377",
+      "match_key": "[\"components/table/index.md\",[[2,\"外観\",1],[3,\"ストライプ表示\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000378",
+      "match_key": "[\"components/table/index.md\",[[2,\"外観\",1],[3,\"テーブルの幅がコンテンツ幅よりも大きい場合\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000379",
+      "match_key": "[\"components/table/index.md\",[[2,\"コンテンツ\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000380",
+      "match_key": "[\"components/table/index.md\",[[2,\"コンテンツ\",1],[3,\"テキスト\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000381",
+      "match_key": "[\"components/table/index.md\",[[2,\"コンテンツ\",1],[3,\"リンク\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000382",
+      "match_key": "[\"components/table/index.md\",[[2,\"ふるまい\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000383",
+      "match_key": "[\"components/table/index.md\",[[2,\"ふるまい\",1],[3,\"ホバーハイライト\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000384",
+      "match_key": "[\"components/table/index.md\",[[2,\"ふるまい\",1],[3,\"行の選択\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000385",
+      "match_key": "[\"components/table/index.md\",[[2,\"ふるまい\",1],[3,\"アクションを持つテーブルヘッダー\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000386",
+      "match_key": "[\"components/table/index.md\",[[2,\"シンプルな構造で作る\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000387",
+      "match_key": "[\"components/table/index.md\",[[2,\"シンプルな構造で作る\",1],[3,\"例1（複雑なテーブル）\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000388",
+      "match_key": "[\"components/table/index.md\",[[2,\"シンプルな構造で作る\",1],[3,\"例2（シンプルなテーブル）\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000389",
+      "match_key": "[\"components/table/index.md\",[[2,\"シンプルな構造で作る\",1],[3,\"例3（複雑なテーブル）\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000390",
+      "match_key": "[\"components/table/index.md\",[[2,\"シンプルな構造で作る\",1],[3,\"例4（シンプルなテーブル）\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000391",
+      "match_key": "[\"components/table/index.md\",[[2,\"シンプルな構造で作る\",1],[3,\"例5（複雑なテーブル）\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000392",
+      "match_key": "[\"components/table/index.md\",[[2,\"シンプルな構造で作る\",1],[3,\"例6（シンプルなテーブル）\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000393",
+      "match_key": "[\"components/table/index.md\",[[2,\"シンプルな構造で作る\",1],[3,\"例7（シンプルなデータテーブル）\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000394",
+      "match_key": "[\"components/textarea/index.md\",[[2,\"仕様\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000395",
+      "match_key": "[\"components/textarea/index.md\",[[2,\"仕様\",1],[3,\"パーツ\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000396",
+      "match_key": "[\"components/textarea/index.md\",[[2,\"使い方\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000397",
+      "match_key": "[\"components/textarea/index.md\",[[2,\"使い方\",1],[3,\"設計の原則\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000398",
+      "match_key": "[\"components/textarea/index.md\",[[2,\"使い方\",1],[3,\"文字数に制限がある場合\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000399",
+      "match_key": "[\"components/textarea/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000400",
+      "match_key": "[\"components/toc/index.md\",[[2,\"ユースケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000401",
+      "match_key": "[\"components/toc/index.md\",[[2,\"注意が必要なケース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000402",
+      "match_key": "[\"components/toc/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000403",
+      "match_key": "[\"components/utility-link/index.md\",[[2,\"使い方\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000404",
+      "match_key": "[\"components/utility-link/index.md\",[[2,\"使い方\",1],[3,\"配置\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000405",
+      "match_key": "[\"components/utility-link/index.md\",[[2,\"使い方\",1],[3,\"参考例\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000406",
+      "match_key": "[\"components/utility-link/index.md\",[[2,\"各種リソース\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000407",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"キーカラー\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000408",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"キーカラー\",1],[3,\"プライマリーカラー\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000409",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"キーカラー\",1],[3,\"セカンダリーカラー\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000410",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"キーカラー\",1],[3,\"ターシャリーカラー\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000411",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"キーカラー\",1],[3,\"バックグラウンドカラー\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000412",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"キーカラー\",1],[3,\"キーカラーの例\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000413",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"共通カラー\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000414",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"機能カラー\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000415",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"機能カラー\",1],[3,\"リンクカラー\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000416",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"機能カラー\",1],[3,\"フォーカスカラー\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000417",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"機能カラー\",1],[3,\"検索ハイライトカラー\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000418",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"機能カラー\",1],[3,\"UIのステートカラーとスタイル\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000419",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"アクセントカラー\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000420",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"アクセントカラー\",1],[3,\"プリミティブカラーを用いたアクセントカラーの例\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000421",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"セマンティックカラー\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000422",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"セマンティックカラー\",1],[3,\"サクセス（Success）\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000423",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"セマンティックカラー\",1],[3,\"エラー（Error）\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000424",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"セマンティックカラー\",1],[3,\"警告（Warning）\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000425",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"プリミティブカラー\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000426",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"プリミティブカラー\",1],[3,\"青（Blue）\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000427",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"プリミティブカラー\",1],[3,\"ライトブルー（Light Blue）\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000428",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"プリミティブカラー\",1],[3,\"シアン（Cyan）\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000429",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"プリミティブカラー\",1],[3,\"緑（Green）\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000430",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"プリミティブカラー\",1],[3,\"ライム（Lime）\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000431",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"プリミティブカラー\",1],[3,\"黄（Yellow）\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000432",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"プリミティブカラー\",1],[3,\"オレンジ（Orange）\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000433",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"プリミティブカラー\",1],[3,\"赤（Red）\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000434",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"プリミティブカラー\",1],[3,\"マゼンタ（Magenta）\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000435",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"プリミティブカラー\",1],[3,\"紫（Purple）\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000436",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"ニュートラルカラー\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000437",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"ニュートラルカラー\",1],[3,\"ホワイト（White）\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000438",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"ニュートラルカラー\",1],[3,\"ブラック（Black）\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000439",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"ニュートラルカラー\",1],[3,\"グレー（Gray）\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000440",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"コントラスト要件\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000441",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"コントラスト要件\",1],[3,\"1.4.3 コントラスト（最低限）（レベルAA） JIS2016 WCAG2.2\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000442",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"コントラスト要件\",1],[3,\"1.4.6 コントラスト（高度）（レベルAAA） JIS2016 WCAG2.2\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000443",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"コントラスト要件\",1],[3,\"1.4.11 非テキストのコントラスト（レベルAA） WCAG2.2\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000444",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"コントラスト要件\",1],[3,\"参考情報\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000445",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"ブランドカラーがコントラスト要件を満たさない場合における、キーカラーの決定方法について\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000446",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"前景色（テキストのカラー）と背景色の両方を指定する\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000447",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"前景色（テキストのカラー）と背景色の両方を指定する\",1],[3,\"参考情報\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000448",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"色覚多様性への配慮\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000449",
+      "match_key": "[\"foundations/color/index.md\",[[2,\"色覚多様性への配慮\",1],[3,\"参考情報\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000450",
+      "match_key": "[\"foundations/corner-shapes/index.md\",[[2,\"角の形状とサイズ\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000451",
+      "match_key": "[\"foundations/corner-shapes/index.md\",[[2,\"角の形状の違いによる強調表現\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000452",
+      "match_key": "[\"foundations/corner-shapes/index.md\",[[2,\"全体的な角丸と部分的な角丸\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000453",
+      "match_key": "[\"foundations/elevation/index.md\",[[2,\"エレベーションの表現\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000454",
+      "match_key": "[\"foundations/elevation/index.md\",[[2,\"エレベーションの表現\",1],[3,\"ドロップシャドウ\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000455",
+      "match_key": "[\"foundations/elevation/index.md\",[[2,\"エレベーションの表現\",1],[3,\"オーバーレイシェード\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000456",
+      "match_key": "[\"foundations/elevation/index.md\",[[2,\"ドロップシャドウとエレベーション\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000457",
+      "match_key": "[\"foundations/elevation/index.md\",[[2,\"ドロップシャドウとエレベーション\",1],[3,\"\\\\[警告]ドロップシャドウでコントラスト比を確保することはできません\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000458",
+      "match_key": "[\"foundations/elevation/index.md\",[[2,\"高さレベルの高低差\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000459",
+      "match_key": "[\"foundations/elevation/index.md\",[[2,\"高さレベルの高低差\",1],[3,\"高さレベルの高低差を広く取った場合\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000460",
+      "match_key": "[\"foundations/elevation/index.md\",[[2,\"高さレベルの高低差\",1],[3,\"高さのレベルの高低差を狭くとった場合\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000461",
+      "match_key": "[\"foundations/elevation/index.md\",[[2,\"固有の高さのレベル\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000462",
+      "match_key": "[\"foundations/elevation/index.md\",[[2,\"固有の高さのレベル\",1],[3,\"立体感のあるコンポーネントの場合\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000463",
+      "match_key": "[\"foundations/elevation/index.md\",[[2,\"固有の高さのレベル\",1],[3,\"Hover時の高さのレベルを確保する場合\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000464",
+      "match_key": "[\"foundations/elevation/index.md\",[[2,\"オーバーレイの高さレベル\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000465",
+      "match_key": "[\"foundations/elevation/index.md\",[[2,\"オーバーレイの高さレベル\",1],[3,\"もともとオーバーレイ（浮いているように）表示されるコンポーネントの高さレベル\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000466",
+      "match_key": "[\"foundations/elevation/index.md\",[[2,\"高さレベルの基準\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000467",
+      "match_key": "[\"foundations/elevation/index.md\",[[2,\"高さレベルの基準\",1],[3,\"基準の可変性\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000468",
+      "match_key": "[\"foundations/elevation/index.md\",[[2,\"高さレベルの基準\",1],[3,\"基準とドロップシャドウのスタイル\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000469",
+      "match_key": "[\"foundations/elevation/index.md\",[[2,\"オーバーレイシェードの高さレベル\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000470",
+      "match_key": "[\"foundations/elevation/index.md\",[[2,\"オーバーレイシェードの高さレベル\",1],[3,\"オーバーレイシェードによる高さレベルのリセット\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000471",
+      "match_key": "[\"foundations/elevation/index.md\",[[2,\"オーバーレイシェードの高さレベル\",1],[3,\"オーバーレイシェードの高さレベル\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000472",
+      "match_key": "[\"foundations/elevation/index.md\",[[2,\"オーバーレイシェードに対する簡易非表示（Light Dismiss）の操作について\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000473",
+      "match_key": "[\"foundations/elevation/index.md\",[[2,\"ダークモードのエレベーション\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000474",
+      "match_key": "[\"foundations/elevation/index.md\",[[2,\"オーバーレイシェードの上に表示される要素であっても必ずボーダーをつける\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000475",
+      "match_key": "[\"foundations/icon/index.md\",[[2,\"種類の定義\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000476",
+      "match_key": "[\"foundations/icon/index.md\",[[2,\"種類の定義\",1],[3,\"ブロックレベルボックスのアイコン\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000477",
+      "match_key": "[\"foundations/icon/index.md\",[[2,\"種類の定義\",1],[3,\"行ボックスのアイコン\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000478",
+      "match_key": "[\"foundations/icon/index.md\",[[2,\"アイコンはラベルと組み合わせて使う\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000479",
+      "match_key": "[\"foundations/icon/index.md\",[[2,\"アイコンはラベルと組み合わせて使う\",1],[3,\"ラベルと組み合わせたアイコンの代替テキスト\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000480",
+      "match_key": "[\"foundations/icon/index.md\",[[2,\"アイコンはラベルと組み合わせて使う\",1],[3,\"ラベルがリンクの場合のリンクの範囲\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000481",
+      "match_key": "[\"foundations/icon/index.md\",[[2,\"アイコンはラベルと組み合わせて使う\",1],[3,\"事情によりアイコン単体で使用しなければならない場合\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000482",
+      "match_key": "[\"foundations/icon/index.md\",[[2,\"アイコンの色は、背景色に対してコントラスト比4.5:1以上を確保する\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000483",
+      "match_key": "[\"foundations/layout/index.md\",[[2,\"グリッドシステム\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000484",
+      "match_key": "[\"foundations/layout/index.md\",[[2,\"グリッドシステム\",1],[3,\"基本的なグリッドシステム\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000485",
+      "match_key": "[\"foundations/layout/index.md\",[[2,\"ブレークポイント\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000486",
+      "match_key": "[\"foundations/layout/index.md\",[[2,\"ブレークポイント\",1],[3,\"ブレークポイントの設定例\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000487",
+      "match_key": "[\"foundations/layout/index.md\",[[2,\"グリッドを基本としたレイアウト\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000488",
+      "match_key": "[\"foundations/layout/index.md\",[[2,\"グリッドを基本としたレイアウト\",1],[3,\"1カラムレイアウト\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000489",
+      "match_key": "[\"foundations/layout/index.md\",[[2,\"グリッドを基本としたレイアウト\",1],[3,\"2カラムレイアウト\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000490",
+      "match_key": "[\"foundations/layout/index.md\",[[2,\"グリッドを基本としたレイアウト\",1],[3,\"3カラムレイアウト\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000491",
+      "match_key": "[\"foundations/layout/index.md\",[[2,\"グリッドを基本としたレイアウト\",1],[3,\"4カラムレイアウト\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000492",
+      "match_key": "[\"foundations/layout/index.md\",[[2,\"グリッドを基本としたレイアウト\",1],[3,\"カラムオフセット\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000493",
+      "match_key": "[\"foundations/layout/index.md\",[[2,\"リキッドレイアウトを採用する\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000494",
+      "match_key": "[\"foundations/layout/index.md\",[[2,\"リキッドレイアウトを採用する\",1],[3,\"参考情報\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000495",
+      "match_key": "[\"foundations/layout/index.md\",[[2,\"視覚的な要素の配置と読み上げ順序をできるだけ一致させる\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000496",
+      "match_key": "[\"foundations/layout/index.md\",[[2,\"視覚的な要素の配置と読み上げ順序をできるだけ一致させる\",1],[3,\"参考情報\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000497",
+      "match_key": "[\"foundations/link-text/index.md\",[[3,\"\\\\[インフォメーション]内部リンクと外部リンクの違い\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000498",
+      "match_key": "[\"foundations/link-text/index.md\",[[2,\"リンクテキストの基本構造\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000499",
+      "match_key": "[\"foundations/link-text/index.md\",[[2,\"リンクカラー（リンクテキストの色）\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000500",
+      "match_key": "[\"foundations/link-text/index.md\",[[2,\"リンクのステート\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000501",
+      "match_key": "[\"foundations/link-text/index.md\",[[2,\"新規タブを開くリンク、ウェブページ以外へのリンク\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000502",
+      "match_key": "[\"foundations/link-text/index.md\",[[2,\"リンクの目的を明確にする\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000503",
+      "match_key": "[\"foundations/link-text/index.md\",[[2,\"リンクの目的を明確にする\",1],[3,\"参考情報\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000504",
+      "match_key": "[\"foundations/link-text/index.md\",[[2,\"「ここ」や「こちら」をリンクテキストにしない\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000505",
+      "match_key": "[\"foundations/link-text/index.md\",[[2,\"「ここ」や「こちら」をリンクテキストにしない\",1],[3,\"参考情報\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000506",
+      "match_key": "[\"foundations/link-text/index.md\",[[2,\"ターゲットサイズの確保\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000507",
+      "match_key": "[\"foundations/link-text/index.md\",[[2,\"ターゲットサイズの確保\",1],[3,\"参考情報\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000508",
+      "match_key": "[\"foundations/spacing/index.md\",[[2,\"余白の機能\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000509",
+      "match_key": "[\"foundations/spacing/index.md\",[[2,\"余白の種類\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000510",
+      "match_key": "[\"foundations/spacing/index.md\",[[2,\"余白の種類\",1],[3,\"パディング\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000511",
+      "match_key": "[\"foundations/spacing/index.md\",[[2,\"余白の種類\",1],[3,\"マージン\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000512",
+      "match_key": "[\"foundations/spacing/index.md\",[[2,\"余白のルールの考え方\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000513",
+      "match_key": "[\"foundations/spacing/index.md\",[[2,\"余白ルールの例\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000514",
+      "match_key": "[\"foundations/spacing/index.md\",[[2,\"余白ルールの例\",1],[3,\"余白スケールの適用例\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000515",
+      "match_key": "[\"foundations/spacing/index.md\",[[2,\"余白ルールの例\",1],[3,\"余白による関係性の明示\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000516",
+      "match_key": "[\"foundations/spacing/index.md\",[[2,\"余白ルールの例\",1],[3,\"余白による階層の明示\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000517",
+      "match_key": "[\"foundations/spacing/index.md\",[[2,\"空白や両端揃えを使ってレイアウトを調整しない\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000518",
+      "match_key": "[\"foundations/spacing/index.md\",[[2,\"空白や両端揃えを使ってレイアウトを調整しない\",1],[3,\"参考情報\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000519",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"フォントファミリー（`font-family`）\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000520",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"フォントファミリー（`font-family`）\",1],[3,\"CSSの記述例\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000521",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"フォントファミリー（`font-family`）\",1],[3,\"HTMLの記述例（Google Fontsを利用する場合）\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000522",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"書体の太さ（`font-weight`）\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000523",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"書体の太さ（`font-weight`）\",1],[3,\"太さレベルについて\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000524",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"書体の大きさ（`font-size`）\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000525",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"行ボックスの高さ（`line-height`）\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000526",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"行ボックスの高さ（`line-height`）\",1],[3,\"行高の定義\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000527",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"テキストスタイル名の構成\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000528",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"テキストスタイルの種類\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000529",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"テキストスタイルの種類\",1],[3,\"Display (Dsp)\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000530",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"テキストスタイルの種類\",1],[3,\"Standard (Std)\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000531",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"テキストスタイルの種類\",1],[3,\"Dense (Dns)\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000532",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"テキストスタイルの種類\",1],[3,\"Oneline (Oln)\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000533",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"テキストスタイルの種類\",1],[3,\"Mono\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000534",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"その他の書式スタイル\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000535",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"その他の書式スタイル\",1],[3,\"イタリック\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000536",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"その他の書式スタイル\",1],[3,\"ルビ\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000537",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"テキスト装飾\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000538",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"テキスト装飾\",1],[3,\"テキスト装飾の種類（`text-decoration-line`）\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000539",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"テキスト装飾\",1],[3,\"スタイル（`text-decoration-style`）\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000540",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"テキスト装飾\",1],[3,\"線の色（`text-decoration-color`）と太さ（`text-decoration-thickness`）\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000541",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"Display (Dsp)\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000542",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"Display (Dsp)\",1],[3,\"Bold\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000543",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"Display (Dsp)\",1],[3,\"Normal\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000544",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"Standard (Std)\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000545",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"Standard (Std)\",1],[3,\"Bold\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000546",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"Standard (Std)\",1],[3,\"Normal\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000547",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"Dense (Dns)\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000548",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"Dense (Dns)\",1],[3,\"Bold\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000549",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"Dense (Dns)\",1],[3,\"Normal\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000550",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"Oneline (Oln)\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000551",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"Oneline (Oln)\",1],[3,\"Bold\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000552",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"Oneline (Oln)\",1],[3,\"Normal\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000553",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"Mono\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000554",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"Mono\",1],[3,\"Bold\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000555",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"Mono\",1],[3,\"Normal\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000556",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"閲覧者による表示フォントの変更\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000557",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"閲覧者による表示フォントの変更\",1],[3,\"参考情報\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000558",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"イタリック体を使用する場合の留意事項\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000559",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"テキスト表示に関する留意事項\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000560",
+      "match_key": "[\"foundations/typography/index.md\",[[2,\"テキスト表示に関する留意事項\",1],[3,\"参考情報\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000561",
+      "match_key": "[\"supplements/logos\",[[2,\"ロゴ\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000562",
+      "match_key": "[\"supplements/image-tone\",[[2,\"画像トーン\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000563",
+      "match_key": "[\"supplements/writing\",[[2,\"ライティング\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000564",
+      "match_key": "[\"supplements/motion\",[[2,\"モーション\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000565",
+      "match_key": "[\"supplements/media-profile\",[[2,\"媒体プロファイル\",1]]]",
+      "retired": false
+    },
+    {
+      "id": "dads-000566",
+      "match_key": "[\"supplements/asset-ledger\",[[2,\"アセット台帳\",1]]]",
+      "retired": false
+    }
+  ]
+}

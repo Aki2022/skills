@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "note": "必須の赤ケース。scripts/tests/test_checks.py が全 id を 1 回ずつ実行し、終了コード 2 と code を確かめる。ケースを足したらテスト側の変異も足す（片方だけだとテストが失敗する）。署名台帳・判定台帳・手書きマニフェスト・opacity 0 のアンカーは runner 統合と ISSUE-02/03 の赤ケースで、この表には無い。",
+  "cases": [
+    {"id": "unanchored-9wari", "code": "IA_L1_UNANCHORED_NUMBER", "why": "非主張表に無い単位語の無い数値「9割」"},
+    {"id": "unanchored-markdown", "code": "IA_L1_UNANCHORED_NUMBER", "why": "Markdown の未アンカー数値"},
+    {"id": "lexicon-hit", "code": "IA_L1_LEXICON_HIT", "why": "語彙ヒット「業界初」がアンカー無し"},
+    {"id": "six-variant-forms", "code": "IA_L1_TERM", "count": 6, "why": "表記ゆれ 6 形（大小・全角・半角カナ・空白・長音字形・別表記）"},
+    {"id": "qualifier-mismatch", "code": "IA_L1_CLAIM_QUALIFIER_MISMATCH", "why": "登録は 100 社以上、成果物は約 100 社"},
+    {"id": "value-mismatch", "code": "IA_L1_CLAIM_VALUE_MISMATCH", "why": "登録は 100 社、成果物は 120 社"},
+    {"id": "unknown-claim-anchor", "code": "IA_L1_UNKNOWN_CLAIM", "why": "登録簿に無い主張 id のアンカー"},
+    {"id": "rendition-raw-number", "code": "IA_RENDITION_RAW_NUMBER", "why": "rendition に生の数値"},
+    {"id": "prh-generated-hand-edit", "code": "IA_TERMS_GENERATED_DRIFT", "why": "terms.prh.yml の生成区間を手で直した"},
+    {"id": "prh-spec-fails", "code": "IA_TERMS_SPEC", "why": "手書き規則の specs が通らない（部分一致の誤置換）"},
+    {"id": "zero-target-files", "code": "IA_L1_NO_TARGETS", "why": "outputs に一致するファイルが 0 件"},
+    {"id": "zero-target-text", "code": "IA_L1_NO_TARGETS", "why": "ファイルはあるがテキストが 0 件"},
+    {"id": "no-channels", "code": "IA_NO_CHANNELS", "why": "チャネル定義が 0 件"},
+    {"id": "state-approved-written", "code": "IA_SCHEMA", "why": "info_arch.yaml に approved を書いた（承認は署名台帳だけが表す）"},
+    {"id": "ship-without-ship-command", "code": "IA_SCHEMA", "why": "出荷チャネルに ship_command が無い"},
+    {"id": "id-not-issued", "code": "IA_ID_NOT_ISSUED", "why": "台帳の次番号以上の id"},
+    {"id": "ref-to-tombstone", "code": "IA_REF_BROKEN", "why": "墓標になった id を参照"},
+    {"id": "claim-expired", "code": "IA_CLAIM_EXPIRED", "why": "主張の期限切れ"},
+    {"id": "claim-out-of-scope", "code": "IA_CLAIM_SCOPE", "why": "メッセージの対象者が主張の適用範囲外"},
+    {"id": "preset-role-missing", "code": "IA_PRESET_ROLE", "why": "lp プリセットの必須役割 cta が無い"},
+    {"id": "empty-message-referenced", "code": "IA_EMPTY_REFERENCED", "why": "チャネルが空欄のメッセージを使う"}
+  ]
+}

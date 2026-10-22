@@ -1,0 +1,12 @@
+# design/info_arch/info_arch.yaml — 情報設計の唯一の正典（スキーマ版 1）
+# id は ledger.next から発行し、再利用しない。改名・削除は tombstones（旧 id → 新 id、削除は null）。
+# state は empty / proposed だけ。承認は design/approvals.yaml の署名行だけが表す（このファイルに書かない）。
+schema_version: 1
+ledger:
+  next: {aud: 1, prb: 1, msg: 1, clm: 1, trm: 1, ent: 1}
+  tombstones: {}
+audiences: {}
+problems: {}
+messages: {}
+claims: {}
+entities: {}

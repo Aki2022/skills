@@ -1,0 +1,9 @@
+# 媒体ごとのチャネル定義。outputs は repo 相対の glob（絶対パス・ホーム・.. は不可）。
+schema_version: 1
+media: web
+preset: lp
+outputs: ["site/**/*.html"]
+ship: true
+ship_command: "mise run deploy"
+messages: []
+order: {mode: pattern, pattern: [benefit, proof, cta]}

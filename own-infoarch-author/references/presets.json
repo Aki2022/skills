@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "note": "プリセットごとの must（必須ブロックと必須役割）の明示リスト。LLM に判定させない。版 1 は手書き。出典は各行の source。",
+  "presets": {
+    "lp": {
+      "required_blocks": ["audiences", "problems", "messages", "claims", "entities"],
+      "required_roles": ["benefit", "proof", "cta"],
+      "source": "SPEC-information-architecture-standardization シナリオ 2〜3（LP は課題→効用→証拠→行動の順に組み、効用には supports の主張が要る）と見出しの統制語彙（課題・特長・導入事例・料金・お問い合わせ）"
+    },
+    "product_ui": {
+      "required_blocks": ["audiences", "messages", "entities"],
+      "required_roles": ["how", "cta"],
+      "source": "SPEC-information-architecture-standardization Requirements 2（プロダクト UI の文字列源）。UI は操作の説明と行動が主で、訴求の証拠は必須にしない"
+    },
+    "document": {
+      "required_blocks": ["audiences", "problems", "messages", "claims"],
+      "required_roles": ["benefit", "proof"],
+      "source": "SPEC-information-architecture-standardization シナリオ 10（資料は主張 id に数値を解決する）"
+    },
+    "print": {
+      "required_blocks": ["audiences", "messages"],
+      "required_roles": ["benefit", "cta"],
+      "source": "SPEC-information-architecture-standardization シナリオ 6（ポスターは情報を短縮する前提。短縮はチャネル定義の選択で表す）"
+    }
+  }
+}

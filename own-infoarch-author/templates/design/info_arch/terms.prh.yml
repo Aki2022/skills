@@ -1,0 +1,4 @@
+version: 1
+rules:
+  # >>> own-infoarch-author:generated (entities; do not edit, run gen-terms)
+  # <<< own-infoarch-author:generated

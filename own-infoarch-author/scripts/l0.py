@@ -124,38 +124,42 @@ def _ref(m, report, src, aid, where, *, from_proposed=False):
     return None
 
 
+def atom_refs(block, atom):
+    """Every id an atom references, as (field, id). One table for all reference fields, so a new field
+    cannot be checked for broken references but forgotten for empty-target references."""
+    out = []
+    if block in ('problems', 'messages') and 'audience' in atom:
+        out.append(('audience', atom['audience']))
+    if block == 'problems':
+        out += [('evidence_claims', c) for c in atom.get('evidence_claims', [])]
+    if block == 'messages':
+        out += [('addresses', x) for x in atom.get('addresses', [])]
+        out += [('supports', c) for c in atom.get('supports', [])]
+        for media, text in (atom.get('renditions') or {}).items():
+            out += [(f'renditions.{media}', c) for c in PLACEHOLDER.findall(text)]
+    if block == 'claims':
+        out += [('scope.audiences', a) for a in (atom.get('scope') or {}).get('audiences', [])]
+    return out
+
+
 def _check_refs(m, report, date):
     path = 'design/info_arch/info_arch.yaml'
     d = m.data
-    for pid, p in d['problems'].items():
-        if p['state'] != 'proposed':
-            continue
-        if 'audience' in p:
-            _ref(m, report, pid, p['audience'], path, from_proposed=True)
-        for c in p.get('evidence_claims', []):
-            claim = _ref(m, report, pid, c, path, from_proposed=True)
-            _scope(report, pid, p.get('audience'), c, claim, path)
+    for block in ('problems', 'messages', 'claims'):
+        for aid, atom in d[block].items():
+            proposed = atom['state'] == 'proposed'
+            for fld, target in atom_refs(block, atom):
+                ref = _ref(m, report, f'{aid}.{fld}', target, path, from_proposed=proposed)
+                if proposed and fld in ('supports', 'evidence_claims'):
+                    _scope(report, aid, atom.get('audience'), target, ref, path)
     for mid, msg in d['messages'].items():
-        if msg['state'] != 'proposed':
-            continue
-        if 'audience' in msg:
-            _ref(m, report, mid, msg['audience'], path, from_proposed=True)
-        for x in msg.get('addresses', []):
-            _ref(m, report, mid, x, path, from_proposed=True)
-        for c in msg.get('supports', []):
-            claim = _ref(m, report, mid, c, path, from_proposed=True)
-            _scope(report, mid, msg.get('audience'), c, claim, path)
         for media, text in (msg.get('renditions') or {}).items():
-            for c in PLACEHOLDER.findall(text):
-                _ref(m, report, f'{mid}.renditions.{media}', c, path)
             raw = PLACEHOLDER.sub(' ', text)
             toks = numeric.candidate_tokens(raw)
             if toks:
                 report.add('fail', 'IA_RENDITION_RAW_NUMBER',
                            f'{mid}.renditions.{media} に生の数値 {[t.text for t in toks]}（主張は {{{{clm-…}}}} で参照する）', path)
     for cid, c in d['claims'].items():
-        for a in (c.get('scope') or {}).get('audiences', []):
-            _ref(m, report, cid, a, path)
         if c.get('expires') and c['expires'] < date:
             report.add('fail', 'IA_CLAIM_EXPIRED', f'{cid} の期限 {c["expires"]} が評価日 {date} を過ぎている', path)
         if 'value' in c and c['value']['unit'] not in _canonical_units():

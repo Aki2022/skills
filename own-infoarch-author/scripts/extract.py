@@ -29,7 +29,7 @@ BLOCK = {'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'td', 'th', 'dt', 'dd', 
          'body', 'head', 'html', 'pre', 'hr', 'caption', 'legend', 'fieldset', 'select'}
 CLOSES_P = BLOCK - {'button', 'title', 'label', 'option', 'summary', 'body', 'head', 'html', 'td', 'th', 'tr', 'li', 'dt', 'dd'}
 TEXT_ATTRS = {'alt', 'title', 'aria-label', 'aria-description', 'placeholder', 'label'}
-META_NAMES = {'description', 'og:title', 'og:description', 'og:image:alt', 'twitter:title', 'twitter:description',
+META_NAMES = {'description', 'og:site_name', 'og:title', 'og:description', 'og:image:alt', 'twitter:title', 'twitter:description',
               'twitter:image:alt'}
 # tag -> (tags it implicitly closes, tags that stop the search)
 IMPLICIT = {
@@ -167,7 +167,7 @@ class _HTML(HTMLParser):
             b = _attr_block(a[name], claim, line, f'attr:{name}')
             if b:
                 self.blocks.append(b)
-        if tag == 'input' and a.get('type') in {'submit', 'button'} and a.get('value'):
+        if tag == 'input' and a.get('type', '').lower() in {'submit', 'button'} and a.get('value'):
             self.blocks.append(_attr_block(a['value'], claim, line, 'attr:value'))
         if tag == 'meta' and (a.get('name') in META_NAMES or a.get('property') in META_NAMES) and a.get('content'):
             self.blocks.append(_attr_block(a['content'], claim, line, 'attr:content'))
@@ -210,7 +210,7 @@ _LINK = re.compile(r'!?\[([^\[\]]*)\]\([^)]*\)')
 _CODE = re.compile(r'`[^`]*`')
 _COMPUTED = re.compile(r'\{\{<.*?>\}\}|`\{[a-z]+\}[^`]*`')
 _TAG = re.compile(r'<[^>]+>')
-_TAG_ATTR = re.compile(r'\b(alt|title|aria-label|aria-description|placeholder)\s*=\s*"([^"]*)"')
+_TAG_ATTR = re.compile(r'''\b(alt|title|aria-label|aria-description|placeholder)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'<>=`]+))''')
 _HEADING = re.compile(r'^\s{0,3}#{1,6}\s+')
 _ITEM = re.compile(r'^\s*(?:[-*+]|\d+[.)])\s+')
 _QUOTE = re.compile(r'^\s*(?:>\s?)+')
@@ -288,7 +288,8 @@ def markdown_blocks(text):
         line = _CODE.sub(' ', line)
         line = _LINK.sub(r'\1', line)
         for am in _TAG_ATTR.finditer(line):
-            b = _attr_block(am.group(2), outer, lineno, f'attr:{am.group(1)}')
+            value = next(g for g in am.groups()[1:] if g is not None)
+            b = _attr_block(value, outer, lineno, f'attr:{am.group(1)}')
             if b:
                 blocks.append(b)
         pos = 0

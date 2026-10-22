@@ -16,7 +16,7 @@
 ## id
 
 種別接頭辞（`aud` `prb` `msg` `clm` `trm` `ent`）＋4 桁以上の連番。`ledger.next` 未満でなければ「台帳が発行していない」で失格。
-墓標の id は生きた原子にできない。墓標の先が無いと失格。墓標の id を参照すると失格（先の id を案内する）。
+墓標の id は生きた原子にできない。墓標の先（null は削除）が無いと失格。墓標の id も台帳が発行した番号でなければ失格。墓標の id を参照すると失格（先の id を案内する）。
 
 ## 終了コード
 
@@ -30,7 +30,7 @@
 | IA_NO_CHANNELS / IA_CHANNEL_NAME | チャネル 0 件・media とファイル名の不一致 |
 | IA_ID_NOT_ISSUED / IA_ID_TOMBSTONED / IA_TOMBSTONE_TARGET | 台帳と墓標 |
 | IA_REF_BROKEN | 参照切れ（墓標なら先を案内） |
-| IA_EMPTY_REFERENCED | チャネル、または proposed の原子が空欄の原子を参照する |
+| IA_EMPTY_REFERENCED | チャネル、または proposed の原子が空欄の原子を参照する（audience・evidence_claims・addresses・supports・rendition の `{{clm-…}}`・scope.audiences の全参照。参照の表は `l0.atom_refs` の 1 か所） |
 | IA_RENDITION_RAW_NUMBER | rendition に生の数値（主張は `{{clm-…}}` で参照） |
 | IA_CLAIM_EXPIRED / IA_CLAIM_SCOPE / IA_CLAIM_UNIT | 期限切れ・対象者が適用範囲外・単位が正規単位に無い |
 | IA_PRESET_BLOCK / IA_PRESET_ROLE | プリセットの必須ブロックが空・チャネルに必須役割のメッセージが無い |

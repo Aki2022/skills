@@ -191,3 +191,49 @@ def test_crash_path_exits_2_not_1(tmp_path):
     proc = subprocess.run([sys.executable, str(scripts / 'infoarch_author.py'), 'check', '--root', str(tmp_path),
                            '--date', '2026-13-45'], capture_output=True, text=True, check=False)
     assert proc.returncode == 2 and json.loads(proc.stdout)['exit_code'] == 2
+
+
+# ---- 2026-10-22 external review (critical): references to empty atoms passed with exit 0 ----
+
+def test_claim_scope_referencing_empty_audience_fails(tmp_path):
+    info = copy.deepcopy(INFO)
+    info['ledger']['next']['aud'] = 4
+    info['audiences']['aud-0003'] = {'state': 'empty', 'provenance': 'proposal'}
+    info['claims']['clm-0001']['scope']['audiences'] = ['aud-0001', 'aud-0003']
+    rc, report = l1_codes(tmp_path, info=info)
+    assert rc == 2 and 'IA_EMPTY_REFERENCED' in codes(report), report['findings']
+
+
+def test_rendition_placeholder_to_empty_claim_fails(tmp_path):
+    info = copy.deepcopy(INFO)
+    info['ledger']['next']['clm'] = 4
+    info['claims']['clm-0003'] = {'state': 'empty', 'provenance': 'proposal'}
+    info['messages']['msg-0001']['renditions']['web'] = '{{clm-0001}}の企業が導入、{{clm-0003}}'
+    rc, report = l1_codes(tmp_path, info=info)
+    assert rc == 2 and 'IA_EMPTY_REFERENCED' in codes(report), report['findings']
+
+
+def test_broken_reference_from_empty_atom_fails(tmp_path):
+    info = copy.deepcopy(INFO)
+    info['ledger']['next']['msg'] = 6
+    info['messages']['msg-0005'] = {'state': 'empty', 'provenance': 'proposal', 'supports': ['clm-0099']}
+    rc, report = l1_codes(tmp_path, info=info)
+    assert rc == 2 and 'IA_REF_BROKEN' in codes(report), report['findings']
+
+
+def test_feature_count_is_a_claim_candidate():
+    assert numeric.candidate_tokens('5つの機能を搭載')
+    assert numeric.candidate_tokens('3つの理由') == []
+
+
+def test_single_quoted_and_unquoted_raw_html_attrs_in_markdown(tmp_path):
+    for attr in ("alt='業界初の画面'", 'alt=業界初'):
+        rc, report = l1_codes(tmp_path, md=MD + f'\n<img src="a.png" {attr}>\n')
+        assert rc == 2 and 'IA_L1_LEXICON_HIT' in codes(report), (attr, report['findings'])
+
+
+def test_uppercase_submit_and_site_name_are_extracted(tmp_path):
+    rc, report = l1_codes(tmp_path, html=add_html(HTML, '<input type="SUBMIT" value="業界初の申込">'))
+    assert rc == 2 and 'IA_L1_LEXICON_HIT' in codes(report), report['findings']
+    rc, report = l1_codes(tmp_path, html=HTML.replace('</head>', '<meta property="og:site_name" content="業界初サイト"></head>'))
+    assert rc == 2 and 'IA_L1_LEXICON_HIT' in codes(report), report['findings']

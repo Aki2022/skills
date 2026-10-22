@@ -5,6 +5,8 @@ description: リポジトリの design/ を作成・更新し、ブランドの�
 
 # Own Design Author
 
+2026-10-22改訂への実装途中。現行のハッシュだけの承認・L0-onlyのshipは、署名/JCS・出荷SHAにL0〜L2を束縛する新specをまだ満たさない。実オーナー承認・本番出荷には使わず、`references/approval-upgrade.md` の未実装と導入境界を確認する。
+
 repo の git toplevel にある `design/` を唯一の正典にする。上流のカタログは項目の定義で、ブランドの既定値ではない。
 
 ## 入口

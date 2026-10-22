@@ -2,6 +2,7 @@
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 from tailwind_contract import build_artifacts
 
@@ -19,6 +20,18 @@ def load_manifest(path):
         raise ValueError('unsupported manifest schema/media')
     if not data.get('tokens') or not data.get('input_hashes'):
         raise ValueError('empty manifest')
+    if data.get('approval_scheme')!='ssh-jcs-v1':
+        raise ValueError('unsupported approval scheme; rerun L0')
+    context=data.get('approval_context')
+    if context is None and (any(t.get('state')=='approved' for t in data['tokens'].values()) or any(i.get('approval_state')=='approved' for i in data.get('items',{}).values())):
+        raise ValueError('approved manifest requires trust context')
+    if context is not None:
+        from approvals import protected_store,repository_id
+        if not isinstance(context,dict) or set(context)!={'repo_id','trust_sha256'}:
+            raise ValueError('invalid approval trust context')
+        trust=protected_store(os.environ.get('DESIGN_ALLOWED_SIGNERS'),design.parent)
+        if hashlib.sha256(trust.read_bytes()).hexdigest()!=context['trust_sha256'] or repository_id(design.parent)!=context['repo_id']:
+            raise ValueError('approval trust changed; rerun L0')
     expected = data['input_hashes']
     actual = {}
     for source in sorted(design.rglob('*')):
@@ -69,3 +82,13 @@ def check_asset_exports(repo, manifest):
             path=root/target
             if not path.resolve().is_relative_to(root) or hashlib.sha256(path.read_bytes()).hexdigest() != row['sha256']:
                 raise ValueError('deployed asset differs from design source')
+
+
+if __name__=='__main__':
+    import sys
+    try:
+        if len(sys.argv)!=2:raise ValueError('one manifest required')
+        load_manifest(sys.argv[1])
+    except (OSError,ValueError,KeyError,TypeError):
+        print('manifest or approval trust unavailable, invalid or stale',file=sys.stderr)
+        raise SystemExit(2)

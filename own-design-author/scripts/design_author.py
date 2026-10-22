@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Create/check/migrate a repository's sole design/ directory. Never writes approvals."""
+"""Create/check/migrate a repository's sole design/ directory. Owner approve command is the only ledger writer."""
 import argparse
 import copy
-from datetime import date
+from datetime import date, datetime, timezone
 import hashlib
 import json
 import math
@@ -15,6 +15,8 @@ import unicodedata
 
 from dtcg import resolve_tokens, value_hash
 from classify import ClassificationError, classify_response, load_policy
+from approvals import verify_rows
+from jcs import media_hashes
 
 VERSION = '1.0.0'
 SKILL = Path(__file__).resolve().parents[1]
@@ -236,31 +238,15 @@ def _asset_rule_evidence(root, rules, errors):
 
 
 def _approvals(design):
-    rows = read_data(design / 'approvals.yaml')
-    if not isinstance(rows, list):
-        raise ValueError('approval ledger must be a list')
-    approvals = {}
-    for row in rows:
-        if not isinstance(row, dict) or set(row) - {'item_id', 'token_path', 'value_hash', 'approver', 'date'}:
-            raise ValueError('invalid approval fields')
-        keys = [key for key in ('item_id', 'token_path') if key in row]
-        if len(keys) != 1 or not all(isinstance(row.get(k), str) and row[k].strip()
-                                    for k in (keys + ['value_hash', 'approver', 'date'])):
-            raise ValueError('invalid approval row')
-        try:
-            date.fromisoformat(row['date'])
-        except ValueError as exc:
-            raise ValueError('approval date must be ISO date') from exc
-        key = (keys[0], row[keys[0]])
-        if key in approvals:
-            raise ValueError('duplicate approval target')
-        approvals[key] = row['value_hash']
-    return approvals
+    return verify_rows(read_data(design/'approvals.yaml'),design.parent,with_context=True)
 
 
 def check_design(root, *, catalog_dir=CATALOG, ship=False):
     design = Path(root) / 'design'
-    result = {'exit_code': 2, 'errors': [], 'warnings': [], 'counts': {
+    result = {'evaluated_at':datetime.now(timezone.utc).isoformat(),
+        'environment':{'python':sys.version.split()[0],
+            'jcs_sha256':hashlib.sha256((SKILL/'scripts/jcs.cjs').read_bytes()).hexdigest()},
+        'exit_code': 2, 'errors': [], 'warnings': [], 'counts': {
         'items': 0, 'defined': 0, 'na': 0, 'deferred': 0, 'unclassified': 0,
         'proposed': 0, 'uncovered': 0, 'tokens': 0, 'fulfillment': 0.0}, 'manifest': {}}
     errors, warnings, counts = result['errors'], result['warnings'], result['counts']
@@ -331,7 +317,7 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
             tokens = {}
             errors.append('zero token targets')
         counts['tokens'] = len(tokens)
-        approvals = _approvals(design)
+        approvals,approval_context = _approvals(design)
         notice = read_data(inside(design, 'NOTICE'))
         sources = {}
         for row in notice.get('sources', []):
@@ -341,26 +327,20 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
                 for k in ('id','url','commit','license','copyright')) or not isinstance(row['edited'],bool):
                 raise ValueError('invalid NOTICE source')
             sources[row['id']] = row
-        valid_targets = {('token_path', path) for path in tokens} | {('item_id', ident) for ident in items}
+        valid_targets = {f'ds:{m}:token:{path}' for m in media for path in tokens} | {f'ds:{m}:item:{ident}' for m in media for ident in items}
         if set(approvals) - valid_targets:
             raise ValueError('approval target absent from catalog/tokens')
         for path, token in tokens.items():
             origin = token['origin']
             if origin not in ('owner','proposal') and not (isinstance(origin,str) and origin.startswith('reference:') and origin[10:] in sources):
                 errors.append(f'missing origin/NOTICE for token: {path}')
-            approved = approvals.get(('token_path', path))
-            if approved is not None and approved != token['value_hash']:
-                errors.append(f'approval hash mismatch: {path}')
-            token['state'] = 'approved' if approved == token['value_hash'] else 'proposed'
-            if token['state'] == 'proposed':
-                counts['proposed'] += 1
+            token['state'] = 'proposed'
         rules = _rules(design)
         measured_rules = _asset_rule_evidence(root,rules,errors)
         uncovered_rules = set(rules) - set(measured_rules)
         counts['uncovered'] = len(uncovered_rules)
-        item_states, must_proposed, must_uncovered = {}, [], []
+        item_states, item_values, must_proposed, must_uncovered = {}, {}, [], []
         classification_policy = load_policy()
-        used_item_approvals = set()
         for ident, item in items.items():
             classification = item.get('classification')
             if not isinstance(classification, dict) or classification.get('grade') not in ('must','nice-to-have'):
@@ -395,11 +375,6 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
                     errors.append(f'n-a needs a reason: {ident}')
                     continue
                 evidence_values = {'state': 'n-a', 'reason': reason}
-                approval = approvals.get(('item_id', ident))
-                item_states[ident]['value_hash'] = value_hash(evidence_values)
-                if (must or approval is not None) and approval != value_hash(evidence_values):
-                    errors.append(f'must n-a approval hash missing/mismatch: {ident}')
-                used_item_approvals.add(ident)
             elif status == 'defined':
                 counts['defined'] += 1
                 evidence = state.get('evidence')
@@ -415,8 +390,6 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
                             errors.append(f'missing token evidence: {ident}')
                         else:
                             evidence_values[ref] = {'type':tokens[target]['type'], 'value':tokens[target]['value']}
-                            if must and tokens[target]['state'] != 'approved':
-                                must_proposed.append(ident)
                     elif kind == 'doc':
                         name, separator, anchor = target.partition('#')
                         if name != 'DESIGN.md' or not separator or not anchor:
@@ -426,40 +399,53 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
                         if not body or re.fullmatch(r'(TODO|TBD|未決定|未定)[.!。\s]*',body,re.I):
                             errors.append(f'missing/empty doc evidence: {ident}')
                         evidence_values[ref] = body
-                        if must:
-                            must_proposed.append(ident)
                     elif kind == 'rule':
                         if target not in rules:
                             errors.append(f'missing rule evidence: {ident}')
                         else:
                             evidence_values[ref] = measured_rules.get(target,rules[target])
                             if must:
-                                must_proposed.append(ident)
                                 if target in uncovered_rules:
                                     must_uncovered.append(ident)
-                if ('item_id',ident) in approvals:
-                    used_item_approvals.add(ident)
-                    if approvals[('item_id',ident)] != value_hash(evidence_values):
-                        errors.append(f'item approval hash mismatch: {ident}')
-                    else:
-                        must_proposed = [i for i in must_proposed if i != ident]
-                        for ref in evidence:
-                            if ref.startswith('token:') and ref[6:] in tokens:
-                                tokens[ref[6:]]['state'] = 'approved'
-                item_states[ident]['value_hash'] = value_hash(evidence_values)
             else:
                 errors.append(f'blank/unknown item state: {ident}')
-        for (kind,target) in approvals:
-            if kind == 'item_id' and target not in used_item_approvals:
-                errors.append(f'approval on deferred/invalid item: {target}')
+            item_values[ident] = evidence_values
         prose = inside(design,'DESIGN.md').read_text()
         if re.search(r'(?<!\w)#[0-9a-fA-F]{3,8}\b', prose):
             errors.append('DESIGN.md contains a literal color; reference tokens instead')
-        counts['proposed'] = sum(t['state'] != 'approved' for t in tokens.values())
-        must_proposed = [ident for ident in must_proposed if not (
-            item_states[ident].get('evidence') and all(
-                ref.startswith('token:') and ref[6:] in tokens and tokens[ref[6:]]['state'] == 'approved'
-                for ref in item_states[ident]['evidence']))]
+        resolved_by_media = {}
+        proposed_paths, must_proposed = set(), []
+        for medium,profile in profiles.items():
+            media_tokens,media_items = copy.deepcopy(tokens),copy.deepcopy(item_states)
+            values = {'token:'+path:{'type':t['type'],'value':t['value']} for path,t in tokens.items()}
+            values.update({'item:'+ident:v for ident,v in item_values.items()})
+            hashes = media_hashes(medium,profile,values)
+            for key,digest in hashes.items():
+                kind,target = key.split(':',1)
+                obj = media_tokens[target] if kind=='token' else media_items[target]
+                obj['value_hash'] = digest
+                approved = approvals.get(f'ds:{medium}:{key}')
+                if approved is not None and approved != digest:
+                    errors.append('approval hash mismatch: '+key)
+                obj['state' if kind=='token' else 'approval_state'] = 'approved' if approved==digest else 'proposed'
+            for ident,obj in media_items.items():
+                if obj.get('approval_state')=='approved':
+                    for ref in obj.get('evidence',[]):
+                        if ref.startswith('token:') and ref[6:] in media_tokens:
+                            media_tokens[ref[6:]]['state']='approved'
+                if obj['state']=='n-a' and obj['must'] and obj.get('approval_state')!='approved':
+                    errors.append('must n-a approval hash missing/mismatch: '+ident)
+                if f'ds:{medium}:item:{ident}' in approvals and ident not in item_values:
+                    errors.append('approval on deferred/invalid item: '+ident)
+            for ident,obj in media_items.items():
+                refs=obj.get('evidence',[])
+                token_only=bool(refs) and all(ref.startswith('token:') and ref[6:] in media_tokens
+                    and media_tokens[ref[6:]]['state']=='approved' for ref in refs)
+                if obj['must'] and obj['state']=='defined' and obj.get('approval_state')!='approved' and not token_only:
+                    must_proposed.append(medium+':'+ident)
+            proposed_paths.update(path for path,t in media_tokens.items() if t['state']!='approved')
+            resolved_by_media[medium]=(media_tokens,media_items)
+        counts['proposed']=len(proposed_paths)
         if must_proposed:
             warnings.append(f'proposed must items: {len(set(must_proposed))}')
         if counts['proposed']:
@@ -483,9 +469,10 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
         artifacts = build_artifacts(tokens,tailwind_templates)
         for medium, profile in profiles.items():
             result['manifest'][medium] = {'schema_version':1, 'skill_version':VERSION,
+                'approval_scheme':'ssh-jcs-v1','approval_context':approval_context,
                 'catalog_version':catalog['version'], 'catalog_hash':value_hash(catalog), 'source_hash':source_hash,
                 'input_hashes':input_hashes, 'media':medium, 'profile':profile,
-                'minimums':profile['minimums'], 'tokens':tokens, 'items':item_states,
+                'minimums':profile['minimums'], 'tokens':resolved_by_media[medium][0], 'items':resolved_by_media[medium][1],
                 'css_variables':{t['css_name']:t['css'] for t in tokens.values()},
                 'tailwind_templates':tailwind_templates, 'artifacts':artifacts, 'rules':list(rules.values()), 'coverage':{'uncovered':sorted(uncovered_rules)},
                 'palette':{kind: sorted({t['css'] for t in tokens.values() if t['type']==kind})
@@ -589,7 +576,7 @@ def git_root(path):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='command',required=True)
-    for command in ('init','check','migrate','sync'):
+    for command in ('init','check','migrate','sync','approve'):
         p = sub.add_parser(command)
         p.add_argument('--repo',default='.')
         p.add_argument('--catalog-dir',type=Path,default=CATALOG)
@@ -600,9 +587,27 @@ def main(argv=None):
         if command == 'check':
             p.add_argument('--ship',action='store_true')
             p.add_argument('--include-manifest',action='store_true')
+        if command == 'approve':
+            p.add_argument('--prepare',action='store_true')
+            p.add_argument('--must',action='store_true')
+            p.add_argument('--target',action='append',default=[])
+            p.add_argument('--request',type=Path)
+            p.add_argument('--key',type=Path)
+            p.add_argument('--approver',default='owner')
     args = parser.parse_args(argv)
     try:
         root = git_root(args.repo)
+        if args.command == 'approve':
+            from owner_approval import prepare,approve_request
+            if args.prepare:
+                if args.request or args.key:raise ValueError('prepare does not use a request or signing key')
+                result=prepare(root,args.catalog_dir,args.target,args.must)
+            else:
+                if not args.request or not args.key or args.must or args.target:
+                    raise ValueError('owner signing requires only --request and --key')
+                result=approve_request(root,args.catalog_dir,read_data(args.request),args.key,args.approver)
+            print(json.dumps(result,ensure_ascii=False,sort_keys=True))
+            return result.get('exit_code',0)
         if args.command in ('check','sync'):
             result = check_design(root,catalog_dir=args.catalog_dir,ship=getattr(args,'ship',False))
             if args.command == 'sync' and result['exit_code'] != 2:

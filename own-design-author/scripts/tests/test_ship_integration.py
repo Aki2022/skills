@@ -8,7 +8,8 @@ import subprocess
 import sys
 
 import pytest
-from test_core import SKILL, project, approve, check
+from test_core import SKILL, project, approve, check,write,item
+import json
 
 
 @pytest.mark.skipif(not os.environ.get('DESIGN_TEST_VIBE_ROOT'), reason='real vibe-guard fixture run required')
@@ -68,14 +69,22 @@ def test_push_and_mise_share_ship_gate_without_bypassing_scanner(project, tmp_pa
         mise_env = dict(env, MISE_TRUSTED_CONFIG_PATHS=str(root))
         run = subprocess.run([mise,'run','design:ship'], cwd=root, env=mise_env, capture_output=True)
         assert run.returncode != 0
+    # A signed row from the agent-writable fixture store is still blocked by the real CLI.
     approve(project)
     git('add','design/approvals.yaml')
-    git('commit','-qm','fixture owner approval')
+    git('commit','-qm','synthetic signature with unprotected trust')
+    blocked=git('push','fixture','HEAD:refs/heads/main',allowed=(1,))
+    assert 'agent account' in blocked.stdout+blocked.stderr
+    # Genuine push/mise green path for optional values; this is not signed-must acceptance.
+    write(root/'design/approvals.yaml',[])
+    data=json.loads((catalogs/'test-v1.json').read_text())
+    data['items']=[item(grade='nice-to-have')];write(catalogs/'test-v1.json',data)
+    git('add','design/approvals.yaml');git('commit','-qm','fixture optional values')
     git('push','fixture','HEAD:refs/heads/main')
-    assert (remote / 'refs/heads/main').read_text().strip() == git('rev-parse','HEAD').stdout.strip()
+    assert (remote / 'refs/heads/main').read_text().strip()==git('rev-parse','HEAD').stdout.strip()
     if mise:
-        run = subprocess.run([mise,'run','design:ship'], cwd=root, env=mise_env, capture_output=True)
-        assert run.returncode == 0, run.stderr
+        run=subprocess.run([mise,'run','design:ship'],cwd=root,env=mise_env,capture_output=True)
+        assert run.returncode==0,run.stderr
     assert scanner_marker.read_text().count('called') >= 2
     assert hashlib.sha256(global_config.read_bytes()).hexdigest() == before
     assert not git('config','--local','--get','core.hooksPath',allowed=(1,)).stdout

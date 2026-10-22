@@ -34,7 +34,7 @@ def item(ident='dads-000001', grade='must'):
 
 
 @pytest.fixture
-def project(tmp_path):
+def project(tmp_path, monkeypatch):
     root = tmp_path / 'repo'
     root.mkdir()
     subprocess.run(['git', 'init', '-q', str(root)], check=True)
@@ -42,6 +42,8 @@ def project(tmp_path):
     write(catalogs / 'test-v1.json', {'schema_version': 1, 'version': 'test-v1', 'items': [item()]})
     write(catalogs / 'id-ledger.json', {'schema_version': 1, 'next_id': 2,
         'entries': [{'id': 'dads-000001', 'match_key': 'dads-000001', 'retired': False}]})
+    subprocess.run(['git','-C',str(root),'remote','add','origin','https://example.org/fixture.git'],check=True)
+    prepare_signer(root,monkeypatch)
     init_design(root, 'product-ui', 'test-v1', catalog_dir=catalogs)
     config = json.loads((root / 'design/design.yaml').read_text())
     config['items'] = {'dads-000001': {'state': 'defined', 'evidence': ['token:color.primary']}}
@@ -57,13 +59,34 @@ def check(project, **kw):
     return check_design(root, catalog_dir=catalogs, **kw)
 
 
+def prepare_signer(root,monkeypatch):
+    import approvals
+    key=root.parent/'fixture-key'
+    subprocess.run(['ssh-keygen','-q','-t','ed25519','-N','','-C','fixture','-f',str(key)],check=True)
+    signers=root.parent/'fixture-signers'
+    signers.write_text('fixture-owner '+key.with_suffix('.pub').read_text())
+    monkeypatch.setenv('DESIGN_ALLOWED_SIGNERS',str(signers))
+    # Only the OS trust-store boundary is substituted in these in-process unit tests.
+    # Actual SSH signing/verification and L0 run normally. Real CLI must reject this store.
+    monkeypatch.setattr(approvals,'protected_store',lambda path,repo:signers)
+
+
+def approve_rows(project,rows):
+    from approvals import repository_id,payload,namespace
+    root,_=project
+    ledger=[]
+    for row in rows:
+        row={**row,'approver':'fixture-owner','date':'2026-10-22'}
+        run=subprocess.run(['ssh-keygen','-Y','sign','-f',str(root.parent/'fixture-key'),
+            '-n',namespace(row['key'])],input=payload(repository_id(root),row),capture_output=True,check=True)
+        ledger.append({**row,'signature':run.stdout.decode()})
+    write(root/'design/approvals.yaml',ledger)
+
+
 def approve(project):
-    root, _ = project
-    result = check(project)
-    value = result['manifest']['web']['tokens']['color.primary']['value_hash']
-    # Human-authored fixture ledger, not a production approval-writing operation.
-    write(root / 'design/approvals.yaml', [{'token_path': 'color.primary', 'value_hash': value,
-                                          'approver': 'fixture-owner', 'date': '2026-10-21'}])
+    result=check(project)
+    value=result['manifest']['web']['tokens']['color.primary']['value_hash']
+    approve_rows(project,[{'key':'ds:web:token:color.primary','value_hash':value}])
 
 
 def test_proposed_warning_and_ship_rejection(project):
@@ -162,9 +185,8 @@ def test_must_na_needs_reason_and_hash_bound_approval(project):
     config['items']['dads-000001'] = {'state': 'n-a', 'reason': 'No interactive surface.'}
     write(p, config)
     assert check(project)['exit_code'] == 2
-    write(root / 'design/approvals.yaml', [{'item_id': 'dads-000001',
-        'value_hash': value_hash({'state': 'n-a', 'reason': 'No interactive surface.'}),
-        'approver': 'fixture-owner', 'date': '2026-10-21'}])
+    digest=check(project)['manifest']['web']['items']['dads-000001']['value_hash']
+    approve_rows(project,[{'key':'ds:web:item:dads-000001','value_hash':digest}])
     assert check(project)['exit_code'] == 1  # remaining token is still proposed
     config['items']['dads-000001']['reason'] = 'Changed reason'
     write(p, config)
@@ -489,7 +511,7 @@ def test_real_l2_palette_empty_targets_and_layout_regression(project, tmp_path):
             assert old['runs'][0][key] == new['runs'][0][key]
 
 
-def test_ship_entrypoint_rejects_proposed_and_allows_approved(project):
+def test_ship_entrypoint_rejects_proposed_and_unprotected_signed_approval(project):
     root, catalogs = project
     env = dict(os.environ, DESIGN_AUTHOR_PYTHON=sys.executable)
     argv = [str(SKILL / 'scripts/design-ship'), '--repo', str(root), '--catalog-dir', str(catalogs)]
@@ -498,8 +520,8 @@ def test_ship_entrypoint_rejects_proposed_and_allows_approved(project):
     assert json.loads(run.stdout)['errors']
     approve(project)
     run = subprocess.run(argv, env=env, capture_output=True, text=True)
-    assert run.returncode == 0
-    assert json.loads(run.stdout)['exit_code'] == 0
+    assert run.returncode == 2
+    assert 'agent account' in str(json.loads(run.stdout)['errors'])
 
 
 def test_ship_allows_warning_on_unapproved_nice_token(project):
@@ -513,6 +535,9 @@ def test_ship_allows_warning_on_unapproved_nice_token(project):
     result = check(project, ship=True)
     assert result['exit_code'] == 1
     assert result['counts']['proposed'] == 1
+    # Genuine CLI green path: optional values need no owner signature.
+    write(root/'design/approvals.yaml',[])
+    catalog=json.loads((catalogs/'test-v1.json').read_text());catalog['items']=[item(grade='nice-to-have')];write(catalogs/'test-v1.json',catalog)
     run = subprocess.run([str(SKILL / 'scripts/design-ship'),'--repo',str(root),'--catalog-dir',str(catalogs)],
                          env=dict(os.environ, DESIGN_AUTHOR_PYTHON=sys.executable),capture_output=True,text=True)
     assert run.returncode == 0
@@ -564,8 +589,7 @@ def test_item_approval_binds_referenced_token_values(project):
     root, _ = project
     result = check(project)
     digest = result['manifest']['web']['items']['dads-000001']['value_hash']
-    write(root / 'design/approvals.yaml', [{'item_id':'dads-000001','value_hash':digest,
-                                          'approver':'fixture-owner','date':'2026-10-22'}])
+    approve_rows(project,[{'key':'ds:web:item:dads-000001','value_hash':digest}])
     result = check(project, ship=True)
     assert result['exit_code'] == 0
     assert result['counts']['proposed'] == 0
@@ -591,8 +615,7 @@ def test_asset_hash_rule_is_measured_and_approval_binds_actual_bytes(project):
     assert result['counts']['uncovered'] == 0
     assert check(project,ship=True)['exit_code'] == 2
     item_hash=result['manifest']['web']['items']['dads-000001']['value_hash']
-    write(root / 'design/approvals.yaml',[{'item_id':'dads-000001','value_hash':item_hash,
-          'approver':'fixture-owner','date':'2026-10-22'}])
+    approve_rows(project,[{'key':'ds:web:item:dads-000001','value_hash':item_hash}])
     assert check(project,ship=True)['exit_code'] == 0
     asset.write_bytes(b'fixture-logo-b')
     result=check(project,ship=True)
@@ -653,8 +676,7 @@ def test_web_check_runs_real_l1_and_l2_and_detects_palette_mutation(project):
     tokens['radius']={'$type':'dimension','$value':{'value':0,'unit':'px'},'$extensions':{'org.own.design':{'origin':'proposal'}}}
     write(root / 'design/tokens/brand.tokens.json',tokens)
     result=check(project)
-    write(root / 'design/approvals.yaml',[{'token_path':path,'value_hash':t['value_hash'],
-          'approver':'fixture-owner','date':'2026-10-22'} for path,t in result['manifest']['web']['tokens'].items()])
+    catalog=json.loads((catalogs/'test-v1.json').read_text());catalog['items']=[item(grade='nice-to-have')];write(catalogs/'test-v1.json',catalog)
     write(root / 'design/validation.json',{'schema_version':1,'html':['index.html'],
           'urls':[{'env':'DESIGN_FIXTURE_URL'}],'viewports':[375],'schemes':['light']})
     normal=('<html lang="en"><head><title>Fixture</title><meta name="viewport" content="width=device-width">'
@@ -674,7 +696,8 @@ def test_web_check_runs_real_l1_and_l2_and_detects_palette_mutation(project):
     try:
         run=subprocess.run(argv,env=env,capture_output=True,text=True)
         result=json.loads(run.stdout)
-        assert run.returncode==0,result
+        assert run.returncode==1,result
+        assert [stage['exit_code'] for stage in result['stages']]==[1,0,0]
         assert [s['stage'] for s in result['stages']]==['L0','L1','L2']
         assert {'pseudo-elements','shadow-dom','iframe-documents'} <= set(result['uncovered'])
         (root / 'index.html').write_text(normal.replace('<h1>','<h1 style="color:red">'))
@@ -718,3 +741,19 @@ def test_sync_rejects_symlinked_targets_and_rolls_back_partial_failure(project,m
     with pytest.raises(OSError):sync_artifacts(root,manifest)
     assert target.read_text()=='before' and other.read_text()=='other-before'
     assert list(root.rglob('*.design-tmp'))==[]
+
+
+def test_unsigned_legacy_approval_is_rejected(project):
+    root,_=project
+    digest=check(project)['manifest']['web']['tokens']['color.primary']['value_hash']
+    write(root/'design/approvals.yaml',[{'token_path':'color.primary','value_hash':digest,
+        'approver':'fixture-owner','date':'2026-10-22'}])
+    assert check(project,ship=True)['exit_code']==2
+
+
+def test_profile_change_invalidates_approval(project):
+    approve(project)
+    assert check(project,ship=True)['exit_code']==0
+    root,_=project
+    write(root/'design/profiles/web.json',{'media':'web','minimums':{'text_contrast':7}})
+    assert check(project,ship=True)['exit_code']==2

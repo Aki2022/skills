@@ -5,7 +5,7 @@ description: リポジトリの design/ を作成・更新し、ブランドの�
 
 # Own Design Author
 
-2026-10-22改訂への実装途中。現行のハッシュだけの承認・L0-onlyのshipは、署名/JCS・出荷SHAにL0〜L2を束縛する新specをまだ満たさない。実オーナー承認・本番出荷には使わず、`references/approval-upgrade.md` の未実装と導入境界を確認する。
+2026-10-22改訂への実装途中。署名/JCSはL0へ接続済みだが、実オーナーの署名環境は未検証。L0-onlyのshipは出荷SHAにL0〜L2を束縛する新specをまだ満たさない。本番出荷には使わず、`references/approval-upgrade.md` の未完範囲と導入境界を確認する。
 
 repo の git toplevel にある `design/` を唯一の正典にする。上流のカタログは項目の定義で、ブランドの既定値ではない。
 
@@ -34,7 +34,7 @@ design-author check --repo <repo>
 
 ## 承認と検査
 
-`approvals.yaml` は人間のチャット確認が唯一の根拠。AIが自律的に書かない。L0 のマニフェストにある `value_hash` を提示し、未承認と承認済みを混同しない。値・理由・散文の対象部分が変われば台帳のハッシュ不一致で止まる。
+`approvals.yaml` はオーナー自身のSSH署名付き行だけを受け付ける。AIが自律的に実鍵で署名・記録しない。`approve --prepare` は対象hashの確認用リクエストだけを返す。値・理由・散文・alias先・媒体profileの変更は失効する。オーナーの実行方法と信頼設定は `references/approval-upgrade.md`。
 
 ```sh
 design-author check --repo <repo>

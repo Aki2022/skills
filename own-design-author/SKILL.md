@@ -51,6 +51,7 @@ L1/L2と生成Tailwindの使い方・制約は `references/web-validation.md` �
 
 散文のdoc証拠とn-a理由は、保存済みの判定だけを読む。未登録入力は未カバー、mustなら出荷失格。
 閾値未満はscreenedで、holdoutのrecallを併記して合格やcleanと混同しない。モデルを検査中に呼ばない。
+回答取得は検査の外でjudgment_run.pyを明示実行し、既存分類と共通の使用量上限を守る。未ラベル回答を合格へ昇格しない。
 記録・移行と5区分報告、IA接続の詳細は `references/judgments-and-modules.md`。
 IA入力を見つけても対応実装を黙って無視しない。IA本体は兄弟WSが担当する。
 

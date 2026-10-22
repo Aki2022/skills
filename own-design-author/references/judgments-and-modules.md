@@ -38,8 +38,28 @@ policyは中央policyの全フィールドと一致必須で、judgment_hashは�
 ```
 
 これは形式例で実データではない。scoreをAIが発案してJevの結果として登録しない。
-本物の回答の取得は既存Jevの認証・呼出経路で行い、実行数と使用量をWSの予算へ計上する。
-このsliceのCLIは回答ファイルの検証・保存を担当し、モデル実行アダプタを追加していない。
+本物の回答はjudgment_run.pyで取得し、既存classify.pyの認証・固定endpoint・リダイレクト拒否・原子的保存を再利用する。
+Noulのyes確率を「問題がある確率」として保存する。版付きモデル、完全な回答集合、確率、使用量を検証する。
+公式契約: [Noul](https://docs.typesafe.ai/primitives/noul)、[HTTP API](https://docs.typesafe.ai/api/system-one)、[料金](https://docs.typesafe.ai/models)。
+
+```sh
+design-author check --repo . --include-candidates > candidates.json
+python3 <skill>/scripts/judgment_run.py --candidates candidates.json --answers design/judgment-answers.json --limit 50
+python3 <skill>/scripts/judgment_run.py --candidates candidates.json --answers design/judgment-answers.json --limit 50 --execute
+```
+
+checkが未承認mustでexit 2でも候補は取得できる。候補以外のcheck結果を合格扱いにしない。
+既定はdry-runで認証読取・通信・書込みなし。executeは別途許可された外部送信と従量予算内だけで使う。
+新しいSDK・認証設定を作らず、classify.pyと同じcatalog/classification-usage.jsonをlockして累計2,000判定を守る。
+既存使用量ファイルが無ければ停止する。CLIから別ファイルや上限増加を指定できない。
+10問/16,000文字以内に分割し、通信前に問数を予約する。失敗や未検証回答も予約数を消費し、自動再試行しない。
+小規模試行後の実使用量に基づいて残りを見積もる。usage_derived_usdは使用量と設定単価からの計算で、請求額・金額上限ではない。
+成功バッチごとに保存し、同じcandidate/policyの回答は再取得しない。入力・policy変更、破損した回答、symlink、対象0件は拒否する。
+
+出力名はjudgment-answers.jsonに限定する。全candidate・Noulのraw回答・scoreをstatus: model-answers-unlabeledとして保存し、
+公開可能な入力かを送信前に確認する。使用量台帳には本文・認証情報を残さず、request hashと件数・token数・時間を残す。
+この出力はjudgments.jsonとは別で、holdout・人間ラベル・承認を生成しない。L0は直接読まない。
+人間確認した実holdoutと組み合わせて下記record/migrateへ渡すまで、未カバーは解消しない。
 
 台帳なし・現在のjudgment_hashなしは未カバー。mustの未カバーはship失格。
 scoreがtheta以上なら証拠の問題として失格。theta未満はscreenedとし、holdoutのrecall・陽性件数・偽陰性数を併記する。

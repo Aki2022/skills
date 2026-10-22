@@ -59,7 +59,8 @@ def check(root, date):
                 report.uncovered.append({'path': str(frel), 'reason': f'形式 {f.suffix or "(なし)"} の抽出アダプタが無い'})
                 report.add('warn', 'IA_L1_UNCOVERED_FORMAT', f'{frel} は抽出アダプタの無い形式（未カバー）', frel)
                 continue
-            blocks, constructs = result
+            blocks, constructs, anchor_ids = result
+            valid = _valid_claims(report, m, frel, anchor_ids)
             for c in constructs:
                 report.uncovered.append({'path': str(frel), 'reason': c})
                 report.add('warn', 'IA_L1_UNCOVERED_CONSTRUCT', f'{frel}: {c}（未カバー）', frel)
@@ -69,7 +70,7 @@ def check(root, date):
             total_files += 1
             total_blocks += len(blocks)
             for b in blocks:
-                anchored |= _check_block(report, m, frel, b)
+                anchored |= _check_block(report, m, frel, b, valid)
         for cid in ch.get('required_claims', []):
             if cid not in anchored:
                 report.add('fail', 'IA_L1_REQUIRED_CLAIM_MISSING', f'channels/{name} の必須主張 {cid} のアンカーが outputs に無い', rel)
@@ -79,21 +80,24 @@ def check(root, date):
     return report
 
 
-def _valid_claims(report, m, frel, b):
-    valid = set()
-    for cid in sorted(b.claim_ids()):
+def _valid_claims(report, m, frel, anchor_ids):
+    """Every claim anchor in the file, with or without text: unknown and empty ones fail once per id."""
+    valid, seen = set(), set()
+    for cid, line in anchor_ids:
+        if cid in seen:
+            continue
+        seen.add(cid)
         claim = m.data['claims'].get(cid)
         if claim is None:
-            report.add('fail', 'IA_L1_UNKNOWN_CLAIM', f'アンカー {cid} が登録簿に無い（墓標: {m.tombstone(cid)}）', frel, b.line)
+            report.add('fail', 'IA_L1_UNKNOWN_CLAIM', f'アンカー {cid} が登録簿に無い（墓標: {m.tombstone(cid)}）', frel, line)
         elif claim['state'] != 'proposed':
-            report.add('fail', 'IA_L1_CLAIM_EMPTY', f'アンカー {cid} の主張が空欄', frel, b.line)
+            report.add('fail', 'IA_L1_CLAIM_EMPTY', f'アンカー {cid} の主張が空欄', frel, line)
         else:
             valid.add(cid)
     return valid
 
 
-def _check_block(report, m, frel, b):
-    valid = _valid_claims(report, m, frel, b)
+def _check_block(report, m, frel, b, valid):
     for tok in numeric.candidate_tokens(b.norm, normalized=True):
         cid = b.claims[tok.start] if tok.start < len(b.claims) else None
         if cid not in valid:
@@ -121,4 +125,4 @@ def _check_block(report, m, frel, b):
             start = folded.find(key, start + 1)
     for hit in prh.check_text(m.rules, b.raw):
         report.add('fail', 'IA_L1_TERM', f'「{hit["found"]}」→「{hit["expected"]}」', frel, b.line, origin=b.origin)
-    return valid
+    return valid & b.claim_ids()

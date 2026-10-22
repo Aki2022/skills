@@ -121,7 +121,7 @@ class _HTML(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.stack = []  # (tag, own claim)
         self.buf = _Buf()
-        self.blocks, self.uncovered = [], []
+        self.blocks, self.uncovered, self.anchor_ids = [], [], []
         self.skip_depth = 0
 
     def _claim(self):
@@ -159,6 +159,8 @@ class _HTML(HTMLParser):
             return
         self._implicit_close(tag)
         own_claim = a.get(CLAIM_ATTR, '').strip() or None
+        if own_claim:  # validated even when the element carries no text
+            self.anchor_ids.append((own_claim, self.getpos()[0]))
         if tag in BLOCK:
             self.flush()
         claim = own_claim or self._claim()
@@ -198,7 +200,7 @@ def html_blocks(text):
     p.feed(text)
     p.close()
     p.flush()
-    return [b for b in p.blocks if b], p.uncovered
+    return [b for b in p.blocks if b], p.uncovered, p.anchor_ids
 
 
 _FENCE = re.compile(r'^\s*(```|~~~)')
@@ -236,7 +238,7 @@ def _md_front_matter(lines, blocks):
 
 def markdown_blocks(text):
     lines = text.split('\n')
-    blocks, uncovered = [], []
+    blocks, uncovered, anchor_ids = [], [], []
     start = _md_front_matter(lines, blocks)
     fence, divs, buf = None, [], _Buf()
 
@@ -262,6 +264,8 @@ def markdown_blocks(text):
         if m:
             flush()
             cm = _ATTR_CLAIM.search(m.group(1))
+            if cm:
+                anchor_ids.append((cm.group(1), lineno))
             divs.append(cm.group(1) if cm else None)
             continue
         if _DIV_CLOSE.match(line):
@@ -273,6 +277,8 @@ def markdown_blocks(text):
             flush()
             continue
         outer = next((c for c in reversed(divs) if c), None)
+        if re.search(r'<[^>]*\bdata-ia-', line):
+            uncovered.append(f'行 {lineno}: Markdown 内の生 HTML の data-ia-* アンカー（Pandoc 属性で書く）')
         if _COMPUTED.search(line):
             uncovered.append(f'行 {lineno}: 計算される値（Quarto のショートコード・インラインコード）')
             line = _COMPUTED.sub(' ', line)
@@ -296,17 +302,19 @@ def markdown_blocks(text):
         for sm in _SPAN.finditer(line):
             buf.add(_TAG.sub(' ', line[pos:sm.start()]), outer, lineno)
             cm = _ATTR_CLAIM.search(sm.group(2))
+            if cm:
+                anchor_ids.append((cm.group(1), lineno))
             buf.add(_TAG.sub(' ', sm.group(1)), cm.group(1) if cm else outer, lineno)
             pos = sm.end()
         buf.add(_TAG.sub(' ', line[pos:]) + '\n', outer, lineno)
         if _HEADING.match(lines[n]) or lines[n].lstrip().startswith('|'):
             flush()
     flush()
-    return blocks, uncovered
+    return blocks, uncovered, anchor_ids
 
 
 def blocks_for(path):
-    """(blocks, uncovered constructs), or None when no adapter exists. Raises UnicodeDecodeError."""
+    """(blocks, uncovered constructs, claim anchor (id, line) list), or None when no adapter exists. Raises UnicodeDecodeError."""
     suffix = path.suffix.lower()
     if suffix not in HTML_SUFFIXES | MD_SUFFIXES:
         return None

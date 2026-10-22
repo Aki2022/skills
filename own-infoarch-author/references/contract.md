@@ -1,7 +1,6 @@
 # design/info_arch/ の契約
 
-実装元: biz_ops `WS-20261022-information-architecture-standardization` ISSUE-01a（runner 非依存の先行分）。
-方針の正典は `SPEC-information-architecture-standardization`。
+この版は runner 非依存の先行分（単体 CLI）。方針は利用側 repo の spec `information-architecture-standardization` に従う。
 
 ## ディレクトリ
 
@@ -27,11 +26,11 @@
 | code | 内容 |
 | --- | --- |
 | IA_MISSING / IA_YAML / IA_SCHEMA | ファイルが無い・YAML として読めない（重複キーを含む。日付は文字列として読む）・スキーマ違反（`state: approved`、outputs の絶対パスと `..` を含む） |
-| IA_NO_CHANNELS / IA_CHANNEL_NAME | チャネル 0 件・media とファイル名の不一致 |
+| IA_NO_CHANNELS / IA_CHANNEL_NAME / IA_CHANNEL_FILE | チャネル 0 件・media とファイル名の不一致・`channels/` の `*.yaml` 以外のファイルやサブディレクトリ（黙って無視しない） |
 | IA_ID_NOT_ISSUED / IA_ID_TOMBSTONED / IA_TOMBSTONE_TARGET | 台帳と墓標 |
 | IA_REF_BROKEN | 参照切れ（墓標なら先を案内） |
 | IA_EMPTY_REFERENCED | チャネル、または proposed の原子が空欄の原子を参照する（audience・evidence_claims・addresses・supports・rendition の `{{clm-…}}`・scope.audiences の全参照。参照の表は `l0.atom_refs` の 1 か所） |
-| IA_RENDITION_RAW_NUMBER | rendition に生の数値（主張は `{{clm-…}}` で参照） |
+| IA_RENDITION_RAW_NUMBER / IA_RENDITION_BAD_PLACEHOLDER | rendition に生の数値（主張は `{{clm-…}}` で参照）・`{{clm-NNNN}}` の形でない `{{…}}` |
 | IA_CLAIM_EXPIRED / IA_CLAIM_SCOPE / IA_CLAIM_UNIT | 期限切れ・対象者が適用範囲外・単位が正規単位に無い |
 | IA_PRESET_BLOCK / IA_PRESET_ROLE | プリセットの必須ブロックが空・チャネルに必須役割のメッセージが無い |
 | IA_TERMS_MISSING / IA_TERMS_MARKERS / IA_TERMS_GENERATED_DRIFT / IA_TERMS_INVALID / IA_TERMS_SPEC | 用語ファイル |
@@ -48,7 +47,7 @@
   （image:alt を含む）。`script` `style` `template` は除く。JSON-LD は未カバーとして報告する。
 - Markdown / Quarto: 段落・見出し・リスト項目・表の行・引用、Pandoc span `[…]{data-ia-claim=…}`、fenced div
   `::: {data-ia-claim=…}`、生 HTML の `alt` 等の属性、front matter（YAML として読む）の title / subtitle / description。
-  コードは除く。Quarto のショートコード `{{< … >}}` とインラインコード `` `{r} …` `` は計算される値なので未カバー。
+  コードは除く。Markdown 内の生 HTML の `data-ia-*` は読まないので未カバーとして報告する（Pandoc 属性で書く）。Quarto のショートコード `{{< … >}}` とインラインコード `` `{r} …` `` は計算される値なので未カバー。
 - それ以外の形式（TSX・pptx・PDF 等）は未カバー。CSS の `content` は抽出しない（既知の限界）。
 
 | code | 内容 |
@@ -57,7 +56,7 @@
 | IA_L1_DECODE | UTF-8 として読めない成果物 |
 | IA_L1_UNCOVERED_FORMAT / IA_L1_UNCOVERED_CONSTRUCT（warn） | 抽出アダプタの無い形式・計算される値や構造化データ |
 | IA_L1_UNANCHORED_NUMBER | 有効な主張アンカー（存在し proposed）の外にある主張候補の数値 |
-| IA_L1_UNKNOWN_CLAIM / IA_L1_CLAIM_EMPTY / IA_L1_CLAIM_NO_VALUE | アンカーの主張が無い・空欄・正規化値が無い。無効なアンカーの中身は未アンカーとして扱う |
+| IA_L1_UNKNOWN_CLAIM / IA_L1_CLAIM_EMPTY / IA_L1_CLAIM_NO_VALUE | アンカーの主張が無い・空欄・正規化値が無い。本文を持たないアンカー（画像だけの要素・空の span・空の div）も検証する。無効なアンカーの中身は未アンカーとして扱う |
 | IA_L1_REQUIRED_CLAIM_MISSING | チャネルの `required_claims` のアンカーが outputs に無い |
 | IA_L1_CLAIM_VALUE_MISMATCH / IA_L1_CLAIM_QUALIFIER_MISMATCH | 値・単位の不一致、修飾（qualifier）の不一致 |
 | IA_L1_LEXICON_HIT | 有効な主張アンカーの外の語彙ヒット |

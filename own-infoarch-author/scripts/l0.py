@@ -16,6 +16,7 @@ from common import INFO_ARCH_DIR, Report, YamlError, load_ref, load_yaml, safe_l
 
 KINDS = {'audiences': 'aud', 'problems': 'prb', 'messages': 'msg', 'claims': 'clm', 'entities': 'ent'}
 PLACEHOLDER = re.compile(r'\{\{\s*(clm-[0-9]{4,})\s*\}\}')
+ANY_BRACES = re.compile(r'\{\{.*?\}\}')
 ID_RE = re.compile(r'^(aud|prb|msg|clm|trm|ent)-([0-9]{4,})$')
 
 
@@ -64,6 +65,10 @@ def load(root, report):
     chan_validator = validator_for('channel.v1.schema.json')
     chan_dir = base / 'channels'
     files = sorted(chan_dir.glob('*.yaml')) if chan_dir.is_dir() else []
+    for other in sorted(chan_dir.iterdir()) if chan_dir.is_dir() else []:
+        if other.is_dir() or other.suffix != '.yaml':
+            report.add('fail', 'IA_CHANNEL_FILE', f'{other.name} はチャネル定義として読まれない（channels/<media>.yaml だけ。黙って無視しない）',
+                       other.relative_to(root))
     if not files:
         report.add('fail', 'IA_NO_CHANNELS', 'channels/*.yaml が 0 件（検査対象が無いことを合格にしない）', 'design/info_arch/channels')
     for f in files:
@@ -154,6 +159,8 @@ def _check_refs(m, report, date):
                     _scope(report, aid, atom.get('audience'), target, ref, path)
     for mid, msg in d['messages'].items():
         for media, text in (msg.get('renditions') or {}).items():
+            for bad in [b for b in ANY_BRACES.findall(text) if not PLACEHOLDER.fullmatch(b)]:
+                report.add('fail', 'IA_RENDITION_BAD_PLACEHOLDER', f'{mid}.renditions.{media} の {bad} は主張のプレースホルダ {{{{clm-NNNN}}}} の形でない', path)
             raw = PLACEHOLDER.sub(' ', text)
             toks = numeric.candidate_tokens(raw)
             if toks:

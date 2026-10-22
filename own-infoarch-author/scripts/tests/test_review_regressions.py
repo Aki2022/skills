@@ -237,3 +237,52 @@ def test_uppercase_submit_and_site_name_are_extracted(tmp_path):
     assert rc == 2 and 'IA_L1_LEXICON_HIT' in codes(report), report['findings']
     rc, report = l1_codes(tmp_path, html=HTML.replace('</head>', '<meta property="og:site_name" content="業界初サイト"></head>'))
     assert rc == 2 and 'IA_L1_LEXICON_HIT' in codes(report), report['findings']
+
+
+# ---- 2026-10-22 external re-review (critical): anchors without text were never validated ----
+
+INFO_E = copy.deepcopy(INFO)
+INFO_E['ledger']['next']['clm'] = 4
+INFO_E['claims']['clm-0003'] = {'state': 'empty', 'provenance': 'proposal'}
+
+
+@pytest.mark.parametrize('snippet,code', [
+    ('<p data-ia-claim="clm-0099"><img src="a.png"></p>', 'IA_L1_UNKNOWN_CLAIM'),
+    ('<p data-ia-claim="clm-0003"><img src="a.png"></p>', 'IA_L1_CLAIM_EMPTY'),
+    ('<p><span data-ia-claim="clm-0003"></span>導入</p>', 'IA_L1_CLAIM_EMPTY'),
+])
+def test_textless_html_anchors_are_validated(tmp_path, snippet, code):
+    rc, report = l1_codes(tmp_path, info=INFO_E, html=add_html(HTML, snippet))
+    assert rc == 2 and code in codes(report), report['findings']
+
+
+@pytest.mark.parametrize('extra,code', [
+    ('\n[]{data-ia-claim=clm-0003}\n', 'IA_L1_CLAIM_EMPTY'),
+    ('\n::: {data-ia-claim=clm-0099}\n:::\n', 'IA_L1_UNKNOWN_CLAIM'),
+])
+def test_textless_markdown_anchors_are_validated(tmp_path, extra, code):
+    rc, report = l1_codes(tmp_path, info=INFO_E, md=MD + extra)
+    assert rc == 2 and code in codes(report), report['findings']
+
+
+def test_raw_html_anchor_in_markdown_is_uncovered_not_silent(tmp_path):
+    rc, report = l1_codes(tmp_path, md=MD + '\n<span data-ia-claim="clm-0099">注記</span>\n')
+    assert rc >= 1 and 'IA_L1_UNCOVERED_CONSTRUCT' in codes(report, 'warn'), report['findings']
+
+
+@pytest.mark.parametrize('rendition', ['{{clm0099}}の企業', '{{clm-0099a}}の企業', '{{ msg-0001 }}の企業'])
+def test_malformed_placeholder_fails(tmp_path, rendition):
+    info = copy.deepcopy(INFO)
+    info['messages']['msg-0001']['renditions']['web'] = rendition
+    rc, report = l1_codes(tmp_path, info=info)
+    assert rc == 2 and 'IA_RENDITION_BAD_PLACEHOLDER' in codes(report), report['findings']
+
+
+@pytest.mark.parametrize('name', ['ship.yml', 'sub/web2.yaml', 'README.md'])
+def test_unexpected_files_in_channels_dir_fail(tmp_path, name):
+    write_repo(tmp_path)
+    f = tmp_path / 'design/info_arch/channels' / name
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text('media: ship\n', encoding='utf-8')
+    rc, report = run(tmp_path)
+    assert rc == 2 and 'IA_CHANNEL_FILE' in codes(report), report['findings']

@@ -43,7 +43,6 @@ def project(tmp_path, monkeypatch):
     write(catalogs / 'id-ledger.json', {'schema_version': 1, 'next_id': 2,
         'entries': [{'id': 'dads-000001', 'match_key': 'dads-000001', 'retired': False}]})
     subprocess.run(['git','-C',str(root),'remote','add','origin','https://example.org/fixture.git'],check=True)
-    prepare_signer(root,monkeypatch)
     init_design(root, 'product-ui', 'test-v1', catalog_dir=catalogs)
     config = json.loads((root / 'design/design.yaml').read_text())
     config['items'] = {'dads-000001': {'state': 'defined', 'evidence': ['token:color.primary']}}
@@ -59,28 +58,10 @@ def check(project, **kw):
     return check_design(root, catalog_dir=catalogs, **kw)
 
 
-def prepare_signer(root,monkeypatch):
-    import approvals
-    key=root.parent/'fixture-key'
-    subprocess.run(['ssh-keygen','-q','-t','ed25519','-N','','-C','fixture','-f',str(key)],check=True)
-    signers=root.parent/'fixture-signers'
-    signers.write_text('fixture-owner '+key.with_suffix('.pub').read_text())
-    monkeypatch.setenv('DESIGN_ALLOWED_SIGNERS',str(signers))
-    # Only the OS trust-store boundary is substituted in these in-process unit tests.
-    # Actual SSH signing/verification and L0 run normally. Real CLI must reject this store.
-    monkeypatch.setattr(approvals,'protected_store',lambda path,repo:signers)
-
-
 def approve_rows(project,rows):
-    from approvals import repository_id,payload,namespace
     root,_=project
-    ledger=[]
-    for row in rows:
-        row={**row,'approver':'fixture-owner','date':'2026-10-22'}
-        run=subprocess.run(['ssh-keygen','-Y','sign','-f',str(root.parent/'fixture-key'),
-            '-n',namespace(row['key'])],input=payload(repository_id(root),row),capture_output=True,check=True)
-        ledger.append({**row,'signature':run.stdout.decode()})
-    write(root/'design/approvals.yaml',ledger)
+    write(root/'design/approvals.yaml',[
+        {**row,'approver':'fixture-owner','date':'2026-10-22'} for row in rows])
 
 
 def approve(project):
@@ -511,7 +492,7 @@ def test_real_l2_palette_empty_targets_and_layout_regression(project, tmp_path):
             assert old['runs'][0][key] == new['runs'][0][key]
 
 
-def test_ship_entrypoint_rejects_proposed_and_unprotected_signed_approval(project):
+def test_ship_entrypoint_rejects_proposed_and_accepts_reviewed_approval(project):
     root, catalogs = project
     env = dict(os.environ, DESIGN_AUTHOR_PYTHON=sys.executable)
     argv = [str(SKILL / 'scripts/design-ship'), '--repo', str(root), '--catalog-dir', str(catalogs)]
@@ -520,8 +501,8 @@ def test_ship_entrypoint_rejects_proposed_and_unprotected_signed_approval(projec
     assert json.loads(run.stdout)['errors']
     approve(project)
     run = subprocess.run(argv, env=env, capture_output=True, text=True)
-    assert run.returncode == 2
-    assert 'agent account' in str(json.loads(run.stdout)['errors'])
+    assert run.returncode == 0,run.stdout+run.stderr
+    assert json.loads(run.stdout)['exit_code']==0
 
 
 def test_ship_allows_warning_on_unapproved_nice_token(project):
@@ -535,9 +516,6 @@ def test_ship_allows_warning_on_unapproved_nice_token(project):
     result = check(project, ship=True)
     assert result['exit_code'] == 1
     assert result['counts']['proposed'] == 1
-    # Genuine CLI green path: optional values need no owner signature.
-    write(root/'design/approvals.yaml',[])
-    catalog=json.loads((catalogs/'test-v1.json').read_text());catalog['items']=[item(grade='nice-to-have')];write(catalogs/'test-v1.json',catalog)
     run = subprocess.run([str(SKILL / 'scripts/design-ship'),'--repo',str(root),'--catalog-dir',str(catalogs)],
                          env=dict(os.environ, DESIGN_AUTHOR_PYTHON=sys.executable),capture_output=True,text=True)
     assert run.returncode == 0
@@ -676,7 +654,7 @@ def test_web_check_runs_real_l1_and_l2_and_detects_palette_mutation(project):
     tokens['radius']={'$type':'dimension','$value':{'value':0,'unit':'px'},'$extensions':{'org.own.design':{'origin':'proposal'}}}
     write(root / 'design/tokens/brand.tokens.json',tokens)
     result=check(project)
-    catalog=json.loads((catalogs/'test-v1.json').read_text());catalog['items']=[item(grade='nice-to-have')];write(catalogs/'test-v1.json',catalog)
+    approve(project)
     write(root / 'design/validation.json',{'schema_version':1,'html':['index.html'],
           'urls':[{'env':'DESIGN_FIXTURE_URL'}],'viewports':[375],'schemes':['light']})
     normal=('<html lang="en"><head><title>Fixture</title><meta name="viewport" content="width=device-width">'

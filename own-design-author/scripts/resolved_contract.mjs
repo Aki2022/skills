@@ -2,8 +2,6 @@
 import {readFileSync, readdirSync, realpathSync, statSync} from 'node:fs';
 import {dirname, basename, join, relative, resolve, sep} from 'node:path';
 import {createHash} from 'node:crypto';
-import {execFileSync} from 'node:child_process';
-import {fileURLToPath} from 'node:url';
 
 export function loadManifest(path) {
   path = realpathSync(path);
@@ -13,17 +11,7 @@ export function loadManifest(path) {
   const data = JSON.parse(readFileSync(path, 'utf8'));
   if (data.schema_version !== 1 || data.media !== 'web' || !Object.keys(data.tokens || {}).length)
     throw new Error('unsupported or empty manifest');
-  if (data.approval_scheme !== 'ssh-jcs-v1') throw new Error('unsupported approval scheme; rerun L0');
-  const approved = Object.values(data.tokens).some(t => t.state === 'approved') ||
-    Object.values(data.items || {}).some(i => i.approval_state === 'approved');
-  if (approved && !data.approval_context) throw new Error('approved manifest requires trust context');
-  if (data.approval_context) {
-    // Shared trust checks only. The consumer never resolves DTCG again.
-    try { execFileSync(process.env.DESIGN_AUTHOR_PYTHON || 'python3',
-      [fileURLToPath(new URL('./resolved_contract.py', import.meta.url)), path],
-      {stdio:'pipe', timeout:30000}); }
-    catch { throw new Error('approval trust unavailable, invalid or stale'); }
-  }
+  if (data.approval_scheme !== 'hash-jcs-v1') throw new Error('unsupported approval scheme; rerun L0');
   const actual = {};
   function walk(dir) {
     for (const name of readdirSync(dir).sort()) {

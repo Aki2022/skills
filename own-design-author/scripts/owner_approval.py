@@ -1,13 +1,10 @@
-"""Prepare review requests; only an explicit owner command invokes SSH signing."""
+"""Prepare review requests; record only after explicit human review."""
 from datetime import date
 import os
 from pathlib import Path
-import subprocess
-import re
 import tempfile
 import fcntl
-from approvals import protected_store,repository_id,payload,verify_rows,namespace
-from jcs import canonicalize_batch
+from approvals import SCHEME,repository_id,verify_rows
 
 
 def _snapshot(root,catalog_dir):
@@ -15,7 +12,7 @@ def _snapshot(root,catalog_dir):
     result=check_design(root,catalog_dir=catalog_dir)
     allowed=('must n-a approval hash missing/mismatch:','approval hash mismatch:')
     if any(not error.startswith(allowed) for error in result['errors']) or not result['manifest']:
-        raise ValueError('repair structural or signature errors before preparing approval')
+        raise ValueError('repair structural or approval errors before preparing approval')
     values,must={},[]
     for media,manifest in result['manifest'].items():
         for kind,rows in [('token',manifest['tokens']),('item',manifest['items'])]:
@@ -35,23 +32,13 @@ def prepare(root,catalog_dir,targets=None,all_must=False,when=None):
     targets=must if all_must else targets
     if not targets or len(set(targets))!=len(targets) or any(key not in values for key in targets):
         raise ValueError('zero, duplicate or unknown approval targets')
-    return {'schema_version':1,'repo_id':repository_id(root),
+    return {'schema_version':2,'approval_scheme':SCHEME,'repo_id':repository_id(root),
         'rows':[{'key':key,'value_hash':values[key],'date':when} for key in sorted(targets)]}
 
 
-def _sign(content,public_key,scope):
-    try:
-        run=subprocess.run(['ssh-keygen','-Y','sign','-f',str(public_key),'-n',scope],
-            input=content,capture_output=True,timeout=60)
-    except (OSError,subprocess.TimeoutExpired) as exc:
-        raise ValueError('owner signing failed or timed out') from exc
-    if run.returncode:raise ValueError('owner signing failed; no approval rows written')
-    return run.stdout.decode()
-
-
-def _approve_request(root,catalog_dir,request,public_key,approver):
+def _approve_request(root,catalog_dir,request,approver):
     from design_author import read_data,check_design
-    if not isinstance(request,dict) or set(request)!={'schema_version','repo_id','rows'} or request['schema_version']!=1:
+    if not isinstance(request,dict) or set(request)!={'schema_version','approval_scheme','repo_id','rows'} or request['schema_version']!=2 or request['approval_scheme']!=SCHEME:
         raise ValueError('invalid approval request')
     rows=request['rows']
     if not isinstance(rows,list) or not rows or any(not isinstance(row,dict) or set(row)!={'key','value_hash','date'} for row in rows):
@@ -66,26 +53,14 @@ def _approve_request(root,catalog_dir,request,public_key,approver):
     values,_=_snapshot(root,catalog_dir)
     if any(values.get(row['key'])!=row['value_hash'] for row in rows):
         raise ValueError('reviewed inputs changed; regenerate approval request')
-    protected_store(os.environ.get('DESIGN_ALLOWED_SIGNERS'),root)
-    if not isinstance(approver,str) or not re.fullmatch(r'[A-Za-z0-9_.@+-]+',approver):
-        raise ValueError('invalid owner principal')
-    key=Path(public_key)
-    try:key_text=key.read_text()
-    except OSError as exc:raise ValueError('owner public key unavailable') from exc
-    if key.suffix!='.pub' or not key_text.split() or key_text.split()[0] not in ('ssh-ed25519','sk-ssh-ed25519@openssh.com'):
-        raise ValueError('supply an Ed25519 public key backed by the owner agent')
-    signed=[]
-    for row in rows:
-        record={**row,'approver':approver}
-        record['signature']=_sign(payload(identity,record),key,namespace(record['key']))
-        signed.append(record)
-    verify_rows(signed,root)
+    recorded=[{**row,'approver':approver} for row in rows]
+    verify_rows(recorded,root)
     current,_=_snapshot(root,catalog_dir)
     if repository_id(root)!=identity or any(current.get(row['key'])!=row['value_hash'] for row in rows):
-        raise ValueError('reviewed inputs changed during signing; no rows written')
+        raise ValueError('reviewed inputs changed during recording; no rows written')
     ledger=read_data(Path(root)/'design/approvals.yaml')
-    # Preserve unrelated owner approvals. No partial writes if signing/verification fails.
-    combined=[row for row in ledger if row['key'] not in keys]+signed
+    # Preserve unrelated owner approvals. No partial writes if validation fails.
+    combined=[row for row in ledger if row['key'] not in keys]+recorded
     verify_rows(combined,root)
     target=Path(root)/'design/approvals.yaml'
     temporary=None
@@ -99,11 +74,11 @@ def _approve_request(root,catalog_dir,request,public_key,approver):
     finally:
         if temporary is not None and temporary.exists():temporary.unlink()
     result=check_design(root,catalog_dir=catalog_dir)
-    return {'status':'recorded','signed_rows':len(signed),'exit_code':result['exit_code'],
+    return {'status':'recorded','recorded_rows':len(recorded),'exit_code':result['exit_code'],
         'errors':result['errors'],'warnings':result['warnings']}
 
 
-def approve_request(root,catalog_dir,request,public_key,approver):
+def approve_request(root,catalog_dir,request,approver):
     root=Path(root)
     if (root/'design/approvals.yaml').is_symlink():raise ValueError('symlinked ledger is unsupported')
     directory=root/'design/.resolved'
@@ -112,4 +87,4 @@ def approve_request(root,catalog_dir,request,public_key,approver):
     with (directory/'approval.lock').open('a') as lock:
         try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
         except BlockingIOError as exc:raise ValueError('another approval command is active') from exc
-        return _approve_request(root,catalog_dir,request,public_key,approver)
+        return _approve_request(root,catalog_dir,request,approver)

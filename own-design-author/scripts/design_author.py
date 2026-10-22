@@ -15,7 +15,7 @@ import unicodedata
 
 from dtcg import resolve_tokens, value_hash
 from classify import ClassificationError, classify_response, load_policy
-from approvals import verify_rows
+from approvals import SCHEME,verify_rows
 from jcs import media_hashes
 
 VERSION = '1.0.0'
@@ -238,7 +238,7 @@ def _asset_rule_evidence(root, rules, errors):
 
 
 def _approvals(design):
-    return verify_rows(read_data(design/'approvals.yaml'),design.parent,with_context=True)
+    return verify_rows(read_data(design/'approvals.yaml'),design.parent)
 
 
 def check_design(root, *, catalog_dir=CATALOG, ship=False):
@@ -317,7 +317,7 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
             tokens = {}
             errors.append('zero token targets')
         counts['tokens'] = len(tokens)
-        approvals,approval_context = _approvals(design)
+        approvals = _approvals(design)
         notice = read_data(inside(design, 'NOTICE'))
         sources = {}
         for row in notice.get('sources', []):
@@ -469,7 +469,7 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
         artifacts = build_artifacts(tokens,tailwind_templates)
         for medium, profile in profiles.items():
             result['manifest'][medium] = {'schema_version':1, 'skill_version':VERSION,
-                'approval_scheme':'ssh-jcs-v1','approval_context':approval_context,
+                'approval_scheme':SCHEME,
                 'catalog_version':catalog['version'], 'catalog_hash':value_hash(catalog), 'source_hash':source_hash,
                 'input_hashes':input_hashes, 'media':medium, 'profile':profile,
                 'minimums':profile['minimums'], 'tokens':resolved_by_media[medium][0], 'items':resolved_by_media[medium][1],
@@ -592,7 +592,6 @@ def main(argv=None):
             p.add_argument('--must',action='store_true')
             p.add_argument('--target',action='append',default=[])
             p.add_argument('--request',type=Path)
-            p.add_argument('--key',type=Path)
             p.add_argument('--approver',default='owner')
     args = parser.parse_args(argv)
     try:
@@ -600,12 +599,12 @@ def main(argv=None):
         if args.command == 'approve':
             from owner_approval import prepare,approve_request
             if args.prepare:
-                if args.request or args.key:raise ValueError('prepare does not use a request or signing key')
+                if args.request:raise ValueError('prepare does not use a request')
                 result=prepare(root,args.catalog_dir,args.target,args.must)
             else:
-                if not args.request or not args.key or args.must or args.target:
-                    raise ValueError('owner signing requires only --request and --key')
-                result=approve_request(root,args.catalog_dir,read_data(args.request),args.key,args.approver)
+                if not args.request or args.must or args.target:
+                    raise ValueError('approval recording requires only --request and --approver')
+                result=approve_request(root,args.catalog_dir,read_data(args.request),args.approver)
             print(json.dumps(result,ensure_ascii=False,sort_keys=True))
             return result.get('exit_code',0)
         if args.command in ('check','sync'):

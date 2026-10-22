@@ -69,17 +69,10 @@ def test_push_and_mise_share_ship_gate_without_bypassing_scanner(project, tmp_pa
         mise_env = dict(env, MISE_TRUSTED_CONFIG_PATHS=str(root))
         run = subprocess.run([mise,'run','design:ship'], cwd=root, env=mise_env, capture_output=True)
         assert run.returncode != 0
-    # A signed row from the agent-writable fixture store is still blocked by the real CLI.
+    # Same real hook/mise path now accepts hash-bound reviewed must values.
     approve(project)
     git('add','design/approvals.yaml')
-    git('commit','-qm','synthetic signature with unprotected trust')
-    blocked=git('push','fixture','HEAD:refs/heads/main',allowed=(1,))
-    assert 'agent account' in blocked.stdout+blocked.stderr
-    # Genuine push/mise green path for optional values; this is not signed-must acceptance.
-    write(root/'design/approvals.yaml',[])
-    data=json.loads((catalogs/'test-v1.json').read_text())
-    data['items']=[item(grade='nice-to-have')];write(catalogs/'test-v1.json',data)
-    git('add','design/approvals.yaml');git('commit','-qm','fixture optional values')
+    git('commit','-qm','fixture reviewed must values')
     git('push','fixture','HEAD:refs/heads/main')
     assert (remote / 'refs/heads/main').read_text().strip()==git('rev-parse','HEAD').stdout.strip()
     if mise:

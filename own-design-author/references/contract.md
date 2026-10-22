@@ -48,29 +48,22 @@ group `$extends`、カスタムdash配列のstrokeStyle、srgb以外のCSS変換
 ## ハッシュと承認
 
 承認hashは媒体・実効profile・解決値/証拠の辞書をJCS（RFC 8785）で正規化したSHA256。
-分類カタログの既存入力hashはこの移行では変更しない。承認schemeはssh-jcs-v1。
+分類カタログの既存入力hashはこの移行では変更しない。承認schemeはhash-jcs-v1。
 
 - tokenは解決後のtype/valueを束縛する。alias先の変更も失効する。
 - defined itemは証拠参照と解決値の辞書を束縛する。
-- n-a itemはstate/reasonを束縛する。mustのn-aは署名済み行が必須。
+- n-a itemはstate/reasonを束縛する。mustのn-aは承認行が必須。
 
-行はkey / value_hash / approver / ISO date / signatureを持つ。
+行はkey / value_hash / approver / ISO dateを持つ。
 keyはds:web:item:<id> またはds:web:token:<path>。IA用namespaceは予約し、DSのL0では未登録対象を拒否する。
-SSH署名namespaceはds-approval/ia-approval。payloadはrepo_id/key/value_hash/dateのJCS。
-repo_idは現在のorigin URLのSHA256で、URLそのものを出力しない。origin変更は再承認が必要。
-無署名の旧token_path/item_id行を承認済みに自動移行しない。
-
-DESIGN_ALLOWED_SIGNERSはrepo外の保護されたallowed_signersを指す。
-ファイルと全親ディレクトリがagent accountの所有か書込み可能なら拒否する。
-自分の所有ファイルをchmodでreadonlyにしただけでは保護にならない。
-実鍵/信頼設定の変更は人間ゲート。詳細はapproval-upgrade.md。署名を消費したmanifestはtrustのdigestとrepo idを持ち、consumerも現在の設定と照合する。公開鍵一覧の失効/変更後に古い承認状態を再利用しない。
+旧token_path/item_id行や署名行を自動移行しない。現在のJCS hashを確認して新しい記録を作る。
+署名・鍵・allowed_signersは要求しない。承認者の真正性は技術的に証明せず、人間の明示承認を運用上の根拠とする。
+AIは提案までを自律で行い、実台帳は書かない。オーナー自身が確認後に記録する。詳細はapproval-upgrade.md。
+consumerはapproval_schemeと全入力hashを検査し、承認台帳の削除・変更後の古いmanifestも拒否する。
 
 一致するdefined item行は直接参照するtokenの承認にもなる。散文内のtoken文字列だけでは伝播しない。
 source-hash規則で全targetsがdesign/assets/以下なら実SHA256とallowlistをL0で検証し、
 item証拠hashに規則と実測を含める。他の宣言規則を自己申告で対応済みにしない。
-
-自己テストの署名鍵は人工fixture。in-processの正例はOS trust境界だけを代替し、実SSH署名とL0を検証する。
-実CLIはそのagent所有fixture trustを拒否する。人工鍵の通過を実オーナーの確認・本番の保護境界の証拠にしない。
 
 ## 終了コードと境界
 

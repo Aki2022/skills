@@ -5,7 +5,7 @@ description: リポジトリの design/ を作成・更新し、ブランドの�
 
 # Own Design Author
 
-2026-10-22改訂への実装途中。署名/JCSはL0へ接続済みだが、実オーナーの署名環境は未検証。L0-onlyのshipは出荷SHAにL0〜L2を束縛する新specをまだ満たさない。本番出荷には使わず、`references/approval-upgrade.md` の未完範囲と導入境界を確認する。
+2026-10-22改訂への実装途中。承認記録とJCSハッシュ照合はL0へ接続済み。署名必須は所有者の判断でDeferred。L0-onlyのshipは出荷SHAにL0〜L2を束縛する新specをまだ満たさない。本番出荷には使わず、`references/approval-upgrade.md` の未完範囲と導入境界を確認する。
 
 repo の git toplevel にある `design/` を唯一の正典にする。上流のカタログは項目の定義で、ブランドの既定値ではない。
 
@@ -34,7 +34,7 @@ design-author check --repo <repo>
 
 ## 承認と検査
 
-`approvals.yaml` はオーナー自身のSSH署名付き行だけを受け付ける。AIが自律的に実鍵で署名・記録しない。`approve --prepare` は対象hashの確認用リクエストだけを返す。値・理由・散文・alias先・媒体profileの変更は失効する。オーナーの実行方法と信頼設定は `references/approval-upgrade.md`。
+`approvals.yaml` は人間が確認した対象のkey・hash・承認者・日付を記録する。オーナー自身が確認後に記録し、AIは実台帳を書かない。署名は要求せず、承認者の真正性やAIによる偽造防止は保証しない。`approve --prepare` は対象hashの確認用リクエストだけを返す。値・理由・散文・alias先・媒体profileの変更は失効する。確認・記録の手順と運用上の限界は `references/approval-upgrade.md`。
 
 ```sh
 design-author check --repo <repo>

@@ -5,7 +5,7 @@ description: リポジトリの design/ を作成・更新し、ブランドの�
 
 # Own Design Author
 
-2026-10-22改訂への実装途中。承認記録とJCSハッシュ照合はL0へ接続済み。署名必須は所有者の判断でDeferred。L0-onlyのshipは出荷SHAにL0〜L2を束縛する新specをまだ満たさない。本番出荷には使わず、`references/approval-upgrade.md` の未完範囲と導入境界を確認する。
+承認記録とJCSハッシュ照合、固定環境のL0〜L2出荷ゲート、維持モードを提供する。署名必須は所有者の判断でDeferred。実パイロットの承認台帳・評価用データ・全画面検証は別に揃える。人工repoの合格を本番の合格にしない。導入境界は `references/approval-upgrade.md` と `references/ship-gates.md`。
 
 repo の git toplevel にある `design/` を唯一の正典にする。上流のカタログは項目の定義で、ブランドの既定値ではない。
 
@@ -56,6 +56,8 @@ L1/L2と生成Tailwindの使い方・制約は `references/web-validation.md` �
 IA入力を見つけても対応実装を黙って無視しない。IA本体は兄弟WSが担当する。
 
 ## 上流更新
+
+セッション終了時は `design-author maintain --repo <repo>` を使う。前回成功時からの変更・期限・実装/カタログ/policyの変更で再生成とL0を実行し、失効した承認と候補を列挙する。承認は書かず、モデルは呼ばない。`design/` 不在は1行skip。期限設定・出力と失敗時の扱いは `references/maintenance.md`。
 
 上流の再取得は人間が起動する。`references/catalog-maintenance.md` の手順でカタログを生成し、差分と判定の使用量を確認する。推測で見出しを改名扱いにしない。元の版を残したまま新しい版を追加する。
 

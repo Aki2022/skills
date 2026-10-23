@@ -492,7 +492,7 @@ def test_real_l2_palette_empty_targets_and_layout_regression(project, tmp_path):
             assert old['runs'][0][key] == new['runs'][0][key]
 
 
-def test_ship_entrypoint_rejects_proposed_and_accepts_reviewed_approval(project):
+def test_l0_approval_alone_does_not_satisfy_formal_ship_gate(project):
     root, catalogs = project
     env = dict(os.environ, DESIGN_AUTHOR_PYTHON=sys.executable)
     argv = [str(SKILL / 'scripts/design-ship'), '--repo', str(root), '--catalog-dir', str(catalogs)]
@@ -501,11 +501,11 @@ def test_ship_entrypoint_rejects_proposed_and_accepts_reviewed_approval(project)
     assert json.loads(run.stdout)['errors']
     approve(project)
     run = subprocess.run(argv, env=env, capture_output=True, text=True)
-    assert run.returncode == 0,run.stdout+run.stderr
-    assert json.loads(run.stdout)['exit_code']==0
+    assert run.returncode == 2,run.stdout+run.stderr
+    assert json.loads(run.stdout)['errors']
 
 
-def test_ship_allows_warning_on_unapproved_nice_token(project):
+def test_l0_nice_warning_does_not_bypass_missing_formal_ship_channel(project):
     approve(project)
     root, catalogs = project
     p = root / 'design/tokens/brand.tokens.json'
@@ -518,8 +518,8 @@ def test_ship_allows_warning_on_unapproved_nice_token(project):
     assert result['counts']['proposed'] == 1
     run = subprocess.run([str(SKILL / 'scripts/design-ship'),'--repo',str(root),'--catalog-dir',str(catalogs)],
                          env=dict(os.environ, DESIGN_AUTHOR_PYTHON=sys.executable),capture_output=True,text=True)
-    assert run.returncode == 0
-    assert json.loads(run.stdout)['exit_code'] == 1
+    assert run.returncode == 2
+    assert json.loads(run.stdout)['errors']
 
 
 def test_vanilla_design_without_color_tokens_does_not_require_tailwind(project):

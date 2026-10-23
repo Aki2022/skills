@@ -157,7 +157,7 @@ def _clear_manifests(design):
         raise ValueError('.resolved symlink was unlinked; its target was not modified')
     if resolved.is_dir():
         for path in resolved.iterdir():
-            if path.is_file() and path.suffix in ('.json', '.css', '.cjs'):
+            if path.is_file() and path.suffix in ('.json', '.css', '.cjs') and path.name != 'maintenance-stamp.json':
                 path.unlink()
 
 
@@ -262,11 +262,17 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
             raise ValueError('design/ missing or symlink; run own-design-author init at git toplevel')
         _clear_manifests(design)
         config = read_data(inside(design, 'design.yaml'))
-        if not isinstance(config, dict) or set(config) - {'schema_version','skill_version','catalog_version','preset','media','items','retired_items','checks','modules','spec'}:
+        if not isinstance(config, dict) or set(config) - {'schema_version','skill_version','catalog_version','preset','media','items','retired_items','checks','modules','spec','maintenance','channels'}:
             raise ValueError('unknown design configuration fields')
         if config.get('schema_version') != 1:
             raise ValueError('unknown design schema version')
         catalog = load_catalog(config.get('catalog_version'), catalog_dir)
+        if 'channels' in config:
+            from ship_contract import validate_channels
+            validate_channels(config)
+        if 'maintenance' in config:
+            from maintenance import validate_maintenance
+            validate_maintenance(config, {x['id'] for x in catalog['items']} | set(config.get('retired_items', {})))
         presets = _presets()
         preset = config.get('preset')
         if preset not in presets or preset == 'schema_version':
@@ -620,13 +626,13 @@ def git_root(path):
     run = subprocess.run(['git','-C',str(path),'rev-parse','--show-toplevel'],capture_output=True,text=True)
     if run.returncode:
         raise ValueError('design commands require an existing git repository')
-    return Path(run.stdout.strip())
+    return Path(run.stdout.strip()).resolve()
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='command',required=True)
-    for command in ('init','check','migrate','sync','approve'):
+    for command in ('init','check','migrate','sync','approve','maintain'):
         p = sub.add_parser(command)
         p.add_argument('--repo',default='.')
         p.add_argument('--catalog-dir',type=Path,default=CATALOG)
@@ -638,6 +644,8 @@ def main(argv=None):
             p.add_argument('--ship',action='store_true')
             p.add_argument('--include-manifest',action='store_true')
             p.add_argument('--include-candidates',action='store_true')
+        if command == 'maintain':
+            p.add_argument('--force',action='store_true')
         if command == 'approve':
             p.add_argument('--prepare',action='store_true')
             p.add_argument('--must',action='store_true')
@@ -647,6 +655,11 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         root = git_root(args.repo)
+        if args.command == 'maintain':
+            from maintenance import maintain_design
+            result = maintain_design(root, catalog_dir=args.catalog_dir, force=args.force)
+            print(json.dumps(result, ensure_ascii=False, sort_keys=True))
+            return result['exit_code']
         if args.command == 'approve':
             from owner_approval import prepare,approve_request
             if args.prepare:

@@ -43,6 +43,7 @@ design-author approve --request request.json --approver owner --repo .
 
 判定台帳の読取・記録/移行、5区分報告、IA接続口はjudgments-and-modules.md。
 実パイロットのモデル回答と人間ラベル付きholdoutはまだ未投入。
-固定L2 2回、出荷SHA/成果物hash、ship_command/doctor、
-維持モードとA/B/Cはまだ追加受入として残る。現在のL0-only shipを正式な出荷ゲートと呼ばない。
+固定L2 2回と5区分報告、出荷SHA/成果物hashとship_command/doctor、維持モードは実装済み。
+出荷契約はship-gates.md、終了時の点検はmaintenance.md、A/B/Cの相互参照はdocs validatorが持つ。
+実パイロットへの正式なチャネル導入・実台帳記入・判定台帳投入と全画面の合格は別工程。
 署名は、AIから独立した承認者の認証を必要とする運用になった時に再検討する。

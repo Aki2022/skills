@@ -9,6 +9,8 @@ Python 3.10以上と、既存環境に導入済みの PyYAML / jsonschema（refe
 ## ファイル
 
 - `design.yaml`: JSON互換YAML。`schema_version: 1`、`skill_version: 1.0.0`、`catalog_version`、`preset`、`media`、`items`。`items` は不変idをキーにした差分だけ。`spec`は方針を持つrepo相対のdocs/specs Markdownパス、または重複しない非空のパス配列。相互参照はown-doc-updateのvalidatorが検査する。
+- `design.yaml`の任意の`maintenance`は期限点検の設定。`within_days`と`review_due_dates`のみを持ち、詳細はmaintenance.md。維持検査の成功stampは`.resolved/`に置き、実台帳は変更しない。
+- `design.yaml`の任意の`channels`は出荷チャネルの宣言。`ship: true`に正式のship_command・成果物・検査用serverを必須とする。ファイル契約と起動方法はship-gates.md。
 - `tokens/*.tokens.json`: 値を持つ正典。名前はlower-case kebab-case、参照パスはdot区切り、aliasは `{group.name}`。`$type` はグループから継承できる。CSS名は `--group-name`、衝突は失格。同じパスの多重定義も失格。
 - `DESIGN.md`: 散文とトークン参照。doc証拠は `doc:DESIGN.md#dads-000001` のような実見出しを指す。空の節・コードブロック内の偽見出しは証拠にならない。
 - `profiles/web.json`: `media: web` と `minimums`。skillの `minimums.json` より厳しい数値だけ上書き可。media不明・下限の緩和・未知キーは失格。

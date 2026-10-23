@@ -21,7 +21,7 @@ def pin(root,env):
     js=('import {probe} from '+json.dumps(HELPER.as_uri())+';'
         'import {createRequire} from "node:module";const require=createRequire(process.cwd()+"/");'
         'const p=require("playwright");console.log(JSON.stringify(await probe(p.chromium,require("playwright/package.json").version)));')
-    run=subprocess.run([NODE,'--input-type=module','-e',js],cwd=SKILL.parent,env=env,capture_output=True,text=True)
+    run=subprocess.run([NODE,'--input-type=module','-e',js],cwd=root,env=env,capture_output=True,text=True)
     assert run.returncode==0,run.stderr
     return {'schema_version':1,'runtime':json.loads(run.stdout),'clock':'2020-01-01T00:00:00.000Z',
         'locale':'en-US','timezone':'UTC','device_scale_factor':1,'reduced_motion':'reduce',
@@ -69,7 +69,7 @@ def test_fixed_two_runs_detect_fallback_instability_and_runtime_mismatch(project
         output=root/'design/.resolved/fixed-test.json'
         run=subprocess.run([NODE,str(script),'http://127.0.0.1:'+str(server.server_port),
             '--manifest',str(root/'design/.resolved/web.json'),'--environment',str(root/'design/render-environment.json'),
-            '--viewports','375','--schemes','light','--json',str(output)],cwd=SKILL.parent,env=env,capture_output=True,text=True)
+            '--viewports','375','--schemes','light','--json',str(output)],cwd=root,env=env,capture_output=True,text=True)
         return run,json.loads(output.read_text()) if output.exists() else None
     try:
         run,data=measure(normal);assert run.returncode==0,run.stderr+run.stdout

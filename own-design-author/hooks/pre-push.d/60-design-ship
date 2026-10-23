@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# vibe-guard pre-push.d extension. Its first argument is the preserved refs file.
+# vibe-guard passes the preserved refs file after its scanner has consumed stdin.
 set -eu
 repo=$(git rev-parse --show-toplevel) || exit 2
 marker="$repo/.vibe-guard/design-ship.enabled"
@@ -8,4 +8,8 @@ marker="$repo/.vibe-guard/design-ship.enabled"
   echo 'invalid design ship marker; shipment stopped' >&2
   exit 2
 }
-exec "${DESIGN_SHIP_COMMAND:-design-ship}" --repo "$repo"
+[ "$#" -eq 1 ] && [ -f "$1" ] || {
+  echo 'missing preserved push refs; shipment stopped' >&2
+  exit 2
+}
+exec "${DESIGN_SHIP_COMMAND:-design-ship}" --repo "$repo" --pre-push --refs-file "$1"

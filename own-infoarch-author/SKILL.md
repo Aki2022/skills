@@ -12,8 +12,8 @@ description: "repo 直下 design/info_arch/ の「伝え方の SSOT」（対象�
 
 ## 重要ルール
 
-- **承認を書かない。** `info_arch.yaml` の `state` は `empty` / `proposed` だけ。承認は、このファイルの変更をオーナーがレビューした
-  PR で表す（CODEOWNERS とブランチ保護）。AI は `info_arch.yaml` の変更を自律マージしない。
+- **承認の状態を書かない。** `info_arch.yaml` の `state` は `empty` / `proposed` だけ。SSOT の変更も、検査が緑なら
+  他の変更と同じく自律マージする（人のレビューは置かない）。値の出所は `provenance` に必ず書く。
 - **制作中に SSOT を書き換えない。** 足りない・合わないと分かったら、成果物を直すか、SSOT の変更を別の PR で提案する。
 - **固定値は参照で書く。** アウトラインの文案では、数値・連絡先・免責などは `{{fct-NNNN}}` で参照し、値を直接書かない。
 - **対象 0 件は失格。** チャネル 0 件・アウトライン 0 件は終了コード 2。
@@ -35,7 +35,7 @@ description: "repo 直下 design/info_arch/ の「伝え方の SSOT」（対象�
 `references/media/flyer-poster.md`、資料は `references/media/deck.md`、アプリの文言は `references/media/app-copy.md`。
 
 - 小さな依頼（単発のチラシなど）は `references/light-process.md` に従って簡略にしてよい。段 1 と段 6 は省かない。
-- 新しい repo で SSOT が空なら、先に `references/bootstrap.md` に従って既存の資料から下書きを起こし、オーナーの PR 承認を待つ。
+- 新しい repo で SSOT が空なら、先に `references/bootstrap.md` に従って既存の資料から下書きを起こし、検査を緑にしてマージする。
 - 例：`references/examples/design/info_arch/` に、同じ SSOT から対象者の違う 2 つの成果物（LP と資料）を作ったアウトラインがある。
 
 ノウハウの数値に「出典なし・目安」とあるものは、検査に使わない。

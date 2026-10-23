@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "own-infoarch-author/info_arch.v2.schema.json",
   "title": "design/info_arch/info_arch.yaml schema version 2 (messaging SSOT)",
-  "description": "伝え方の SSOT。原子は 7 種（対象者・課題・メッセージ・証拠・固定値・正式名称・声）。state に approved は無い：承認は、このファイルの変更をオーナーがレビューした PR で表す。出典: SPEC-information-architecture-standardization v4。",
+  "description": "伝え方の SSOT。原子は 7 種（対象者・課題・メッセージ・証拠・固定値・正式名称・声）。state に approved は無い：承認の状態は持たない（変更は自律マージ。記録は git の履歴）。出典: SPEC-information-architecture-standardization v4。",
   "type": "object",
   "additionalProperties": false,
   "required": [

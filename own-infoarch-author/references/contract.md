@@ -60,6 +60,29 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 `expires` があればその日、無ければ `as_of` に日数を足した日を期限とする。期限の日の当日までは有効で、翌日から期限切れ。日数の初期値は `references/expiry.json`、プロジェクトの
 `info_arch.yaml` の `policy.expiry_days` で上書きできる。`evergreen: true` の固定値は期限を持たない。
 
-## この版に無いもの（ISSUE-02 以降）
+## 描画物の確認（`dom`）
 
-6 段の手順とノウハウ、描画物の DOM の確認、Jev の判定台帳（表記ゆれ・強調）、出荷ゲート、工場の接続。
+`infoarch-author dom --root . --outline <id>` は、アウトラインの outputs のうち HTML を、チャネルの viewports（無ければ 375×812 と 1280×800）でブラウザに描画し、DOM を確かめる。
+
+- 解析と描画はブラウザ（Playwright の Chromium）が行う。成果物のソースを自前のパーサで読まない。
+- 工場はアンカーを埋める：メッセージは `data-ia-msg`、課題は `data-ia-problem`、固定値の表示は `data-ia-fact`。
+- Playwright は `INFOARCH_PLAYWRIGHT_DIR`、無ければ対象 repo（実行ディレクトリ）から解決する。自動では入れない。解決できなければ IA_DOM_PLAYWRIGHT で失格。
+- 同じ入力を 2 回描画し、結果が違えば IA_DOM_UNSTABLE（判定に使わない）。
+- 最初の画面の文言（各画面幅）を報告の `first_screens` に出す。強調の判定（Jev の判定台帳）の入力になる。
+
+| code | 内容 |
+| --- | --- |
+| IA_DOM_NO_TARGETS | 描画されたテキストが 0 件 |
+| IA_DOM_ANCHOR_MISSING / IA_DOM_ANCHOR_HIDDEN | アウトラインのメッセージ・課題のアンカーが無い・見えていない（display / visibility / opacity / 大きさ 0） |
+| IA_DOM_ANCHOR_UNKNOWN | アウトラインに無いメッセージ・課題のアンカー |
+| IA_DOM_ORDER | 見えているアンカーの描画順（上から）に、アウトラインの順が部分列として現れない（行動喚起の繰り返しは可） |
+| IA_DOM_FACT_MISSING / IA_DOM_FACT_VALUE | 文案が参照する固定値の表示が無い・SSOT の値と違う（空白は正規化して比べる） |
+| IA_DOM_UNSTABLE | 2 回の描画で結果が違う |
+| IA_DOM_OUTPUT_MISSING / IA_DOM_UNCOVERED（warn） | 成果物のファイルが無い・HTML 以外（未カバー） |
+| IA_DOM_PLAYWRIGHT | Playwright を解決できない・描画に失敗した |
+
+見えるかどうかは、要素とその祖先の display / visibility / opacity と、大きさで判定する。コントラストや画面外への配置（clip-path・transform）は、デザイン側の L2 が持つ。
+
+## この版に無いもの
+
+Jev の判定台帳（表記ゆれ・強調）、出荷ゲート、工場の接続。

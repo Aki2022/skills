@@ -45,6 +45,7 @@ description: "repo 直下 design/info_arch/ の「伝え方の SSOT」（対象�
 ```sh
 infoarch-author check --root .              # SSOT・チャネル・アウトラインの決定論の検査。終了コード 0 / 1（警告）/ 2（失格）
 infoarch-author impact --root . --id fct-0001  # その原子を参照するアウトラインと成果物を列挙
+infoarch-author dom --root . --outline lp-xxx # 描画物をブラウザで開き、アンカー・順序・固定値の表示を確かめる
 ```
 
 `scripts/infoarch-author` を PATH に置き、PyYAML と jsonschema のある Python を `DESIGN_AUTHOR_PYTHON` で選ぶ
@@ -53,7 +54,7 @@ infoarch-author impact --root . --id fct-0001  # その原子を参照するア�
 
 ## 参照
 
-- `references/contract.md` — ディレクトリ・原子・アウトラインの契約、検査の code 一覧、期限の扱い。
+- `references/contract.md` — ディレクトリ・原子・アウトラインの契約、検査の code 一覧、期限の扱い、描画物の確認（工場が埋めるアンカー）。
 - `references/schema/` — `info_arch.yaml`（版 2）・`channels/*.yaml`（版 2）・`outlines/*.yaml`（版 1）の JSON Schema。
 - `references/expiry.json` — 証拠・固定値の期限の初期値。
 - `fixtures/red-cases.json` — 必須の赤ケース。自己テストは `python3 -m pytest -q <skill>/scripts/tests`。

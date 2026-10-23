@@ -1,0 +1,9 @@
+#!/usr/bin/env sh
+set -eu
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+py="${DESIGN_AUTHOR_PYTHON:-python3}"
+if ! command -v "$py" >/dev/null 2>&1; then
+  printf '{"exit_code": 2, "error": "interpreter not found: set DESIGN_AUTHOR_PYTHON to a Python with PyYAML and jsonschema"}\n'
+  exit 2
+fi
+exec "$py" "$script_dir/infoarch_author.py" "$@"

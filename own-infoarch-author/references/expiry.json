@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "note": "証拠・固定値の期限の初期値（日数）。明示の expires が無く as_of だけがある時、as_of からこの日数を過ぎたら期限切れ。evergreen: true の固定値は期限を持たない。プロジェクトの info_arch.yaml の policy.expiry_days で上書きできる。365 日は出典の無い目安で、1 年ごとに数字を見直す運用を想定した値。",
+  "expiry_days": {"proof": 365, "fact": 365}
+}

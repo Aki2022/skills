@@ -18,6 +18,14 @@ DEFAULT_VIEWPORTS = [{'name': 'mobile', 'width': 375, 'height': 812}, {'name': '
 HTML_SUFFIXES = {'.html', '.htm'}
 
 
+def expected_for(outline, output):
+    """Anchors and facts one output file must show: its own page when pages and outputs pair up 1:1."""
+    pages = outline['pages']
+    if len(pages) == len(outline['outputs']):
+        pages = [pages[outline['outputs'].index(output)]]
+    return expected({'pages': pages})
+
+
 def expected(outline):
     seq, facts = [], []
     for p in outline['pages']:
@@ -39,13 +47,13 @@ def _is_subsequence(want, have):
     return all(any(w == h for h in it) for w in want)
 
 
-def compare(outline, ssot, snap):
+def compare(outline, ssot, snap, output=None):
     """-> [(code, level, message)] for one snapshot (one file, one viewport)."""
     out = []
     vp = snap['viewport']['name']
     if not snap.get('text_chars'):
         return [('IA_DOM_NO_TARGETS', 'fail', f'{vp}: 描画されたテキストが 0 件（対象 0 件を合格にしない）')]
-    seq, facts = expected(outline)
+    seq, facts = expected_for(outline, output) if output else expected(outline)
     anchors = snap['anchors']
     wanted = set(seq)
     for a in anchors:
@@ -117,7 +125,7 @@ def run(root, outline_id, date, runs=2):
         files += 1
         for i, vp in enumerate(viewports):
             per_vp = [s[i] for s in series]
-            for code, level, msg in compare_runs(per_vp) or compare(o, m.ssot, per_vp[0]):
+            for code, level, msg in compare_runs(per_vp) or compare(o, m.ssot, per_vp[0], out):
                 report.add(level, code, f'{out} {msg}', out)
             first_screens.append({'file': out, 'viewport': vp['name'], 'text': per_vp[0]['first_screen']})
     report.targets = {'files': files, 'viewports': len(viewports) if files else 0}

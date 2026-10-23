@@ -45,6 +45,7 @@ description: "repo 直下 design/info_arch/ の「伝え方の SSOT」（対象�
 ```sh
 infoarch-author check --root .              # SSOT・チャネル・アウトラインの決定論の検査。終了コード 0 / 1（警告）/ 2（失格）
 infoarch-author impact --root . --id fct-0001  # その原子を参照するアウトラインと成果物を列挙
+infoarch-author skeleton --root . --outline lp-xxx [--out DIR]  # アウトラインから骨組みの HTML（アンカー・順序・固定値）を出す。工場はこれを崩さずにスタイリングする
 infoarch-author dom --root . --outline lp-xxx # 描画物をブラウザで開き、アンカー・順序・固定値の表示を確かめる
 ```
 

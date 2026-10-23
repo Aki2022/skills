@@ -17,7 +17,7 @@ Python 3.10以上と、既存環境に導入済みの PyYAML / jsonschema（refe
 - `checks/*.yaml`: `rules` 配列。id / kind / targetsまたはpaths / allowlist / minimum / pattern の宣言だけ。任意コマンドやコードを実行しない。実際のL1/L2実行を持たない規則は未カバー。
 - `assets/`: ファイルのsha256から `assets.json` を生成する。別の手書き台帳を正典にしない。
 - `approvals.yaml`: 人間確認を根拠にした行の配列。
-- `judgments.json`: 任意。doc証拠とn-a理由への保存済み確率判定、pinされたpolicyと人間ラベル付きholdout。未登録入力は未カバー。
+- `judgments.json`: 任意。doc証拠とn-a理由への保存済み確率判定、pinされたpolicy、評価用ラベルの有無。schema2は完全なcandidateとscoreを持ち、人間ラベルが無い時は明示的に精度未測定とする。高scoreは補助指摘、未登録・古い入力・不正台帳は出荷停止。
 - `NOTICE`: JSON互換YAML、`sources` 配列。各参照のid / url / commit / license / copyright / editedを必須とする。`edited`は真偽値。
 - `tailwind.json`: 任意の生成設定。対象別content・宣言的plugin・tokenを参照するthemeを持つ。詳細は `web-validation.md`。
 - `asset-exports.json`: `schema_version: 1` と `exports` 配列。各行にassets/以下のsourceとrepo相対targetsを置き、syncで配置、L1で実バイトを照合する。

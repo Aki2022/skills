@@ -1,8 +1,31 @@
 /** Read an L0 output and measure computed membership; no DTCG resolution. */
-import {readFileSync, readdirSync, realpathSync, statSync} from 'node:fs';
+import {readFileSync, readdirSync, realpathSync, statSync, lstatSync} from 'node:fs';
 import {dirname, basename, join, relative, resolve, sep} from 'node:path';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
+
+function iaDigest(file, full) {
+  if (!full) return createHash('sha256').update(readFileSync(file)).digest('hex');
+  const skill = dirname(dirname(file));
+  const inputs = {};
+  function walk(directory) {
+    if (lstatSync(directory).isSymbolicLink() || realpathSync(directory) !== directory)
+      throw new Error('IA trusted dependency symlink or escape');
+    for (const name of readdirSync(directory)) {
+      if (['tests', '__pycache__'].includes(name) || name.endsWith('.pyc')) continue;
+      const path = join(directory, name);
+      if (lstatSync(path).isSymbolicLink() || realpathSync(path) !== path)
+        throw new Error('IA trusted dependency symlink or escape');
+      if (statSync(path).isDirectory()) walk(path);
+      else if (statSync(path).isFile())
+        inputs[relative(skill, path).split(sep).join('/')] = createHash('sha256').update(readFileSync(path)).digest('hex');
+    }
+  }
+  for (const sub of ['scripts', 'references']) walk(join(skill, sub));
+  const keys = Object.keys(inputs).sort((a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b)));
+  if (!keys.length) throw new Error('zero IA trusted dependencies');
+  return createHash('sha256').update(JSON.stringify(Object.fromEntries(keys.map(key => [key, inputs[key]])))).digest('hex');
+}
 
 export function loadManifest(path) {
   path = realpathSync(path);
@@ -20,7 +43,7 @@ export function loadManifest(path) {
   if (Object.keys(modules).some(key => key !== 'ia')) throw new Error('unsupported resolved module');
   if (modules.ia) {
     const file = fileURLToPath(new URL('../../own-infoarch-author/scripts/ia_module.py', import.meta.url));
-    if (realpathSync(file) !== file || createHash('sha256').update(readFileSync(file)).digest('hex') !== modules.ia.implementation_sha256)
+    if (realpathSync(file) !== file || iaDigest(file, modules.ia.resolved?.governance?.contract === 'ia-git-history-v2') !== modules.ia.implementation_sha256)
       throw new Error('IA resolver changed; rerun L0');
   }
   const actual = {};

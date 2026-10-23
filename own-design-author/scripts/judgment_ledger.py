@@ -24,7 +24,7 @@ def probability(value):
 def validate_policy(policy):
     if not isinstance(policy,dict) or set(policy)!={'schema_version','model','theta','prompt_version','prompts'}:
         raise ValueError('invalid judgment policy')
-    if policy['schema_version']!=1 or not all(isinstance(policy[k],str) and policy[k].strip() for k in ('model','prompt_version')):
+    if type(policy['schema_version']) is not int or policy['schema_version']!=1 or not all(isinstance(policy[k],str) and policy[k].strip() for k in ('model','prompt_version')):
         raise ValueError('invalid judgment policy version/model')
     probability(policy['theta'])
     if not isinstance(policy['prompts'],dict) or set(policy['prompts'])!={'doc-relevance','na-rationale'} or any(not isinstance(v,str) or not v.strip() for v in policy['prompts'].values()):
@@ -78,52 +78,198 @@ def holdout_metrics(holdout,theta):
         'false_negatives':positives-tp,'false_positives':fp,'recall':tp/positives}
 
 
+def evaluation_metrics(holdout,theta):
+    """An explicit absence of labels is not a measured zero or a synthetic recall."""
+    if holdout=={'source':'unmeasured'}:
+        return {'status':'unmeasured'}
+    return {'status':'owner-labeled',**holdout_metrics(holdout,theta)}
+
+
+def _candidate_row(row,policy):
+    if not isinstance(row,dict) or set(row)!={'candidate','score'}:
+        raise ValueError('invalid judgment candidate row')
+    target=row['candidate']
+    try:
+        data=target['input']
+        if (not isinstance(data['catalog_id'],str) or not data['catalog_id'].strip()
+                or not isinstance(data['context'],dict)):
+            raise ValueError('invalid candidate identity/context')
+        expected=candidate(data['kind'],data['catalog_id'],data['text'],data['context'],policy=policy)
+        if digest(target)!=digest(expected):raise ValueError('judgment candidate identity mismatch')
+    except (KeyError,TypeError,AttributeError):
+        raise ValueError('invalid judgment candidate') from None
+    return target,probability(row['score'])
+
+
+def _ledger_rows(ledger,policy):
+    if (not isinstance(ledger,dict) or set(ledger)-{'schema_version','policy','rows','holdout','migration','refresh'}
+            or not {'schema_version','policy','rows','holdout'}<=set(ledger)):
+        raise ValueError('invalid judgment ledger')
+    version=ledger['schema_version']
+    if type(version) is not int or version not in (1,2):raise ValueError('invalid judgment ledger version')
+    if policy_digest(ledger['policy'])!=policy_digest(policy):
+        raise ValueError('judgment policy changed; migrate with a same input comparison')
+    # Schema 1 retains its original owner-labeled contract. Schema 2 permits an
+    # explicit unmeasured evaluation and binds each score to its full input.
+    metrics=({'status':'owner-labeled',**holdout_metrics(ledger['holdout'],policy['theta'])}
+        if version==1 else evaluation_metrics(ledger['holdout'],policy['theta']))
+    if not isinstance(ledger['rows'],list):raise ValueError('invalid judgment rows')
+    rows={};identities=set()
+    for row in ledger['rows']:
+        if version==1:
+            if (not isinstance(row,dict) or set(row)!={'judgment_hash','score'}
+                    or not isinstance(row['judgment_hash'],str) or len(row['judgment_hash'])!=64
+                    or any(c not in '0123456789abcdef' for c in row['judgment_hash'])):
+                raise ValueError('invalid judgment key/row')
+            hashed=row['judgment_hash'];score=probability(row['score'])
+        else:
+            target,score=_candidate_row(row,policy);hashed=target['judgment_hash']
+            ident=(target['id'],digest(target['input']))
+            if ident in identities:raise ValueError('duplicate judgment input identity')
+            identities.add(ident)
+        if hashed in rows:raise ValueError('duplicate judgment key')
+        rows[hashed]=score
+    return rows,metrics
+
+
+def _comparison_rows(ledger,other):
+    if ledger['schema_version']==2:
+        return {(r['candidate']['id'],digest(r['candidate']['input'])):
+            {'judgment_hash':r['candidate']['judgment_hash'],'score':r['score']} for r in ledger['rows']}
+    # Legacy rows lack input identities. They may be upgraded under the same
+    # policy using replacement candidates that reproduce the exact old hashes.
+    # A policy migration needs that upgrade first; guessing identities is unsafe.
+    if other['schema_version']==2:
+        if policy_digest(ledger['policy'])!=policy_digest(other['policy']):
+            raise ValueError('same input proof requires upgrading legacy rows before policy changes')
+        by_hash={r['candidate']['judgment_hash']:r['candidate'] for r in other['rows']}
+        if set(by_hash)!={r['judgment_hash'] for r in ledger['rows']}:
+            raise ValueError('migration must compare the same input set')
+        return {(by_hash[r['judgment_hash']]['id'],digest(by_hash[r['judgment_hash']]['input'])):r
+            for r in ledger['rows']}
+    if policy_digest(ledger['policy'])!=policy_digest(other['policy']):
+        raise ValueError('same input proof requires upgrading legacy rows before policy changes')
+    return {(r['judgment_hash'],r['judgment_hash']):r for r in ledger['rows']}
+
+
 def migration_evidence(before,after):
-    old={r['id']:r for r in before['holdout']['cases']}
-    new={r['id']:r for r in after['holdout']['cases']}
+    _,before_metrics=_ledger_rows(before,before['policy'])
+    _,after_metrics=_ledger_rows(after,after['policy'])
+    old=_comparison_rows(before,after);new=_comparison_rows(after,before)
+    if set(old)!=set(new):raise ValueError('migration must compare the same input set')
+    if policy_digest(before['policy'])==policy_digest(after['policy']):
+        if any(digest(old[key]['score'])!=digest(new[key]['score']) for key in old):
+            raise ValueError('same policy migration must retain unchanged judgment scores')
+        if digest(before['holdout'])!=digest(after['holdout']):
+            raise ValueError('same policy migration must retain unchanged holdout')
+    inputs=[]
+    for ident,input_hash in sorted(old):
+        a=old[(ident,input_hash)];b=new[(ident,input_hash)]
+        inputs.append({'id':ident,'input_hash':input_hash,
+            'before_judgment_hash':a['judgment_hash'],'after_judgment_hash':b['judgment_hash'],
+            'before_score':a['score'],'after_score':b['score'],
+            'before_flag':a['score']>=before['policy']['theta'],
+            'after_flag':b['score']>=after['policy']['theta']})
+    # Existing real owner labels remain comparable. Never manufacture labels or
+    # metrics when either side is explicitly unmeasured.
+    changed=[]
+    if before['holdout'].get('source')=='owner' and after['holdout'].get('source')!='owner':
+        raise ValueError('migration must retain existing owner-labeled holdout')
+    if before['holdout'].get('source')=='owner' and after['holdout'].get('source')=='owner':
+        old_labels={r['id']:r for r in before['holdout']['cases']}
+        new_labels={r['id']:r for r in after['holdout']['cases']}
+        if set(old_labels)!=set(new_labels) or any(old_labels[k]['positive']!=new_labels[k]['positive'] for k in old_labels):
+            raise ValueError('migration must compare the same labeled holdout')
+        changed=sorted(k for k in old_labels if (old_labels[k]['score']>=before['policy']['theta'])!=(new_labels[k]['score']>=after['policy']['theta']))
+    return {'previous_schema_version':before['schema_version'],'previous_policy':before['policy'],
+        'previous_rows':before['rows'],'previous_holdout':before['holdout'],
+        'before':before_metrics,'after':after_metrics,'inputs':inputs,
+        'changed_inputs':[{'id':r['id'],'input_hash':r['input_hash']} for r in inputs if r['before_flag']!=r['after_flag']],
+        'changed':changed}
+
+
+def _legacy_migration_evidence(proof,ledger):
+    """Verify an already recorded schema-1 proof under its original contract.
+
+    This compatibility path is read-only: new migrations use input-bound proof.
+    Legacy proofs never contained the old candidate rows and therefore cannot
+    claim that the old/new current input sets were compared.
+    """
+    previous_policy=validate_policy(proof['previous_policy'])
+    before=holdout_metrics(proof['previous_holdout'],previous_policy['theta'])
+    after=holdout_metrics(ledger['holdout'],ledger['policy']['theta'])
+    old={r['id']:r for r in proof['previous_holdout']['cases']}
+    new={r['id']:r for r in ledger['holdout']['cases']}
     if set(old)!=set(new) or any(old[k]['positive']!=new[k]['positive'] for k in old):
         raise ValueError('migration must compare the same labeled holdout')
-    return {'previous_policy':before['policy'],'previous_holdout':before['holdout'],
-        'before':holdout_metrics(before['holdout'],before['policy']['theta']),
-        'after':holdout_metrics(after['holdout'],after['policy']['theta']),
-        'changed':sorted(k for k in old if (old[k]['score']>=before['policy']['theta'])!=(new[k]['score']>=after['policy']['theta']))}
+    return {'previous_policy':previous_policy,'previous_holdout':proof['previous_holdout'],
+        'before':before,'after':after,'changed':sorted(k for k in old if
+            (old[k]['score']>=previous_policy['theta'])!=(new[k]['score']>=ledger['policy']['theta']))}
+
+
+def refresh_evidence(before,after):
+    old,_=_ledger_rows(before,before['policy']);new,_=_ledger_rows(after,after['policy'])
+    if before['schema_version']!=2 or after['schema_version']!=2:
+        raise ValueError('refresh requires schema 2 input identities')
+    if policy_digest(before['policy'])!=policy_digest(after['policy']):
+        raise ValueError('refresh cannot change judgment policy; use migrate')
+    retained=sorted(set(old)&set(new))
+    if any(digest(old[key])!=digest(new[key]) for key in retained):
+        raise ValueError('refresh cannot rescore unchanged judgment inputs')
+    if digest(before['holdout'])!=digest(after['holdout']):
+        raise ValueError('refresh must retain the existing holdout unchanged')
+    return {'previous_policy':before['policy'],'previous_rows':before['rows'],
+        'previous_holdout':before['holdout'],'retained':retained,
+        'added':sorted(set(new)-set(old)),'removed':sorted(set(old)-set(new))}
 
 
 def validate_ledger(ledger,policy):
-    if not isinstance(ledger,dict) or set(ledger)-{'schema_version','policy','rows','holdout','migration'} or not {'schema_version','policy','rows','holdout'}<=set(ledger):
-        raise ValueError('invalid judgment ledger')
-    if ledger['schema_version']!=1 or policy_digest(ledger['policy'])!=policy_digest(policy):
-        raise ValueError('judgment policy changed; migrate with a holdout comparison')
-    metrics=holdout_metrics(ledger['holdout'],policy['theta'])
-    if not isinstance(ledger['rows'],list):raise ValueError('invalid judgment rows')
-    rows={}
-    for row in ledger['rows']:
-        if not isinstance(row,dict) or set(row)!={'judgment_hash','score'} or not isinstance(row['judgment_hash'],str) or len(row['judgment_hash'])!=64 or any(c not in '0123456789abcdef' for c in row['judgment_hash']):
-            raise ValueError('invalid judgment key/row')
-        if row['judgment_hash'] in rows:raise ValueError('duplicate judgment key')
-        rows[row['judgment_hash']]=probability(row['score'])
+    rows,metrics=_ledger_rows(ledger,policy)
+    if 'migration' in ledger and 'refresh' in ledger:
+        raise ValueError('ambiguous judgment transition evidence')
     if 'migration' in ledger:
         proof=ledger['migration']
-        if not isinstance(proof,dict) or 'previous_policy' not in proof or 'previous_holdout' not in proof:
-            raise ValueError('invalid judgment migration evidence')
-        validate_policy(proof['previous_policy'])
-        expected=migration_evidence({'policy':proof['previous_policy'],'holdout':proof['previous_holdout']},ledger)
-        if proof!=expected:raise ValueError('judgment migration evidence mismatch')
+        required={'previous_schema_version','previous_policy','previous_rows','previous_holdout',
+            'before','after','inputs','changed_inputs','changed'}
+        legacy={'previous_policy','previous_holdout','before','after','changed'}
+        if isinstance(proof,dict) and ledger['schema_version']==1 and set(proof)==legacy:
+            expected=_legacy_migration_evidence(proof,ledger)
+        else:
+            if not isinstance(proof,dict) or set(proof)!=required:
+                raise ValueError('invalid judgment migration evidence')
+            previous={'schema_version':proof['previous_schema_version'],'policy':proof['previous_policy'],
+                'rows':proof['previous_rows'],'holdout':proof['previous_holdout']}
+            expected=migration_evidence(previous,ledger)
+        if digest(proof)!=digest(expected):raise ValueError('judgment migration evidence mismatch')
+    if 'refresh' in ledger:
+        proof=ledger['refresh']
+        required={'previous_policy','previous_rows','previous_holdout','retained','added','removed'}
+        if not isinstance(proof,dict) or set(proof)!=required:
+            raise ValueError('invalid judgment refresh evidence')
+        previous={'schema_version':2,'policy':proof['previous_policy'],
+            'rows':proof['previous_rows'],'holdout':proof['previous_holdout']}
+        if digest(proof)!=digest(refresh_evidence(previous,ledger)):
+            raise ValueError('judgment refresh evidence mismatch')
     return rows,metrics
 
 
 def evaluate(candidates,ledger,*,policy=None):
     policy=validate_policy(load_policy() if policy is None else policy)
-    rows,metrics=validate_ledger(ledger,policy) if ledger is not None else ({},None)
-    result={'errors':[],'uncovered':[],'screened':[]}
+    rows,metrics=validate_ledger(ledger,policy) if ledger is not None else ({},{'status':'unmeasured'})
+    result={'errors':[],'warnings':[],'uncovered':[],'screened':[]}
     for row in candidates:
         if row['judgment_hash'] not in rows:
             result['uncovered'].append({'id':row['id'],'judgment_hash':row['judgment_hash'],'reason':'judgment not recorded for current input/policy'})
-        elif rows[row['judgment_hash']]>=policy['theta']:
-            result['errors'].append('judgment flags evidence: '+row['id'])
         else:
-            result['screened'].append({'id':row['id'],'judgment_hash':row['judgment_hash'],'status':'screened',
-                'score':rows[row['judgment_hash']],'theta':policy['theta'],'holdout':metrics})
+            score=rows[row['judgment_hash']];flagged=score>=policy['theta']
+            screened={'id':row['id'],'judgment_hash':row['judgment_hash'],'status':'screened',
+                'score':score,'theta':policy['theta'],'flagged_advisory':flagged,
+                'semantic_guarantee':False,'evaluation':metrics}
+            if metrics['status']=='owner-labeled':
+                screened['holdout']={k:v for k,v in metrics.items() if k!='status'}
+            result['screened'].append(screened)
+            if flagged:result['warnings'].append({'id':row['id'],'judgment_hash':row['judgment_hash'],
+                'score':score,'theta':policy['theta'],'reason':'semantic evidence requires source review; advisory only'})
     return result
 
 
@@ -131,14 +277,25 @@ def migrate_ledger(previous,replacement,policy):
     validate_ledger(previous,previous['policy'])
     validate_ledger(replacement,policy)
     updated=copy.deepcopy(replacement)
+    updated.pop('refresh',None)
     updated['migration']=migration_evidence(previous,replacement)
+    validate_ledger(updated,policy)
+    return updated
+
+
+def refresh_ledger(previous,replacement,policy):
+    validate_ledger(previous,previous['policy'])
+    validate_ledger(replacement,policy)
+    updated=copy.deepcopy(replacement)
+    updated.pop('migration',None)
+    updated['refresh']=refresh_evidence(previous,replacement)
     validate_ledger(updated,policy)
     return updated
 
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command',choices=['record','migrate'])
+    parser.add_argument('command',choices=['record','migrate','refresh'])
     parser.add_argument('--repo',default='.')
     parser.add_argument('--replacement',type=Path,required=True)
     parser.add_argument('--write',action='store_true')
@@ -155,19 +312,21 @@ def main():
             except BlockingIOError as exc:raise ValueError('judgment writer is active') from exc
             updated=read_data(args.replacement);policy,policy_sha256=read_policy()
             if args.command=='migrate':updated=migrate_ledger(read_data(path),updated,policy)
+            elif args.command=='refresh':updated=refresh_ledger(read_data(path),updated,policy)
             else:
-                if path.exists():raise ValueError('existing ledger requires migrate')
+                if path.exists():raise ValueError('existing ledger requires refresh or migrate')
                 validate_ledger(updated,policy)
             if hashlib.sha256(POLICY.read_bytes()).hexdigest()!=policy_sha256:
                 raise ValueError('judgment policy changed during recording')
             if args.write:write_data(path,updated)
         report={'status':'recorded' if args.write else 'preview','rows':len(updated['rows']),
-            'holdout':holdout_metrics(updated['holdout'],policy['theta'])}
+            'evaluation':evaluation_metrics(updated['holdout'],policy['theta'])}
         if 'migration' in updated:report['migration']=updated['migration']
+        if 'refresh' in updated:report['refresh']=updated['refresh']
         print(json.dumps(report,ensure_ascii=False))
         return 0
     except (OSError,ValueError,KeyError,TypeError):
-        print(json.dumps({'status':'rejected','error':'judgment record/migration requires valid current policy and matching labeled holdout'}))
+        print(json.dumps({'status':'rejected','error':'judgment record/refresh/migration requires valid current policy and matching input evidence'}))
         return 2
 
 

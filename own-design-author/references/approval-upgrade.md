@@ -42,7 +42,7 @@ design-author approve --request request.json --approver owner --repo .
 これは人間が内容を判断した証明ではない。実パイロットの台帳は対象承認まで空のままにする。
 
 判定台帳の読取・記録/移行、5区分報告、IA接続口はjudgments-and-modules.md。
-実パイロットのモデル回答と人間ラベル付きholdoutはまだ未投入。
+実プロジェクトの回答取得と判定台帳への記録は別工程。人間ラベルが無い時はschema2で精度未測定と明示し、ラベルを発案しない。
 固定L2 2回と5区分報告、出荷SHA/成果物hashとship_command/doctor、維持モードは実装済み。
 出荷契約はship-gates.md、終了時の点検はmaintenance.md、A/B/Cの相互参照はdocs validatorが持つ。
 実パイロットへの正式なチャネル導入・実台帳記入・判定台帳投入と全画面の合格は別工程。

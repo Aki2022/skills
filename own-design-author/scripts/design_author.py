@@ -359,7 +359,6 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
         uncovered_rules = set(rules) - set(measured_rules)
         counts['uncovered'] = len(uncovered_rules)
         item_states, item_values, must_proposed, must_uncovered = {}, {}, [], []
-        judgment_must={}
         judgment_policy,judgment_policy_sha256=read_judgment_policy()
         classification_policy = load_policy()
         for ident, item in items.items():
@@ -398,7 +397,7 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
                     continue
                 evidence_values = {'state': 'n-a', 'reason': reason}
                 row=judgment_candidate('na-rationale',ident,reason,{'item':item_context,'preset':preset},policy=judgment_policy)
-                result['judgment_candidates'].append(row);judgment_must[row['judgment_hash']]=must
+                result['judgment_candidates'].append(row)
             elif status == 'defined':
                 counts['defined'] += 1
                 evidence = state.get('evidence')
@@ -425,7 +424,7 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
                         evidence_values[ref] = body
                         if body:
                             row=judgment_candidate('doc-relevance',ident,body,{'item':item_context,'reference':ref,'preset':preset},policy=judgment_policy)
-                            result['judgment_candidates'].append(row);judgment_must[row['judgment_hash']]=must
+                            result['judgment_candidates'].append(row)
                     elif kind == 'rule':
                         if target not in rules:
                             errors.append(f'missing rule evidence: {ident}')
@@ -440,9 +439,10 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
         ledger=read_data(inside(design,'judgments.json')) if (design/'judgments.json').exists() else None
         judged=evaluate_judgments(result['judgment_candidates'],ledger,policy=judgment_policy)
         errors.extend(judged['errors'])
+        warnings.extend(f"semantic advisory: {row['id']} score {row['score']} >= {row['theta']}; source review remains; no semantic guarantee" for row in judged['warnings'])
         report['uncovered'].extend(judged['uncovered']);report['screened'].extend(judged['screened'])
         for row in judged['uncovered']:
-            if judgment_must[row['judgment_hash']]:must_uncovered.append(row['id'])
+            must_uncovered.append(row['id'])
         report['uncovered'].extend({'id':ident,'reason':'rule requires L1/L2 evidence'} for ident in sorted(uncovered_rules))
         counts['uncovered']=len(report['uncovered'])
         if not result['judgment_candidates']:skip(report,'semantic-evidence','no doc or n-a spans were flagged')
@@ -491,7 +491,7 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
         if counts['uncovered']:
             warnings.append(f'uncovered rules/spans: {counts["uncovered"]}; recorded or measured evidence required')
         if ship and (must_proposed or must_uncovered):
-            errors.append(f'ship gate: proposed must {len(set(must_proposed))}, uncovered must {len(set(must_uncovered))}')
+            errors.append(f'ship gate: proposed must {len(set(must_proposed))}, uncovered required evidence {len(set(must_uncovered))}')
         assets = []
         for path in sorted((design/'assets').rglob('*')):
             if path.is_file():

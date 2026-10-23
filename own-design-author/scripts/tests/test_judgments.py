@@ -45,9 +45,10 @@ def test_input_context_model_prompt_and_threshold_invalidate_keys():
             evaluate([target],ledger_for([row],[0.1]),policy=changed)
 
 
-def test_at_threshold_is_violation_and_empty_or_invalid_holdout_is_never_green():
+def test_at_threshold_is_advisory_and_empty_or_invalid_holdout_is_never_green():
     row=example();policy=load_policy()
-    assert evaluate([row],ledger_for([row],[policy['theta']]))['errors']
+    assert not evaluate([row],ledger_for([row],[policy['theta']]))['errors']
+    assert evaluate([row],ledger_for([row],[policy['theta']]))['warnings']
     for cases in [[],[{'id':'one','positive':False,'score':0.1}]]:
         data=ledger_for([row],[0.1]);data['holdout']['cases']=cases
         with pytest.raises(ValueError):evaluate([row],data)
@@ -59,9 +60,9 @@ def test_at_threshold_is_violation_and_empty_or_invalid_holdout_is_never_green()
 
 def test_migration_requires_same_labeled_holdout_and_records_recall_delta(tmp_path):
     old_policy=load_policy();new_policy={**old_policy,'theta':0.95}
-    old=ledger_for([example()],[0.1],old_policy)
+    old=current_ledger([example()],[0.1],old_policy,holdout=ledger_for([],[])['holdout'])
     row=candidate('doc-relevance','dads-000001','A clear policy.',{'title':'Brand'},policy=new_policy)
-    new=ledger_for([row],[0.1],new_policy)
+    new=current_ledger([row],[0.1],new_policy,holdout=ledger_for([],[])['holdout'])
     migrated=migrate_ledger(old,new,new_policy)
     assert migrated['migration']['before']['recall']==1.0
     assert migrated['migration']['after']['recall']==0.0
@@ -126,10 +127,10 @@ def test_record_and_migrate_cli_write_real_ledger_and_reject_label_changes(proje
     bad=subprocess.run(argv+['migrate']+args+['--write'],capture_output=True,text=True)
     assert bad.returncode==2
     assert (root/'design/judgments.json').read_bytes()==before
-    data=ledger_for([row],[0.2]);data['holdout']['cases'][0]['score']=0.4;write(replacement,data)
+    data=ledger_for([row],[0.1]);write(replacement,data)
     run=subprocess.run(argv+['migrate']+args+['--write'],capture_output=True,text=True)
     assert run.returncode==0,run.stdout+run.stderr
-    assert json.loads(run.stdout)['migration']['after']['recall']==0.0
+    assert json.loads(run.stdout)['migration']['after']['recall']==1.0
 
 
 def test_real_cli_resolves_installed_ia_once_and_consumers_pin_module_and_policy(project,tmp_path):
@@ -208,3 +209,205 @@ def test_policy_change_during_l0_is_rejected_and_old_output_removed(project,monk
     assert result['exit_code']==2
     assert 'judgment policy changed during validation' in result['errors']
     assert not (root/'design/.resolved/web.json').exists()
+
+
+def current_ledger(candidates,scores,policy=None,holdout=None):
+    return {'schema_version':2,'policy':policy or load_policy(),'rows':[
+        {'candidate':row,'score':score} for row,score in zip(candidates,scores)],
+        'holdout':holdout or {'source':'unmeasured'}}
+
+
+def test_unmeasured_high_scores_are_visible_advisory_without_fabricated_metrics(monkeypatch):
+    row=example()
+    def forbidden(*args,**kwargs):raise AssertionError('gate invoked a model')
+    monkeypatch.setattr(subprocess,'run',forbidden)
+    result=evaluate([row],current_ledger([row],[0.99]))
+    assert not result['errors'] and not result['uncovered']
+    screened=result['screened'][0]
+    assert screened['flagged_advisory'] is True and screened['semantic_guarantee'] is False
+    assert 'input' not in screened and screened['evaluation']=={'status':'unmeasured'}
+    assert 'recall' not in json.dumps(result) and result['warnings']
+
+
+def test_current_ledger_validates_candidate_identity_duplicates_and_unmeasured_shape():
+    row=example();data=current_ledger([row],[0.9])
+    for mutate in [lambda d:d['rows'].extend(copy.deepcopy(d['rows'])),
+                   lambda d:d['rows'][0]['candidate']['input'].update(text='tampered'),
+                   lambda d:d['holdout'].update(recall=1.0),
+                   lambda d:d['holdout'].update(cases=[]),
+                   lambda d:d['rows'][0].update(score=True)]:
+        changed=copy.deepcopy(data);mutate(changed)
+        with pytest.raises(ValueError):evaluate([row],changed)
+
+
+def test_same_input_migration_records_actual_flags_without_fake_label_metrics():
+    row=example();old_policy=load_policy();new_policy={**old_policy,'theta':0.8}
+    newrow=candidate(**{'kind':row['input']['kind'],'ident':row['input']['catalog_id'],
+        'text':row['input']['text'],'context':row['input']['context']},policy=new_policy)
+    before=current_ledger([row],[0.7]);after=current_ledger([newrow],[0.7],new_policy)
+    migrated=migrate_ledger(before,after,new_policy)
+    proof=migrated['migration']
+    assert proof['changed_inputs']==[{'id':row['id'],'input_hash':proof['inputs'][0]['input_hash']}]
+    assert proof['inputs'][0]['before_flag'] is True and proof['inputs'][0]['after_flag'] is False
+    assert proof['before']==proof['after']=={'status':'unmeasured'}
+    assert 'recall' not in json.dumps(proof)
+    assert evaluate([newrow],migrated,policy=new_policy)['screened']
+    for mutate in [lambda d:d['migration']['inputs'][0].update(after_flag=True),
+                   lambda d:d['migration']['previous_rows'].append(copy.deepcopy(d['migration']['previous_rows'][0])),
+                   lambda d:d['migration'].update(changed_inputs=[]),
+                   lambda d:d['migration']['previous_rows'][0]['candidate']['input'].update(text='wrong')]:
+        bad=copy.deepcopy(migrated);mutate(bad)
+        with pytest.raises(ValueError):evaluate([newrow],bad,policy=new_policy)
+    wrong=copy.deepcopy(after);wrong['rows'][0]['candidate']=candidate('doc-relevance','dads-000002','different',{},policy=new_policy)
+    with pytest.raises(ValueError,match='same input'):migrate_ledger(before,wrong,new_policy)
+    with pytest.raises(ValueError,match='same input'):migrate_ledger(before,current_ledger([],[],new_policy),new_policy)
+
+
+def test_legacy_owner_holdout_can_upgrade_without_losing_metrics():
+    row=example();before=ledger_for([row],[0.8])
+    after=current_ledger([row],[0.8],holdout=copy.deepcopy(before['holdout']))
+    upgraded=migrate_ledger(before,after,load_policy())
+    assert upgraded['migration']['before']['recall']==1.0
+    assert upgraded['migration']['after']['recall']==1.0
+    assert evaluate([row],upgraded)['screened'][0]['holdout']['recall']==1.0
+
+
+def test_real_l0_high_score_does_not_block_approved_targets_but_stale_missing_block(project):
+    root,_=project;define_doc(project)
+    result=check(project);manifest=result['manifest']['web']
+    approve_rows(project,[{'key':'ds:web:item:dads-000001','value_hash':manifest['items']['dads-000001']['value_hash']},
+        {'key':'ds:web:token:color.primary','value_hash':manifest['tokens']['color.primary']['value_hash']}])
+    candidates=result['judgment_candidates']
+    write(root/'design/judgments.json',current_ledger(candidates,[0.99]*len(candidates)))
+    result=check(project,ship=True)
+    assert result['exit_code']==1 and not result['errors'],result
+    assert result['warnings'] and result['report']['screened'][0]['flagged_advisory']
+    assert (root/'design/.resolved/web.json').exists()
+    assert 'recall' not in json.dumps(result)
+    ledger=current_ledger([],[]);write(root/'design/judgments.json',ledger)
+    assert check(project,ship=True)['exit_code']==2
+    write(root/'design/judgments.json',current_ledger(candidates,[0.1]*len(candidates)))
+    (root/'design/DESIGN.md').write_text('# Brand\n## dads-000001\nOther current wording.\n')
+    result=check(project,ship=True)
+    assert result['exit_code']==2 and result['report']['uncovered']
+    assert not (root/'design/.resolved/web.json').exists()
+
+
+def test_real_l0_ship_rejects_missing_optional_item_judgment(project):
+    from test_core import item
+    root,catalogs=project
+    catalog=json.loads((catalogs/'test-v1.json').read_text());catalog['items'].append(item('dads-000002','nice'))
+    write(catalogs/'test-v1.json',catalog)
+    ledger=json.loads((catalogs/'id-ledger.json').read_text());ledger['next_id']=3
+    ledger['entries'].append({'id':'dads-000002','match_key':'dads-000002','retired':False});write(catalogs/'id-ledger.json',ledger)
+    config=json.loads((root/'design/design.yaml').read_text());config['items']['dads-000002']={'state':'defined','evidence':['doc:DESIGN.md#dads-000002']}
+    write(root/'design/design.yaml',config)
+    (root/'design/DESIGN.md').write_text('# Brand\n## dads-000002\nA specific optional policy.\n')
+    approve(project)
+    result=check(project,ship=True)
+    assert result['exit_code']==2 and result['report']['uncovered'],result
+
+
+def test_migration_keeps_existing_owner_labels_and_strictly_validates_flag_types():
+    row=example();old=ledger_for([row],[0.9]);new=current_ledger([row],[0.9])
+    with pytest.raises(ValueError,match='holdout'):migrate_ledger(old,new,load_policy())
+    new['holdout']=copy.deepcopy(old['holdout']);migrated=migrate_ledger(old,new,load_policy())
+    migrated['migration']['inputs'][0]['before_flag']=1
+    with pytest.raises(ValueError,match='mismatch'):evaluate([row],migrated)
+
+
+@pytest.mark.parametrize('kind',['doc-relevance','na-rationale'])
+def test_both_semantic_kinds_are_advisory_and_cli_records_unmeasured(kind,project,tmp_path):
+    root,_=project;row=candidate(kind,'dads-000001','A retained source statement.',{'title':'Brand'})
+    data=current_ledger([row],[1.0]);replacement=tmp_path/'replacement.json';write(replacement,data)
+    argv=[sys.executable,str(SKILL/'scripts/judgment_ledger.py'),'record','--repo',str(root),
+        '--replacement',str(replacement),'--write']
+    run=subprocess.run(argv,capture_output=True,text=True)
+    assert run.returncode==0,run.stdout+run.stderr
+    assert json.loads(run.stdout)['evaluation']=={'status':'unmeasured'}
+    assert 'recall' not in run.stdout
+    evaluated=evaluate([row],json.loads((root/'design/judgments.json').read_text()))
+    assert evaluated['warnings'] and not evaluated['errors']
+
+
+def test_policy_change_requires_legacy_identity_upgrade_first():
+    old=ledger_for([example()],[0.1]);newpolicy={**load_policy(),'theta':0.7}
+    newrow=candidate('doc-relevance','dads-000001','A clear policy.',{'title':'Brand'},policy=newpolicy)
+    with pytest.raises(ValueError,match='upgrading legacy'):
+        migrate_ledger(old,current_ledger([newrow],[0.1],newpolicy,holdout=old['holdout']),newpolicy)
+
+
+def test_original_schema1_migration_proof_remains_readable_and_tamper_rejected():
+    from judgment_ledger import holdout_metrics
+    data=ledger_for([example()],[0.1]);prior_policy={**load_policy(),'theta':0.95}
+    prior_holdout=copy.deepcopy(data['holdout'])
+    data['migration']={'previous_policy':prior_policy,'previous_holdout':prior_holdout,
+        'before':holdout_metrics(prior_holdout,prior_policy['theta']),
+        'after':holdout_metrics(data['holdout'],data['policy']['theta']),
+        'changed':['fixture-positive']}
+    assert evaluate([example()],data)['screened'][0]['holdout']['recall']==1.0
+    bad=copy.deepcopy(data);bad['migration']['after']['recall']=0.0
+    with pytest.raises(ValueError):evaluate([example()],bad)
+    bad=current_ledger([example()],[0.1],holdout=data['holdout']);bad['migration']=data['migration']
+    with pytest.raises(ValueError):evaluate([example()],bad)
+
+
+def test_refresh_preserves_scores_labels_and_verifies_added_removed_input_sets():
+    from judgment_ledger import refresh_ledger
+    retained=example();removed=candidate('na-rationale','dads-000002','Old rationale.',{})
+    added=candidate('na-rationale','dads-000002','New rationale.',{})
+    before=current_ledger([retained,removed],[0.8,0.6]);after=current_ledger([retained,added],[0.8,0.9])
+    refreshed=refresh_ledger(before,after,load_policy())
+    proof=refreshed['refresh']
+    assert proof['added']==[added['judgment_hash']] and proof['removed']==[removed['judgment_hash']]
+    assert proof['retained']==[retained['judgment_hash']]
+    assert evaluate([retained,added],refreshed)['screened']
+    assert 'recall' not in json.dumps(proof)
+    for mutate in [lambda d:d['refresh'].update(added=[]),
+                   lambda d:d['refresh']['previous_rows'][0].update(score=0.7),
+                   lambda d:d['refresh']['previous_rows'].append(copy.deepcopy(d['refresh']['previous_rows'][0]))]:
+        bad=copy.deepcopy(refreshed);mutate(bad)
+        with pytest.raises(ValueError):evaluate([retained,added],bad)
+    bad=copy.deepcopy(after);bad['rows'][0]['score']=0.1
+    with pytest.raises(ValueError,match='unchanged'):refresh_ledger(before,bad,load_policy())
+    policy={**load_policy(),'theta':0.7};target=candidate('doc-relevance','dads-000001','A clear policy.',{'title':'Brand'},policy=policy)
+    with pytest.raises(ValueError,match='policy'):refresh_ledger(before,current_ledger([target],[0.8],policy),policy)
+    labeled=current_ledger([retained,removed],[0.8,0.6],holdout=ledger_for([],[])['holdout'])
+    with pytest.raises(ValueError,match='holdout'):refresh_ledger(labeled,after,load_policy())
+    after['holdout']=copy.deepcopy(labeled['holdout']);after['holdout']['cases'][0]['score']=0.4
+    with pytest.raises(ValueError,match='holdout'):refresh_ledger(labeled,after,load_policy())
+
+
+def test_refresh_cli_records_changed_source_inputs_then_real_l0_uses_them(project,tmp_path):
+    from judgment_ledger import refresh_ledger
+    root,_=project;define_doc(project);oldrows=check(project)['judgment_candidates']
+    before=current_ledger(oldrows,[0.8]*len(oldrows));write(root/'design/judgments.json',before)
+    (root/'design/DESIGN.md').write_text('# Brand\n## dads-000001\nAn explicitly updated policy.\n')
+    current=check(project);newrows=current['judgment_candidates']
+    replacement=tmp_path/'refresh.json';write(replacement,current_ledger(newrows,[0.9]*len(newrows)))
+    argv=[sys.executable,str(SKILL/'scripts/judgment_ledger.py'),'refresh','--repo',str(root),
+        '--replacement',str(replacement)]
+    preview=subprocess.run(argv,capture_output=True,text=True)
+    assert preview.returncode==0,preview.stdout+preview.stderr
+    assert json.loads((root/'design/judgments.json').read_text())==before
+    run=subprocess.run(argv+['--write'],capture_output=True,text=True)
+    assert run.returncode==0,run.stdout+run.stderr
+    recorded=json.loads((root/'design/judgments.json').read_text())
+    assert recorded['refresh']['removed']==[oldrows[0]['judgment_hash']]
+    manifest=current['manifest']['web']
+    approve_rows(project,[{'key':'ds:web:item:dads-000001','value_hash':manifest['items']['dads-000001']['value_hash']},
+        {'key':'ds:web:token:color.primary','value_hash':manifest['tokens']['color.primary']['value_hash']}])
+    result=check(project,ship=True)
+    assert result['exit_code']==1 and not result['errors'],result
+    assert result['report']['screened'][0]['judgment_hash']==newrows[0]['judgment_hash']
+    assert result['report']['screened'][0]['flagged_advisory'] is True
+
+
+def test_same_policy_migrate_cannot_bypass_refresh_score_and_holdout_retention():
+    row=example();before=current_ledger([row],[0.9]);after=current_ledger([row],[0.1])
+    with pytest.raises(ValueError,match='unchanged'):migrate_ledger(before,after,load_policy())
+    after=current_ledger([row],[0.9],holdout=ledger_for([],[])['holdout'])
+    with pytest.raises(ValueError,match='holdout'):migrate_ledger(before,after,load_policy())
+    with pytest.raises(ValueError,match='holdout'):
+        from judgment_ledger import refresh_ledger
+        refresh_ledger(before,after,load_policy())

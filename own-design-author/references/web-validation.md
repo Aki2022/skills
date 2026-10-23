@@ -50,7 +50,7 @@ repo外・design内・隠しpath・symlink先への配置を拒否し、途中�
 URLは実行時の環境変数で渡す。既存Nodeは `DESIGN_AUDIT_NODE`、Pythonは
 `DESIGN_AUTHOR_PYTHON` で選ぶ。L2を含むため、人間の実施確認を得てから実行する。
 各L2はdesign/render-environment.jsonを必須とし、固定環境で2回実行する。JSONは `.resolved/l2-<index>.json` に保存し、未カバーを集約出力する。実行前に前回の同名レポートを削除し、環境不一致や新規レポート欠落を古い成功で埋めない。
-reportはexecuted / skipped / missing / uncovered / screenedの5配列。実行したL1/L2はskippedから除き、L0のscreenedとholdout指標を引き継ぐ。
+reportはexecuted / skipped / missing / uncovered / screenedの5配列。実行したL1/L2はskippedから除き、L0のscreened・補助指摘・評価用ラベル有無を引き継ぐ。精度未測定をrecall 0や合格へ読み替えない。
 対象欠落・実行不能を成功にしない。未承認nice値だけのL0警告は集約後もexit 1に残す。
 
 ## L2と範囲

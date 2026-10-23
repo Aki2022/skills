@@ -121,3 +121,29 @@ def test_missing_playwright_is_exit_2_not_a_pass(tmp_path):
                            '--outline', 'lp-municipal'], capture_output=True, text=True, env=env, cwd=str(tmp_path), check=False)
     assert proc.returncode == 2, proc.stdout + proc.stderr
     assert 'IA_DOM_PLAYWRIGHT' in [f['code'] for f in json.loads(proc.stdout)['findings']], proc.stdout
+
+
+ANIMATED = '''<!doctype html><html><head><meta charset="utf-8"><style>
+body{{margin:0;font:16px sans-serif}} section{{min-height:200px}}
+@keyframes up{{from{{opacity:0}}to{{opacity:1}}}} .anim{{animation:up .6s ease-out forwards}}
+</style></head><body>
+<section data-ia-problem="prb-0001" class="hero" style="opacity:0">既存システムの運用、重くありませんか</section>
+<section data-ia-msg="msg-0001" class="anim">運用の手間が半分になります</section>
+<section data-ia-msg="msg-0002" class="anim">導入は<span data-ia-fact="fct-0001">100社以上</span></section>
+<section data-ia-msg="msg-0003" class="anim">資料請求はこちら（<span data-ia-fact="fct-0002">03-1234-5678</span>）</section>
+<script>document.addEventListener('DOMContentLoaded',function(){{setTimeout(function(){{var h=document.querySelector('.hero');h.style.transition='opacity .8s ease-out .2s';h.style.opacity='1';}},100);}});</script>
+</body></html>'''
+
+
+@pytest.mark.skipif(not PW_DIR, reason='INFOARCH_TEST_PLAYWRIGHT_DIR is not set: real-browser integration not run (reported as skipped, not passed)')
+def test_page_that_fades_in_is_read_after_it_settles(tmp_path):
+    """A hero shown by a timer + transition and sections with CSS animations must not read as hidden or unstable."""
+    from test_check import write_repo
+    write_repo(tmp_path)
+    page = tmp_path / 'site/index.html'
+    page.parent.mkdir(parents=True, exist_ok=True)
+    page.write_text(ANIMATED.format(), encoding='utf-8')
+    env = dict(os.environ, INFOARCH_PLAYWRIGHT_DIR=PW_DIR)
+    proc = subprocess.run([sys.executable, str(SCRIPTS / 'infoarch_author.py'), 'dom', '--root', str(tmp_path),
+                           '--outline', 'lp-municipal'], capture_output=True, text=True, env=env, check=False)
+    assert proc.returncode == 0, json.loads(proc.stdout)['findings']

@@ -22,6 +22,8 @@ if (!file || !viewportsJson) {
   process.exit(2);
 }
 const viewports = JSON.parse(viewportsJson);
+const SETTLE_MS = 1000;            // timers that start reveals (setTimeout of ~100 ms is common)
+const ANIMATION_TIMEOUT_MS = 5000; // upper bound for running transitions / animations to finish
 
 const browser = await playwright.chromium.launch();
 const out = [];
@@ -34,6 +36,14 @@ try {
     });
     const page = await context.newPage();
     await page.goto(pathToFileURL(file).href, { waitUntil: "load" });
+    // Settle before reading: pages often reveal content with timers, transitions and CSS animations
+    // (a hero shown after a short setTimeout, sections fading in). Reading at "load" would see them as hidden.
+    await page.waitForLoadState("networkidle").catch(() => {});
+    await page.waitForTimeout(SETTLE_MS);
+    await page
+      .waitForFunction(() => document.getAnimations().every((a) => a.playState !== "running" && a.playState !== "pending"),
+        null, { timeout: ANIMATION_TIMEOUT_MS })
+      .catch(() => {}); // endless animations: read anyway; the two-run stability check reports a moving page
     const snap = await page.evaluate((vh) => {
       const visible = (el) => {
         for (let e = el; e && e.nodeType === 1; e = e.parentElement) {

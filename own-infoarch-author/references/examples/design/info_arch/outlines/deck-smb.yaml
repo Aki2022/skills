@@ -1,0 +1,23 @@
+schema_version: 1
+id: deck-smb
+channel: deck
+brief:
+  purpose: 中小企業向けの説明
+  action: 問い合わせ
+  medium: 資料
+  cut:
+  - msg-0001
+audience: aud-0002
+outputs:
+- decks/smb.pptx
+pages:
+- id: s1
+  sections:
+  - role: proof
+    message: msg-0002
+    proofs:
+    - prf-0001
+    copy: '{{fct-0001}}が導入'
+  - role: cta
+    message: msg-0003
+    copy: お問い合わせ {{fct-0002}}

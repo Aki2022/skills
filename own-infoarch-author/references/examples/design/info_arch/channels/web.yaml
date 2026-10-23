@@ -1,0 +1,6 @@
+schema_version: 2
+media: web
+outputs:
+- site/**/*.html
+ship: true
+ship_command: mise run deploy

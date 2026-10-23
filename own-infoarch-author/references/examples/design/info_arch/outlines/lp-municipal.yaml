@@ -1,0 +1,30 @@
+schema_version: 1
+id: lp-municipal
+channel: web
+brief:
+  purpose: 自治体の情報部門からの資料請求を増やす
+  action: 資料請求
+  medium: LP
+  constraints:
+  - 1 ページ
+audience: aud-0001
+outputs:
+- site/index.html
+pages:
+- id: top
+  label: トップ
+  sections:
+  - role: problem
+    problem: prb-0001
+    copy: 既存システムの運用、重くありませんか
+  - role: benefit
+    message: msg-0001
+    copy: 運用の手間が半分になります
+  - role: proof
+    message: msg-0002
+    proofs:
+    - prf-0001
+    copy: 導入は{{fct-0001}}
+  - role: cta
+    message: msg-0003
+    copy: 資料請求はこちら（{{fct-0002}}）

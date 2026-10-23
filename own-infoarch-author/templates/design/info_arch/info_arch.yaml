@@ -1,0 +1,15 @@
+# design/info_arch/info_arch.yaml — 伝え方の SSOT（スキーマ版 2）
+# 原子は 7 種：audiences（対象者）・problems（課題）・messages（メッセージ）・proofs（証拠）・facts（固定値）・entities（正式名称）・voices（声）。
+# id は ledger.next から発行し、再利用しない。改名・削除は tombstones（旧 id → 新 id、削除は null）。
+# state は empty / proposed だけ。承認は、このファイルの変更をオーナーがレビューした PR で表す（CODEOWNERS とブランチ保護）。
+schema_version: 2
+ledger:
+  next: {aud: 1, prb: 1, msg: 1, prf: 1, fct: 1, ent: 1, vce: 1}
+  tombstones: {}
+audiences: {}
+problems: {}
+messages: {}
+proofs: {}
+facts: {}
+entities: {}
+voices: {}

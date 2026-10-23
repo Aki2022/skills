@@ -1,0 +1,26 @@
+{
+  "version": 2,
+  "note": "必須の赤ケース（SSOT・チャネル・アウトラインの決定論の検査）。scripts/tests/test_check.py が全 id を 1 回ずつ実行し、終了コード 2 と code を確かめる。ケースを足したらテスト側の変異も足す（片方だけだとテストが失敗する）。描画物の DOM と Jev の判定台帳の赤ケースは ISSUE-03・04 で足す。",
+  "cases": [
+    {"id": "outline-ref-broken", "code": "IA_OUTLINE_REF_BROKEN", "why": "アウトラインが存在しないメッセージを参照"},
+    {"id": "outline-ref-tombstoned", "code": "IA_OUTLINE_REF_BROKEN", "why": "墓標になった id を参照"},
+    {"id": "outline-ref-empty", "code": "IA_OUTLINE_REF_EMPTY", "why": "空欄の原子を参照"},
+    {"id": "outline-placeholder-unknown", "code": "IA_OUTLINE_REF_BROKEN", "why": "文案の {{fct-…}} が存在しない固定値"},
+    {"id": "outline-placeholder-malformed", "code": "IA_OUTLINE_BAD_PLACEHOLDER", "why": "{{fct-NNNN}} の形でない {{…}}"},
+    {"id": "outline-fact-literal", "code": "IA_OUTLINE_FACT_LITERAL", "why": "固定値の値を参照せず直接書いた"},
+    {"id": "outline-cut-used", "code": "IA_OUTLINE_CUT_USED", "why": "削ると決めたメッセージを使っている"},
+    {"id": "outline-channel-unknown", "code": "IA_OUTLINE_CHANNEL", "why": "宣言の無いチャネル"},
+    {"id": "outline-output-undeclared", "code": "IA_OUTLINE_OUTPUT_UNDECLARED", "why": "チャネルの outputs に一致しない成果物"},
+    {"id": "outline-id-mismatch", "code": "IA_OUTLINE_ID", "why": "id とファイル名が違う"},
+    {"id": "expired-proof-shipped", "code": "IA_EXPIRED_SHIPPED", "why": "期限切れの証拠を出荷チャネルの成果物が参照"},
+    {"id": "expired-fact-shipped", "code": "IA_EXPIRED_SHIPPED", "why": "期限切れの固定値を出荷チャネルの成果物が参照"},
+    {"id": "no-outlines", "code": "IA_NO_OUTLINES", "why": "アウトラインが 0 件（対象 0 件を合格にしない）"},
+    {"id": "no-channels", "code": "IA_NO_CHANNELS", "why": "チャネル定義が 0 件"},
+    {"id": "ssot-state-approved", "code": "IA_SCHEMA", "why": "SSOT に approved を書いた（承認は PR のレビューで表す）"},
+    {"id": "ssot-ref-to-empty", "code": "IA_EMPTY_REFERENCED", "why": "proposed の原子が空欄の原子を参照"},
+    {"id": "ssot-id-not-issued", "code": "IA_ID_NOT_ISSUED", "why": "台帳の次番号以上の id"},
+    {"id": "ssot-voice-multiple", "code": "IA_VOICE_MULTIPLE", "why": "proposed の声が 2 つ"},
+    {"id": "channel-ship-without-command", "code": "IA_SCHEMA", "why": "出荷チャネルに ship_command が無い"},
+    {"id": "ssot-duplicate-key", "code": "IA_YAML", "why": "YAML の重複キー（黙って後勝ちにしない）"}
+  ]
+}

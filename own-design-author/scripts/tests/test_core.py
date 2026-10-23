@@ -749,3 +749,15 @@ def test_profile_change_invalidates_approval(project):
     root,_=project
     write(root/'design/profiles/web.json',{'media':'web','minimums':{'text_contrast':7}})
     assert check(project,ship=True)['exit_code']==2
+
+
+def test_spec_reference_metadata_is_allowed_without_duplicating_the_docs_validator(project):
+    root, _ = project
+    config = json.loads((root / 'design/design.yaml').read_text())
+    expected = check(project)['approval_targets']
+    config['spec'] = 'docs/specs/visual.md'
+    write(root / 'design/design.yaml', config)
+    result = check(project)
+    assert result['exit_code'] == 1
+    assert not any('unknown design configuration' in error for error in result['errors'])
+    assert result['approval_targets'] == expected

@@ -8,7 +8,7 @@ Python 3.10以上と、既存環境に導入済みの PyYAML / jsonschema（refe
 
 ## ファイル
 
-- `design.yaml`: JSON互換YAML。`schema_version: 1`、`skill_version: 1.0.0`、`catalog_version`、`preset`、`media`、`items`。`items` は不変idをキーにした差分だけ。
+- `design.yaml`: JSON互換YAML。`schema_version: 1`、`skill_version: 1.0.0`、`catalog_version`、`preset`、`media`、`items`。`items` は不変idをキーにした差分だけ。`spec`は方針を持つrepo相対のdocs/specs Markdownパス、または重複しない非空のパス配列。相互参照はown-doc-updateのvalidatorが検査する。
 - `tokens/*.tokens.json`: 値を持つ正典。名前はlower-case kebab-case、参照パスはdot区切り、aliasは `{group.name}`。`$type` はグループから継承できる。CSS名は `--group-name`、衝突は失格。同じパスの多重定義も失格。
 - `DESIGN.md`: 散文とトークン参照。doc証拠は `doc:DESIGN.md#dads-000001` のような実見出しを指す。空の節・コードブロック内の偽見出しは証拠にならない。
 - `profiles/web.json`: `media: web` と `minimums`。skillの `minimums.json` より厳しい数値だけ上書き可。media不明・下限の緩和・未知キーは失格。

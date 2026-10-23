@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import check  # noqa: E402
 import dom  # noqa: E402
+import skeleton  # noqa: E402
 
 
 def _print(obj):
@@ -35,6 +36,32 @@ def cmd_dom(args):
     return report.exit_code
 
 
+def cmd_skeleton(args):
+    """Print (or write under --out, never overwriting) the HTML skeleton of a checked outline."""
+    report, m = check.check(args.root, dt.date.today().isoformat())
+    if m.ssot is None or args.outline not in m.outlines:
+        report.add('fail', 'IA_SKELETON_OUTLINE', f'アウトライン {args.outline} が無い')
+    elif report.exit_code == 2:
+        report.add('fail', 'IA_SKELETON_REFUSED', 'check が失格しているので骨組みを出さない。先に直す')
+    if report.exit_code == 2:
+        _print(report.to_dict())
+        return 2
+    pages = skeleton.render(m.outlines[args.outline][1], m.ssot)
+    if not args.out:
+        print('\n'.join(pages.values()), end='')
+        return 0
+    targets = {Path(args.out) / rel: html for rel, html in pages.items()}
+    existing = [str(t) for t in targets if t.exists()]
+    if existing:
+        _print({'exit_code': 2, 'error': f'上書きしない: {existing}'})
+        return 2
+    for t, html in targets.items():
+        t.parent.mkdir(parents=True, exist_ok=True)
+        t.write_text(html, encoding='utf-8')
+    _print({'written': sorted(str(t) for t in targets)})
+    return 0
+
+
 def cmd_impact(args):
     report, result = check.impact(args.root, args.id)
     if report.exit_code == 2:
@@ -56,6 +83,11 @@ def main(argv=None):
     d.add_argument('--outline', required=True)
     d.add_argument('--date', help='evaluation date YYYY-MM-DD (default: today)')
     d.set_defaults(fn=cmd_dom)
+    k = sub.add_parser('skeleton', help='print or write the HTML skeleton (anchors, order, facts) of an outline for a factory to style')
+    k.add_argument('--root', default='.')
+    k.add_argument('--outline', required=True)
+    k.add_argument('--out', help='directory to write into (files are never overwritten)')
+    k.set_defaults(fn=cmd_skeleton)
     i = sub.add_parser('impact', help='list outlines and outputs that reference an atom id')
     i.add_argument('--root', default='.')
     i.add_argument('--id', required=True)

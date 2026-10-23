@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: dev-silent-empty-env
+expected_outcome: |
+  Explains that a missing _.file target makes mise silently yield empty secrets and checks the path / file existence / Confirms by key name (jq keys) or check-secrets without displaying values

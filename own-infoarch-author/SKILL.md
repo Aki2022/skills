@@ -18,6 +18,28 @@ description: "repo 直下 design/info_arch/ の「伝え方の SSOT」（対象�
 - **固定値は参照で書く。** アウトラインの文案では、数値・連絡先・免責などは `{{fct-NNNN}}` で参照し、値を直接書かない。
 - **対象 0 件は失格。** チャネル 0 件・アウトライン 0 件は終了コード 2。
 
+## 作る：依頼からアウトラインまでの 6 段
+
+依頼を受けたら、次の 6 段を順に行い、`design/info_arch/outlines/<成果物 id>.yaml` を書く。各段では、その段のファイルと、作る媒体のファイルだけを読む。
+
+| 段 | 読むファイル | アウトラインに書くもの |
+| --- | --- | --- |
+| 1 依頼を固める | `references/steps/01-brief.md` | brief（目的・行動・媒体・必須事項） |
+| 2 対象者を選ぶ | `references/steps/02-audience.md` | audience |
+| 3 選ぶ・優先順・削る | `references/steps/03-select-and-cut.md` | sections の message と proofs、brief.cut |
+| 4 構造を決める | `references/steps/04-structure.md` と媒体のファイル | pages・role |
+| 5 文案を書く | `references/steps/05-copy.md` | copy（固定値は `{{fct-NNNN}}`） |
+| 6 見直して渡す | `references/steps/06-review.md` | `check` を緑にして工場へ渡す |
+
+媒体のファイル：LP は `references/media/lp.md`、複数ページのサイトは `references/media/site.md`、チラシ・ポスターは
+`references/media/flyer-poster.md`、資料は `references/media/deck.md`、アプリの文言は `references/media/app-copy.md`。
+
+- 小さな依頼（単発のチラシなど）は `references/light-process.md` に従って簡略にしてよい。段 1 と段 6 は省かない。
+- 新しい repo で SSOT が空なら、先に `references/bootstrap.md` に従って既存の資料から下書きを起こし、オーナーの PR 承認を待つ。
+- 例：`references/examples/design/info_arch/` に、同じ SSOT から対象者の違う 2 つの成果物（LP と資料）を作ったアウトラインがある。
+
+ノウハウの数値に「出典なし・目安」とあるものは、検査に使わない。
+
 ## 使い方
 
 ```sh

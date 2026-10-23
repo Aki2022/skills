@@ -1,0 +1,102 @@
+schema_version: 2
+ledger:
+  next:
+    aud: 3
+    prb: 2
+    msg: 5
+    prf: 2
+    fct: 3
+    ent: 2
+    vce: 2
+  tombstones:
+    msg-0004: msg-0003
+audiences:
+  aud-0001:
+    state: proposed
+    provenance: owner
+    label: 自治体の情報部門
+    situation: 既存システムの運用が重い
+    pains:
+    - 運用負荷
+    desired_action: 資料請求
+    tone: 丁寧で落ち着いた調子
+    priorities:
+    - msg-0001
+    - msg-0002
+    - msg-0003
+  aud-0002:
+    state: proposed
+    provenance: owner
+    label: 中小企業の経営者
+    situation: 人手が足りない
+    desired_action: 問い合わせ
+    priorities:
+    - msg-0002
+    - msg-0001
+    - msg-0003
+problems:
+  prb-0001:
+    state: proposed
+    provenance: owner
+    text: 運用が重い
+    audience: aud-0001
+messages:
+  msg-0001:
+    state: proposed
+    provenance: owner
+    text: 運用の手間が半分になる
+    role: benefit
+    addresses:
+    - prb-0001
+  msg-0002:
+    state: proposed
+    provenance: owner
+    text: 多くの自治体で使われている
+    role: proof
+  msg-0003:
+    state: proposed
+    provenance: owner
+    text: 資料を請求する
+    role: cta
+proofs:
+  prf-0001:
+    state: proposed
+    provenance: owner
+    text: 導入自治体の数
+    source: 導入台帳
+    supports:
+    - msg-0002
+    as_of: '2026-10-01'
+facts:
+  fct-0001:
+    state: proposed
+    provenance: owner
+    label: 導入社数
+    value: 100社以上
+    as_of: '2026-10-01'
+  fct-0002:
+    state: proposed
+    provenance: owner
+    label: 問い合わせ電話
+    value: 03-1234-5678
+    evergreen: true
+entities:
+  ent-0001:
+    state: proposed
+    provenance: owner
+    type: product
+    name: Webサーバー
+voices:
+  vce-0001:
+    state: proposed
+    provenance: owner
+    traits:
+    - trait: わかりやすい
+      is: 専門的な中身も噛み砕いて言う
+      is_not: 子ども扱いはしない
+    - trait: 誠実
+      is: できることを具体的に言う
+      is_not: 大げさな約束はしない
+    - trait: 前向き
+      is: 解決の道筋を示す
+      is_not: 浮ついた煽りはしない

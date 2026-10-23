@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: local-missing-age-key
+expected_outcome: |
+  Gives the owner a single runnable command (bash block) that restores keys.txt from Bitwarden (bw login/unlock + attachment) without printing the key / Says to exclude keys.txt from Time Machine (tmutil addexclusion) after placing it / Verifies with age-keygen -y or check-secrets rather than displaying the key

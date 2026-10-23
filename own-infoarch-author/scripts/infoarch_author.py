@@ -10,6 +10,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import check  # noqa: E402
+import dom  # noqa: E402
 
 
 def _print(obj):
@@ -21,6 +22,16 @@ def cmd_check(args):
     dt.date.fromisoformat(date)  # ValueError -> exit 2 in main
     report, _ = check.check(args.root, date)
     _print(report.to_dict())
+    return report.exit_code
+
+
+def cmd_dom(args):
+    date = args.date or dt.date.today().isoformat()
+    dt.date.fromisoformat(date)
+    report = dom.run(args.root, args.outline, date)
+    out = report.to_dict()
+    out['first_screens'] = getattr(report, 'first_screens', [])
+    _print(out)
     return report.exit_code
 
 
@@ -40,6 +51,11 @@ def main(argv=None):
     c.add_argument('--root', default='.')
     c.add_argument('--date', help='evaluation date YYYY-MM-DD (default: today)')
     c.set_defaults(fn=cmd_check)
+    d = sub.add_parser('dom', help='render the outline outputs in a browser and compare anchors, order and facts')
+    d.add_argument('--root', default='.')
+    d.add_argument('--outline', required=True)
+    d.add_argument('--date', help='evaluation date YYYY-MM-DD (default: today)')
+    d.set_defaults(fn=cmd_dom)
     i = sub.add_parser('impact', help='list outlines and outputs that reference an atom id')
     i.add_argument('--root', default='.')
     i.add_argument('--id', required=True)

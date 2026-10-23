@@ -9,11 +9,11 @@
 - `outlines/<成果物 id>.yaml`：成果物ごとの構造化アウトライン。AI が書き、人は保守しない。`id` はファイル名と一致する。
 - `INFO_ARCH.md`：散文。原子を id で参照するだけで、値を持たない。
 
-それ以外のファイルやサブディレクトリが `channels/` `outlines/` にあると失格にする（黙って無視しない）。
+それ以外のファイルやサブディレクトリが `channels/` `outlines/` にあると失格にする（黙って無視しない）。`.` で始まるファイル（`.DS_Store`・`.gitkeep`）だけは読まずに飛ばす。
 
 ## 原子（7 種）
 
-id は種別の接頭辞＋4 桁以上の連番。`ledger.next` 未満でなければ「台帳が発行していない」。改名・削除は `ledger.tombstones`（旧 → 新、削除は null）。
+id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999）か、10000 以上なら先頭を 0 にしない（`msg-00001` のような同じ番号の別表記は失格）。`ledger.next` 未満でなければ「台帳が発行していない」。改名・削除は `ledger.tombstones`（旧 → 新、削除は null）。
 
 | 種別 | 接頭辞 | proposed で必須 | 参照 |
 | --- | --- | --- | --- |
@@ -21,7 +21,7 @@ id は種別の接頭辞＋4 桁以上の連番。`ledger.next` 未満でなけ�
 | 課題 | `prb` | text・audience | audience → aud |
 | メッセージ | `msg` | text・role（benefit / proof / how / objection / cta / vision） | addresses → prb |
 | 証拠 | `prf` | text・source・supports・as_of か expires | supports → msg |
-| 固定値 | `fct` | label・value・as_of か expires か evergreen: true | ― |
+| 固定値 | `fct` | label・value・as_of か expires か evergreen: true（evergreen と日付は併存させない） | ― |
 | 正式名称 | `ent` | type・name | ― |
 | 声 | `vce` | traits（3〜4 個。trait・is・is_not） | proposed はプロジェクトに 1 つ |
 
@@ -29,7 +29,7 @@ id は種別の接頭辞＋4 桁以上の連番。`ledger.next` 未満でなけ�
 
 ## 構造化アウトライン（版 1）
 
-- `brief`：purpose（目的）・action（取ってほしい行動）・medium・constraints・cut（この成果物では言わないメッセージ）。
+- `brief`：purpose（目的）・action（取ってほしい行動）・medium・constraints・cut（この成果物では言わないメッセージ）。cut も参照として検査し、墓標をたどって改名先と比べる。
 - `audience`：対象者 id。
 - `outputs`：成果物のファイル（チャネルの outputs の glob に一致すること）。
 - `pages[].sections[]`：role・message・problem・proofs・copy（文案）。固定値は copy の中で `{{fct-NNNN}}` として参照する。
@@ -49,14 +49,15 @@ id は種別の接頭辞＋4 桁以上の連番。`ledger.next` 未満でなけ�
 | IA_NO_CHANNELS / IA_NO_OUTLINES / IA_CHANNEL_NAME / IA_CHANNEL_FILE / IA_OUTLINE_FILE / IA_OUTLINE_ID | 対象 0 件・名前の不一致・読まれないファイル |
 | IA_OUTLINE_CHANNEL / IA_OUTLINE_OUTPUT_UNDECLARED | 宣言の無いチャネル・チャネルの outputs に一致しない成果物 |
 | IA_OUTLINE_REF_BROKEN / IA_OUTLINE_REF_EMPTY | アウトラインの参照切れ（墓標なら先を案内）・空欄の原子を参照（参照の表は `check.outline_refs` の 1 か所） |
-| IA_OUTLINE_BAD_PLACEHOLDER / IA_OUTLINE_FACT_LITERAL | `{{fct-NNNN}}` の形でない `{{…}}`・固定値の値を参照せず直接書いた |
+| IA_OUTLINE_BAD_PLACEHOLDER / IA_OUTLINE_FACT_LITERAL | `{{fct-NNNN}}` の形でない `{{…}}`（改行をまたぐものを含む）・固定値の値を参照せず直接書いた |
+| IA_IMPACT_UNKNOWN_ID | `impact --id` に SSOT にも墓標にも無い id を渡した（空の結果を合格にしない） |
 | IA_OUTLINE_CUT_USED | brief.cut で削ると決めたメッセージを使った |
 | IA_OUTLINE_OFF_PRIORITY（warn） | 対象者の priorities に無いメッセージを使った |
 | IA_EXPIRED_SHIPPED / IA_EXPIRED_UNSHIPPED（info） | 期限切れの証拠・固定値を、出荷チャネル（`ship: true`）のアウトラインが参照している／参照していない |
 
 ## 期限
 
-`expires` があればその日、無ければ `as_of` に日数を足した日を期限とする。日数の初期値は `references/expiry.json`、プロジェクトの
+`expires` があればその日、無ければ `as_of` に日数を足した日を期限とする。期限の日の当日までは有効で、翌日から期限切れ。日数の初期値は `references/expiry.json`、プロジェクトの
 `info_arch.yaml` の `policy.expiry_days` で上書きできる。`evergreen: true` の固定値は期限を持たない。
 
 ## この版に無いもの（ISSUE-02 以降）

@@ -15,9 +15,9 @@ from common import INFO_ARCH_DIR, Report, YamlError, load_ref, load_yaml, valida
 BLOCKS = {'audiences': 'aud', 'problems': 'prb', 'messages': 'msg', 'proofs': 'prf', 'facts': 'fct',
           'entities': 'ent', 'voices': 'vce'}
 PREFIX_BLOCK = {v: k for k, v in BLOCKS.items()}
-ID_RE = re.compile(r'^(aud|prb|msg|prf|fct|ent|vce)-([0-9]{4,})$')
-PLACEHOLDER = re.compile(r'\{\{\s*(fct-[0-9]{4,})\s*\}\}')
-ANY_BRACES = re.compile(r'\{\{.*?\}\}')
+ID_RE = re.compile(r'^(aud|prb|msg|prf|fct|ent|vce)-([0-9]{4}|[1-9][0-9]{4,})$')
+PLACEHOLDER = re.compile(r'\{\{\s*(fct-(?:[0-9]{4}|[1-9][0-9]{4,}))\s*\}\}')
+ANY_BRACES = re.compile(r'\{\{.*?\}\}', re.S)
 SSOT_PATH = INFO_ARCH_DIR / 'info_arch.yaml'
 
 
@@ -34,6 +34,15 @@ class Model:
 
     def tombstone(self, aid):
         return (self.ssot['ledger'].get('tombstones') or {}).get(aid, '__live__')
+
+    def resolve(self, aid):
+        """Follow tombstones to the live id (None when deleted). Bounded so a cycle cannot loop."""
+        for _ in range(len(self.ssot['ledger'].get('tombstones') or {}) + 1):
+            t = self.tombstone(aid)
+            if t == '__live__' or t is None:
+                return aid if t == '__live__' else None
+            aid = t
+        return None
 
 
 def _errors(validator, data):
@@ -70,6 +79,8 @@ def load(root, report):
         validator = validator_for(schema)
         for f in sorted(d.iterdir()) if d.is_dir() else []:
             rel = f.relative_to(root)
+            if f.name.startswith('.'):
+                continue  # editor and OS dotfiles (.DS_Store, .gitkeep) are not declarations
             if f.is_dir() or f.suffix != '.yaml':
                 report.add('fail', f'IA_{kind.upper()}_FILE', f'{f.name} は読まれない（{sub}/<name>.yaml だけ。黙って無視しない）', rel)
                 continue
@@ -183,11 +194,9 @@ def check_outline(m, report, oid, rel, o):
             if not any(g.match(out) for g in globs):
                 report.add('fail', 'IA_OUTLINE_OUTPUT_UNDECLARED', f'{oid}: 成果物 {out} がチャネル {o["channel"]} の outputs {ch[1]["outputs"]} に一致しない', rel)
     for where, aid in outline_refs(o):
-        if where == 'brief.cut':
-            continue
         _ref(m, report, f'{oid}.{where}', aid, rel, from_proposed=True,
              broken_code='IA_OUTLINE_REF_BROKEN', empty_code='IA_OUTLINE_REF_EMPTY')
-    cut = set(o['brief'].get('cut', []))
+    cut = {m.resolve(x) for x in o['brief'].get('cut', [])} - {None}
     aud = m.atom(o['audience']) or {}
     priorities = set(aud.get('priorities', []))
     facts = {fid: f['value'] for fid, f in m.ssot['facts'].items() if f['state'] == 'proposed' and f.get('value')}
@@ -265,6 +274,8 @@ def check(root, date):
 def impact(root, aid):
     report = Report('impact', dt.date.today().isoformat())
     m = load(root, report)
+    if m.ssot is not None and m.atom(aid) is None and m.tombstone(aid) == '__live__':
+        report.add('fail', 'IA_IMPACT_UNKNOWN_ID', f'{aid} は SSOT にも墓標にも無い（綴りを確かめる）')
     hits = sorted(oid for oid, (_, o) in m.outlines.items() if aid in {x for _, x in outline_refs(o)})
     outputs = sorted({out for oid in hits for out in m.outlines[oid][1]['outputs']})
     return report, {'id': aid, 'outlines': hits, 'outputs': outputs}

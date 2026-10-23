@@ -166,6 +166,20 @@ def mutate(case, root):
         p = root / 'design/info_arch/info_arch.yaml'
         p.write_text(p.read_text(encoding='utf-8') + 'schema_version: 2\n', encoding='utf-8')
         return
+    elif case == 'outline-cut-ref-broken':
+        deck['brief']['cut'] = ['msg-0099']
+    elif case == 'outline-cut-ref-empty':
+        ssot['ledger']['next']['msg'] = 6
+        ssot['messages']['msg-0005'] = {'state': 'empty', 'provenance': 'proposal'}
+        deck['brief']['cut'] = ['msg-0005']
+    elif case == 'outline-cut-tombstoned-used':
+        deck['brief']['cut'] = ['msg-0004']
+    elif case == 'outline-placeholder-multiline':
+        sec[2]['copy'] = '導入は{{fct-001\n}}と{{ msg-0001\n}}'
+    elif case == 'ssot-id-noncanonical':
+        ssot['messages']['msg-00001'] = copy.deepcopy(ssot['messages']['msg-0001'])
+    elif case == 'ssot-evergreen-with-date':
+        ssot['facts']['fct-0002']['expires'] = '2020-01-01'
     else:
         raise KeyError(case)
     write_repo(root, ssot, channels, [o for o in (outline, deck) if o])
@@ -254,3 +268,26 @@ def test_proof_supporting_an_empty_message_fails_on_its_own(tmp_path):
     write_repo(tmp_path, ssot)
     rc, report = check(tmp_path)
     assert rc == 2 and 'IA_EMPTY_REFERENCED' in codes(report), report['findings']
+
+
+def test_impact_on_unknown_id_is_exit_2(tmp_path):
+    write_repo(tmp_path)
+    rc, out = cli('impact', '--root', str(tmp_path), '--id', 'msg-9999')
+    assert rc == 2 and 'IA_IMPACT_UNKNOWN_ID' in codes(out)
+
+
+def test_dotfiles_in_channels_and_outlines_are_ignored(tmp_path):
+    base = write_repo(tmp_path)
+    (base / 'channels/.DS_Store').write_bytes(b'x')
+    (base / 'outlines/.gitkeep').write_text('', encoding='utf-8')
+    rc, report = check(tmp_path)
+    assert rc == 0, report['findings']
+
+
+def test_wrapper_exits_2_when_interpreter_is_missing(tmp_path):
+    import os
+    write_repo(tmp_path)
+    env = dict(os.environ, DESIGN_AUTHOR_PYTHON=str(tmp_path / 'no-such-python'))
+    proc = subprocess.run([str(SCRIPTS / 'infoarch-author'), 'check', '--root', str(tmp_path)],
+                          capture_output=True, text=True, env=env, check=False)
+    assert proc.returncode == 2, (proc.returncode, proc.stdout, proc.stderr)

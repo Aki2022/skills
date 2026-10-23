@@ -1,0 +1,10 @@
+# 成果物の置き場所と出し方の宣言だけ。使うメッセージや順序は持たない（成果物ごとのアウトラインに書く）。
+# outputs は repo 相対の glob（絶対パス・ホーム・.. は不可）。出荷するチャネルは ship_command が必須。
+schema_version: 2
+media: web
+outputs: ["site/**/*.html"]
+ship: true
+ship_command: "mise run deploy"
+viewports:
+  - {name: mobile, width: 375, height: 812}
+  - {name: desktop, width: 1280, height: 800}

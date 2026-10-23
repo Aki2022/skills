@@ -1,0 +1,627 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "own-infoarch-author/info_arch.v2.schema.json",
+  "title": "design/info_arch/info_arch.yaml schema version 2 (messaging SSOT)",
+  "description": "伝え方の SSOT。原子は 7 種（対象者・課題・メッセージ・証拠・固定値・正式名称・声）。state に approved は無い：承認は、このファイルの変更をオーナーがレビューした PR で表す。出典: SPEC-information-architecture-standardization v4。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "ledger",
+    "audiences",
+    "problems",
+    "messages",
+    "proofs",
+    "facts",
+    "entities",
+    "voices"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 2
+    },
+    "ledger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "next",
+        "tombstones"
+      ],
+      "properties": {
+        "next": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "aud",
+            "prb",
+            "msg",
+            "prf",
+            "fct",
+            "ent",
+            "vce"
+          ],
+          "properties": {
+            "aud": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "prb": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "msg": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "prf": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "fct": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "ent": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "vce": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "tombstones": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/anyId"
+          },
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/anyId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "expiry_days": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "proof": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "fact": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      }
+    },
+    "audiences": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^aud-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/audience"
+      }
+    },
+    "problems": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^prb-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/problem"
+      }
+    },
+    "messages": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^msg-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/message"
+      }
+    },
+    "proofs": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^prf-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/proof"
+      }
+    },
+    "facts": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^fct-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/fact"
+      }
+    },
+    "entities": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^ent-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/entity"
+      }
+    },
+    "voices": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^vce-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/voice"
+      }
+    }
+  },
+  "$defs": {
+    "anyId": {
+      "type": "string",
+      "pattern": "^(aud|prb|msg|prf|fct|ent|vce)-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
+    },
+    "state": {
+      "enum": [
+        "empty",
+        "proposed"
+      ]
+    },
+    "provenance": {
+      "type": "string",
+      "pattern": "^(owner|proposal|extracted:.+|reference:.+)$"
+    },
+    "date": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1
+    },
+    "ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string"
+      }
+    },
+    "audience": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "provenance"
+      ],
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/state"
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        },
+        "label": {
+          "$ref": "#/$defs/text"
+        },
+        "situation": {
+          "$ref": "#/$defs/text"
+        },
+        "pains": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/text"
+          }
+        },
+        "desired_action": {
+          "$ref": "#/$defs/text"
+        },
+        "tone": {
+          "$ref": "#/$defs/text"
+        },
+        "priorities": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/ids"
+            },
+            {
+              "items": {
+                "pattern": "^msg-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
+              }
+            }
+          ],
+          "description": "この対象者に伝えるメッセージを優先順に並べる。先頭が 1 位"
+        }
+      },
+      "if": {
+        "properties": {
+          "state": {
+            "const": "proposed"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "label",
+          "situation",
+          "desired_action",
+          "priorities"
+        ],
+        "properties": {
+          "priorities": {
+            "minItems": 1
+          }
+        }
+      }
+    },
+    "problem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "provenance"
+      ],
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/state"
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        },
+        "text": {
+          "$ref": "#/$defs/text"
+        },
+        "audience": {
+          "type": "string",
+          "pattern": "^aud-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
+        }
+      },
+      "if": {
+        "properties": {
+          "state": {
+            "const": "proposed"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "text",
+          "audience"
+        ]
+      }
+    },
+    "message": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "provenance"
+      ],
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/state"
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        },
+        "text": {
+          "$ref": "#/$defs/text"
+        },
+        "role": {
+          "enum": [
+            "benefit",
+            "proof",
+            "how",
+            "objection",
+            "cta",
+            "vision"
+          ]
+        },
+        "addresses": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/ids"
+            },
+            {
+              "items": {
+                "pattern": "^prb-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
+              }
+            }
+          ]
+        }
+      },
+      "if": {
+        "properties": {
+          "state": {
+            "const": "proposed"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "text",
+          "role"
+        ]
+      }
+    },
+    "proof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "provenance"
+      ],
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/state"
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        },
+        "text": {
+          "$ref": "#/$defs/text"
+        },
+        "source": {
+          "$ref": "#/$defs/text"
+        },
+        "supports": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/ids"
+            },
+            {
+              "items": {
+                "pattern": "^msg-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
+              }
+            }
+          ]
+        },
+        "as_of": {
+          "$ref": "#/$defs/date"
+        },
+        "expires": {
+          "$ref": "#/$defs/date"
+        }
+      },
+      "if": {
+        "properties": {
+          "state": {
+            "const": "proposed"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "text",
+          "source",
+          "supports"
+        ],
+        "anyOf": [
+          {
+            "required": [
+              "as_of"
+            ]
+          },
+          {
+            "required": [
+              "expires"
+            ]
+          }
+        ]
+      }
+    },
+    "fact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "provenance"
+      ],
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/state"
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        },
+        "label": {
+          "$ref": "#/$defs/text"
+        },
+        "value": {
+          "$ref": "#/$defs/text"
+        },
+        "as_of": {
+          "$ref": "#/$defs/date"
+        },
+        "expires": {
+          "$ref": "#/$defs/date"
+        },
+        "evergreen": {
+          "type": "boolean",
+          "description": "連絡先・免責など、時点を持たない値は true"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "proposed"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "label",
+              "value"
+            ],
+            "anyOf": [
+              {
+                "required": [
+                  "as_of"
+                ]
+              },
+              {
+                "required": [
+                  "expires"
+                ]
+              },
+              {
+                "required": [
+                  "evergreen"
+                ],
+                "properties": {
+                  "evergreen": {
+                    "const": true
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "evergreen": {
+                "const": true
+              }
+            },
+            "required": [
+              "evergreen"
+            ]
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "as_of"
+                  ]
+                },
+                {
+                  "required": [
+                    "expires"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "entity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "provenance"
+      ],
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/state"
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        },
+        "type": {
+          "enum": [
+            "product",
+            "feature",
+            "organization",
+            "service",
+            "other"
+          ]
+        },
+        "name": {
+          "$ref": "#/$defs/text"
+        }
+      },
+      "if": {
+        "properties": {
+          "state": {
+            "const": "proposed"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "type",
+          "name"
+        ]
+      }
+    },
+    "voice": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "provenance"
+      ],
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/state"
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        },
+        "traits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "trait",
+              "is",
+              "is_not"
+            ],
+            "properties": {
+              "trait": {
+                "$ref": "#/$defs/text"
+              },
+              "is": {
+                "$ref": "#/$defs/text"
+              },
+              "is_not": {
+                "$ref": "#/$defs/text"
+              }
+            }
+          }
+        }
+      },
+      "if": {
+        "properties": {
+          "state": {
+            "const": "proposed"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "traits"
+        ],
+        "properties": {
+          "traits": {
+            "minItems": 3,
+            "maxItems": 4
+          }
+        }
+      }
+    }
+  }
+}

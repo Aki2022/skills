@@ -23,11 +23,13 @@ repo の git toplevel の `design/` を正典として HTML / dashboard を生�
 5. 値の発案や参照が必要なら `own-design-author` へ戻す。指示された参照の権利確認は
    `own-brand-resolve` の方針に従い、`proposed` と出所を `design/` に記録する。
    ブランド値をAIが承認しない。
+5b. **情報設計のアウトラインを使う場合**: `design/info_arch/outlines/<成果物 id>.yaml`があり、この成果物をoutputsに含むなら、`infoarch-author skeleton --outline <id>`で骨組みのHTMLを受け取る。文言・セクション順・`data-ia-*`属性を変えずにスタイリングする。アウトラインのない依頼は上の手順を継続し、情報設計を新しく作る依頼は`own-infoarch-author`へ渡す。
 6. `media/<media>/media.yaml` / `rules.md` と必要なassetを読み、
    `references/context-composer.md` に従って生成する。媒体最低値はマニフェストを読む。
 7. 生成後の L1（`scripts/audit_html.py <html> --manifest design/.resolved/web.json`）は確認せず毎回実行する。
    描画の L2 は `references/validator.md` / `site-validation.md` に従い人間へ実施可否を確認する。
    ブラウザ利用時は `own-browser-route` と `playwright-cli` を使う。
+7b. アウトラインを使った場合、出力後に`infoarch-author dom --outline <id>`を必ず実行する。終了コード2ならアンカーの欠落・順序・固定値の表示を直す。直せない時や未実施は未解決として報告する。
 8. 決定論の失格は修正して再検査する。修正は最大2回。失格や未実施が残れば準拠を名乗らない。
 9. 出力にL0/L1/L2の結果・提案値数・主要制約・未カバー規則・通さなかった工程と理由を残す。
    フォールバック由来の値を発見したら欠陥として報告し、`design/` へ戻して修正する。

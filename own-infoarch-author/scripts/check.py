@@ -15,8 +15,8 @@ from common import INFO_ARCH_DIR, Report, YamlError, load_ref, load_yaml, valida
 BLOCKS = {'audiences': 'aud', 'problems': 'prb', 'messages': 'msg', 'proofs': 'prf', 'facts': 'fct',
           'entities': 'ent', 'voices': 'vce'}
 PREFIX_BLOCK = {v: k for k, v in BLOCKS.items()}
-ID_RE = re.compile(r'^(aud|prb|msg|prf|fct|ent|vce)-([0-9]{4}|[1-9][0-9]{4,})$')
-PLACEHOLDER = re.compile(r'\{\{\s*(fct-(?:[0-9]{4}|[1-9][0-9]{4,}))\s*\}\}')
+ID_RE = re.compile(r'(aud|prb|msg|prf|fct|ent|vce)-((?!0000)[0-9]{4}|[1-9][0-9]{4,})')  # always fullmatch: $ would accept a trailing newline
+PLACEHOLDER = re.compile(r'\{\{(fct-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,}))\}\}')  # exactly {{fct-NNNN}}, no padding
 ANY_BRACES = re.compile(r'\{\{.*?\}\}', re.S)
 SSOT_PATH = INFO_ARCH_DIR / 'info_arch.yaml'
 
@@ -29,7 +29,7 @@ class Model:
     outlines: dict = field(default_factory=dict)  # id -> (rel path, data)
 
     def atom(self, aid):
-        m = ID_RE.match(aid or '')
+        m = ID_RE.fullmatch(aid or '')
         return (self.ssot.get(PREFIX_BLOCK[m.group(1)]) or {}).get(aid) if m and self.ssot else None
 
     def tombstone(self, aid):
@@ -79,8 +79,8 @@ def load(root, report):
         validator = validator_for(schema)
         for f in sorted(d.iterdir()) if d.is_dir() else []:
             rel = f.relative_to(root)
-            if f.name.startswith('.'):
-                continue  # editor and OS dotfiles (.DS_Store, .gitkeep) are not declarations
+            if f.name.startswith('.') and f.is_file():
+                continue  # editor and OS dotfiles (.DS_Store, .gitkeep) are not declarations; dot directories still fail
             if f.is_dir() or f.suffix != '.yaml':
                 report.add('fail', f'IA_{kind.upper()}_FILE', f'{f.name} は読まれない（{sub}/<name>.yaml だけ。黙って無視しない）', rel)
                 continue
@@ -131,9 +131,14 @@ def _ref(m, report, src, aid, where, *, from_proposed, broken_code, empty_code):
 def check_ssot(m, report):
     d, path = m.ssot, str(SSOT_PATH)
     nxt, tomb = d['ledger']['next'], d['ledger']['tombstones']
+    for key in [k for b in BLOCKS for k in d[b]] + list(tomb) + [v for v in tomb.values() if v]:
+        if not ID_RE.fullmatch(key):
+            report.add('fail', 'IA_SCHEMA', f'{key!r} は id の正規の書き方（接頭辞-0001〜9999、10000 以上は先頭 0 なし）でない', path)
     for block, prefix in BLOCKS.items():
         for aid, atom in d[block].items():
-            if int(ID_RE.match(aid).group(2)) >= nxt[prefix]:
+            if not ID_RE.fullmatch(aid):
+                continue
+            if int(ID_RE.fullmatch(aid).group(2)) >= nxt[prefix]:
                 report.add('fail', 'IA_ID_NOT_ISSUED', f'{aid} は台帳の次番号 {nxt[prefix]} 以上で、台帳が発行していない', path)
             if aid in tomb:
                 report.add('fail', 'IA_ID_TOMBSTONED', f'{aid} は墓標にある（id は再利用しない）', path)
@@ -141,7 +146,9 @@ def check_ssot(m, report):
                 _ref(m, report, f'{aid}.{fld}', target, path, from_proposed=atom['state'] == 'proposed',
                      broken_code='IA_REF_BROKEN', empty_code='IA_EMPTY_REFERENCED')
     for old, new in tomb.items():
-        o = ID_RE.match(old)
+        o = ID_RE.fullmatch(old)
+        if o is None or (new is not None and not ID_RE.fullmatch(new)):
+            continue
         if int(o.group(2)) >= nxt[o.group(1)]:
             report.add('fail', 'IA_ID_NOT_ISSUED', f'墓標 {old} は台帳が発行していない番号', path)
         if new is not None and m.atom(new) is None:

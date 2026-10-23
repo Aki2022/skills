@@ -112,7 +112,7 @@
     "audiences": {
       "type": "object",
       "propertyNames": {
-        "pattern": "^aud-(?:[0-9]{4}|[1-9][0-9]{4,})$"
+        "pattern": "^aud-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
       },
       "additionalProperties": {
         "$ref": "#/$defs/audience"
@@ -121,7 +121,7 @@
     "problems": {
       "type": "object",
       "propertyNames": {
-        "pattern": "^prb-(?:[0-9]{4}|[1-9][0-9]{4,})$"
+        "pattern": "^prb-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
       },
       "additionalProperties": {
         "$ref": "#/$defs/problem"
@@ -130,7 +130,7 @@
     "messages": {
       "type": "object",
       "propertyNames": {
-        "pattern": "^msg-(?:[0-9]{4}|[1-9][0-9]{4,})$"
+        "pattern": "^msg-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
       },
       "additionalProperties": {
         "$ref": "#/$defs/message"
@@ -139,7 +139,7 @@
     "proofs": {
       "type": "object",
       "propertyNames": {
-        "pattern": "^prf-(?:[0-9]{4}|[1-9][0-9]{4,})$"
+        "pattern": "^prf-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
       },
       "additionalProperties": {
         "$ref": "#/$defs/proof"
@@ -148,7 +148,7 @@
     "facts": {
       "type": "object",
       "propertyNames": {
-        "pattern": "^fct-(?:[0-9]{4}|[1-9][0-9]{4,})$"
+        "pattern": "^fct-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
       },
       "additionalProperties": {
         "$ref": "#/$defs/fact"
@@ -157,7 +157,7 @@
     "entities": {
       "type": "object",
       "propertyNames": {
-        "pattern": "^ent-(?:[0-9]{4}|[1-9][0-9]{4,})$"
+        "pattern": "^ent-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
       },
       "additionalProperties": {
         "$ref": "#/$defs/entity"
@@ -166,7 +166,7 @@
     "voices": {
       "type": "object",
       "propertyNames": {
-        "pattern": "^vce-(?:[0-9]{4}|[1-9][0-9]{4,})$"
+        "pattern": "^vce-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
       },
       "additionalProperties": {
         "$ref": "#/$defs/voice"
@@ -176,7 +176,7 @@
   "$defs": {
     "anyId": {
       "type": "string",
-      "pattern": "^(aud|prb|msg|prf|fct|ent|vce)-(?:[0-9]{4}|[1-9][0-9]{4,})$"
+      "pattern": "^(aud|prb|msg|prf|fct|ent|vce)-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
     },
     "state": {
       "enum": [
@@ -242,7 +242,7 @@
             },
             {
               "items": {
-                "pattern": "^msg-(?:[0-9]{4}|[1-9][0-9]{4,})$"
+                "pattern": "^msg-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
               }
             }
           ],
@@ -289,7 +289,7 @@
         },
         "audience": {
           "type": "string",
-          "pattern": "^aud-(?:[0-9]{4}|[1-9][0-9]{4,})$"
+          "pattern": "^aud-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
         }
       },
       "if": {
@@ -340,7 +340,7 @@
             },
             {
               "items": {
-                "pattern": "^prb-(?:[0-9]{4}|[1-9][0-9]{4,})$"
+                "pattern": "^prb-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
               }
             }
           ]
@@ -387,7 +387,7 @@
             },
             {
               "items": {
-                "pattern": "^msg-(?:[0-9]{4}|[1-9][0-9]{4,})$"
+                "pattern": "^msg-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
               }
             }
           ]

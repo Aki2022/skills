@@ -131,6 +131,26 @@
       "id": "ssot-evergreen-with-date",
       "code": "IA_SCHEMA",
       "why": "evergreen と日付の併存（日付が黙って捨てられる）"
+    },
+    {
+      "id": "outline-dot-directory",
+      "code": "IA_OUTLINE_FILE",
+      "why": "outlines/ のドット始まりのサブディレクトリ（飛ばすのはドット始まりのファイルだけ）"
+    },
+    {
+      "id": "ssot-id-zero-serial",
+      "code": "IA_SCHEMA",
+      "why": "連番 0000 の id"
+    },
+    {
+      "id": "ssot-id-trailing-newline",
+      "code": "IA_SCHEMA",
+      "why": "末尾に改行のある id（同じ番号の別表記）"
+    },
+    {
+      "id": "outline-placeholder-padded",
+      "code": "IA_OUTLINE_BAD_PLACEHOLDER",
+      "why": "余白や改行を含む {{ fct-NNNN }}（形は {{fct-NNNN}} だけ）"
     }
   ]
 }

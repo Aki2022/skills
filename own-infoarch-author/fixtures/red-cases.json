@@ -75,7 +75,7 @@
     {
       "id": "ssot-state-approved",
       "code": "IA_SCHEMA",
-      "why": "SSOT に approved を書いた（承認は PR のレビューで表す）"
+      "why": "SSOT に approved を書いた（承認の状態は持たない）"
     },
     {
       "id": "ssot-ref-to-empty",

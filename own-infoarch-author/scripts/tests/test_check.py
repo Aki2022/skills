@@ -180,6 +180,17 @@ def mutate(case, root):
         ssot['messages']['msg-00001'] = copy.deepcopy(ssot['messages']['msg-0001'])
     elif case == 'ssot-evergreen-with-date':
         ssot['facts']['fct-0002']['expires'] = '2020-01-01'
+    elif case == 'outline-dot-directory':
+        base = write_repo(root, ssot, channels, [outline, deck])
+        (base / 'outlines/.drafts').mkdir()
+        (base / 'outlines/.drafts/broken.yaml').write_text('a: [', encoding='utf-8')
+        return
+    elif case == 'ssot-id-zero-serial':
+        ssot['messages']['msg-0000'] = copy.deepcopy(ssot['messages']['msg-0003'])
+    elif case == 'ssot-id-trailing-newline':
+        ssot['messages']['msg-0001\n'] = copy.deepcopy(ssot['messages']['msg-0003'])
+    elif case == 'outline-placeholder-padded':
+        deck['pages'][0]['sections'][0]['copy'] = '{{\nfct-0001\n}}が導入'
     else:
         raise KeyError(case)
     write_repo(root, ssot, channels, [o for o in (outline, deck) if o])

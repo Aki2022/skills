@@ -63,3 +63,41 @@ DESIGN_SHIP_COMMAND / DESIGN_AUTHOR_COMMAND / DESIGN_CHECK_COMMANDは、既存ru
 ユーザーの設定・global hook・実プロジェクトの承認台帳は、このテストで変更しない。
 実ブラウザ・hook用環境変数を指定しない時のskipは、実経路の合格に数えない。
 これは人工repoでのゲート検証。実パイロットの全画面合格や本番デプロイ完了とは区別する。
+
+## 本番接続を後続に残すローカル統合検査
+
+本番CIへの接続を後続WSに明記しているrepoは、PRのpush前検査に限って任意の
+`integration_gate`を明示できる。これは`channels`の出荷宣言ではなく、本番の配布入口・成果物を保護した証拠にもならない。
+ローカル統合検査を設定しても、通常の`design-ship`および`--channel`は実際の出荷チャネルがなければ停止する。
+既存のmarker・hook・scannerは保持する。`--pre-push`は宣言された出荷チャネルとローカル統合検査を両方実行し、一方を代用しない。
+
+```json
+{
+  "integration_gate": {
+    "media": "web",
+    "merge_base": "origin/main",
+    "prepare_command": ["npm", "ci"],
+    "render_servers": {
+      "DESIGN_WEB_URL": {
+        "command": ["npm", "run", "dev", "--", "--port", "{port}"],
+        "path": "/"
+      }
+    }
+  }
+}
+```
+
+許可するフィールドは上記4つだけで、`prepare_command`だけが省略可能。
+コマンドは実repoの既存経路に合わせる。依存導入には別途そのrepoでの承認が必要で、設定が認可を代行することはない。
+`ship_command`・`artifacts`・`ship`は受理しない。各URLの書式・網羅性は出荷チャネルと同じ規約を使う。
+
+`design-ship --integration --repo .`は現在のclean commitを検査する。
+`--pre-push`は同じ予測マージ木の隔離checkoutで準備コマンドを実行し、commit/treeが変わらず、
+trackedまたは未追跡のソース変更がないことを確認する。依存・build cacheは既存ignoreの範囲に置く。
+その後、同じL0 `--ship`、L1、固定描画L2を対象0・欠落・不一致を拒否して実行する。
+serverはそのcheckoutで起動し、外から渡されたURLは利用しない。変更された承認・不正なソース・描画差異は停止する。
+
+結果の`scope`は`local-integration`、`production_protected`は`false`、`deployment`は`not-applicable`。
+commit/tree・元push commit・予測マージの有無・design入力・実描画の証拠を記録し、出荷物のhashや配布完了は記録しない。
+現在checkoutでの結果は`design/.resolved/integration.json`へ出力する。
+予測マージの結果はhookのJSON出力に含め、隔離checkoutは検査の成否にかかわらず除去する。

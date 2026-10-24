@@ -262,7 +262,7 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
             raise ValueError('design/ missing or symlink; run own-design-author init at git toplevel')
         _clear_manifests(design)
         config = read_data(inside(design, 'design.yaml'))
-        if not isinstance(config, dict) or set(config) - {'schema_version','skill_version','catalog_version','preset','media','items','retired_items','checks','modules','spec','maintenance','channels'}:
+        if not isinstance(config, dict) or set(config) - {'schema_version','skill_version','catalog_version','preset','media','items','retired_items','checks','modules','spec','maintenance','channels','integration_gate'}:
             raise ValueError('unknown design configuration fields')
         if config.get('schema_version') != 1:
             raise ValueError('unknown design schema version')
@@ -270,6 +270,9 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
         if 'channels' in config:
             from ship_contract import validate_channels
             validate_channels(config)
+        if 'integration_gate' in config:
+            from ship_contract import validate_integration_gate
+            validate_integration_gate(config)
         if 'maintenance' in config:
             from maintenance import validate_maintenance
             validate_maintenance(config, {x['id'] for x in catalog['items']} | set(config.get('retired_items', {})))

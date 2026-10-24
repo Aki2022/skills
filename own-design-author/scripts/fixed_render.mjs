@@ -82,6 +82,20 @@ export async function trackFonts(page,context,requests) {
   await client.send('DOM.enable');await client.send('CSS.enable');
 }
 
+// Scroll/hit-area measurement can leave Chromium's raster tiles awaiting paint.
+// Require two consecutive identical captures in each independent render; never
+// choose between the outer repeat runs or tolerate a changing pixel.
+async function stableScreenshot(page) {
+  let previous;
+  for (let sample=0;sample<3;sample++) {
+    await page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done))));
+    const current=await page.screenshot({fullPage:true,animations:'disabled',caret:'hide'});
+    if(previous && sha(previous)===sha(current))return current;
+    previous=current;
+  }
+  throw Error('render did not stabilize within three captures');
+}
+
 export async function renderEvidence(page,context,environment,requests) {
   const client=requests.client;
   let glyphs=0;const fallback=new Set();const used=new Set();
@@ -125,7 +139,7 @@ export async function renderEvidence(page,context,environment,requests) {
   if(!glyphs||!requests.used.size)fallback.add('no pinned font glyphs');
   return {font_glyphs:glyphs,fonts:[...used].sort(),font_sources:[...new Map(sources.map(s=>[digest(s),s])).values()].sort((a,b)=>digest(a).localeCompare(digest(b))),fallbacks:[...fallback].sort(),
     rejected_font_requests:requests.rejected.length,...actual,
-    screenshot_sha256:sha(await page.screenshot({fullPage:true,animations:'disabled',caret:'hide'}))};
+    stable_capture:true,screenshot_sha256:sha(await stableScreenshot(page))};
 }
 
 export function compareRepeats(report) {

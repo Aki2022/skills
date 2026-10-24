@@ -21,6 +21,35 @@ def _argv(value, *, port=False):
     return value
 
 
+def _merge_base(value):
+    if not isinstance(value,str) or not value or value.startswith('-') or any(c.isspace() for c in value):
+        raise ValueError('gate requires an explicit merge_base ref')
+
+
+def _render_servers(servers):
+    if not isinstance(servers,dict) or not servers:raise ValueError('gate requires bound render servers')
+    for env,server in servers.items():
+        if not isinstance(env,str) or not re.fullmatch(r'[A-Z][A-Z0-9_]*',env) or not isinstance(server,dict) or set(server)!={'command','path'}:
+            raise ValueError('invalid render server')
+        _argv(server['command'],port=True)
+        path=server['path']
+        if not isinstance(path,str) or not path.startswith('/') or path.startswith('//') or any(c in path for c in ('#','\\','\0','\n','\r')):
+            raise ValueError('render server path must be local to the assigned origin')
+
+
+def validate_integration_gate(config):
+    """An explicit local PR gate is never a production shipment declaration."""
+    if 'integration_gate' not in config:return None
+    row=config['integration_gate']
+    if not isinstance(row,dict) or set(row)-{'media','merge_base','prepare_command','render_servers'}:
+        raise ValueError('invalid local integration gate')
+    if row.get('media')!='web':raise ValueError('only web local integration gates are implemented')
+    _merge_base(row.get('merge_base'))
+    _render_servers(row.get('render_servers'))
+    if 'prepare_command' in row:_argv(row['prepare_command'])
+    return row
+
+
 def validate_channels(config):
     """Validate config's optional channels, returning only explicitly shipped channels."""
     rows=config.get('channels',{})
@@ -34,22 +63,12 @@ def validate_channels(config):
         if row.get('media')!='web':raise ValueError('only web ship channels are implemented')
         _argv(row.get('ship_command'))
         if 'build_command' in row:_argv(row['build_command'])
-        base=row.get('merge_base')
-        if not isinstance(base,str) or not base or base.startswith('-') or any(c.isspace() for c in base):
-            raise ValueError('ship channel requires an explicit merge_base ref')
+        _merge_base(row.get('merge_base'))
         artifacts=row.get('artifacts')
         if not isinstance(artifacts,list) or not artifacts or len(set(artifacts))!=len(artifacts):
             raise ValueError('ship channel requires nonempty unique artifact paths')
         for path in artifacts:_relative(path)
-        servers=row.get('render_servers')
-        if not isinstance(servers,dict) or not servers:raise ValueError('ship channel requires bound render servers')
-        for env,server in servers.items():
-            if not isinstance(env,str) or not re.fullmatch(r'[A-Z][A-Z0-9_]*',env) or not isinstance(server,dict) or set(server)!={'command','path'}:
-                raise ValueError('invalid render server')
-            _argv(server['command'],port=True)
-            path=server['path']
-            if not isinstance(path,str) or not path.startswith('/') or path.startswith('//') or any(c in path for c in ('#','\\','\0','\n','\r')):
-                raise ValueError('render server path must be local to the assigned origin')
+        _render_servers(row.get('render_servers'))
         selected[name]=row
     return selected
 
@@ -113,6 +132,9 @@ def validate_web_result(root,result,urls):
         if stage.get('exit_code')!=0 or stage.get('target_env')!=env:
             raise ValueError('partial or failed L2 stage')
         path=safe_path(root,'design/.resolved/l2-'+str(i)+'.json');measured=read_json(path)
+        profile=config['urls'][i].get('profile','lp')
+        if profile not in ('lp','product-ui') or stage.get('profile','lp')!=profile or measured.get('profile','lp')!=profile:
+            raise ValueError('rendering profile evidence mismatch')
         actual=measured.get('environment',{})
         if measured.get('url')!=urls[env] or actual.get('repeat_equal') is not True or actual.get('runtime')!=fixed['runtime'] or actual.get('config_sha256')!=environment_hash or measured.get('failures'):
             raise ValueError('unbound or failed fixed rendering evidence')

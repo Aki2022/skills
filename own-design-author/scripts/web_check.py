@@ -11,6 +11,15 @@ from design_author import check_design, git_root, inside, read_data, CATALOG
 from reporting import empty_report,stage,skip
 
 
+def validation_endpoint(row):
+    if not isinstance(row,dict) or set(row) not in ({'env'},{'env','profile'}) or not isinstance(row.get('env'),str):
+        raise ValueError('rendering URL must name an environment variable and an optional profile')
+    profile=row.get('profile','lp')
+    if profile not in ('lp','product-ui'):
+        raise ValueError('invalid rendering profile')
+    return row['env'],profile
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--repo',default='.')
@@ -33,6 +42,7 @@ def main():
         html=config['html'];urls=config['urls']
         if not isinstance(html,list) or not html or not isinstance(urls,list) or not urls:
             raise ValueError('zero L1/L2 targets')
+        endpoints=[validation_endpoint(row) for row in urls]
         files=[inside(root,path) for path in html]
         resolved=root/'design/.resolved/web.json'
         skills=Path(__file__).resolve().parents[2]
@@ -51,9 +61,8 @@ def main():
         environment=inside(root/'design','render-environment.json')
         if not environment.is_file():raise ValueError('fixed rendering environment missing')
         uncovered=set(l0['manifest']['web']['coverage']['uncovered'])
-        for index,row in enumerate(urls):
-            if not isinstance(row,dict) or set(row)!={'env'} or not isinstance(row['env'],str):
-                raise ValueError('rendering URL must name an environment variable')
+        for index,(target_env,profile) in enumerate(endpoints):
+            row={'env':target_env}
             url=os.environ.get(row['env'],'')
             if not url.startswith(('http://','https://')):
                 raise ValueError('missing or invalid rendering URL: '+row['env'])
@@ -61,13 +70,16 @@ def main():
             output.unlink(missing_ok=True)
             l2=subprocess.run([os.environ.get('DESIGN_AUDIT_NODE','node'),
                 str(skills/'own-website-audit/scripts/measure_lp.mjs'),url,'--manifest',str(resolved),
-                '--environment',str(environment),
+                '--environment',str(environment),'--profile',profile,
                 '--viewports',','.join(map(str,config['viewports'])),'--schemes',','.join(config['schemes']),
                 '--json',str(output)],cwd=root,capture_output=True,text=True)
             if not output.is_file():
                 report['report']['missing'].append({'id':'L2:'+row['env'],'reason':'no fresh fixed rendering report'})
                 raise ValueError('fresh fixed rendering report missing')
             measured=read_data(output)
+            if measured.get('profile')!=profile:raise ValueError('rendering profile evidence mismatch')
+            for skipped in measured.get('skipped',[]):
+                report['report']['skipped'].append({'id':'L2:'+target_env+':'+skipped['id'],'reason':skipped['reason']})
             fixed=measured.get('environment')
             if not isinstance(fixed,dict) or type(fixed.get('repeat_equal')) is not bool:
                 raise ValueError('missing fixed rendering evidence')
@@ -78,7 +90,7 @@ def main():
             report['uncovered']=sorted(uncovered)
             report['report']['uncovered'].extend({'id':'L2:'+row['env']+':'+ident,'reason':'rendering scope not covered'} for ident in measured['uncovered'])
             stage(report['report'],'L2',l2.returncode,index+1)
-            report['stages'].append({'stage':'L2','exit_code':l2.returncode,'target_env':row['env']})
+            report['stages'].append({'stage':'L2','exit_code':l2.returncode,'target_env':row['env'],'profile':profile})
             if l2.returncode:
                 report['exit_code']=l2.returncode
                 report['errors'].append('L2 failed; inspect the generated report or rerun the measurement command')

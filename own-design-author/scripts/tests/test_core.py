@@ -687,7 +687,7 @@ def test_web_check_runs_real_l1_and_l2_and_detects_palette_mutation(project):
         run=subprocess.run(argv,env=env,capture_output=True,text=True)
         result=json.loads(run.stdout)
         assert run.returncode==1,result
-        assert result['stages'][-1]=={'stage':'L2','exit_code':1,'target_env':'DESIGN_FIXTURE_URL'}
+        assert result['stages'][-1]=={'stage':'L2','exit_code':1,'target_env':'DESIGN_FIXTURE_URL','profile':'lp'}
         (root/'index.html').write_text(normal)
         fixed=json.loads((root/'design/render-environment.json').read_text())
         fixed['runtime']['browser_version']='wrong-version'

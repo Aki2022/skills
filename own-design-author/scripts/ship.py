@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bind L0/L1/L2 to a clean commit and exact built artifacts before shipment."""
+"""Bind L0/L1/L2 to clean source; shipment additionally requires exact artifacts."""
 import argparse
 from contextlib import contextmanager
 import hashlib
@@ -15,7 +15,7 @@ import time
 from urllib.request import urlopen
 
 from design_author import git_root, read_data, CATALOG
-from ship_contract import validate_channels, artifact_hashes, validate_web_result, safe_path
+from ship_contract import validate_channels, validate_integration_gate, artifact_hashes, validate_web_result, safe_path
 
 SCRIPT=Path(__file__).resolve().parent
 
@@ -42,15 +42,15 @@ def json_command(argv,root,env):
     return data
 
 
-def command(argv,root,env):
+def command(argv,root,env,*,purpose="ship"):
     result=subprocess.run(argv,cwd=root,env=env,capture_output=True,text=True)
-    if result.returncode:raise ValueError('configured ship command failed')
+    if result.returncode:raise ValueError('configured '+purpose+' command failed')
 
 
 @contextmanager
 def render_servers(root,servers,env):
     """Own each endpoint's process and ephemeral origin; ignore inherited URLs."""
-    processes=[];urls={};child_env=dict(env)
+    processes=[];urls={};child_env={key:value for key,value in env.items() if key not in servers}
     try:
         for name,row in servers.items():
             with socket.socket() as listener:
@@ -82,10 +82,14 @@ def render_servers(root,servers,env):
                 process.wait()
 
 
-def gate(root,name,channel,catalogs,*,deploy=False,source_commit=None,predicted=False):
+def gate(root,name,channel,catalogs,*,deploy=False,source_commit=None,predicted=False,local=False):
     root=Path(root).resolve()
     commit,tree=clean_commit(root)
     env=dict(os.environ)
+    if local:
+        if deploy:raise ValueError('local integration cannot deploy')
+        if 'prepare_command' in channel:command(channel['prepare_command'],root,env,purpose='prepare')
+        if clean_commit(root)!=(commit,tree):raise ValueError('preparation changed the committed source')
     l0_command=env.get('DESIGN_AUTHOR_COMMAND') or str(SCRIPT/'design-author')
     l0=json_command([l0_command,'check','--ship','--repo',str(root),'--catalog-dir',str(catalogs),'--include-manifest'],root,env)
     if l0['exit_code']==2:return {'exit_code':2,'errors':l0.get('errors',[]) or ['ship L0 failed'],'l0':l0}
@@ -98,8 +102,8 @@ def gate(root,name,channel,catalogs,*,deploy=False,source_commit=None,predicted=
     urls=validation.get('urls',[])
     if not urls or any(not isinstance(row,dict) or set(row)!={'env'} for row in urls) or {row['env'] for row in urls}!=set(channel['render_servers']):
         raise ValueError('render server coverage differs from validation endpoints')
-    if 'build_command' in channel:command(channel['build_command'],root,env)
-    before=artifact_hashes(root,channel['artifacts'])
+    if not local and 'build_command' in channel:command(channel['build_command'],root,env)
+    before=None if local else artifact_hashes(root,channel['artifacts'])
     clean_commit(root)
     with render_servers(root,channel['render_servers'],env) as (bound_env,bound_urls,processes):
         validator=bound_env.get('DESIGN_CHECK_COMMAND') or str(SCRIPT/'design-check')
@@ -108,7 +112,7 @@ def gate(root,name,channel,catalogs,*,deploy=False,source_commit=None,predicted=
             return {'exit_code':2,'errors':['L0/L1/L2 validation failed'],'validation':web}
         evidence=validate_web_result(root,web,bound_urls)
         if any(process.poll() is not None for process in processes):raise ValueError('bound render server exited during validation')
-    if clean_commit(root)!=(commit,tree) or artifact_hashes(root,channel['artifacts'])!=before:
+    if clean_commit(root)!=(commit,tree) or (not local and artifact_hashes(root,channel['artifacts'])!=before):
         raise ValueError('source or ship artifacts changed during validation')
     from resolved_contract import load_manifest
     if load_manifest(root/'design/.resolved/web.json')['input_hashes']!=inputs:
@@ -117,24 +121,27 @@ def gate(root,name,channel,catalogs,*,deploy=False,source_commit=None,predicted=
         'source_commit':source_commit or commit,'predicted_merge':predicted,'artifacts':before,
         'design_input_hashes':inputs,'render_evidence':evidence,'stages':web['stages'],'report':web.get('report',{}),
         'warnings':l0.get('warnings',[]),'deployment':'not-requested'}
-    if clean_commit(root)!=(commit,tree) or artifact_hashes(root,channel['artifacts'])!=before:
+    if clean_commit(root)!=(commit,tree) or (not local and artifact_hashes(root,channel['artifacts'])!=before):
         raise ValueError('source or artifacts changed before shipment')
+    if local:
+        receipt.pop('artifacts')
+        receipt.update(scope='local-integration',production_protected=False,deployment='not-applicable')
     if deploy:
         env.update(DESIGN_SHIP_COMMIT=commit,DESIGN_SHIP_TREE=tree,
                    DESIGN_SHIP_ARTIFACTS_JSON=json.dumps(before,sort_keys=True))
         command(channel['ship_command'],root,env)
-        if clean_commit(root)!=(commit,tree) or artifact_hashes(root,channel['artifacts'])!=before:
+        if clean_commit(root)!=(commit,tree) or (not local and artifact_hashes(root,channel['artifacts'])!=before):
             raise ValueError('ship command changed the checked source or artifact set')
         receipt['deployment']='command-completed'
-    output=safe_path(root,'design/.resolved/ship-'+name+'.json')
+    output=safe_path(root,'design/.resolved/integration.json' if local else 'design/.resolved/ship-'+name+'.json')
     output.parent.mkdir(parents=True,exist_ok=True)
     output.write_text(json.dumps(receipt,ensure_ascii=False,sort_keys=True,indent=2)+'\n')
     return receipt
 
 
-def doctor(root,channels):
+def doctor(root,channels,integration=None):
     errors=[]
-    if not channels:errors.append('no ship:true channels declared')
+    if not channels and integration is None:errors.append('no ship:true channels or local integration gate declared')
     marker=root/'.vibe-guard/design-ship.enabled'
     if marker.is_symlink() or not marker.is_file() or marker.read_text().strip()!='1':errors.append('design ship marker missing or invalid')
     try:
@@ -147,10 +154,12 @@ def doctor(root,channels):
         if not extension.is_file() or not os.access(extension,os.X_OK) or extension.read_bytes()!=(SCRIPT.parent/'hooks/pre-push.d/60-design-ship').read_bytes():
             raise ValueError('current design pre-push extension missing')
     except (OSError,ValueError) as exc:errors.append(str(exc))
-    return {'exit_code':2 if errors else 0,'errors':errors,'channels':sorted(channels)}
+    return {'exit_code':2 if errors else 0,'errors':errors,'channels':sorted(channels),
+        'local_integration':integration is not None,'production_protected':False,
+        'scope':'configuration-diagnostic'}
 
 
-def pre_push(root,channels,catalogs,refs_file):
+def pre_push(root,channels,catalogs,refs_file,integration=None):
     if refs_file is None:raise ValueError('pre-push requires the preserved refs file')
     records=Path(refs_file).read_text().splitlines()
     if not records:raise ValueError('zero push refs')
@@ -163,9 +172,12 @@ def pre_push(root,channels,catalogs,refs_file):
         verified=git(root,'rev-parse','--verify',sha+'^{commit}')
         if verified!=sha:raise ValueError('push source must be a commit')
         if sha not in sources:sources.append(sha)
+    jobs=[(name,row,False) for name,row in channels.items()]
+    if integration is not None:jobs.append(('local-integration',integration,True))
+    if not jobs:raise ValueError('no ship:true channels or local integration gate declared')
     results=[]
     for source in sources:
-        for name,channel in channels.items():
+        for name,channel,local in jobs:
             base=git(root,'rev-parse','--verify',channel['merge_base']+'^{commit}')
             # No merge conflict or missing merge-base is treated as a passed check.
             tree=git(root,'merge-tree','--write-tree',base,source).splitlines()[0]
@@ -176,9 +188,20 @@ def pre_push(root,channels,catalogs,refs_file):
                 git(root,'worktree','add','--detach',str(snapshot),synthetic)
                 try:
                     # Config and commands come from the predicted tree itself.
-                    predicted_channels=validate_channels(read_data(snapshot/'design/design.yaml'))
-                    if name not in predicted_channels:raise ValueError('predicted tree removed ship channel')
-                    result=gate(snapshot,name,predicted_channels[name],catalogs,source_commit=source,predicted=True)
+                    config=read_data(snapshot/'design/design.yaml')
+                    predicted_channels=validate_channels(config)
+                    predicted_integration=validate_integration_gate(config)
+                    if set(predicted_channels)!=set(channels) or (predicted_integration is not None)!=(integration is not None):
+                        raise ValueError('predicted tree changed gate coverage')
+                    if local:
+                        predicted_channel=predicted_integration
+                        if predicted_channel is None:raise ValueError('predicted tree removed local integration gate')
+                    else:
+                        if name not in predicted_channels:raise ValueError('predicted tree removed ship channel')
+                        predicted_channel=predicted_channels[name]
+                    if predicted_channel['merge_base']!=channel['merge_base']:
+                        raise ValueError('predicted tree changed the gate merge base')
+                    result=gate(snapshot,name,predicted_channel,catalogs,source_commit=source,predicted=True,local=local)
                     results.append(result)
                     if result['exit_code']==2:return {'exit_code':2,'errors':['predicted merge ship gate failed'],'checks':results}
                 finally:git(root,'worktree','remove','--force',str(snapshot))
@@ -193,14 +216,20 @@ def main(argv=None):
     modes.add_argument('--channel')
     modes.add_argument('--pre-push',action='store_true')
     modes.add_argument('--doctor',action='store_true')
+    modes.add_argument('--integration',action='store_true',help='check the declared local integration gate; never ships')
     parser.add_argument('--refs-file',type=Path)
     args=parser.parse_args(argv)
     try:
         root=git_root(args.repo).resolve()
-        channels=validate_channels(read_data(root/'design/design.yaml'))
-        if args.doctor:result=doctor(root,channels)
+        config=read_data(root/'design/design.yaml')
+        channels=validate_channels(config)
+        integration=validate_integration_gate(config)
+        if args.doctor:result=doctor(root,channels,integration)
+        elif args.pre_push:result=pre_push(root,channels,args.catalog_dir.resolve(),args.refs_file,integration)
+        elif args.integration:
+            if integration is None:raise ValueError('no local integration gate declared')
+            result=gate(root,'local-integration',integration,args.catalog_dir.resolve(),local=True)
         elif not channels:raise ValueError('no ship:true channels declared; L0-only shipment is unsupported')
-        elif args.pre_push:result=pre_push(root,channels,args.catalog_dir.resolve(),args.refs_file)
         elif args.channel:
             if args.channel not in channels:raise ValueError('unknown or nonshipping channel')
             result=gate(root,args.channel,channels[args.channel],args.catalog_dir.resolve(),deploy=True)

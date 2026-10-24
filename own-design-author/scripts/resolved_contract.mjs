@@ -73,6 +73,9 @@ export function loadManifest(path) {
 export function collectDesign(manifest) {
   const probe = document.createElement('div');
   probe.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none';
+  // Page-wide reduced-motion CSS must not animate the normalization probe.
+  probe.style.setProperty('transition', 'none', 'important');
+  probe.style.setProperty('animation', 'none', 'important');
   document.body.append(probe);
   const normalize = (property, value) => {
     probe.style[property] = '';
@@ -82,22 +85,62 @@ export function collectDesign(manifest) {
   };
   const colors = new Set((manifest.palette.color || []).map(v => normalize('color', v)));
   const fonts = new Set((manifest.palette.fontFamily || []).map(v => normalize('fontFamily', v)));
-  const radii = new Set((manifest.palette.dimension || []).map(v => normalize('borderTopLeftRadius', v)));
+  // A DTCG dimension can be a signed transform/spacing value, not a radius.
+  // Validate the length itself, then include only values CSS permits as radii.
+  const radii = new Set((manifest.palette.dimension || []).flatMap(value => {
+    normalize('left', value);
+    return CSS.supports('border-top-left-radius', value)
+      ? [normalize('borderTopLeftRadius', value)] : [];
+  }));
   probe.remove();
   const elements = [...document.querySelectorAll('body *')].filter(el =>
     !['SCRIPT','STYLE','TEMPLATE','LINK','META'].includes(el.tagName));
   const failures = [];
+  let targetCount = 0;
+  const transparent = value => {
+    const alpha = value.includes('/') ? value.split('/').at(-1)
+      : value.startsWith('rgba(') && value.split(',').length === 4 ? value.split(',').at(-1) : null;
+    return alpha !== null && parseFloat(alpha) === 0;
+  };
+  const directText = el => [...el.childNodes].some(node => {
+    if (node.nodeType !== Node.TEXT_NODE || !node.textContent.trim()) return false;
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    return [...range.getClientRects()].some(rect => rect.width > 0 && rect.height > 0);
+  });
   for (const [index, el] of [document.body, ...elements].entries()) {
     const style = getComputedStyle(el);
+    // Unpainted defaults (notably border/outline currentColor on wrappers) do
+    // not describe rendered design. Hidden ancestors must hide their children.
+    let visible = style.visibility === 'visible';
+    for (let node = el; visible && node; node = node.parentElement) {
+      const ancestor = getComputedStyle(node);
+      visible = ancestor.display !== 'none' && ancestor.contentVisibility !== 'hidden'
+        && Number(ancestor.opacity) !== 0;
+    }
+    const text = directText(el);
+    if (!visible || (!text && ![...el.getClientRects()].some(rect => rect.width > 0 && rect.height > 0))) continue;
+    if (el !== document.body || text) targetCount++;
     const check = (property, allowed) => {
       if (!allowed.has(style[property])) failures.push({index, tag:el.tagName.toLowerCase(), property, value:style[property]});
     };
-    for (const property of ['color','backgroundColor','borderTopColor','borderRightColor','borderBottomColor','borderLeftColor','outlineColor','textDecorationColor'])
-      check(property, colors);
-    check('fontFamily', fonts);
+    const controlText = ['INPUT','TEXTAREA','SELECT'].includes(el.tagName)
+      && (el.value || el.getAttribute('placeholder') || ['submit','reset'].includes(el.type));
+    if ((text || controlText) && !transparent(style.color)) {
+      check('color', colors);
+      check('fontFamily', fonts);
+    }
+    if (!transparent(style.backgroundColor)) check('backgroundColor', colors);
+    for (const side of ['Top','Right','Bottom','Left']) {
+      if (!['none','hidden'].includes(style[`border${side}Style`]) && parseFloat(style[`border${side}Width`]) > 0
+          && !transparent(style[`border${side}Color`])) check(`border${side}Color`, colors);
+    }
+    if (!['none','hidden'].includes(style.outlineStyle) && parseFloat(style.outlineWidth) > 0
+        && !transparent(style.outlineColor)) check('outlineColor', colors);
+    if (style.textDecorationLine !== 'none' && !transparent(style.textDecorationColor)) check('textDecorationColor', colors);
     for (const property of ['borderTopLeftRadius','borderTopRightRadius','borderBottomLeftRadius','borderBottomRightRadius'])
       check(property, radii);
   }
-  return {targetCount:elements.length, failures,
+  return {targetCount, failures,
     uncovered:[...(manifest.coverage?.uncovered || []), 'pseudo-elements', 'shadow-dom', 'iframe-documents']};
 }

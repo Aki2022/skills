@@ -50,6 +50,10 @@ const flag = (name, fallback) => {
   const i = args.indexOf(`--${name}`);
   return i === -1 ? fallback : args[i + 1];
 };
+const profile = flag('profile', 'lp');
+if (!['lp', 'product-ui'].includes(profile)) {
+  console.error('invalid measurement profile; expected lp or product-ui');process.exit(2);
+}
 const viewports = flag("viewports", "375,1280")
   .split(",")
   .map((v) => Number(v.trim()))
@@ -163,6 +167,42 @@ function collect(T) {
     return false;
   };
 
+  // Native checkbox/radio labels enlarge the hit target only when associated,
+  // contiguous with that control, and reachable through the rendered hit map.
+  // This is geometry/native semantics evidence, not a test of application event handlers.
+  const labelTarget = control => {
+    if (!control.matches('input[type=checkbox],input[type=radio]') || control.disabled) return null;
+    for (const label of control.labels || []) {
+      if (label.control !== control || !vis(label) || getComputedStyle(label).pointerEvents === 'none') continue;
+      const original = control.getBoundingClientRect(), area = label.getBoundingClientRect();
+      if (area.width < T.tapTargetMin || area.height < T.tapTargetMin ||
+          original.left < area.left || original.right > area.right ||
+          original.top < area.top || original.bottom > area.bottom) continue;
+      const scroll = [];
+      for (let node = label.parentElement; node; node = node.parentElement)
+        scroll.push([node, node.scrollLeft, node.scrollTop]);
+      const before = [window.scrollX, window.scrollY];
+      let reachable = false;
+      try {
+        label.scrollIntoView({block:'center',inline:'nearest',behavior:'instant'});
+        const box = label.getBoundingClientRect();
+        const points = [[box.left+1,box.top+1],[box.right-1,box.top+1],
+          [box.left+1,box.bottom-1],[box.right-1,box.bottom-1],
+          [(box.left+box.right)/2,(box.top+box.bottom)/2]];
+        reachable = points.every(([x,y]) => {
+          const hit = document.elementFromPoint(x,y);
+          return hit === control || (hit && (hit === label || label.contains(hit)) &&
+            !hit.closest('a[href],button,input,select,textarea,[role=button],[role=link]'));
+        });
+      } finally {
+        for (const [node,left,top] of scroll) node.scrollTo({left,top,behavior:'instant'});
+        window.scrollTo({left:before[0],top:before[1],behavior:'instant'});
+      }
+      if (reachable) return area;
+    }
+    return null;
+  };
+
   const kinds = {
     fontSize: new Set(),
     lineHeight: new Set(),
@@ -260,7 +300,7 @@ function collect(T) {
         el.parentElement &&
         hasText(el.parentElement);
       if (!inlineInText) {
-        const r = el.getBoundingClientRect();
+        const r = labelTarget(el) || el.getBoundingClientRect();
         if (r.height < T.tapTargetMin || r.width < T.tapTargetMin) {
           tapFails.push({
             tag: el.tagName.toLowerCase(),
@@ -549,6 +589,8 @@ try{if(fixed)environment=await verifyRuntime(fixed,chromium,require('playwright/
 catch{await browser.close();console.error('fixed runtime mismatch');process.exit(2);}
 const report = {
   url,
+  profile,
+  skipped: profile === 'product-ui' ? [{id:'fold-cta',reason:'marketing first-fold CTA is not applicable to product-ui'}] : [],
   measuredAt: fixed?fixed.config.clock:new Date().toISOString(),
   environment,
   runs: [],
@@ -774,7 +816,7 @@ for (const r of report.runs) {
   if (r.consoleErrors.length)
     fail("console-error", { at, sample: r.consoleErrors.slice(0, 3) });
   if (r.fold.h1Visible === false) fail("fold-h1", { at });
-  if (r.fold.primaryCtaVisible === false && !r.fold.hasStickyCta)
+  if (profile === 'lp' && r.fold.primaryCtaVisible === false && !r.fold.hasStickyCta)
     fail("fold-cta", { at });
   for (const im of r.imageLightness) {
     if (im.skipped) {

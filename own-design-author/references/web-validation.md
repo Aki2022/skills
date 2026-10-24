@@ -47,6 +47,7 @@ repo外・design内・隠しpath・symlink先への配置を拒否し、途中�
 `design-check --repo .` は実L0→L1→L2を順に呼ぶ。L0失格なら後段へ進まない。
 `design/validation.json` は `schema_version: 1`、非空の `html`（repo相対path）、
 `urls`（`{"env":"DESIGN_WEB_URL"}`等）、正の整数の `viewports`、`schemes`（light/dark）を持つ。
+各URLにprofile: lp|product-uiを任意指定でき、省略時はlp。product-uiでは広告LPの最初の画面のCTAだけを適用外としてskippedへ理由付きで残し、色・a11y・字体・固定描画の制約を維持する。関連付いたcheckbox/radioのlabelは、入力を包含する連続した矩形と実hit mapが有効な時だけ操作領域に含む。
 URLは実行時の環境変数で渡す。既存Nodeは `DESIGN_AUDIT_NODE`、Pythonは
 `DESIGN_AUTHOR_PYTHON` で選ぶ。L2を含むため、人間の実施確認を得てから実行する。
 各L2はdesign/render-environment.jsonを必須とし、固定環境で2回実行する。JSONは `.resolved/l2-<index>.json` に保存し、未カバーを集約出力する。実行前に前回の同名レポートを削除し、環境不一致や新規レポート欠落を古い成功で埋めない。
@@ -56,7 +57,7 @@ reportはexecuted / skipped / missing / uncovered / screenedの5配列。実行�
 ## L2と範囲
 
 色・フォント・角の許可集合をマニフェストからブラウザのcomputed表現へ正規化する。
-bodyと子孫の各要素のcolor/background/border/outline/text-decoration、fontFamily、4隅のradiusを照合する。
+bodyと子孫のうち描画される色・背景・境界・outline・装飾線・文字のfontFamilyと4隅のradiusを照合する。非描画の境界・透明な背景・非表示DOMは適合の証拠にせず、描画対象0件を拒否する。寸法tokenは負の変換値も持てるが、CSSが半径として許可する値だけを半径集合に使う。正規化用の見本はページのanimation/transitionから独立させる。
 透明色と角ゼロも必要なら明示的なtokenにする。検査対象0件は失格。
 コントラストとターゲットサイズは媒体minimumsを読む。axeのcolor-contrastと従来の実効コントラスト検査を併用し、
 axeで測れない対象は未検証として残す。失敗したaxe実行を合格にしない。
@@ -121,3 +122,5 @@ viewports/schemesの順序と集合もpinに一致必須。ブラウザ版・フ
 測定の不一致や実fallbackはexit 1。API一次資料は[時計](https://playwright.dev/docs/clock)と
 [CDP字体情報](https://chromedevtools.github.io/devtools-protocol/tot/CSS/#method-getPlatformFontsForNode)。
 実ブラウザfixtureの追加条件はDESIGN_TEST_FONTに既存Inter woff2のパスを渡すこと。通常lintのskipを実測と報告しない。
+
+各独立描画内では、スクロール等の計測で生じた再描画待ちを除くため、最大3枚の固定条件キャプチャから連続2枚の完全一致を要求する。安定しなければ失格。安定した画素のhashをさらに独立した2回の描画間で完全比較し、別runから都合のよい画像を選ばない。

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "attempted_judgments": 1345,
+  "attempted_judgments": 1369,
   "batches": [
     {
       "model": "jev-1.13.0",
@@ -1673,6 +1673,61 @@
       "input_tokens": 4189,
       "output_tokens": 38,
       "usage_derived_usd": 0.00017593800000000002
+    },
+    {
+      "purpose": "design-evidence",
+      "model": "jev-1.13.0",
+      "questions": 6,
+      "status": "succeeded",
+      "request_sha256": "191ccb32de41377d240d5651f3b2cb554ccdb2af2950f81cdea9c5f4f9ebb054",
+      "duration_seconds": 0.221167,
+      "input_tokens": 11286,
+      "output_tokens": 106,
+      "usage_derived_usd": 0.00047401200000000006
+    },
+    {
+      "purpose": "design-evidence",
+      "model": "jev-1.13.0",
+      "questions": 4,
+      "status": "succeeded",
+      "request_sha256": "9c8e603866ed4a5f1ce75f7e1332d321300d84e5cff69ef16c33150c11729ba3",
+      "duration_seconds": 0.258817,
+      "input_tokens": 10207,
+      "output_tokens": 72,
+      "usage_derived_usd": 0.000428694
+    },
+    {
+      "purpose": "design-evidence",
+      "model": "jev-1.13.0",
+      "questions": 6,
+      "status": "succeeded",
+      "request_sha256": "5d6d86188f89a0609804abe63d4dad403f3ee98883a3aaefed904e87b48a9622",
+      "duration_seconds": 0.295907,
+      "input_tokens": 12028,
+      "output_tokens": 106,
+      "usage_derived_usd": 0.0005051760000000001
+    },
+    {
+      "purpose": "design-evidence",
+      "model": "jev-1.13.0",
+      "questions": 5,
+      "status": "succeeded",
+      "request_sha256": "c744fc479f760a0036f40d835f37e8cead199252662d4a5635e8bb2bc64315ec",
+      "duration_seconds": 0.208191,
+      "input_tokens": 10744,
+      "output_tokens": 89,
+      "usage_derived_usd": 0.00045124800000000007
+    },
+    {
+      "purpose": "design-evidence",
+      "model": "jev-1.13.0",
+      "questions": 3,
+      "status": "succeeded",
+      "request_sha256": "6afed10996d7b6b46190a21a2a819f3260449e1be019f23aa738416ea3970949",
+      "duration_seconds": 0.230058,
+      "input_tokens": 6550,
+      "output_tokens": 55,
+      "usage_derived_usd": 0.0002751
     }
   ]
 }

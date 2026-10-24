@@ -123,6 +123,26 @@ Summaries of what happened go there, not into the index and not into a guide.
 Skip this step only when the repo has no `docs/` governance (`docs/00_index.md`
 absent). Say so, then go straight to Step 3.
 
+### Step 2.5 — design maintenance
+
+Run `design-author maintain --repo <repo>` through the existing PATH (or the
+runtime's existing `DESIGN_AUTHOR_PYTHON` with the discovered skill script).
+Do not install dependencies or persist a machine-specific path in the repo.
+The command emits one line and skips repositories without `design/`.
+It uses the last successful commit stamp, committed and uncommitted changes,
+review dates, and skill/catalog/policy fingerprints to decide whether to
+regenerate and run offline L0. It lists invalidated approvals and candidates;
+it never writes approvals or invokes a model.
+
+On exit 0, continue. On exit 1, report the warnings and continue with those
+limitations visible. On exit 2 or a missing command when `design/` exists,
+read **own-design-author** and its [maintenance contract](../own-design-author/references/maintenance.md), repair only
+within the current authorization, and stop the integration phase if the
+failure remains. Do not turn an unfinished design gate into a successful
+closeout. A repository without `design/` can use a one-line skip even when the
+command is unavailable. Include generated recommendations in the work unit's
+Next Actions, then continue to Step 3; do not approve them automatically.
+
 ### Step 3 — own-git-clean
 
 Invoke the **own-git-clean** skill and follow its SKILL.md, **passing it both

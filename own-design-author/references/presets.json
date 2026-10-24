@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "lp": {"default_state": "deferred", "media": ["web"]},
+  "product-ui": {"default_state": "deferred", "media": ["web"]},
+  "presentation": {"default_state": "deferred", "media": ["web"], "note": "pptx minimums/consumer are gated on the subordinate workstream; web preview only"}
+}

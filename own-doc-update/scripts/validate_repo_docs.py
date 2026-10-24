@@ -874,6 +874,86 @@ def validate_review_recency(root: Path, warnings: list[str]) -> None:
         )
 
 
+def validate_design_references(root: Path, errors: list[str]) -> None:
+    """Check spec/master links only. Never resolve tokens, approvals, IA or L0."""
+    root = root.resolve()
+    config_path = root / "design/design.yaml"
+    masters = {root / "design", config_path}
+    backlinks: set[str] = set()
+    for path in sorted(root.glob("docs/specs/**/*.md")):
+        if "archive" in path.relative_to(root / "docs/specs").parts:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+            for _, _, raw in iter_link_destinations(strip_code(text)):
+                target = link_target(raw)
+                if target is None:
+                    continue
+                base = root if target.startswith("/") else path.parent
+                if (base / target.lstrip("/")).resolve() in masters:
+                    backlinks.add(path.relative_to(root).as_posix())
+        except (OSError, UnicodeError, RuntimeError):
+            errors.append(f"{path.relative_to(root)}: unreadable during design reference check")
+
+    if not config_path.exists() and not config_path.is_symlink():
+        for path in sorted(backlinks):
+            errors.append(f"{path}: design back-reference has no design/design.yaml")
+        if backlinks:
+            errors.append("design/design.yaml: missing master referenced by specs")
+        return
+    if config_path.resolve() != config_path or not config_path.is_file():
+        errors.append("design/design.yaml: design configuration must be a regular repository file")
+        return
+    try:
+        # Only design-bearing repositories need the runner's existing YAML dependency.
+        import yaml
+
+        class UniqueLoader(yaml.SafeLoader):
+            def construct_mapping(self, node, deep=False):
+                pairs = self.construct_pairs(node, deep=deep)
+                result = {}
+                for key, value in pairs:
+                    if key in result:
+                        raise ValueError("duplicate configuration key")
+                    result[key] = value
+                return result
+
+        config = yaml.load(config_path.read_text(encoding="utf-8"), Loader=UniqueLoader)
+        if not isinstance(config, dict):
+            raise ValueError("configuration must be an object")
+        declared = config.get("spec")
+        references = [declared] if isinstance(declared, str) else declared
+        if (not isinstance(references, list) or not references
+                or any(not isinstance(value, str) or not value for value in references)
+                or len(set(references)) != len(references)):
+            raise ValueError("spec must be a path or nonempty unique path list")
+    except ImportError:
+        errors.append("design/design.yaml: YAML dependency missing; use the design runner environment")
+        return
+    except (OSError, UnicodeError, ValueError, TypeError, yaml.YAMLError):
+        errors.append("design/design.yaml: invalid configuration or spec declaration")
+        return
+
+    for reference in references:
+        parts = reference.split("/")
+        if (len(parts) < 3 or parts[:2] != ["docs", "specs"]
+                or any(part in ("", ".", "..", "archive") for part in parts)
+                or not reference.endswith(".md")):
+            errors.append("design/design.yaml: spec must name an active repository docs/specs Markdown file")
+            continue
+        path = root / reference
+        if (path.resolve() != path or not path.is_file()
+                or not resolves_case_sensitively(root, reference)):
+            errors.append(f"design/design.yaml: spec file missing or not a regular repository file: {reference}")
+            errors.append(f"{reference}: spec referenced by design/design.yaml is missing or not a regular file")
+        elif reference not in backlinks:
+            errors.append(f"{reference}: missing design back-reference to design/ or design/design.yaml")
+            errors.append(f"design/design.yaml: spec has no design back-reference: {reference}")
+    for reference in sorted(backlinks - set(references)):
+        errors.append(f"design/design.yaml: spec does not list {reference}, which links to the design master")
+        errors.append(f"{reference}: design back-reference is not listed by design/design.yaml spec")
+
+
 def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
     root = Path(repo).resolve()
     errors: list[str] = []
@@ -1279,6 +1359,7 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
 
     validate_ownership(root, errors, warnings)
     validate_relative_links(root, errors, warnings)
+    validate_design_references(root, errors)
     validate_spec_placement(root, errors, warnings)
     validate_baseline_freshness(root, baseline, deferred, errors, warnings)
     validate_review_recency(root, warnings)

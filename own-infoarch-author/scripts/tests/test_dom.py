@@ -115,8 +115,11 @@ def test_missing_playwright_is_exit_2_not_a_pass(tmp_path):
     from test_check import write_repo
     write_repo(tmp_path)
     (tmp_path / 'site').mkdir(exist_ok=True)
-    (tmp_path / 'site/index.html').write_text('<p>x</p>', encoding='utf-8')
+    (tmp_path / 'site/index.html').write_text(HTML.format(hidden=''), encoding='utf-8')
     env = dict(os.environ, INFOARCH_PLAYWRIGHT_DIR=str(tmp_path / 'nowhere'))
+    if PW_DIR:
+        # A valid inherited runtime must not override the explicitly selected missing root.
+        env['NODE_PATH'] = str(Path(PW_DIR) / 'node_modules')
     proc = subprocess.run([sys.executable, str(SCRIPTS / 'infoarch_author.py'), 'dom', '--root', str(tmp_path),
                            '--outline', 'lp-municipal'], capture_output=True, text=True, env=env, cwd=str(tmp_path), check=False)
     assert proc.returncode == 2, proc.stdout + proc.stderr
@@ -147,3 +150,23 @@ def test_page_that_fades_in_is_read_after_it_settles(tmp_path):
     proc = subprocess.run([sys.executable, str(SCRIPTS / 'infoarch_author.py'), 'dom', '--root', str(tmp_path),
                            '--outline', 'lp-municipal'], capture_output=True, text=True, env=env, check=False)
     assert proc.returncode == 0, json.loads(proc.stdout)['findings']
+
+
+@pytest.mark.skipif(not PW_DIR, reason='INFOARCH_TEST_PLAYWRIGHT_DIR is not set: real monorepo runtime integration not run')
+def test_default_runtime_resolves_from_monorepo_ancestor(tmp_path):
+    """Without an explicit override, a nested app can use its repository's existing runtime."""
+    project = tmp_path / 'project'
+    nested = project / 'apps/web'
+    nested.mkdir(parents=True)
+    (project / 'node_modules').symlink_to(Path(PW_DIR) / 'node_modules', target_is_directory=True)
+    page = project / 'index.html'
+    page.write_text(HTML.format(hidden=''), encoding='utf-8')
+    env = dict(os.environ)
+    env.pop('INFOARCH_PLAYWRIGHT_DIR', None)
+    env.pop('NODE_PATH', None)
+    proc = subprocess.run(['node', str(SCRIPTS / 'dom_snapshot.mjs'), str(page), json.dumps([VP])],
+                          cwd=nested, env=env, capture_output=True, text=True, check=False)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    snapshots = json.loads(proc.stdout)
+    assert len(snapshots) == 1 and snapshots[0]['viewport'] == VP
+    assert snapshots[0]['anchors'] and snapshots[0]['text_chars'] > 0

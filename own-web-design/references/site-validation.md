@@ -10,9 +10,9 @@ title: Site Validation Runbook（レンダリング実測）
 
 ## 実行前の必須確認（コストゲート）
 
-- **ブラウザ起動はコストがかかるので、必ずユーザーの承認を得てから実行する**（SKILL.md「Validateは人間に聞く」）。
+- **ブラウザ起動はコストがかかるので、必ずユーザーの承認を得てから実行する**（SKILL.md「検査の実施境界」）。
 - ユーザーが「毎回自動でvalidateして」と明示した場合のみ、都度確認を省く。
-- ブラウザの選択・起動方針は `browser-automation-policy` Skill に従い、原則 `playwright-cli` Skill を使う。
+- ブラウザの選択・起動方針は `own-browser-route` Skill に従い、原則 `playwright-cli` Skill を使う。
 
 ## 手順
 

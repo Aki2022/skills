@@ -15,12 +15,15 @@
  * 反映されず「実際にどう見えているか」を測れない（v1 でこの誤りを踏んだ）。
  *
  * 使い方:
- *   node measure_lp.mjs <url> [--viewports 375,1280] [--schemes dark,light] [--json out.json]
+ *   node measure_lp.mjs <url> --manifest design/.resolved/web.json [--viewports 375,1280] [--schemes dark,light] [--json out.json]
  *
  * 終了コード: 0 = 失格なし / 1 = 失格あり / 2 = 実行不能
  */
 
-import { writeFileSync } from "node:fs";
+import { writeFileSync, existsSync, realpathSync, unlinkSync } from "node:fs";
+import {dirname} from "node:path";
+import {loadEnvironment,verifyRuntime,configureFonts,trackFonts,renderEvidence,compareRepeats} from "../../own-design-author/scripts/fixed_render.mjs";
+import { loadManifest, collectDesign } from "../../own-design-author/scripts/resolved_contract.mjs";
 import { createRequire } from "node:module";
 
 const require = createRequire(`${process.cwd()}/`);
@@ -40,19 +43,33 @@ function loadPlaywright() {
 const args = process.argv.slice(2);
 const url = args.find((a) => !a.startsWith("--"));
 if (!url) {
-  console.error("使い方: node measure_lp.mjs <url> [--viewports 375,1280]");
+  console.error("使い方: node measure_lp.mjs <url> --manifest design/.resolved/web.json [--viewports 375,1280]");
   process.exit(2);
 }
 const flag = (name, fallback) => {
   const i = args.indexOf(`--${name}`);
   return i === -1 ? fallback : args[i + 1];
 };
+const profile = flag('profile', 'lp');
+if (!['lp', 'product-ui'].includes(profile)) {
+  console.error('invalid measurement profile; expected lp or product-ui');process.exit(2);
+}
 const viewports = flag("viewports", "375,1280")
   .split(",")
   .map((v) => Number(v.trim()))
   .filter(Boolean);
 const jsonOut = flag("json", null);
 const schemes = flag("schemes", "dark,light").split(",").filter(Boolean);
+let manifest;
+try {
+  if(jsonOut && flag('environment',null) && existsSync(jsonOut))unlinkSync(jsonOut);
+  manifest = loadManifest(flag('manifest', 'design/.resolved/web.json'));
+}
+catch { console.error('resolved manifest unavailable, invalid or stale; rerun L0'); process.exit(2); }
+if (!viewports.length || !schemes.length) { console.error('zero measurement runs'); process.exit(2); }
+let axePath = process.env.AXE_CORE_PATH;
+if (!axePath) { try { axePath = require.resolve('axe-core/axe.min.js'); } catch {} }
+
 
 /**
  * 閾値。根拠と、緩めた履歴は references/aesthetic-thresholds.md に残すこと。
@@ -66,8 +83,9 @@ const T = {
   bodyFontSizeMin: 15, // 本文（最頻サイズ）
   textFontSizeFloor: 12, // 注記も含めた絶対下限
   measureMaxCh: 48, // 和文の全角基準
-  contrastMin: 4.5,
-  tapTargetMin: 44,
+  contrastMin: manifest.minimums.text_contrast,
+  largeContrastMin: manifest.minimums.large_text_contrast,
+  tapTargetMin: manifest.minimums.target_size_px,
   orphanMinChars: 3,
   imageStandoutArea: 200, // 焦点画素の面積(CSS px²)。14x14 相当を下回れば絵が沈んでいる
   imageCropMax: 0.45, // object-fit: cover の切り取り率。意図した構図が壊れる境
@@ -149,6 +167,42 @@ function collect(T) {
     return false;
   };
 
+  // Native checkbox/radio labels enlarge the hit target only when associated,
+  // contiguous with that control, and reachable through the rendered hit map.
+  // This is geometry/native semantics evidence, not a test of application event handlers.
+  const labelTarget = control => {
+    if (!control.matches('input[type=checkbox],input[type=radio]') || control.disabled) return null;
+    for (const label of control.labels || []) {
+      if (label.control !== control || !vis(label) || getComputedStyle(label).pointerEvents === 'none') continue;
+      const original = control.getBoundingClientRect(), area = label.getBoundingClientRect();
+      if (area.width < T.tapTargetMin || area.height < T.tapTargetMin ||
+          original.left < area.left || original.right > area.right ||
+          original.top < area.top || original.bottom > area.bottom) continue;
+      const scroll = [];
+      for (let node = label.parentElement; node; node = node.parentElement)
+        scroll.push([node, node.scrollLeft, node.scrollTop]);
+      const before = [window.scrollX, window.scrollY];
+      let reachable = false;
+      try {
+        label.scrollIntoView({block:'center',inline:'nearest',behavior:'instant'});
+        const box = label.getBoundingClientRect();
+        const points = [[box.left+1,box.top+1],[box.right-1,box.top+1],
+          [box.left+1,box.bottom-1],[box.right-1,box.bottom-1],
+          [(box.left+box.right)/2,(box.top+box.bottom)/2]];
+        reachable = points.every(([x,y]) => {
+          const hit = document.elementFromPoint(x,y);
+          return hit === control || (hit && (hit === label || label.contains(hit)) &&
+            !hit.closest('a[href],button,input,select,textarea,[role=button],[role=link]'));
+        });
+      } finally {
+        for (const [node,left,top] of scroll) node.scrollTo({left,top,behavior:'instant'});
+        window.scrollTo({left:before[0],top:before[1],behavior:'instant'});
+      }
+      if (reachable) return area;
+    }
+    return null;
+  };
+
   const kinds = {
     fontSize: new Set(),
     lineHeight: new Set(),
@@ -224,7 +278,7 @@ function collect(T) {
         const r = ratio(fg, bg);
         const bold = Number(s.fontWeight) >= 700;
         const large = size >= 24 || (size >= 18.66 && bold);
-        const min = large ? 3 : T.contrastMin;
+        const min = large ? T.largeContrastMin : T.contrastMin;
         if (r < min) {
           contrastFails.push({
             tag: el.tagName.toLowerCase(),
@@ -246,7 +300,7 @@ function collect(T) {
         el.parentElement &&
         hasText(el.parentElement);
       if (!inlineInText) {
-        const r = el.getBoundingClientRect();
+        const r = labelTarget(el) || el.getBoundingClientRect();
         if (r.height < T.tapTargetMin || r.width < T.tapTargetMin) {
           tapFails.push({
             tag: el.tagName.toLowerCase(),
@@ -520,22 +574,42 @@ async function measureRegion(page, region) {
 }
 
 const { chromium } = loadPlaywright();
-const browser = await chromium.launch();
+let fixed=null,environment=null;
+try {
+  if(flag('environment',null)){
+    const root=dirname(dirname(dirname(realpathSync(flag('manifest','design/.resolved/web.json')))));
+    fixed=loadEnvironment(flag('environment',null),root,viewports,schemes);
+
+  }
+} catch {console.error('fixed rendering environment unavailable or mismatched');process.exit(2);}
+let browser;
+try{browser=await chromium.launch(fixed?{executablePath:chromium.executablePath()}:{});}
+catch{console.error('browser runtime unavailable');process.exit(2);}
+try{if(fixed)environment=await verifyRuntime(fixed,chromium,require('playwright/package.json').version,browser);}
+catch{await browser.close();console.error('fixed runtime mismatch');process.exit(2);}
 const report = {
   url,
-  measuredAt: new Date().toISOString(),
+  profile,
+  skipped: profile === 'product-ui' ? [{id:'fold-cta',reason:'marketing first-fold CTA is not applicable to product-ui'}] : [],
+  measuredAt: fixed?fixed.config.clock:new Date().toISOString(),
+  environment,
   runs: [],
   failures: [],
+  uncovered: [...(manifest.coverage?.uncovered || []), 'pseudo-elements', 'shadow-dom', 'iframe-documents',...(fixed?[]:['fixed-render-environment'])],
 };
 
+try {
+for(let repeat=0;repeat<(fixed?2:1);repeat++){
 for (const scheme of schemes) {
   for (const width of viewports) {
-    const context = await browser.newContext({
-      viewport: { width, height: width < 500 ? 812 : 900 },
-      colorScheme: scheme,
-      deviceScaleFactor: 1,
-    });
+    const context = await browser.newContext(fixed?{
+      viewport:fixed.config.viewports.find(v=>v.width===width),colorScheme:scheme,
+      deviceScaleFactor:fixed.config.device_scale_factor,reducedMotion:fixed.config.reduced_motion,
+      locale:fixed.config.locale,timezoneId:fixed.config.timezone,serviceWorkers:'block',
+    }:{viewport:{width,height:width<500?812:900},colorScheme:scheme,deviceScaleFactor:1});
+    const requests=fixed?await configureFonts(context,fixed,url):null;
     const page = await context.newPage();
+    if(fixed){await trackFonts(page,context,requests);await page.clock.setFixedTime(new Date(fixed.config.clock));}
     const consoleErrors = [];
     page.on(
       "console",
@@ -557,15 +631,31 @@ for (const scheme of schemes) {
       else thirdPartyIssues.push(line);
     });
 
-    await page.goto(url, { waitUntil: "networkidle", timeout: 60000 });
+    // Background prefetch/analytics streams do not define visual readiness.
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
     // 遅延読み込みを確定させる（未読込を「壊れている」と誤判定しないため）
     await page.evaluate(() =>
       document.querySelectorAll("img").forEach((i) => (i.loading = "eager")),
     );
-    await page.evaluate(() => document.fonts.ready);
+    await page.evaluate(async () => {
+      await Promise.race([
+        Promise.all([document.fonts.ready, ...[...document.images].map(image => image.decode())]),
+        new Promise((_, reject) => setTimeout(() => reject(Error('visible assets did not become ready')), 10000)),
+      ]);
+    });
     await page.waitForTimeout(700);
 
     const data = await page.evaluate(collect, T);
+    data.design = await page.evaluate(collectDesign, manifest);
+    data.axe = {violations:[], incomplete:[], unavailable:false};
+    if (axePath && existsSync(axePath)) {
+      await page.addScriptTag({path:axePath});
+      data.axe = await page.evaluate(async () => {
+        const result = await window.axe.run(document, {runOnly:{type:'rule', values:['color-contrast']}});
+        return {violations:result.violations.map(v => ({id:v.id, count:v.nodes.length})),
+          incomplete:result.incomplete.map(v => ({id:v.id, count:v.nodes.length})), unavailable:false};
+      });
+    } else data.axe.unavailable = true;
     // 404 等はテキストに URL が出ないので、favicon を除いた実リクエストで置き換える。
     data.consoleErrors = [
       ...consoleErrors.filter((t) => !/Failed to load resource/.test(t)),
@@ -589,7 +679,7 @@ for (const scheme of schemes) {
         const [hi, lo] = [fgY, Y].sort((a, b) => b - a);
         const ratio = (hi + 0.05) / (lo + 0.05);
         const large = t.fontSize >= 24 || (t.fontSize >= 18.66 && t.bold);
-        const min = large ? 3 : T.contrastMin;
+        const min = large ? T.largeContrastMin : T.contrastMin;
         if (ratio < min) {
           data.contrastFails.push({
             tag: t.tag,
@@ -631,11 +721,23 @@ for (const scheme of schemes) {
         });
       }
     }
-    report.runs.push({ scheme, width, ...data });
+    if(fixed)data.render_evidence=await renderEvidence(page,context,fixed,requests);
+    report.runs.push({ scheme, width, ...(fixed?{repeat}:{}), ...data });
     await context.close();
   }
 }
-await browser.close();
+}
+if(fixed){
+  const reloaded=loadEnvironment(fixed.path,fixed.root,viewports,schemes);
+  if(reloaded.config_sha256!==fixed.config_sha256)throw Error('environment changed');
+  await verifyRuntime(reloaded,chromium,require('playwright/package.json').version,browser);
+}
+} catch {
+  console.error('rendering failed or fixed inputs changed');process.exitCode=2;
+} finally {
+  await browser.close();
+}
+if(process.exitCode===2)process.exit(2);
 
 const fail = (id, detail) => report.failures.push({ id, ...detail });
 // 校正が足りない / 環境差が出る項目は警告に置く。失格に混ぜると
@@ -644,6 +746,11 @@ report.warnings = [];
 const warn = (id, detail) => report.warnings.push({ id, ...detail });
 for (const r of report.runs) {
   const at = `${r.scheme}/${r.width}px`;
+  if (!r.design.targetCount) fail('zero-targets', {at});
+  if (r.design.failures.length) fail('design-palette', {at, count:r.design.failures.length, sample:r.design.failures.slice(0, 8)});
+  if (r.axe.unavailable) fail('axe-unavailable', {at, note:'axe-core not available; unverified'});
+  if (r.axe.violations.length) fail('axe-contrast', {at, violations:r.axe.violations});
+  if (r.axe.incomplete.length) fail('axe-incomplete', {at, note:'unverified contrast', incomplete:r.axe.incomplete});
   if (r.kinds.fontSize > T.fontSizeKinds)
     fail("type-scale", { at, got: r.kinds.fontSize, max: T.fontSizeKinds });
   if (r.kinds.lineHeight > T.lineHeightKinds)
@@ -697,6 +804,15 @@ for (const r of report.runs) {
       min: T.bodyLineHeightMin,
     });
   if (r.headJumps.length) fail("heading-jump", { at, jumps: r.headJumps });
+  if(fixed && (r.render_evidence.fallbacks.length || r.render_evidence.rejected_font_requests))
+    fail('font-fallback',{at,families:r.render_evidence.fallbacks,rejected_requests:r.render_evidence.rejected_font_requests});
+  if(fixed){
+    const actual=r.render_evidence,expected=fixed.config;
+    if(actual.clock!==expected.clock||actual.dpr!==expected.device_scale_factor||!actual.reduced_motion||
+      actual.locale!==expected.locale||actual.timezone!==expected.timezone||
+      actual.viewport.width!==r.width||actual.viewport.height!==expected.viewports.find(v=>v.width===r.width).height)
+      fail('render-environment-mismatch',{at});
+  }
   if (r.fontFallbacks.length)
     // headless では webfont の subset 読み込みが実ブラウザと揺れる。
     // 実ブラウザで確認するまで失格にしない。
@@ -706,7 +822,7 @@ for (const r of report.runs) {
   if (r.consoleErrors.length)
     fail("console-error", { at, sample: r.consoleErrors.slice(0, 3) });
   if (r.fold.h1Visible === false) fail("fold-h1", { at });
-  if (r.fold.primaryCtaVisible === false && !r.fold.hasStickyCta)
+  if (profile === 'lp' && r.fold.primaryCtaVisible === false && !r.fold.hasStickyCta)
     fail("fold-cta", { at });
   for (const im of r.imageLightness) {
     if (im.skipped) {
@@ -742,6 +858,7 @@ for (const r of report.runs) {
   }
 }
 
+if(fixed)compareRepeats(report);
 const out = JSON.stringify(report, null, 2);
 if (jsonOut) writeFileSync(jsonOut, out);
 
@@ -777,5 +894,6 @@ if (report.warnings.length) {
   }
   console.log("");
 }
+if (report.uncovered.length) console.log(`  未カバー: ${report.uncovered.join(", ")}（準拠合格の対象外）`);
 if (jsonOut) console.log(`  詳細: ${jsonOut}\n`);
 process.exit(report.failures.length ? 1 : 0);

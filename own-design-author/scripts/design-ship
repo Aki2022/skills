@@ -1,0 +1,12 @@
+#!/usr/bin/env sh
+set -eu
+script_file=$0
+while [ -L "$script_file" ]; do
+  target=$(readlink "$script_file")
+  case "$target" in
+    /*) script_file=$target ;;
+    *) script_file=$(dirname -- "$script_file")/$target ;;
+  esac
+done
+script_dir=$(CDPATH= cd -- "$(dirname -- "$script_file")" && pwd)
+exec "${DESIGN_AUTHOR_PYTHON:-python3}" "$script_dir/ship.py" "$@"

@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "web": {
+    "minimums": {
+      "text_contrast": 4.5,
+      "large_text_contrast": 3,
+      "ui_contrast": 3,
+      "target_size_px": 44,
+      "focus_width_px": 2,
+      "focus_contrast": 3
+    },
+    "sources": {
+      "contrast": "https://design.digital.go.jp/dads/foundations/color/",
+      "target_size_px": "https://design.digital.go.jp/dads/components/button/",
+      "focus": "https://www.w3.org/WAI/WCAG22/Understanding/focus-appearance.html"
+    }
+  }
+}

@@ -69,7 +69,9 @@ def discover(canon: Path, search_roots: list[Path], max_depth: int) -> dict[Path
                 continue
             if target == canon:
                 found.setdefault(path, "whole")
-            elif canon in target.parents:
+            # A CLI link into scripts/ is not a skill-discovery root. Match
+            # only direct canonical skill directories (including broken aliases).
+            elif target.parent == canon and (target.is_dir() or not target.exists()):
                 found.setdefault(path.parent, "per-skill")
     return {p: k for p, k in found.items() if not is_retired(p)}
 

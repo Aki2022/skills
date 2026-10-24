@@ -1,98 +1,47 @@
 ---
 name: own-brand-resolve
-description: "ブランド意匠の倉庫。文脈（corporate-presentation / public-sector / dashboard 等）と媒体（html / dashboard / pptx 等）を渡すと、解決済みの意匠（値・出所・ライセンス可否）を返す。「自社ブランドで」「デジタル庁風に」「このサービスの意匠で」と言われた時、配色・タイポ・余白をブランドに合わせる時、工場 skill が意匠を必要とする時に使う。成果物そのものは作らない。"
+description: "指示されたブランドやデザインの参照ライブラリ。自社ブランド・デジタル庁風・指定サイトの方針や値を調べ、出所と権利情報を own-design-author に渡す時に使う。repo の design/ が正典で、値の承認と成果物の生成は担当しない。"
 ---
 
 # Own Brand Resolve
 
-**この skill はブランド意匠のデータと、それを選ぶロジックだけを持つ。** 成果物は作らない。
-「文脈と媒体を渡すと、解決済みの意匠（値＋出所＋ライセンス可否）を返す」窓口として振る舞う。
+倉庫は指示された時だけ引く参照ライブラリ。repo の `design/` が唯一の正典で、
+工場は倉庫から値を継承しない。ブランドの企画・命名・戦略や成果物の生成は扱わない。
 
-なぜ倉庫を分けたか（`SPEC-web-design-skill-scope` 決定7）: 選択ロジックを各工場に置くと、
-同じ規則が複数実装になり `extends` の解釈がズレる。**ズレは仮定ではなく実測済み** —
-同一ブランドの値が2箇所で完全に別物だった（一方は色相を持つ配色、他方はグレー階調）。
-さらに**ライセンスゲートは守る対象と同じ場所に置く**必要がある。門が工場側にあると、
-工場は門を通らずに第三者資産の値を取得できてしまう。
+## 参照の手順
 
-## 同梱物
+1. ユーザーが指定した参照元と必要な部分だけを読む。自律探索・全件スキャンはしない。
+2. 第三者 DESIGN.md の許可元は `kzhrknt/awesome-design-md-jp` と `VoltAgent/awesome-design-md`。
+   `plugins/awesome-design-md-jp-import/import-policy.md` と `mapping.md` に従う。
+3. 取得した版のライセンス実物を確認し、色・余白・角・影と方針を `own-design-author` に渡す。
+   repo の `design/` に `proposed` として写し、値の出所を `reference:<id>`、
+   URL・commit・ライセンス・著作権表示・編集有無を同じrepoの `design/NOTICE` に残す。
+4. 本家の英語UIから typography の値は写さない。空のまま「和文フォント未決定」を報告する。
+   和文フォントの提案元は -jp またはオーナー指定だけ。
+5. L0 の結果と未決定を報告する。AIが `approvals.yaml` を自律的に書かない。
+
+ロゴ・商標・固有ビジュアル、実アセット、既存サービスの画面・実装は写さない。
+`allow_asset_copy: false` は画像・アイコン・フォント等の実ファイルを指し、数値提案の許可とは別。
+出所と権利確認はブランド値の承認を代替しない。
+
+## 同梱物と取得メタ
 
 | パス | 役割 |
 | --- | --- |
-| plugins/my_company | `owned` の箱（自社ブランド） |
-| plugins/digital-agency | `observed` の箱（上流が公式 token を公開） |
-| plugins/notion | `observed` の箱（散文のみ） |
-| plugins/awesome-design-md-jp-import | 第三者 DESIGN.md を内部形式へ写像する入口 |
-| references/plugin-spec.md | `plugin.yaml` の正式スキーマ（等級・取得メタ・`usage_policy`） |
-| references/resolver.md | Plugin Resolver・`extends` 1階層・タイブレークの規則と受け入れテスト |
+| `plugins/my_company` | owned の参照箱（自社ブランド） |
+| `plugins/digital-agency` | observed の参照箱（公式tokenあり） |
+| `plugins/notion` | observed の参照箱（散文のみ） |
+| `plugins/awesome-design-md-jp-import` | 許可された第三者DESIGN.mdの参照入口 |
+| `references/plugin-spec.md` | 箱のスキーマと参照時の権利確認 |
+| `references/resolver.md` | 旧Resolverの互換仕様。web工場へは適用しない |
 
-## 等級は2つだけ（決定8）
+等級は `owned` / `observed`。各 `plugin.yaml` は `id` 直後に `tier` と `source`
+（upstream / upstream_version / fetched_at）を持つ。版が無いなら `unversioned`、
+取得時に記録していなければ `unrecorded` と書き、版を推測しない。再取得は人間が起動する。
 
-`owned`（自社ブランド）と `observed`（外部観察）。**当初案の `licensed` は廃止した** —
-デジタル庁も `awesome-design-md-jp` も観察対象であり、違いは等級ではなく
-**上流が公開している情報の豊かさ**にすぎない。
+## 互換範囲
 
-**ライセンスゲート（値を出力に使う許可）は等級ではなく直交する属性**である。
-`observed` でもゲートを通れば値を使えるし、通っていなければ使えない。
-
-| 等級 | 構造 | 例 |
-| --- | --- | --- |
-| `owned` | DESIGN.md + `tokens/` + **媒体プロファイル**（pptx=pt 実値 / web=px・rem / 将来 印刷=mm） | `my_company` |
-| `observed`（上流が公式 token を公開） | DESIGN.md + `tokens/` + 媒体別資産。値の出力利用はゲート通過が条件 | `digital-agency` |
-| `observed`（散文のみ） | DESIGN.md のみ | `notion` |
-
-**DESIGN.md が全等級共通のハブ**で、そこから必要な下位構造へ分岐する。
-`owned` が媒体プロファイルとして**実値**を持つのは、単位変換を各工場に書かせると
-Resolver を1本化した理由と同じズレが単位変換で再発するため。
-
-## 取得メタは機械が読める位置に置く
-
-各 `plugin.yaml` の `id:` の直後に `tier` と `source` を持つ。**上流が版を公開していない場合や
-取得時の版を記録していなかった場合は、それを正直に書く**（`unversioned` / `unrecorded`）。
-でっち上げた版は鮮度検査を黙って通してしまう。
-
-```yaml
-id: <box>
-tier: owned | observed
-source:
-  upstream: <URL または none>
-  upstream_version: <commit / 日付 / unversioned / unrecorded>
-  fetched_at: <YYYY-MM-DD または n/a>
-```
-
-上流は流動的で定期的に変わる。**ズレは検出される側に回す** — 値を手で追い続けるのではなく、
-鮮度と同値を検査で見る（`own-skill-commonize` の `check_mirrors` と同じ姿勢）。
-
-## ライセンスゲート（この skill が守る）
-
-第三者アセット（`observed` の箱）の**資産値**（色トークン実値・フォント・ロゴ・テンプレート）を
-成果物へ反映する前に、その箱の `references.md` に**ライセンス確認と人間承認の記録**があり、
-`plugin.yaml` の `usage_policy.license_gate_approved` が `true` であることを確認する。
-未承認なら値を出力に使わない（**方針や雰囲気の参照は可、実値の反映は不可**）。
-
-**第三者 DESIGN.md の参照元は `awesome-design-md-jp` に限定する。** 個別サイトはユーザー指示制で、
-この skill が自律的に外部サイトを探索・スクレイピングしない。
-
-## Plugin Resolver
-
-1. `plugins/*/plugin.yaml` をスキャンし、`supported_media` に対象媒体を含む箱を候補にする。
-2. `priority.contexts` のうちタスク文脈に一致するスコアが高い箱を選ぶ。
-   文脈一致がなければ `priority.default` を使う。
-3. **同点のタイブレーク**: (a) プロジェクトローカルに近い箱、(b) それも同点なら id の辞書順で先。
-   決めきれない・候補が拮抗する場合はユーザーに確認する。
-4. `extends` があれば親を**1階層だけ**辿って合成対象に含める。**多段継承は不可。**
-
-規則の詳細と受け入れテストは references/resolver.md。
-
-## 返すもの・返さないもの
-
-- 返す: 解決した箱の id（継承元を含む）／DESIGN.md と tokens の値／**出所**（`source`）／
-  **ライセンス可否**（ゲートの結果）／媒体プロファイルの値（`owned` のみ）
-- 返さない: 成果物／媒体固有の制約（工場の `media/` が持つ）／情報設計・メッセージ設計
-
-## やってはいけないこと
-
-- **ゲートを通らずに `observed` の資産値を出力へ流す。** 方針の参照とは別物。
-- **多段継承を辿る。** 1階層で止める（`extends` の解釈がズレた実測がある）。
-- **取得メタの版をでっち上げる。** 分からないなら `unrecorded` と書く。
-- **この skill で成果物を作る。** 倉庫は値と選択規則だけを持つ。
-- **同じ選択ロジックを工場側にも書く。** 2実装になった時点でズレが始まる。
+既存箱・Resolverはpptxの段階移行中の互換のため保持する。旧Resolverの優先度・1階層extendsは
+既存利用者に限り、repoの `design/` に持ち込まない。`own-pptx-build` は従属WSが完了するまで
+`design/` を読まず、倉庫との同値検査を維持する。既存の実アセットの許可は
+`plugin.yaml` と `references.md` の記録を確認し、参照トークンの許可で拡大しない。

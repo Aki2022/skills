@@ -7,20 +7,22 @@ title: Validator 仕様
 生成物を点検する。**客観的に機械検証できる項目はLLMの自己申告に任せず、実行可能なツールで検証する**
 （再現性の担保）。各項目に検証方式を明示する。
 
-**重要: validate（実測点検）の実行はサイトの場合コストがかかるため自動発火しない。** SKILL.md 手順10に従い、
-サイト（HTML/web）では**ユーザーに実施可否を聞いてから**実行する。実施する場合は `[静的]`→必要なら
-`[実測]` の順、最後に `[自己点検]`。参考Tier（PPTX 等）は機械validateしない。
+L0とL1は確認せず毎回実行する。L2だけ人間へ実施可否を確認する。
+L0失格で生成を止め、L1/L2失格で非決定論レビューを止める。
+対象0件は失格、検査できない規則は未カバーとして記録する。静的だけで準拠合格を名乗らない。
+
+詳細な実行方法・マニフェストとTailwindの契約は `own-design-author/references/web-validation.md`。
 
 ## 検証方式
 
 - `[静的]`（軽量・ほぼ無コスト）: ブラウザを起動せず、ソースを解析して機械判定する。
-  `python3 scripts/audit_html.py <file>`（リンクされたローカルCSSも追跡）。
+  `python3 scripts/audit_html.py <file> --manifest design/.resolved/web.json`（リンクされたローカルCSSも追跡）。
   - lang / viewport / landmark（main/header/footer）/ SVG・imgの代替テキスト / focus-visible の有無
   - リテラルに書かれた前景/背景色ペアの WCAG コントラスト計算（4.5:1 以上等）
 - `[実測]`（コストあり・人間承認後）: `playwright-cli` Skill で実ブラウザを起動し、**computedスタイル**で点検。
   静的では取れない「CSS変数・継承・メディアクエリ適用後の実際の色」「フォーカスリングの実表示」
   「テーマ切替後の各テーマ」を実測する。手順は `references/site-validation.md`。
-  ブラウザ操作は `browser-automation-policy` Skill のポリシーに従う。
+  ブラウザ操作は `own-browser-route` Skill のポリシーに従う。
 - `[自己点検]`: 生成した AI 自身が DESIGN.md / Media Rule と照合して確認する。客観的数値基準がない、
   または実行環境がない項目。
 
@@ -61,7 +63,7 @@ title: Validator 仕様
 | テーマ切替が全テーマ健全か | [実測]（該当時）           |
 
 `[静的]` は `audit_html.py` で常に取れる。CSS変数・継承・メディアクエリ・テーマ切替が絡む項目は
-静的で PASS でも `[実測]` で最終確定する（ユーザーが実測を選んだ場合）。
+静的で PASS でも `[実測]` で最終確定する（人間がL2実施を認めた場合）。
 
 ## PPTX Validator（参考Tier — 機械validateしない）
 

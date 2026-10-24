@@ -55,6 +55,22 @@ class DiscoveryTests(unittest.TestCase):
             self.assertEqual(_run(canon, search), 0,
                              "宣言なしで見つけて、一致していれば通るべき")
 
+    def test_command_link_into_a_skill_is_not_a_skill_root(self):
+        with TemporaryDirectory() as d:
+            tmp = Path(d)
+            canon = _canon(tmp, ["own-a-run"])
+            scripts = canon / "own-a-run" / "scripts"
+            scripts.mkdir()
+            command = scripts / "command"
+            command.write_text("#!/bin/sh\nexit 0\n")
+            search = tmp / "search"
+            root = _wire(search / "tool" / "skills", canon, ["own-a-run"])
+            binary = search / "bin"
+            binary.mkdir()
+            (binary / "command").symlink_to(command)
+            self.assertEqual(mod.discover(canon.resolve(), [search], 3), {root: "per-skill"})
+            self.assertEqual(_run(canon, search), 0)
+
     def test_retired_backup_is_not_audited(self):
         """退役マーカーのついた配線先は対象にしない（常に赤い検査を作らない）。"""
         with TemporaryDirectory() as d:

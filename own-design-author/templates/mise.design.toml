@@ -1,0 +1,8 @@
+# Merge these tasks into the repository mise configuration after approval.
+[tasks."design:check"]
+description = "Validate design consistency, source and authorized fixed rendering"
+run = "design-check --repo ."
+
+[tasks."design:ship"]
+description = "Validate shipped commits and artifacts with L0, L1 and fixed L2"
+run = "design-ship --repo ."

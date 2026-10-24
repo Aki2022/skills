@@ -360,4 +360,13 @@ Scripts in `scripts/`:
   (one `path<TAB>target` per line, preferring the target-scoped form); the list
   only shrinks, so an entry that is now resolvable is itself an error.
 
+For repositories with `design/design.yaml`, its `spec` field names one policy path
+or a nonempty unique list under `docs/specs/`. Each named spec must link back to
+`design/` or `design/design.yaml`; every active spec linking to that master must
+be listed. Use relative Markdown links, not code examples. The validator checks
+these references only, never token values, approvals, IA semantics, or L0–L2.
+The design runner's existing PyYAML environment is needed for these repositories;
+repositories without a design configuration have no new dependency. See the
+repository's SPEC-doc-governance for the division of policy, records and history.
+
 Read the matching template before creating a file manually. Keep legacy archives in place; promote useful current knowledge into a guide or spec instead of renaming history.

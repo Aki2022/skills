@@ -6,11 +6,15 @@
 // It is never installed automatically; when it cannot be resolved this exits 2.
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
+import { resolve } from "node:path";
 
 const base = process.env.INFOARCH_PLAYWRIGHT_DIR || process.cwd();
 let playwright;
 try {
-  playwright = createRequire(`${base}/`)("playwright");
+  // An explicit runtime root is authoritative; NODE_PATH must not silently replace it.
+  // With no override, retain normal project/monorepo ancestor module resolution.
+  playwright = createRequire(`${base}/`)(process.env.INFOARCH_PLAYWRIGHT_DIR
+    ? resolve(base, "node_modules/playwright") : "playwright");
 } catch {
   console.error(`playwright が解決できない（${base ? "INFOARCH_PLAYWRIGHT_DIR か実行ディレクトリ" : ""}）。自動では入れない。`);
   process.exit(2);

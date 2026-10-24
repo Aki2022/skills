@@ -101,3 +101,5 @@ serverはそのcheckoutで起動し、外から渡されたURLは利用しない
 commit/tree・元push commit・予測マージの有無・design入力・実描画の証拠を記録し、出荷物のhashや配布完了は記録しない。
 現在checkoutでの結果は`design/.resolved/integration.json`へ出力する。
 予測マージの結果はhookのJSON出力に含め、隔離checkoutは検査の成否にかかわらず除去する。
+
+通常PATHへの導入では、既存の利用者binに3つのdesign-author/design-check/design-shipを正典scriptsへのsymlinkとして置ける。入口は相対・多段symlinkを解決して正典と同じPython実装を起動し、別コピーの実装を持たない。既存の実体や異なるlinkを無断で置き換えない。

@@ -631,12 +631,18 @@ for (const scheme of schemes) {
       else thirdPartyIssues.push(line);
     });
 
-    await page.goto(url, { waitUntil: "networkidle", timeout: 60000 });
+    // Background prefetch/analytics streams do not define visual readiness.
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
     // 遅延読み込みを確定させる（未読込を「壊れている」と誤判定しないため）
     await page.evaluate(() =>
       document.querySelectorAll("img").forEach((i) => (i.loading = "eager")),
     );
-    await page.evaluate(() => document.fonts.ready);
+    await page.evaluate(async () => {
+      await Promise.race([
+        Promise.all([document.fonts.ready, ...[...document.images].map(image => image.decode())]),
+        new Promise((_, reject) => setTimeout(() => reject(Error('visible assets did not become ready')), 10000)),
+      ]);
+    });
     await page.waitForTimeout(700);
 
     const data = await page.evaluate(collect, T);

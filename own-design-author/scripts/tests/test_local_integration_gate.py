@@ -47,7 +47,11 @@ def test_real_local_gate_binds_predicted_tree_and_rejects_source_endpoint_and_pr
     run_git(root,env,'config','user.name','Fixture Owner');run_git(root,env,'config','user.email','fixture@example.org')
     config=json.loads((root/'design/design.yaml').read_text());config.pop('channels')
     config['integration_gate']={**local_gate(),'prepare_command':['python3','build.py']}
-    write(root/'design/design.yaml',config);approve(project);commit(root,env,'fixture local integration')
+    write(root/'design/design.yaml',config)
+    validation=json.loads((root/'design/validation.json').read_text())
+    validation['urls']=[{'env':'DESIGN_WEB_URL','profile':'product-ui'}]
+    write(root/'design/validation.json',validation)
+    approve(project);commit(root,env,'fixture local integration')
     source=run_git(root,env,'rev-parse','HEAD').stdout.strip()
     run_git(root,env,'update-ref','refs/remotes/origin/main',source)
     argv=[str(SKILL/'scripts/design-ship'),'--repo',str(root),'--catalog-dir',str(catalogs)]

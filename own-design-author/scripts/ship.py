@@ -16,6 +16,7 @@ from urllib.request import urlopen
 
 from design_author import git_root, read_data, CATALOG
 from ship_contract import validate_channels, validate_integration_gate, artifact_hashes, validate_web_result, safe_path
+from web_check import validation_endpoint
 
 SCRIPT=Path(__file__).resolve().parent
 
@@ -100,7 +101,10 @@ def gate(root,name,channel,catalogs,*,deploy=False,source_commit=None,predicted=
         raise ValueError('all design inputs must be committed, including ignored inputs')
     validation=read_data(safe_path(root,'design/validation.json'))
     urls=validation.get('urls',[])
-    if not urls or any(not isinstance(row,dict) or set(row)!={'env'} for row in urls) or {row['env'] for row in urls}!=set(channel['render_servers']):
+    if not isinstance(urls,list) or not urls:
+        raise ValueError('render server coverage differs from validation endpoints')
+    endpoints=[validation_endpoint(row)[0] for row in urls]
+    if len(set(endpoints))!=len(endpoints) or set(endpoints)!=set(channel['render_servers']):
         raise ValueError('render server coverage differs from validation endpoints')
     if not local and 'build_command' in channel:command(channel['build_command'],root,env)
     before=None if local else artifact_hashes(root,channel['artifacts'])

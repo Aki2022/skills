@@ -70,56 +70,56 @@ mirrors:
     upstream_version: v1.5.0
     fetched_at: 2026-09-09
     license: Apache-2.0 (frontmatter + repo root)
-    reinstall: npx degit google/agents-cli#v1.5.0/skills/google-agents-cli-adk-code ~/.agents/skills/google-agents-cli-adk-code
+    reinstall: npx degit google/agents-cli/skills/google-agents-cli-adk-code#v1.5.0 ~/.agents/skills/google-agents-cli-adk-code
   - dir: google-agents-cli-deploy
     upstream: google/agents-cli
     upstream_path: skills/google-agents-cli-deploy
     upstream_version: v1.5.0
     fetched_at: 2026-09-09
     license: Apache-2.0 (frontmatter + repo root)
-    reinstall: npx degit google/agents-cli#v1.5.0/skills/google-agents-cli-deploy ~/.agents/skills/google-agents-cli-deploy
+    reinstall: npx degit google/agents-cli/skills/google-agents-cli-deploy#v1.5.0 ~/.agents/skills/google-agents-cli-deploy
   - dir: google-agents-cli-eval
     upstream: google/agents-cli
     upstream_path: skills/google-agents-cli-eval
     upstream_version: v1.5.0
     fetched_at: 2026-09-09
     license: Apache-2.0 (frontmatter + repo root)
-    reinstall: npx degit google/agents-cli#v1.5.0/skills/google-agents-cli-eval ~/.agents/skills/google-agents-cli-eval
+    reinstall: npx degit google/agents-cli/skills/google-agents-cli-eval#v1.5.0 ~/.agents/skills/google-agents-cli-eval
   - dir: google-agents-cli-observability
     upstream: google/agents-cli
     upstream_path: skills/google-agents-cli-observability
     upstream_version: v1.5.0
     fetched_at: 2026-09-09
     license: Apache-2.0 (frontmatter + repo root)
-    reinstall: npx degit google/agents-cli#v1.5.0/skills/google-agents-cli-observability ~/.agents/skills/google-agents-cli-observability
+    reinstall: npx degit google/agents-cli/skills/google-agents-cli-observability#v1.5.0 ~/.agents/skills/google-agents-cli-observability
   - dir: google-agents-cli-publish
     upstream: google/agents-cli
     upstream_path: skills/google-agents-cli-publish
     upstream_version: v1.5.0
     fetched_at: 2026-09-09
     license: Apache-2.0 (frontmatter + repo root)
-    reinstall: npx degit google/agents-cli#v1.5.0/skills/google-agents-cli-publish ~/.agents/skills/google-agents-cli-publish
+    reinstall: npx degit google/agents-cli/skills/google-agents-cli-publish#v1.5.0 ~/.agents/skills/google-agents-cli-publish
   - dir: google-agents-cli-scaffold
     upstream: google/agents-cli
     upstream_path: skills/google-agents-cli-scaffold
     upstream_version: v1.5.0
     fetched_at: 2026-09-09
     license: Apache-2.0 (frontmatter + repo root)
-    reinstall: npx degit google/agents-cli#v1.5.0/skills/google-agents-cli-scaffold ~/.agents/skills/google-agents-cli-scaffold
+    reinstall: npx degit google/agents-cli/skills/google-agents-cli-scaffold#v1.5.0 ~/.agents/skills/google-agents-cli-scaffold
   - dir: google-agents-cli-workflow
     upstream: google/agents-cli
     upstream_path: skills/google-agents-cli-workflow
     upstream_version: v1.5.0
     fetched_at: 2026-09-09
     license: Apache-2.0 (frontmatter + repo root)
-    reinstall: npx degit google/agents-cli#v1.5.0/skills/google-agents-cli-workflow ~/.agents/skills/google-agents-cli-workflow
+    reinstall: npx degit google/agents-cli/skills/google-agents-cli-workflow#v1.5.0 ~/.agents/skills/google-agents-cli-workflow
   - dir: playwright-cli
     upstream: microsoft/playwright-cli
     upstream_path: skills/playwright-cli
     upstream_version: b85c7a736bb473bf55b584e54a09ffa698d6d871
     fetched_at: 2026-10-01
     license: Apache-2.0 (repo root LICENSE)
-    reinstall: "npx degit microsoft/playwright-cli#b85c7a736bb473bf55b584e54a09ffa698d6d871/skills/playwright-cli ~/.agents/skills/playwright-cli"
+    reinstall: "npx degit microsoft/playwright-cli/skills/playwright-cli#b85c7a736bb473bf55b584e54a09ffa698d6d871 ~/.agents/skills/playwright-cli"
   - dir: quarto-authoring
     upstream: posit-dev/skills
     upstream_path: quarto/quarto-authoring
@@ -244,7 +244,7 @@ mirrors:
     upstream_version: "30ee6041c328ce21d38a7963f667e079a93d7a12"
     fetched_at: 2026-10-01
     license: "MIT (repo root LICENSE; SKILL.md frontmatter)"
-    reinstall: "npx degit nanaism/yomiyasu#30ee6041c328ce21d38a7963f667e079a93d7a12/skills/yomiyasu ~/.agents/skills/yomiyasu"
+    reinstall: "git clone https://github.com/nanaism/yomiyasu && git -C yomiyasu checkout 30ee6041c328ce21d38a7963f667e079a93d7a12 && cp -r yomiyasu/skills/yomiyasu ~/.agents/skills/yomiyasu"  # degit resolves only refs at a branch or tag tip, not this commit
 
   - dir: agents-sdk
     upstream: cloudflare/skills

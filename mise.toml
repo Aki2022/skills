@@ -1,0 +1,8 @@
+# setup and verify for reinstall's post:project-restore (and anyone starting fresh).
+[tasks.setup]
+description = "No setup needed: the skills are plain files read in place"
+run = "echo 'setup: nothing to install for the skills repository'"
+
+[tasks.verify]
+description = "Run the skill lint (structure, wiring, mirrors) over every skill"
+run = "bash own-skill-commonize/scripts/skill_lint.sh"

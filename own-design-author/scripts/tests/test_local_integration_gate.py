@@ -122,3 +122,19 @@ def test_bound_server_does_not_inherit_another_checkout_url(tmp_path):
         assert bound['DESIGN_WEB_URL']!=env['DESIGN_WEB_URL']
         assert processes[0].poll() is None
     assert processes[0].poll() is not None
+
+
+def test_hook_exported_git_dir_does_not_redirect_the_predicted_checkout(tmp_path,monkeypatch):
+    # git exports GIT_DIR to hooks; the gate must still inspect its own snapshot checkout.
+    from ship import clean_commit,hook_free_env
+    env={k:v for k,v in os.environ.items() if not k.startswith('GIT_')}
+    def git(cwd,*args):return subprocess.run(['git','-C',str(cwd),'-c','user.name=Fixture','-c','user.email=fixture@example.org',*args],
+        env=env,capture_output=True,text=True,check=True).stdout.strip()
+    root=tmp_path/'repo';root.mkdir();git(root,'init','-q')
+    (root/'a.txt').write_text('base\n');git(root,'add','a.txt');git(root,'commit','-qm','base')
+    base=git(root,'rev-parse','HEAD')
+    (root/'a.txt').write_text('source\n');git(root,'commit','-qam','source')
+    snapshot=tmp_path/'snapshot';git(root,'worktree','add','-q','--detach',str(snapshot),base)
+    monkeypatch.setenv('GIT_DIR',git(root,'rev-parse','--absolute-git-dir'))
+    assert clean_commit(snapshot)[0]==base
+    assert 'GIT_DIR' not in hook_free_env() and hook_free_env()['PATH']==os.environ['PATH']

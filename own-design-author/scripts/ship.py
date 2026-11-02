@@ -2,6 +2,7 @@
 """Bind L0/L1/L2 to clean source; shipment additionally requires exact artifacts."""
 import argparse
 from contextlib import contextmanager
+import functools
 import hashlib
 import json
 import os
@@ -21,8 +22,18 @@ from web_check import validation_endpoint
 SCRIPT=Path(__file__).resolve().parent
 
 
+@functools.cache
+def _local_git_env():
+    return frozenset(subprocess.run(['git','rev-parse','--local-env-vars'],capture_output=True,text=True,check=True).stdout.split())
+
+
+def hook_free_env(base=None):
+    """Drop the repository variables git exports to hooks, so every command targets its own checkout."""
+    return {key:value for key,value in (os.environ if base is None else base).items() if key not in _local_git_env()}
+
+
 def git(root,*args,input=None):
-    result=subprocess.run(['git','-C',str(root),*args],input=input,capture_output=True,text=True)
+    result=subprocess.run(['git','-C',str(root),*args],input=input,env=hook_free_env(),capture_output=True,text=True)
     if result.returncode:raise ValueError('git '+args[0]+' failed')
     return result.stdout.strip()
 
@@ -86,7 +97,7 @@ def render_servers(root,servers,env):
 def gate(root,name,channel,catalogs,*,deploy=False,source_commit=None,predicted=False,local=False):
     root=Path(root).resolve()
     commit,tree=clean_commit(root)
-    env=dict(os.environ)
+    env=hook_free_env()
     if local:
         if deploy:raise ValueError('local integration cannot deploy')
         if 'prepare_command' in channel:command(channel['prepare_command'],root,env,purpose='prepare')

@@ -246,11 +246,17 @@ Codex plugin やローカル取得元にある第三者 skill も `scripts/mirro
 そのコピーを `--source-dir` に渡してから、正典への symlink に置き換える。
 `~/.codex*/` の認証・セッション・history・plugin cache は移動も共有もしない。
 
-### 第三者 skill を足す手順は script に閉じる
+### 第三者 skill の追加・更新は script に閉じる
 
 `scripts/mirror_skill.sh`（処理本体 `mirror_skill.py`）が「上流またはレビュー済みローカル source
 から複製 → `mirrors.yaml` へ登録 → per-skill 配線先4つへ symlink → 監査」を通しで行う。
 **手で4回やらない** — 途中で止めると必ず壊れる。
+
+新規 skill は通常どおり実行する。`mirrors.yaml` に既にある skill の上流更新では
+`--update-existing` を付ける。script は source を一時領域へ取得し、frontmatter の `name` と
+既存配線を確認してから、同じ正典 path の中身と台帳 entry を置き換える。退役 skill は
+`--reactivate-retired` を使い、退役 directory が既に削除されていても `--source-dir` または
+上流 source から再導入できる。二つの option は併用しない。
 
 | 止まる場所 | 起きること |
 | --- | --- |

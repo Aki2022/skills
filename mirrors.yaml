@@ -26,13 +26,6 @@ mirrors:
     license: 記載なし（明示の許諾なし＝既定では全権留保）
     reinstall: npx degit ibelick/ui-skills/skills/baseline-ui ~/.agents/skills/baseline-ui
     note: 本文はバイト一致。description だけローカルで異なる
-  - dir: cloudflare-email-service
-    upstream: cloudflare/skills
-    upstream_path: skills/cloudflare-email-service
-    upstream_version: 70c9cb7
-    fetched_at: 2026-08-07
-    license: Apache-2.0 (repo root LICENSE)
-    reinstall: npx degit cloudflare/skills/skills/cloudflare-email-service ~/.agents/skills/cloudflare-email-service
   - dir: drawio
     upstream: jgraph/drawio-mcp
     upstream_path: plugins/claude-code/skills/drawio
@@ -127,13 +120,6 @@ mirrors:
     fetched_at: 2026-08-01
     license: MIT (repo LICENSE + frontmatter)
     reinstall: npx degit posit-dev/skills/quarto/quarto-authoring ~/.agents/skills/quarto-authoring
-  - dir: turnstile-spin
-    upstream: cloudflare/skills
-    upstream_path: skills/turnstile-spin
-    upstream_version: 30553f8
-    fetched_at: 2026-08-07
-    license: Apache-2.0 (repo root LICENSE)
-    reinstall: npx degit cloudflare/skills/skills/turnstile-spin ~/.agents/skills/turnstile-spin
   - dir: typesafe-ai
     upstream: typesafe-ai/skills
     upstream_path: skills/typesafe-ai
@@ -163,14 +149,6 @@ mirrors:
     fetched_at: 2026-08-07
     license: Apache-2.0 (repo root LICENSE)
     reinstall: npx degit cloudflare/skills/skills/web-perf ~/.agents/skills/web-perf
-  - dir: wrangler
-    upstream: cloudflare/skills
-    upstream_path: skills/wrangler
-    upstream_version: 8c01b03
-    fetched_at: 2026-08-07
-    license: Apache-2.0 (repo root LICENSE)
-    reinstall: npx degit cloudflare/skills/skills/wrangler ~/.agents/skills/wrangler
-
 # 退役（2026-09-23）。141日間まったく発火せず、かつ他の skill から参照もされていないため
 # 正典から外し、一覧の description 予算を空けた。
 # 消したのではなく「棚から下ろした」だけで、reinstall 行1本で戻せる。
@@ -246,14 +224,47 @@ mirrors:
     license: "MIT (repo root LICENSE; SKILL.md frontmatter)"
     reinstall: "npx degit nanaism/yomiyasu#30ee6041c328ce21d38a7963f667e079a93d7a12/skills/yomiyasu ~/.agents/skills/yomiyasu"
 
-retired:
+  - dir: wrangler
+    upstream: "cloudflare/skills"
+    upstream_path: "skills/wrangler"
+    upstream_version: "d8c1937dcd7a11d447965a87330c3a0fbf70ae22"
+    fetched_at: 2026-10-01
+    license: "Apache-2.0 (repo root LICENSE)"
+    reinstall: "npx degit cloudflare/skills/skills/wrangler ~/.agents/skills/wrangler"
+
+  - dir: cloudflare-email-service
+    upstream: "cloudflare/skills"
+    upstream_path: "skills/cloudflare-email-service"
+    upstream_version: "d8c1937dcd7a11d447965a87330c3a0fbf70ae22"
+    fetched_at: 2026-10-01
+    license: "Apache-2.0 (repo root LICENSE)"
+    reinstall: "npx degit cloudflare/skills/skills/cloudflare-email-service ~/.agents/skills/cloudflare-email-service"
+
+  - dir: turnstile-spin
+    upstream: "cloudflare/skills"
+    upstream_path: "skills/turnstile-spin"
+    upstream_version: "d8c1937dcd7a11d447965a87330c3a0fbf70ae22"
+    fetched_at: 2026-10-01
+    license: "Apache-2.0 (repo root LICENSE)"
+    reinstall: "npx degit cloudflare/skills/skills/turnstile-spin ~/.agents/skills/turnstile-spin"
+
+  - dir: cloudflare
+    upstream: "cloudflare/skills"
+    upstream_path: "skills/cloudflare"
+    upstream_version: "d8c1937dcd7a11d447965a87330c3a0fbf70ae22"
+    fetched_at: 2026-10-01
+    license: "Apache-2.0 (repo root LICENSE)"
+    reinstall: "npx degit cloudflare/skills/skills/cloudflare ~/.agents/skills/cloudflare"
+
   - dir: agents-sdk
-    upstream: cloudflare/skills
-    upstream_path: skills/agents-sdk
-    upstream_version: ba329ca
-    fetched_at: 2026-08-07
-    license: Apache-2.0 (repo root LICENSE)
-    reinstall: npx degit cloudflare/skills/skills/agents-sdk ~/.agents/skills/agents-sdk
+    upstream: "cloudflare/skills"
+    upstream_path: "skills/agents-sdk"
+    upstream_version: "d8c1937dcd7a11d447965a87330c3a0fbf70ae22"
+    fetched_at: 2026-10-01
+    license: "Apache-2.0 (repo root LICENSE)"
+    reinstall: "npx degit cloudflare/skills/skills/agents-sdk ~/.agents/skills/agents-sdk"
+
+retired:
   - dir: alloydb-basics
     upstream: google/skills
     upstream_path: skills/cloud/alloydb-basics
@@ -282,13 +293,6 @@ retired:
     fetched_at: 2026-08-01
     license: Apache-2.0 (repo root LICENSE)
     reinstall: git clone https://github.com/google/skills && cp -r skills/skills/cloud/cloud-sql-basics ~/.agents/skills/cloud-sql-basics
-  - dir: cloudflare
-    upstream: cloudflare/skills
-    upstream_path: skills/cloudflare
-    upstream_version: 2b1ffd2
-    fetched_at: 2026-08-07
-    license: Apache-2.0 (repo root LICENSE)
-    reinstall: npx degit cloudflare/skills/skills/cloudflare ~/.agents/skills/cloudflare
   - dir: cloudflare-one
     upstream: cloudflare/skills
     upstream_path: skills/cloudflare-one

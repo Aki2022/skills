@@ -18,7 +18,7 @@ def manifest_names(path: Path) -> dict[str, set[str]]:
     result = {"mirrors": set(), "retired": set()}
     section = None
     for line in path.read_text(encoding="utf-8").splitlines():
-        if not line[:1].isspace():
+        if line and not line[:1].isspace():
             section = line.split(":", 1)[0] if line.endswith(":") else None
         match = re.match(r"\s+- dir:\s*(.*?)\s*$", line)
         if section in result and match:
@@ -35,16 +35,18 @@ def frontmatter_name(path: Path) -> str | None:
     return None
 
 
-def replace_retired_entry(lines: list[str], name: str) -> list[str]:
+def remove_manifest_entry(lines: list[str], section_name: str, name: str) -> list[str]:
     out: list[str] = []
     section = None
     skipping = False
     for line in lines:
-        if not line[:1].isspace():
+        if line and not line[:1].isspace():
             if skipping:
                 skipping = False
             section = line.split(":", 1)[0] if line.endswith(":") else None
-        if section == "retired" and re.match(r"^  - dir:\s*" + re.escape(name) + r"\s*$", line):
+        if section == section_name and re.match(
+            r"^  - dir:\s*" + re.escape(name) + r"\s*$", line
+        ):
             skipping = True
             continue
         if skipping:
@@ -56,14 +58,21 @@ def replace_retired_entry(lines: list[str], name: str) -> list[str]:
     return out
 
 
+def replace_retired_entry(lines: list[str], name: str) -> list[str]:
+    return remove_manifest_entry(lines, "retired", name)
+
+
 def write_ledger(
     path: Path, *, name: str, upstream: str, upstream_path: str,
     version: str, license_name: str, reinstall: str, note: str,
     local_copy: str, reactivate: bool,
+    update_existing: bool,
 ) -> None:
     lines = path.read_text(encoding="utf-8").splitlines()
     if reactivate:
         lines = replace_retired_entry(lines, name)
+    if update_existing:
+        lines = remove_manifest_entry(lines, "mirrors", name)
     block = [
         f"  - dir: {name}",
         f"    upstream: {json.dumps(upstream, ensure_ascii=False)}",
@@ -99,6 +108,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--source-dir", type=Path, help="copy a reviewed local source instead of fetching")
     parser.add_argument("--local-copy", default="", help="local comparison source recorded in mirrors.yaml")
     parser.add_argument("--reactivate-retired", action="store_true")
+    parser.add_argument(
+        "--update-existing", action="store_true",
+        help="replace an active mirror from the supplied upstream source",
+    )
     parser.add_argument("--alias-root", action="append", type=Path, default=[])
     return parser.parse_args(argv)
 
@@ -114,9 +127,15 @@ def main(argv: list[str] | None = None) -> int:
     if not ledger.is_file():
         print("ERROR mirrors.yaml is missing", file=sys.stderr)
         return 2
+    if args.reactivate_retired and args.update_existing:
+        print("ERROR --reactivate-retired and --update-existing cannot be combined", file=sys.stderr)
+        return 2
     entries = manifest_names(ledger)
-    if name in entries["mirrors"]:
+    if name in entries["mirrors"] and not args.update_existing:
         print(f"ERROR {name} is already active in mirrors.yaml", file=sys.stderr)
+        return 2
+    if args.update_existing and name not in entries["mirrors"]:
+        print(f"ERROR {name} is not active in mirrors.yaml", file=sys.stderr)
         return 2
     if name in entries["retired"] and not args.reactivate_retired:
         print(f"ERROR {name} is retired; pass --reactivate-retired", file=sys.stderr)
@@ -125,9 +144,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR {name} is not retired", file=sys.stderr)
         return 2
     destination = canonical / name
-    if not args.reactivate_retired and destination.exists():
-        print(f"ERROR canonical directory already exists: {name}", file=sys.stderr)
+    if args.update_existing and (
+        destination.is_symlink() or not (destination / "SKILL.md").is_file()
+    ):
+        print(f"ERROR active mirror source is missing or not a directory: {name}", file=sys.stderr)
         return 2
+    if not args.reactivate_retired and destination.exists():
+        if not args.update_existing:
+            print(f"ERROR canonical directory already exists: {name}", file=sys.stderr)
+            return 2
 
     home = Path.home()
     alias_roots = args.alias_root or [
@@ -147,7 +172,7 @@ def main(argv: list[str] | None = None) -> int:
             return 2
 
     staged: Path | None = None
-    if args.reactivate_retired and not args.source_dir:
+    if args.reactivate_retired and not args.source_dir and destination.exists():
         if not (destination / "SKILL.md").is_file():
             print(f"ERROR retired skill source is missing: {name}", file=sys.stderr)
             return 2
@@ -183,7 +208,18 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"ERROR source frontmatter name {source_name!r} does not match {name!r}", file=sys.stderr)
                 return 1
             if args.reactivate_retired:
-                backup = Path(tmp) / "retired-source-backup"
+                if destination.exists():
+                    backup = Path(tmp) / "retired-source-backup"
+                    shutil.move(str(destination), str(backup))
+                    try:
+                        shutil.move(str(staged), str(destination))
+                    except OSError:
+                        shutil.move(str(backup), str(destination))
+                        raise
+                else:
+                    shutil.move(str(staged), str(destination))
+            elif args.update_existing:
+                backup = Path(tmp) / "existing-source-backup"
                 shutil.move(str(destination), str(backup))
                 try:
                     shutil.move(str(staged), str(destination))
@@ -198,6 +234,7 @@ def main(argv: list[str] | None = None) -> int:
         ledger, name=name, upstream=args.upstream, upstream_path=args.upstream_path,
         version=args.version, license_name=args.license_name, reinstall=reinstall,
         note=args.note, local_copy=args.local_copy, reactivate=args.reactivate_retired,
+        update_existing=args.update_existing,
     )
     gitignore = canonical / ".gitignore"
     ignore_lines = gitignore.read_text(encoding="utf-8").splitlines() if gitignore.exists() else []

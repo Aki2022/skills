@@ -1,7 +1,8 @@
 # 判定 subagent への指示（sonnet）
 
 置換: `{REPO}` = 作業ディレクトリ（main その場、または hygiene worktree）、`{SWEEP}` = `docs/log/sweep-YYYYMMDD.md`、
-`{REVIEW}` = `docs/log/review-YYYYMMDD.md`。
+`{REVIEW}` = 保存した hygiene JSON の `review_path` の正確な値（例: `docs/log/review-YYYYMMDD-2.md`）。
+`{REVIEW}` を日付から組み立てず、JSON の値を使う。
 
 ---
 

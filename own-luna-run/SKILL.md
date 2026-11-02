@@ -1,41 +1,51 @@
 ---
 name: own-luna-run
-description: Temporarily run bounded Codex implementation, code exploration, technical research, and independent review as separate GPT-5.6 Luna CLI processes while Luna cannot be selected as a native Sol/V2 subagent. Use only for Codex delegation that would normally route to worker, explorer, researcher, or reviewer. Expires after 2026-09-30 JST or earlier when Luna becomes Multi-Agent V2 compatible; never use from Claude.
+description: Route explicitly requested Luna code investigation, technical research, and independent review through the native GPT-6 Luna read-only role in Codex. Use for bounded read-only delegation when Luna is requested; never launch a CLI bridge, select another model silently, or use this role for implementation.
 ---
 
-# August Luna loop
+# Native Luna read-only delegation
 
-Use this Codex-only bridge instead of native `spawn_agent` when the requested
-child role requires Luna. Keep the primary orchestrator on its current model.
+Keep the primary agent on its current model. Use the native `luna_readonly`
+role for bounded code investigation, technical research, and independent review.
+Implementation stays with the primary agent; this skill does not provide a
+write-capable Luna role.
 
-## Run a leaf agent
+## Preflight
 
-1. Select exactly one role:
-   - `worker`: bounded implementation or fixes; Luna/high; workspace-write.
-   - `explorer`: codebase investigation; Luna/high; read-only.
-   - `researcher`: source-oriented technical research; Luna/high; read-only.
-   - `reviewer`: independent review with fresh context; Luna/max; read-only.
-2. Give the leaf a self-contained prompt containing its objective, relevant
-   paths, constraints, expected output, and verification requirements. For
-   `worker`, include a disjoint Write set. Do not pass unnecessary parent chat.
-3. Invoke `scripts/run_luna.py --role <role>`. Pass the prompt on stdin, as a
-   positional argument, or with `--prompt-file <path>`. Prefer stdin or a prompt
-   file when the text contains shell metacharacters.
-4. Consume the JSONL output and check the process exit status. Integrate the
-   leaf's final result in the primary thread. Do not describe it as a native
-   subagent or expect native wait/steer/thread controls.
-5. Run independent writers only in separate worktrees or with non-overlapping
-   Write sets.
+1. Inspect the installed model catalog without a model turn: `codex debug models`.
+   Require the exact `gpt-6-luna` entry with `multi_agent_version` equal to `v2`.
+   Missing or unparseable metadata means unavailable; do not substitute a model.
+2. Confirm the current runtime exposes `luna_readonly`. Its shared role definition
+   must specify `gpt-6-luna`, reasoning `high`, and sandbox `read-only`.
+   Registration in a configuration file is placement evidence, not runtime proof.
+3. If the role is absent, stop delegation and report the unavailable route.
+   Role definitions are maintained in the reinstall repository's
+   `home/agent-config/codex/agents/` and deployed through Nix to
+   `~/.agents/codex/agents/`. Each account registers the role against its own
+   `agents/` alias. Do not edit a Nix-rendered file or broaden activation scope.
+4. After changing routing, verify one small read-only task in a fresh session.
+   Confirm the actual child model ID, completed final response, and absence of
+   changes before scheduling the real investigation. A role file, successful
+   spawn acknowledgement, or the child's self-reported model name is insufficient.
 
-The runner uses `--ephemeral`, prevents recursive bridge calls, and refuses to
-run after 2026-09-30 JST. It also stops early when the installed model catalog
-reports Luna as Multi-Agent V2, signaling that this bridge should be removed and
-native routing restored.
+## Delegate and collect
 
-## Check without model usage
+- Spawn with native `agent_type: luna_readonly`, fresh context (`fork_turns: none`),
+  and a self-contained prompt. The fixed role supplies the model and reasoning;
+  do not override them or reuse a Terra role with a model argument.
+- State the exact question, permitted read roots, evidence requirements, output
+  format, and time/call budget. Require file and line references, verified
+  guarantees, concrete gaps, and unresolved uncertainty.
+- Prohibit writes, installs, configuration changes, external mutations, recursive
+  delegation, and additional model processes. Do not include credentials or
+  unnecessary conversation history.
+- Use at most two concurrent children unless the user explicitly chooses another
+  limit. Include model usage in the shared budget; unknown cost is not zero.
+- Wait for the final response through native lifecycle tools and inspect failures.
+  An acknowledgement or completed status without substantive output is not success.
+  The primary agent verifies material claims against the referenced source.
+- On an unavailable role, model mismatch, or failed canary, stop and report the
+  exact error. Do not retry automatically or fall back to another model or CLI.
 
-Run `scripts/run_luna.py --check`. This inspects the CLI and model catalog but
-does not start a model turn.
-
-Do not bypass the expiration or native-support checks. Extend or remove the
-bridge only through an explicit configuration update.
+The expired GPT-5.6 CLI bridge has been retired. There is no date-based bypass,
+replacement runner, or implicit fallback path.

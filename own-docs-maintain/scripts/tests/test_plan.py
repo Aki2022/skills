@@ -1,5 +1,7 @@
 import importlib.util
 import json
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -82,6 +84,25 @@ class PlanTest(unittest.TestCase):
         p = MODULE.plan(hygiene, Path("/nonexistent"), 2)
         self.assertEqual((p["judge"], p["docs"], p["carry"]), (0, [], 0))
         self.assertEqual(p["context_budget_before"]["oversized_docs"], None)
+
+    def test_cli_uses_numbered_review_path_from_hygiene_json(self):
+        (self.root / "docs/log/review-20260921.md").write_text("# older review without candidates\n")
+        numbered_review = self.root / "docs/log/review-20260921-2.md"
+        numbered_review.write_text(REVIEW)
+        hygiene = dict(self.hygiene, review_path="docs/log/review-20260921-2.md")
+        hygiene_json = self.root / "hygiene.json"
+        hygiene_json.write_text(json.dumps(hygiene))
+
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), str(self.root), str(hygiene_json)],
+            check=True, capture_output=True, text=True,
+        )
+
+        plan = json.loads(result.stdout)
+        self.assertEqual(plan["demote_candidates"], 1)
+        self.assertEqual([item["file"] for item in plan["docs"]], [
+            "docs/guides/big-hot.md", "docs/specs/mid-warm.md",
+        ])
 
 
 if __name__ == "__main__":

@@ -28,7 +28,7 @@ import sys
 import tempfile
 from datetime import date
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from validate_repo_docs import (
     INDEX_HEADROOM_BYTES,
@@ -1155,19 +1155,30 @@ BARE_DOC_RE = re.compile(r"(?<![\w./(])(docs/(?:guides|specs|adrs)/[\w.-]+\.md)"
 ID_RE = re.compile(r"\b((?:ADR|SPEC|GUIDE)-[A-Za-z0-9][\w-]*)")
 
 
-def last_review_date(root: Path) -> Optional[date]:
-    """Date of the newest docs/log/review-YYYYMMDD.md, or None when never reviewed."""
+def _review_dates(root: Path) -> list[date]:
     log_dir = root / "docs/log"
     if not log_dir.is_dir():
-        return None
+        return []
     dates = []
     for path in log_dir.glob("review-*.md"):
-        m = re.fullmatch(r"review-(\d{4})(\d{2})(\d{2})\.md", path.name)
+        m = re.fullmatch(r"review-(\d{4})(\d{2})(\d{2})(?:-\d+)?\.md", path.name)
         if m:
             try:
                 dates.append(date(int(m.group(1)), int(m.group(2)), int(m.group(3))))
             except ValueError:
                 continue
+    return dates
+
+
+def last_review_date(root: Path) -> Optional[date]:
+    """Date of the newest base or numbered review, or None when never reviewed."""
+    dates = _review_dates(root)
+    return max(dates) if dates else None
+
+
+def previous_review_date(root: Path, today: date) -> Optional[date]:
+    """Newest review date strictly before today; same-day reruns are not history."""
+    dates = [review_date for review_date in _review_dates(root) if review_date < today]
     return max(dates) if dates else None
 
 
@@ -1262,10 +1273,42 @@ def build_review(root: Path, today: Optional[date] = None) -> dict:
     tiers = {"hot": 0, "warm": 0, "cold": 0}
     for r in rows:
         tiers[r["tier"]] += 1
+    previous_review = previous_review_date(root, today)
     return {"today": today.isoformat(), "docs": rows, "tiers": tiers,
             "demote_candidates": demote, "split_candidates": split,
-            "last_review": (last_review_date(root) or "never") if isinstance(last_review_date(root), str) else
-                           (last_review_date(root).isoformat() if last_review_date(root) else "never")}
+            "last_review": previous_review.isoformat() if previous_review else "never"}
+
+
+def write_versioned_history(log_dir: Path, stem: str, content_for_path: Callable[[Path], str]) -> Path:
+    """Keep distinct same-day results and reuse identical content without replacing judgments."""
+    for number in range(1, 1000):
+        suffix = "" if number == 1 else f"-{number}"
+        path = log_dir / f"{stem}{suffix}.md"
+        content = content_for_path(path)
+        if path.exists() or path.is_symlink():
+            if path.read_text(encoding="utf-8") == content:
+                return path
+            continue
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=log_dir,
+                                         prefix=f".{stem}.", suffix=".tmp") as temp:
+            temp.write(content)
+            temp.flush()
+            try:
+                os.link(temp.name, path)
+                return path
+            except FileExistsError:
+                if path.read_text(encoding="utf-8") == content:
+                    return path
+    raise RuntimeError(f"too many same-day versions for {stem}")
+
+
+def write_review_preserving_history(log_dir: Path, day: date, content_template: str) -> Path:
+    """Keep distinct same-day reviews; reuse identical content without replacing judgments."""
+    stem = f"review-{day.strftime('%Y%m%d')}"
+    return write_versioned_history(
+        log_dir, stem,
+        lambda path: content_template.replace("@REVIEW_PATH@", f"docs/log/{path.name}"),
+    )
 
 
 def write_review(root: Path, today: Optional[date] = None) -> Path:
@@ -1280,8 +1323,7 @@ def write_review(root: Path, today: Optional[date] = None) -> Path:
         "現在の真実の層（guides / specs / adrs）を、生きている文書からの参照で重み付けした点検。",
         "hot = active な issue/workstream か他の guide/spec が参照、warm = index だけが参照、cold = どこからも参照されない。",
         f"cold で {COLD_DAYS} 日以上動いていないものは降格候補、{SPLIT_BYTES // 1024}KB 超か日付見出し {HISTORY_HEADINGS_MAX} 超は分割候補。",
-        "`[x]` を付けて `docs_hygiene.py <repo> --apply-sweep docs/log/review-"
-        f"{today.strftime('%Y%m%d')}.md` で archive 行だけ適用できる。split 行は手で行う（H2 ごとの大きさを付けた）。",
+        "`[x]` を付けて `docs_hygiene.py <repo> --apply-sweep @REVIEW_PATH@` で archive 行だけ適用できる。split 行は手で行う（H2 ごとの大きさを付けた）。",
         "",
         f"tiers — hot: {t['hot']}, warm: {t['warm']}, cold: {t['cold']}  (previous review: {review['last_review']})",
         "",
@@ -1307,9 +1349,7 @@ def write_review(root: Path, today: Optional[date] = None) -> Path:
     lines.append("")
     log_dir = root / "docs/log"
     log_dir.mkdir(parents=True, exist_ok=True)
-    path = log_dir / f"review-{today.strftime('%Y%m%d')}.md"
-    path.write_text("\n".join(lines))
-    return path
+    return write_review_preserving_history(log_dir, today, "\n".join(lines))
 
 
 def report_context_budget(root: Path, report: dict) -> None:
@@ -1428,20 +1468,7 @@ def render_report(result: dict) -> str:
 def write_report_preserving_history(log_dir: Path, day: date, content: str) -> Path:
     """Keep each distinct same-day result; repeated identical runs reuse its file."""
     stem = f"hygiene-{day.strftime('%Y%m%d')}"
-    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=log_dir,
-                                     prefix=f".{stem}.", suffix=".tmp") as temp:
-        temp.write(content)
-        temp.flush()
-        for number in range(1, 1000):
-            suffix = "" if number == 1 else f"-{number}"
-            path = log_dir / f"{stem}{suffix}.md"
-            try:
-                os.link(temp.name, path)
-                return path
-            except FileExistsError:
-                if path.read_text(encoding="utf-8") == content:
-                    return path
-    raise RuntimeError(f"too many same-day hygiene reports for {day}")
+    return write_versioned_history(log_dir, stem, lambda _path: content)
 
 
 def summary_text(result: dict) -> str:
@@ -1515,7 +1542,7 @@ def main() -> None:
     parser.add_argument("--apply-sweep", metavar="FILE",
                         help="archive the `[x]` rows of a sweep or review file and stamp it")
     parser.add_argument("--review", action="store_true",
-                        help="write docs/log/review-YYYYMMDD.md: guides/specs/ADRs re-weighted by use")
+                        help="write a review-YYYYMMDD.md; changed same-day results get numbered versions")
     args = parser.parse_args()
     try:
         if args.review:

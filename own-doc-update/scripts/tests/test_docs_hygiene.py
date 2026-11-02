@@ -12,6 +12,7 @@ import tempfile
 import unittest
 from datetime import date, timedelta
 from pathlib import Path
+from unittest.mock import patch
 
 SCRIPTS = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS))
@@ -747,6 +748,69 @@ class ReviewTest(HygieneFixture):
         MODULE.write_review(root, today=date(2026, 9, 19))
         report = MODULE.run(root, fix=False, report=False, today=date(2026, 9, 19))
         self.assertEqual(report["report"]["R8_review_overdue"]["count"], 0)
+
+    def test_same_day_review_rerun_preserves_first_and_versions_changed_state(self):
+        root = self.make_repo()
+        self.build(root)
+        today = date(2026, 10, 3)
+        first_path = MODULE.write_review(root, today=today)
+        first_text = first_path.read_text(encoding="utf-8")
+        self.assertIn("previous review: never", first_text)
+
+        judged_text = first_text.replace(
+            "- [ ] archive `docs/guides/orphan-big.md`",
+            "- [x] archive `docs/guides/orphan-big.md`",
+        )
+        self.assertNotEqual(judged_text, first_text)
+        first_path.write_text(judged_text, encoding="utf-8")
+        (root / "docs/guides/new.md").write_text(
+            "---\nupdated_at: 2026-09-01\n---\n# New guide\n"
+        )
+
+        second_path = MODULE.write_review(root, today=today)
+        second_text = second_path.read_text(encoding="utf-8")
+        self.assertEqual(first_path.name, "review-20261003.md")
+        self.assertEqual(second_path.name, "review-20261003-2.md")
+        self.assertEqual(first_path.read_text(encoding="utf-8"), judged_text)
+        self.assertIn(f"--apply-sweep docs/log/{second_path.name}", second_text)
+        self.assertIn("docs/guides/new.md", second_text)
+        self.assertIn("previous review: never", second_text)
+        self.assertNotEqual(second_text, judged_text)
+
+        repeated_path = MODULE.write_review(root, today=today)
+        self.assertEqual(repeated_path, second_path)
+        self.assertEqual(second_path.read_text(encoding="utf-8"), second_text)
+        self.assertEqual(MODULE.last_review_date(root), today)
+
+        # The suffixed version alone must count as a review and become tomorrow's previous review.
+        first_path.unlink()
+        self.assertEqual(MODULE.last_review_date(root), today)
+        next_day_path = MODULE.write_review(root, today=today + timedelta(days=1))
+        self.assertIn("previous review: 2026-10-03", next_day_path.read_text(encoding="utf-8"))
+
+    def test_version_writer_preserves_file_created_after_initial_absence_check(self):
+        with tempfile.TemporaryDirectory() as temp:
+            log_dir = Path(temp)
+            first_path = log_dir / "review-20261003.md"
+            real_link = os.link
+
+            def concurrent_writer(src, dst):
+                if Path(dst) == first_path and not first_path.exists():
+                    first_path.write_text("concurrent human decision\n", encoding="utf-8")
+                    raise FileExistsError(str(first_path))
+                return real_link(src, dst)
+
+            with patch.object(MODULE.os, "link", side_effect=concurrent_writer):
+                written_path = MODULE.write_versioned_history(
+                    log_dir, "review-20261003", lambda path: f"generated for {path.name}\n"
+                )
+
+            self.assertEqual(first_path.read_text(encoding="utf-8"), "concurrent human decision\n")
+            self.assertEqual(written_path.name, "review-20261003-2.md")
+            self.assertEqual(
+                written_path.read_text(encoding="utf-8"),
+                "generated for review-20261003-2.md\n",
+            )
 
 
 class ContextBudgetTest(HygieneFixture):

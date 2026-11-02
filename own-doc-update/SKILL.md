@@ -190,7 +190,11 @@ sessions.
    as `[x]`-able archive rows, and split candidates (over 32 KB or more than five dated
    headings) with their H2 sections sized so the cut is mechanical. Decide demotions in the
    review file and apply the archive rows with `--apply-sweep`; splits go one guide per task,
-   keeping the old path as a pointer with its original front matter. **Who decides:**
+   keeping the old path as a pointer with its original front matter. A rerun whose generated
+   content differs from today's file gets `review-YYYYMMDD-2.md` (then `-3.md`); identical
+   generated content reuses its version. Manually edited files stay untouched, so their checked
+   decisions remain available in the original. The review's `previous review` is strictly from
+   an earlier date, while R8 still counts today's review as current. **Who decides:**
    `own-docs-maintain` — a judge subagent ticks the sweep and review rows on primary
    evidence and split/condense subagents restructure at most two documents per
    close-session; humans read the recorded decisions, they are not asked for them
@@ -329,8 +333,10 @@ Scripts in `scripts/`:
   checklist of closure candidates; `--apply-sweep <file>` archives its `[x]` rows
   and stamps the file (a review file's archive rows work the same way). `--review`
   writes `docs/log/review-YYYYMMDD.md`, the re-weighting of guides/specs/ADRs (due every 14 days)
-  (R8 reports when it is overdue); `--report` writes it too, so every close-session
-  reviews. R9 reports the context budget (digest drops, oversized docs, hot-set size).
+  (R8 reports when it is overdue); distinct same-day output gets a numbered file and identical
+  generated output reuses its version. `--report` writes it too, so every close-session reviews; use the
+  returned `review_path` when running `--apply-sweep`. R9 reports the context budget (digest
+  drops, oversized docs, hot-set size).
   A6 regenerates the ownership lists from front matter and drops the hand-written rows
   they replace; R10 counts where every active issue is routed from (orphans and
   unassigned issues, zero included).

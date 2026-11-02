@@ -26,8 +26,9 @@ docs/ は次のセッションが最初に読むコンテキストで、放っ�
 
 ## 契約
 
-- 入力: `docs_hygiene.py <repo> --fix --report --json` の結果と、それが書いた
-  `docs/log/review-YYYYMMDD.md`・`docs/log/sweep-YYYYMMDD.md`。
+- 入力: `docs_hygiene.py <repo> --fix --report --json` の結果と、JSON の `review_path` が示すレビュー成果物、
+  およびそれが書いた `docs/log/sweep-YYYYMMDD.md`。同日再生成で review 名に `-2` 以降が付く場合があるため、
+  日付から review のパスを組み立てない。
 - 出力: archive・分割・圧縮が commit 済み（docs/ のみ）で、判断の根拠が sweep / review ファイルに
   1 行ずつ残り、validator の error が実行前より増えていない。
 - 予算（1 回の close-session あたり）: 判定 subagent 1 本（候補は全件）、分割または圧縮の subagent
@@ -44,16 +45,18 @@ docs/ は次のセッションが最初に読むコンテキストで、放っ�
 ## 手順
 
 1. **機械修正**: `python3 ~/.agents/skills/own-doc-update/scripts/docs_hygiene.py <repo> --fix --report --json`
-   を実行し、JSON を保存する（R1〜R9 の件数、sweep 候補、review の split/demote 候補）。
+   を実行し、JSON を保存する（R1〜R9 の件数、sweep 候補、review の split/demote 候補）。後続手順では
+   JSON の `review_path` をそのまま使う。日付から `review-YYYYMMDD.md` を推測しない。
 2. **計画**: `python3 ~/.agents/skills/own-docs-maintain/scripts/plan.py <repo> <hygiene.json>` が、
    予算内で今回やる作業を JSON で出す: `judge`（sweep 候補があれば 1）、`docs`（分割/圧縮の対象、
    hot かつ大きい順に最大 2 本、各 `mode: split|condense`）。`docs` の選び方は
    「active な作業が参照している（hot）」＞「index が参照（warm）」＞ cold、同順位ならサイズ降順。
    cold の降格候補は `judge` に渡す。
-3. **判定 subagent（sonnet）**: `references/judge-sweep.prompt.md` を repo パスとファイル名で埋めて
-   起こす。sweep と review の archive 行を一次証拠（Completion・成果物の実在・git log・参照の有無）で
+3. **判定 subagent（sonnet）**: `references/judge-sweep.prompt.md` を repo パス、sweep のファイル名、
+   JSON の `review_path` の正確な値で埋めて起こす。sweep と review の archive 行を一次証拠
+   （Completion・成果物の実在・git log・参照の有無）で
    `[x]` / `— keep: 理由` に書き分けさせる。終わったら
-   `docs_hygiene.py <repo> --apply-sweep <sweep>` と `--apply-sweep <review>` を実行する。
+   `docs_hygiene.py <repo> --apply-sweep <sweep>` と `--apply-sweep <review_path の値>` を実行する。
 4. **分割/圧縮 subagent（sonnet、`docs` の本数だけ並列）**: `mode: split` は
    `references/split-doc.prompt.md`、`mode: condense` は `references/condense-doc.prompt.md`。
    split は「現在の真実を task 単位の guide（32 KB 以下）に分け、経緯は history、決定は ADR、元パスは

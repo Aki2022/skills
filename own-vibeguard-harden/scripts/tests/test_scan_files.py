@@ -1,55 +1,27 @@
-"""vibe-guard scan-files — 前置パスの誤検出を塞ぐ。陽性対照を先に書き、実装前に赤を見る。
+"""vibe-guard scan-files の内容とパス境界を検証する。
 
-なぜホーム配下に一時ディレクトリを作るか: local-info パターンは `/Users/<name>/...` の形に
-当たる。`/var/folders/...` の既定の一時ディレクトリではバグが**再現しない**ので、
-検査が空振りになる。再現条件を満たす場所に作る。
+個人用の設定を読み込まず、テンポラリ領域に合成したパターンだけを使う。
 """
 from __future__ import annotations
 
 import os
-import shutil
+import re
 import subprocess
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 VIBE_GUARD = Path.home() / ".config" / "vibe-guard" / "bin" / "vibe-guard"
-PATTERNS = Path.home() / ".config" / "vibe-guard" / "config" / "personal-identifiers.txt"
 
 
-def _sample_matching_first_pattern() -> str:
-    """personal-identifiers.txt の1件目に**実際にマッチする実文**を機械的に作る。
+SYNTHETIC_PERSONAL_PATTERN = r"TEST_LOCAL_ID_[0-9]+"
 
-    パターンは拡張正規表現なので、パターン文字列そのものを貼っても自分自身にマッチしない
-    （2026-09-09 に陽性対照が空振りした実測がある）。生成してから re.search で確かめる。
-    """
-    import re
 
-    pats = [l.rstrip("\n") for l in PATTERNS.read_text().splitlines()
-            if l.strip() and not l.strip().startswith("#")]
-    if not pats:
-        raise unittest.SkipTest("personal-identifiers.txt が空")
-    p = pats[0]
-    out, i = [], 0
-    while i < len(p):
-        c = p[i]
-        if c == "[":
-            j = p.index("]", i)
-            cls = p[i + 1:j]
-            i = j + 1
-            if i < len(p) and p[i] == "?":
-                i += 1
-                continue
-            out.append(cls[0])
-        elif c == "\\":
-            out.append(p[i + 1]); i += 2
-        elif c == "+":
-            out.append(out[-1] if out else "x"); i += 1
-        else:
-            out.append(c); i += 1
-    s = "".join(out)
-    assert re.search(p, s), f"生成した実文がパターンにマッチしない: {s!r}"
-    return s
+def _sample_synthetic_identifier() -> str:
+    """合成した個人識別子パターンの陽性fixtureを返す。"""
+    sample = "TEST_LOCAL_ID_1234"
+    assert re.search(SYNTHETIC_PERSONAL_PATTERN, sample)
+    return sample
 
 
 @unittest.skipUnless(VIBE_GUARD.is_file(), f"{VIBE_GUARD} が無い（この端末に vibe-guard 未配置）")
@@ -57,21 +29,37 @@ class ScanFilesTest(unittest.TestCase):
     """scan-files をディレクトリに掛けたとき、指摘が**ファイル内容**由来だけであること。"""
 
     def _run(self, *args):
-        r = subprocess.run([str(VIBE_GUARD), *args], capture_output=True, text=True)
+        r = subprocess.run(
+            [str(VIBE_GUARD), *args], capture_output=True, text=True, env=self._guard_env
+        )
         return r.returncode, r.stdout + r.stderr
 
-    def _homedir_tmp(self):
-        """ホーム配下の一時ディレクトリ。パスが local-info パターンに当たる状態を作る。"""
-        return TemporaryDirectory(dir=str(Path.home()), prefix=".vgtest-")
+    def _isolated_tmp(self):
+        """一時領域にscan対象と合成設定を分離して作る。"""
+        temporary = TemporaryDirectory(prefix="vibe-guard-test-")
+        base = Path(temporary.name)
+        scan = base / "scan"
+        scan.mkdir()
+        config = base / "isolated-guard" / "config"
+        config.mkdir(parents=True)
+        (config / "local-info-patterns.txt").write_text(
+            re.escape(str(scan)) + "\n", encoding="utf-8"
+        )
+        (config / "personal-identifiers.txt").write_text(
+            SYNTHETIC_PERSONAL_PATTERN + "\n", encoding="utf-8"
+        )
+        (config / "allowlist.txt").write_text("", encoding="utf-8")
+        self._guard_env = dict(os.environ, VIBE_GUARD_ROOT=str(config.parent))
+        return temporary
 
     def test_target_exists(self):
         """空振り防止: 被検査物が実在することを独立に確かめる。"""
         self.assertTrue(VIBE_GUARD.is_file())
 
-    def test_clean_directory_under_home_is_green(self):
-        """陰性対照（**これが今 赤い**）: 内容が清潔なら、パスがホーム配下でも exit 0。"""
-        with self._homedir_tmp() as t:
-            d = Path(t)
+    def test_clean_temporary_directory_is_green(self):
+        """陰性対照: 内容が清潔なら、絶対パスが合成パターンに一致しても exit 0。"""
+        with self._isolated_tmp() as t:
+            d = Path(t) / "scan"
             (d / "a.md").write_text("# hello\nnothing sensitive here\n")
             (d / "b.py").write_text("def f():\n    return 1\n")
             rc, out = self._run("scan-files", str(d))
@@ -81,10 +69,10 @@ class ScanFilesTest(unittest.TestCase):
 
     def test_content_hit_is_detected_and_names_the_file(self):
         """陽性対照: **ファイル内容**に local-info があれば exit 1 で、どのファイルか分かる。"""
-        with self._homedir_tmp() as t:
-            d = Path(t)
+        with self._isolated_tmp() as t:
+            d = Path(t) / "scan"
             (d / "clean.md").write_text("nothing here\n")
-            (d / "dirty.md").write_text("line1\ncontact = " + _sample_matching_first_pattern() + "\nline3\n")
+            (d / "dirty.md").write_text("line1\ncontact = " + _sample_synthetic_identifier() + "\nline3\n")
             rc, out = self._run("scan-files", str(d))
             self.assertEqual(rc, 1, out)
             hits = [l for l in out.splitlines() if l.startswith("[local-info]")]
@@ -95,8 +83,8 @@ class ScanFilesTest(unittest.TestCase):
 
     def test_single_file_target_still_works(self):
         """退行防止: ファイルを直接渡す経路（もともとバグが無い側）が壊れていない。"""
-        with self._homedir_tmp() as t:
-            d = Path(t)
+        with self._isolated_tmp() as t:
+            d = Path(t) / "scan"
             f = d / "x.md"
             f.write_text("plain text\n")
             rc, out = self._run("scan-files", str(f))
@@ -112,9 +100,8 @@ class ScanFilesTest(unittest.TestCase):
         何を検査したかが分かる。CWD に大きなファイルを置き、小さな2ディレクトリを指定して、
         報告バイト数が小さいままであることを確かめる。
         """
-        import re
-        with self._homedir_tmp() as t:
-            d = Path(t)
+        with self._isolated_tmp() as t:
+            d = Path(t) / "scan"
             # CWD に置く大きなファイル（指定していないので検査されてはいけない）
             (d / "big.txt").write_text("filler line for size\n" * 20000)
             big = (d / "big.txt").stat().st_size
@@ -123,7 +110,7 @@ class ScanFilesTest(unittest.TestCase):
                 sub.mkdir()
                 (sub / f"{name}.md").write_text(f"tiny content in {name}\n")
             r = subprocess.run([str(VIBE_GUARD), "scan-files", str(d / "a"), str(d / "b")],
-                               capture_output=True, text=True, cwd=str(d))
+                               capture_output=True, text=True, cwd=str(d), env=self._guard_env)
             out = r.stdout + r.stderr
             scanned = [int(m) for m in re.findall(r"scanned ~(\d+) bytes", out)]
             self.assertTrue(scanned, f"gitleaks の scanned 行が読めない:\n{out[:400]}")
@@ -135,13 +122,13 @@ class ScanFilesTest(unittest.TestCase):
 
     def test_scan_text_not_regressed(self):
         """退行防止: scan-text（push の判定に使う経路）が清潔/汚染で 0/1 を返す。"""
-        with self._homedir_tmp() as t:
-            d = Path(t)
+        with self._isolated_tmp() as t:
+            d = Path(t) / "scan"
             clean = d / "clean.txt"; clean.write_text("just words\n")
             rc, out = self._run("scan-text", str(clean))
             self.assertEqual(rc, 0, out)
             dirty = d / "dirty.txt"
-            dirty.write_text("contact = " + _sample_matching_first_pattern() + "\n")
+            dirty.write_text("contact = " + _sample_synthetic_identifier() + "\n")
             rc, out = self._run("scan-text", str(dirty))
             self.assertEqual(rc, 1, out)
 

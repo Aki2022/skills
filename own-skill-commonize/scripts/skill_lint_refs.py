@@ -3,8 +3,9 @@
 
 The skills repository uses both ordinary relative references (for example
 ``references/guide.md``) and cross-skill references (``/other-skill`` followed
-by ``references/guide.md``).  The latter are resolved from the canonical root,
-not from the skill currently being inspected.
+by ``references/guide.md``, or ``other-skill`` followed by ``skill, its
+references/guide.md``). Cross-skill references are resolved from the canonical
+root, not from the skill currently being inspected.
 
 Output is tab-separated and intentionally contains only relative names:
 
@@ -31,6 +32,9 @@ FULL_CROSS = re.compile(
     rf"/(?P<skill>[A-Za-z0-9][A-Za-z0-9._-]*)/(?P<resource>(?:{GROUPS})/[A-Za-z0-9._/-]+)"
 )
 SKILL_TOKEN = re.compile(r"/(?P<skill>[A-Za-z0-9][A-Za-z0-9._-]*)")
+NAMED_SKILL_TOKEN = re.compile(
+    r"`(?P<skill>[A-Za-z0-9][A-Za-z0-9._-]*)`\s+skill(?:,\s+its|'s|’s)"
+)
 
 
 def canonical_skill_names(root: Path) -> set[str]:
@@ -83,6 +87,12 @@ def scan(root: Path, markdown: Path) -> None:
             for match in SKILL_TOKEN.finditer(line)
             if match.group("skill") in names
         ]
+        skill_tokens.extend(
+            (match.start(), match.group("skill"))
+            for match in NAMED_SKILL_TOKEN.finditer(line)
+            if match.group("skill") in names
+        )
+        skill_tokens.sort()
         for match in RESOURCE.finditer(line):
             if any(match.start() >= start and match.end() <= end for start, end in full_spans):
                 continue

@@ -17,6 +17,12 @@ write_skill provider 'See `references/guide.md`.'
 mkdir -p "$tmp_root/provider/references"
 printf '%s\n' 'provider guide' > "$tmp_root/provider/references/guide.md"
 
+# A named canonical skill followed by its relative resource is also cross-skill.
+write_skill agents-sdk 'Agents SDK reference.'
+mkdir -p "$tmp_root/agents-sdk/references"
+printf '%s\n' 'MCP reference' > "$tmp_root/agents-sdk/references/mcp.md"
+write_skill named-consumer 'Use `agents-sdk` skill, its `references/mcp.md` before continuing.'
+
 # A canonical skill name followed by a relative resource is a cross-skill reference.
 write_skill consumer 'Load `/provider` → `references/guide.md` before continuing.'
 write_skill full-consumer 'Load `/provider/references/guide.md` before continuing.'

@@ -41,5 +41,10 @@ def test_background_stream_does_not_replace_visible_resource_readiness(project):
         page.write_text(page.read_text().replace('<p>Stable text.</p>', '<img src="/missing.png" alt="Required image"><p>Stable text.</p>'))
         run = subprocess.run(argv,cwd=root,env=env,capture_output=True,text=True,timeout=12)
         assert run.returncode != 0
+        assert output.is_file(), 'failed rendering must leave a fresh failed diagnostic report'
+        failed = json.loads(output.read_text())
+        assert failed['execution_error'] == 'asset-decode'
+        assert failed['environment']['repeat_equal'] is False
+        assert any(row['id'] == 'render-execution-failed' for row in failed['failures'])
     finally:
         stop.set(); server.shutdown(); server.server_close(); thread.join()

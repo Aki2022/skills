@@ -162,6 +162,24 @@ def audit_individual(canon: Path) -> list[str]:
     return out
 
 
+def report_cli_links(cli_bin: Path) -> None:
+    """CLI の bin の宙ぶらりんを、skill の配線とは別に報告する。
+
+    判定には入れない（RESULT にも入れない）。CLI のリンク切れは skill の配線の問題ではないから。
+    見た範囲と、見なかった範囲は必ず言う。
+    """
+    shown = str(cli_bin).replace(str(Path.home()), "~")
+    if not cli_bin.is_dir():
+        print(f"CLI 検査: {shown} が無い（宙ぶらりんは見ていない）")
+        return
+    links = [p for p in sorted(cli_bin.iterdir()) if p.is_symlink()]
+    dangling = [p for p in links if not p.exists()]
+    for p in dangling:
+        print(f"CLI 宙を指している: {p.name} → {os.readlink(p)}")
+    print(f"CLI 検査: {shown} の symlink {len(links)} 件を見た"
+          f"（宙ぶらりん {len(dangling)} 件・判定には含めない）")
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -169,6 +187,8 @@ def main(argv=None) -> int:
     ap.add_argument("--search", type=Path, action="append", default=[],
                     help="配線先を探す起点。既定はホーム直下の隠しディレクトリ全部")
     ap.add_argument("--max-depth", type=int, default=3)
+    ap.add_argument("--cli-bin", type=Path, default=Path.home() / ".local" / "bin",
+                    help="CLI の bin。宙ぶらりんの symlink を skill の配線とは別に報告する")
     args = ap.parse_args(argv)
 
     canon = args.canonical.expanduser().resolve()
@@ -209,6 +229,7 @@ def main(argv=None) -> int:
     print(f"coverage: 配線先 {cov['roots']} 件を検査"
           f"（棚ごと {cov['whole']} / 1冊ずつ {cov['per_skill']}）"
           f" 正典 {len(catalog.active)} 件 / 個別対処 {len(individual)} 件")
+    report_cli_links(args.cli_bin.expanduser())
     if not wiring:
         # 配線0件には2つの意味がある。区別しないと空振りを通す。
         #   A まだ配線していない正典（新しい環境・差し替えた $HOME の fixture）→ 正常

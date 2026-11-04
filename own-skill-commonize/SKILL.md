@@ -761,7 +761,7 @@ name とディレクトリ名の不一致は自前・第三者を問わず
 `FAIL S6` とする。description の意味的類似・発火競合は決定論的 lint の対象外で、トリアージで扱う。
 
 さらに `S8` として、各 skill 直下の `scripts/tests/` にある `test_*.py` を
-`python3 -m pytest -q <skill>/scripts/tests` で実行する。テストが赤ければ `FAIL S8`
+`pytest -q <skill>/scripts/tests` で実行する（mise の global tool。pytest の版は `~/.config/mise/config.toml` と `mise.lock` で固定）。テストが赤ければ `FAIL S8`
 として exit code に反映する（テストが赤いまま skill を編集させないため、warn ではなく fail）。
 `pytest` を持つ skill が 1 件も無ければ「S8: pytest を持つ skill が無い」と明示し、対象0件を
 黙って合格扱いにしない。`pytest` 自体が使えない環境、または環境変数

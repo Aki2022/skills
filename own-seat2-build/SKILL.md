@@ -79,8 +79,8 @@ bash ~/.agents/skills/own-seat2-build/scripts/seat2_clone.sh --install all
 
 ## スクリプトが作るもの
 
-`scripts/seat2_clone.sh` は本体 app を `ditto` で複製し、**3点だけ**変えて ad-hoc 署名する。
-手で直すときもこの3点以外に触らない — 触るほど次の本体更新との差分が増える。
+`scripts/seat2_clone.sh` は本体 app を `ditto` で複製し、**4点だけ**変えて ad-hoc 署名する。
+手で直すときもこの4点以外に触らない — 触るほど次の本体更新との差分が増える。
 
 1. **shim**: `Contents/MacOS/<exe>` を、プロファイルディレクトリを `--user-data-dir` として
    注入して `<exe>Seat2Payload`（改名した本体バイナリ）を `exec` するシェルスクリプトにする。
@@ -90,6 +90,7 @@ bash ~/.agents/skills/own-seat2-build/scripts/seat2_clone.sh --install all
    scheme は列挙ではなく**接尾辞を付けて**書き換える（本体が scheme を増やしても seat2 が
    黙って二重登録しないため）。`http` / `https` は落とす（seat2 が既定ブラウザを争わないため）。
 3. **ad-hoc の `--deep` 再署名**。
+4. **コピー元の quarantine の除去**: `ditto` は既定でコピー元の quarantine（ダウンロード由来の印）を複製先へ運ぶ。ad-hoc 署名の複製は、それだけで Gatekeeper に止められる（Codex-Seat2 で実測）。複製の作成後に剥がし、残っていれば失敗させる。`ditto --noqtn` は、この macOS（27.2）では quarantine を落とさなかったので使わない。
 
 Info.plist の変換処理は同じ `scripts/` の `patch_plist.py` に置き、`seat2_clone.sh` は
 そのPythonファイルを直接起動する。Pythonコードを Bash の here-document に埋め込まない。

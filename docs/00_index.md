@@ -23,6 +23,7 @@ Read this file first. Do not scan all docs unless needed. Read the active workst
 ## ADRs
 
 - [ADR-20260921-separate-historical-analysis-from-response-status](adrs/ADR-20260921-separate-historical-analysis-from-response-status.md) — 履歴の候補索引と正式statusを分離
+- [ADR-20261104-skill-test-deps-and-wiring-shelf-rule](adrs/ADR-20261104-skill-test-deps-and-wiring-shelf-rule.md) — skill のテスト依存の宣言方式と、配線の棚判定・CLI 報告の分離
 
 ## Active Issues
 

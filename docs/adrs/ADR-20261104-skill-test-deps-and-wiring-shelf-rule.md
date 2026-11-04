@@ -32,7 +32,7 @@ S10 の配線監査は、正典を指す symlink の親ディレクトリを「�
    pin 済みの依存を置き（`uv pip compile` で解決）、S8 は `uv run --no-project --with-requirements <file>
    -- pytest` で走らせる。依存を持たない skill は mise の global の pytest（pypi:pytest 9.2.0、
    `~/.config/mise/mise.lock` で固定）で走らせる。
-2. **棚は正典直下の skill ディレクトリそのものを指す symlink だけで判定する。** 個別スクリプトへの symlink、
+2. **棚は正典直下の skill ディレクトリを指す symlink だけで判定する（壊れたリンクを含む）。** 個別スクリプトへの symlink、
    正典直下のファイル、mise の状態ファイルは棚として数えない。
 3. **宙ぶらりんの CLI リンクは判定から分離し、CLI 行で報告する。** `--cli-bin`（既定は `~/.local/bin`）の
    宙ぶらりん symlink は RESULT と S10 の失敗に入れず、`CLI 宙を指している:` 行として出す。lint は
@@ -64,7 +64,7 @@ S10 の配線監査は、正典を指す symlink の親ディレクトリを「�
 ## Verification
 
 - 先に赤のテストを書き、今の実装で赤を確認してから直した（監査テスト、S8 の uv 経路テスト）。
-- 監査テスト 17 件、skill-commonize 全体 109 件が緑。
+- 監査テスト 18 件、skill-commonize 全体 110 件が緑（main 側の監査テストを含む統合後の件数）。
 - 実物の S10: 2251 件の誤検出から、FAIL 0 件へ。S8: 16 件中 12 件が成功（残る 4 件は既存の失敗）。
 
 ## Open

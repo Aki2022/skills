@@ -460,7 +460,7 @@ python3 ~/.agents/skills/own-skill-commonize/scripts/audit_skill_wiring.py
 4. **宙を指していないか**
 5. **個別対処した skill**（正典の外を指す symlink）が配線先でも解決するか
 
-棚（配線先）として数えるのは、**正典直下の skill ディレクトリそのものを指す symlink だけ**。個別スクリプトへの symlink（例: `~/.local/bin` の `design-author`）や、正典直下のファイル（`mise.toml`）を指すものは棚ではない。mise は見た repo の `mise.toml` を状態ディレクトリへ symlink で記録し、それを数えると無関係な 2146 件の誤検出になる（2026-11-04 に実測）。
+棚（配線先）として数えるのは、**正典直下の skill ディレクトリを指す symlink だけ**（壊れたリンクを含む）。個別スクリプトへの symlink（例: `~/.local/bin` の `design-author`）や、正典直下のファイル（`mise.toml`）を指すものは棚ではない。mise は見た repo の `mise.toml` を状態ディレクトリへ symlink で記録し、それを数えると無関係な 2146 件の誤検出になる（2026-11-04 に実測）。
 
 CLI の宙ぶらりん（`--cli-bin`、既定は `~/.local/bin`）は、skill の配線とは別に `CLI 宙を指している:` 行で報告する。判定（RESULT と S10 の失敗）には入れない。lint 側も `CLI ` 行は fail にせず note として出す。宙ぶらりんの CLI リンクを直すか消すかは人が決める。
 

@@ -51,10 +51,17 @@ S10 の配線監査は、正典を指す symlink の親ディレクトリを「�
 
 ## Consequences
 
-- S8 は依存を宣言した skill で実テストを走らせる。依存を宣言した 4 skill のうち通ったのは 1 件
-  （`own-project-update`、387 件）。残る 3 件（`own-design-author`・`own-infoarch-author`・`own-pptx-build`）は
-  依存が揃った上でのテスト本体の失敗で、依存不足ではない。依存を持たない `own-doc-update` は、未追跡の作業中
+- S8 は依存を宣言した skill で実テストを走らせる。依存を宣言した 4 skill のうち、`own-project-update`（387 件）と
+  `own-infoarch-author`（91 件、5 件 skip）は通る。`own-design-author` は、main の `own-web-design` を隣に置くと
+  166 件が通る。`own-pptx-build` は 3 件失敗する（原因は未調査）。依存を持たない `own-doc-update` は、未追跡の作業中
   テストが未実装の関数を呼んで失敗する。
+- 初版の `requirements.txt` には `jsonschema`（と推移依存の `referencing` など）が無かった。`design-author` と
+  `infoarch-author` の検証器は import できず、例外を握りつぶして空の結果を返していた。後段が `KeyError` になるため、
+  依存不足が「テスト本体の失敗」に見えていた。`jsonschema==4.26.0` と推移依存を pin して解消した。
+- ライブの作業ツリーは main より 45 件遅れており、その古い `own-web-design/scripts/audit_html.py` は `--manifest` を
+  受け付けない。このためライブでは `own-design-author` の 2 件が赤のまま。main に揃えれば緑になる見込み。
+- `test_l1_rejects_missing_declared_tailwind_target` は終了コード 2 だけを見ている。スクリプトが無くても 2 になるので、
+  偽りの緑になり得る（Open を参照）。
 - S10 の配線先は 8 件（棚ごと 4 / 1冊ずつ 4）。見なくなったもの: `~/.local/bin` 内の「正典の外を指す」
   「正典に無い名前」「symlink でない実体」。これらは skill の配線監査としてはノイズだった。
 - 宙ぶらりんの CLI リンク（現在 10 件）は報告のみ。lint は赤くならないので、見落としやすくなる。
@@ -66,10 +73,13 @@ S10 の配線監査は、正典を指す symlink の親ディレクトリを「�
 - 先に赤のテストを書き、今の実装で赤を確認してから直した（監査テスト、S8 の uv 経路テスト）。
 - 監査テスト 18 件、skill-commonize 全体 110 件が緑（main 側の監査テストを含む統合後の件数）。
 - 実物の S10: 2251 件の誤検出から、FAIL 0 件へ。S8: 16 件中 12 件が成功（残る 4 件は既存の失敗）。
+- 追記（jsonschema 追加後）: `own-infoarch-author` は 91 件通過。`own-design-author` は main の `own-web-design` を隣に置いて
+  166 件通過（ライブでは 2 件赤）。ライブの skill_lint は S8 で `own-design-author`・`own-doc-update`・`own-pptx-build` が赤。
 
 ## Open
 
 - 宙ぶらりんの CLI リンク 10 件を直すか消すかは未決（人が決める）。
-- S8 の残る 4 件の失敗（`own-design-author`・`own-infoarch-author`・`own-doc-update`・`own-pptx-build`）は
-  未決。`own-design-author` と `own-infoarch-author` は未追跡の作業中ディレクトリで、その `requirements.txt`
-  も未コミット。
+- S8 の残る失敗: `own-doc-update`（21 件、未追跡の作業中テスト）と `own-pptx-build`（3 件）は未調査で未決。
+  `own-design-author` の 2 件は、ライブの作業ツリーを main に揃えると解消する見込み（検証は main の `own-web-design` を
+  隣に置いた場合のみ）。
+- `test_l1_rejects_missing_declared_tailwind_target` の判定を、終了コードだけでなく理由で確かめるように直すかは未決。

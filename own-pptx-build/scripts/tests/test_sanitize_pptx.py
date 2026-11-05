@@ -149,6 +149,48 @@ def test_renamed_chart_part_is_scanned(tmp_path: Path) -> None:
     assert [local(c) for c in ser] == ["idx", "order", "marker", "dLbls", "cat", "val", "smooth"]
 
 
+# --- 限界 1（#58 の既知の限界）: dPt は marker・invertIfNegative より後 -------------
+
+@pytest.mark.parametrize(
+    ("plot", "expected_order"),
+    [
+        pytest.param(
+            '<c:lineChart><c:grouping val="standard"/><c:varyColors val="0"/>'
+            f'<c:ser><c:idx val="0"/><c:order val="0"/>{DPT}{MARKER}{DLBLS}{CAT_VAL}<c:smooth val="0"/></c:ser>'
+            '<c:axId val="1"/><c:axId val="2"/></c:lineChart>',
+            ["idx", "order", "marker", "dPt", "dLbls", "cat", "val", "smooth"],
+            id="line-dPt-before-marker",
+        ),
+        pytest.param(
+            '<c:lineChart><c:grouping val="standard"/><c:varyColors val="0"/>'
+            f'<c:ser><c:idx val="0"/><c:order val="0"/>{DLBLS}{DPT}{MARKER}{CAT_VAL}<c:smooth val="0"/></c:ser>'
+            '<c:axId val="1"/><c:axId val="2"/></c:lineChart>',
+            ["idx", "order", "marker", "dPt", "dLbls", "cat", "val", "smooth"],
+            id="line-dLbls-and-dPt-before-marker",
+        ),
+        pytest.param(
+            '<c:lineChart><c:grouping val="standard"/><c:varyColors val="0"/>'
+            f'<c:ser><c:idx val="0"/><c:order val="0"/>{DPT}{MARKER}{CAT_VAL}<c:smooth val="0"/></c:ser>'
+            '<c:axId val="1"/><c:axId val="2"/></c:lineChart>',
+            ["idx", "order", "marker", "dPt", "cat", "val", "smooth"],
+            id="line-without-dLbls",
+        ),
+        pytest.param(
+            '<c:barChart><c:barDir val="col"/><c:grouping val="clustered"/><c:varyColors val="0"/>'
+            f'<c:ser><c:idx val="0"/><c:order val="0"/>{DPT}<c:invertIfNegative val="0"/>{CAT_VAL}</c:ser>'
+            '<c:axId val="1"/><c:axId val="2"/></c:barChart>',
+            ["idx", "order", "invertIfNegative", "dPt", "cat", "val"],
+            id="bar-dPt-before-invertIfNegative",
+        ),
+    ],
+)
+def test_dpt_is_placed_after_every_required_predecessor(tmp_path: Path, plot: str, expected_order: list[str]) -> None:
+    pptx = write_pptx(tmp_path / "d.pptx", {"ppt/charts/chart1.xml": chart(plot)})
+    assert_detected_then_fixed(pptx)
+    ser = part_tree(pptx, "ppt/charts/chart1.xml").find(f".//{{{NS_C}}}ser")
+    assert [local(c) for c in ser] == expected_order
+
+
 # --- a5e8740: serAx の無い 2D の 3 つ目の axId を落とす --------------------------
 
 @pytest.mark.parametrize("kind", ["barChart", "lineChart", "areaChart", "radarChart"])
@@ -204,3 +246,22 @@ def test_duplicate_shape_ids_within_a_slide_are_renumbered(tmp_path: Path) -> No
     # 振り直したのは 2 回目に出た id="2"（表）だけ。他の内容はバイト単位で同じ
     text = part_bytes(pptx, "ppt/slides/slide1.xml").decode("utf-8")
     assert text == original.replace('<p:cNvPr id="2" name="Table"/>', '<p:cNvPr id="4" name="Table"/>')
+
+
+def test_duplicate_id_is_found_when_name_precedes_id(tmp_path: Path) -> None:
+    """限界 2（#58 の既知の限界）: 属性の順序が name→id でも重複を見つけて振り直す（id が先頭という前提を外す）。"""
+    table = (
+        '<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr name="Table" id="2"/><p:cNvGraphicFramePr/><p:nvPr/>'
+        "</p:nvGraphicFramePr>"
+        '<p:xfrm><a:off x="0" y="0"/><a:ext cx="1000000" cy="500000"/></p:xfrm>'
+        '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table"/></a:graphic>'
+        "</p:graphicFrame>"
+    )
+    original = slide(sp(2, "Title", "rect") + table + sp(3, "Body", "rect"))
+    pptx = write_pptx(tmp_path / "d.pptx", {"ppt/slides/slide1.xml": original})
+    assert_detected_then_fixed(pptx)
+    tree = part_tree(pptx, "ppt/slides/slide1.xml")
+    ids = [c.get("id") for c in tree.iter(f"{{{NS_P}}}cNvPr")]
+    assert len(ids) == len(set(ids)) == 4
+    text = part_bytes(pptx, "ppt/slides/slide1.xml").decode("utf-8")
+    assert text == original.replace('<p:cNvPr name="Table" id="2"/>', '<p:cNvPr name="Table" id="4"/>')

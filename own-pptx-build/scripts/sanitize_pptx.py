@@ -136,13 +136,18 @@ def fix_callout_adjustments(data: bytes, name: str):
     return ET.tostring(root, encoding="UTF-8", xml_declaration=True), n
 
 
+# <p:cNvPr> の開始タグと、その中の id 属性。属性の並びに依らず id を拾う（name が先に来ても重複を見逃さない）。
+_CNV_TAG_RE = re.compile(r"<p:cNvPr\b[^>]*>")
+_CNV_ID_RE = re.compile(r'(\s)id="(\d+)"')
+
+
 def fix_duplicate_shape_ids(data: bytes, name: str):
     """スライド内で重複する <p:cNvPr id> を振り直す（(fixed_bytes, n_fixes)）。
     PowerPoint はスライド内の図形 ID の重複で「修復」を要求する（2026-10-19 実測、pptxgenjs 4.0.1 の表＋図形の組合せで発生）。
     最大 ID + 1 から順に、2 回目以降の出現だけを書き換える。ID は同スライド内でしか参照されない。"""
     _reject_dtd(data, name)
     text = data.decode("utf-8")
-    ids = re.findall(r'<p:cNvPr id="(\d+)"', text)
+    ids = [m.group(2) for tag in _CNV_TAG_RE.finditer(text) for m in _CNV_ID_RE.finditer(tag.group(0))]
     if len(ids) == len(set(ids)):
         return data, 0
     next_id = max(int(i) for i in ids) + 1
@@ -151,17 +156,44 @@ def fix_duplicate_shape_ids(data: bytes, name: str):
 
     def _sub(m):
         nonlocal next_id, n
-        cur = m.group(1)
+        cur = m.group(2)
         if cur in seen:
             new = str(next_id)
             next_id += 1
             n += 1
-            return f'<p:cNvPr id="{new}"'
+            return f'{m.group(1)}id="{new}"'
         seen.add(cur)
         return m.group(0)
 
-    text = re.sub(r'<p:cNvPr id="(\d+)"', _sub, text)
+    text = _CNV_TAG_RE.sub(lambda t: _CNV_ID_RE.sub(_sub, t.group(0), count=1), text)
     return text.encode("utf-8"), n
+
+
+# CT_*Ser（ECMA-376 DrawingML Chart）の子要素の順序。同じ rank の要素は、同じ種類の系列には同時に現れない。
+SER_CHILD_RANK = {
+    "idx": 0, "order": 1, "tx": 2, "spPr": 3,
+    "invertIfNegative": 4, "explosion": 4, "pictureOptions": 4, "marker": 4,
+    "dPt": 5, "dLbls": 6, "trendline": 7, "errBars": 8,
+    "cat": 9, "xVal": 9, "val": 10, "yVal": 10,
+    "smooth": 11, "shape": 11, "bubbleSize": 11,
+    "bubble3D": 12, "extLst": 13,
+}
+
+
+def _reorder_ser_children(ser) -> int:
+    """<c:ser> の子要素を SER_CHILD_RANK の順に並べ替える（並べ替えたら 1、不要なら 0）。
+    未知の子要素がある系列は触らない。スキーマに無い要素の位置を推測で動かさないため。"""
+    children = list(ser)
+    names = [c.tag.rsplit("}", 1)[-1] for c in children]
+    if any(name not in SER_CHILD_RANK for name in names):
+        return 0
+    ordered = sorted(children, key=lambda c: SER_CHILD_RANK[c.tag.rsplit("}", 1)[-1]])
+    if all(a is b for a, b in zip(ordered, children)):
+        return 0
+    for c in children:
+        ser.remove(c)
+    ser.extend(ordered)
+    return 1
 
 
 def fix_chart_xml(data: bytes, name: str = "chart.xml"):
@@ -176,28 +208,12 @@ def fix_chart_xml(data: bytes, name: str = "chart.xml"):
                 for bad in ser.findall(f"{{{C}}}invertIfNegative"):
                     ser.remove(bad)
                     n += 1
-                # 2) marker は dLbls より前が正
-                children = list(ser)
-                marker = ser.find(f"{{{C}}}marker")
-                dlbls = ser.find(f"{{{C}}}dLbls")
-                if marker is not None and dlbls is not None:
-                    if children.index(marker) > children.index(dlbls):
-                        ser.remove(marker)
-                        ser.insert(list(ser).index(dlbls), marker)
-                        n += 1
-    # 3) dPt（点ごとの書式。bar の chartColors を点ごとに指定すると出る）は dLbls より前が正
-    #    （CT_BarSer 等: …invertIfNegative, pictureOptions, dPt*, dLbls…）。pptxgenjs は dLbls の後に出力し、
-    #    PowerPoint が「修復」を要求する（2026-10-19 実測。LibreOffice は黙って描く）。全チャート種の ser が対象
+    # 2) 系列の子要素の順序（marker・dPt は dLbls より前、dLbls は cat/val より前 等）。全チャート種の ser が対象。
+    #    dPt の順序違いは PowerPoint が「修復」を要求する（2026-10-19 実測。LibreOffice は黙って描く）。
+    #    判定と修正を同じ関数で行うため、--check と修正の結果は食い違わない。
     for ser in root.iter(f"{{{C}}}ser"):
-        dlbls = ser.find(f"{{{C}}}dLbls")
-        if dlbls is None:
-            continue
-        late = [d for d in ser.findall(f"{{{C}}}dPt") if list(ser).index(d) > list(ser).index(dlbls)]
-        for d in late:
-            ser.remove(d)
-            ser.insert(list(ser).index(dlbls), d)
-            n += 1
-    # 4) 2D の bar/line/area/radar に 3 つ目の <c:axId>（系列軸 ID）が出るが、対応する <c:serAx> が無い
+        n += _reorder_ser_children(ser)
+    # 3) 2D の bar/line/area/radar に 3 つ目の <c:axId>（系列軸 ID）が出るが、対応する <c:serAx> が無い
     #    （pptxgenjs 4.0.1 は bar3D 以外でも無条件に 3 つ出す。CT_BarChart 等の axId は 2 つ固定で、
     #    PowerPoint が「修復」を要求する。2026-10-19 実測）。serAx が無ければ 3 つ目以降の axId を落とす
     ser_ax_ids = {ax.find(f"{{{C}}}axId").get("val") for ax in root.iter(f"{{{C}}}serAx") if ax.find(f"{{{C}}}axId") is not None}

@@ -52,6 +52,37 @@ PASSING_TEST = textwrap.dedent(
 )
 
 
+# uv の代わりに PATH 先頭へ置く stub。受け取った引数をログに残し、
+# `--` の後ろのコマンドをそのまま実行する（失敗させたい時は UV_STUB_EXIT に非0を入れる）。
+UV_STUB = textwrap.dedent("""\
+    #!/bin/sh
+    printf '%s\\n' "$*" >> "$UV_STUB_LOG"
+    if [ "${UV_STUB_EXIT:-0}" != "0" ]; then exit "$UV_STUB_EXIT"; fi
+    while [ $# -gt 0 ]; do
+        if [ "$1" = "--" ]; then shift; exec "$@"; fi
+        shift
+    done
+    echo "uv stub: no -- separator" >&2
+    exit 97
+    """)
+
+
+def _install_uv_stub(bin_dir: Path) -> Path:
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    stub = bin_dir / "uv"
+    stub.write_text(UV_STUB)
+    stub.chmod(0o755)
+    return bin_dir
+
+
+def _uv_env(bin_dir: Path, log: Path, exit_code: int = 0) -> dict:
+    return {
+        "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+        "UV_STUB_LOG": str(log),
+        "UV_STUB_EXIT": str(exit_code),
+    }
+
+
 class SkillLintPytestTest(unittest.TestCase):
     def _run(self, root: Path, env_extra: dict | None = None):
         env = dict(os.environ)
@@ -115,6 +146,43 @@ class SkillLintPytestTest(unittest.TestCase):
             self.assertEqual(rc, 0, out)
             self.assertIn("S8", out)
             self.assertIn("skip", out.lower())
+
+    def test_requirements_file_runs_pytest_through_uv(self):
+        """scripts/tests/requirements.txt を持つ skill は uv run（--no-project、依存宣言つき）で pytest を走らせる。"""
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp) / "skills"
+            _write_skill_md(root, "fake-skill-deps")
+            tests = root / "fake-skill-deps" / "scripts" / "tests"
+            _write(tests / "test_x.py", PASSING_TEST)
+            _write(tests / "requirements.txt", "pytest==9.2.0\n")
+            log = Path(tmp) / "uv.log"
+            bin_dir = _install_uv_stub(Path(tmp) / "bin")
+
+            rc, out = self._run(root, env_extra=_uv_env(bin_dir, log))
+
+            self.assertEqual(rc, 0, out)
+            self.assertIn("fake-skill-deps", out)
+            logged = log.read_text()
+            self.assertIn("--no-project", logged)
+            self.assertIn("--with-requirements", logged)
+            self.assertIn("requirements.txt", logged)
+
+    def test_uv_failure_is_red_not_skipped(self):
+        """依存付きの skill で uv が失敗したら、黙って合格にせず S8 を FAIL にする。"""
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp) / "skills"
+            _write_skill_md(root, "fake-skill-deps")
+            tests = root / "fake-skill-deps" / "scripts" / "tests"
+            _write(tests / "test_x.py", PASSING_TEST)
+            _write(tests / "requirements.txt", "pytest==9.2.0\n")
+            log = Path(tmp) / "uv.log"
+            bin_dir = _install_uv_stub(Path(tmp) / "bin")
+
+            rc, out = self._run(root, env_extra=_uv_env(bin_dir, log, exit_code=3))
+
+            self.assertEqual(rc, 1, out)
+            self.assertIn("S8", out)
+            self.assertIn("fake-skill-deps", out)
 
 
 if __name__ == "__main__":

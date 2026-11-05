@@ -1,6 +1,6 @@
 ---
 id: GUIDE-skill-usage-metrics
-updated_at: 2026-09-21
+updated_at: 2026-11-04
 source_issues: [ISSUE-20260909-measure-skill-usage, ISSUE-20260909-skill-usage-schedule, ISSUE-20260910-improve-loop-review-handoff]
 source_workstreams: []
 related_specs: []
@@ -105,7 +105,7 @@ Claude/Codex の JSONL schema が変わったら、実物を本文を表示し�
 fixture を先に追加する。その後、次を実行する。
 
 ```bash
-python3 -m pytest -q own-skill-commonize/scripts/tests/test_measure_skill_usage.py
+pytest -q own-skill-commonize/scripts/tests/test_measure_skill_usage.py
 bash own-skill-commonize/scripts/skill_lint.sh ~/.agents/skills
 ```
 

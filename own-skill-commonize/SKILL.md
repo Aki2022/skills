@@ -460,6 +460,10 @@ python3 ~/.agents/skills/own-skill-commonize/scripts/audit_skill_wiring.py
 4. **宙を指していないか**
 5. **個別対処した skill**（正典の外を指す symlink）が配線先でも解決するか
 
+棚（配線先）として数えるのは、**正典直下の skill ディレクトリを指す symlink だけ**（壊れたリンクを含む）。個別スクリプトへの symlink（例: `~/.local/bin` の `design-author`）や、正典直下のファイル（`mise.toml`）を指すものは棚ではない。mise は見た repo の `mise.toml` を状態ディレクトリへ symlink で記録し、それを数えると無関係な 2146 件の誤検出になる（2026-11-04 に実測）。
+
+CLI の宙ぶらりん（`--cli-bin`、既定は `~/.local/bin`）は、skill の配線とは別に `CLI 宙を指している:` 行で報告する。判定（RESULT と S10 の失敗）には入れない。lint 側も `CLI ` 行は fail にせず note として出す。宙ぶらりんの CLI リンクを直すか消すかは人が決める。
+
 **中身は照合しない。** 配線は正典の同じ実体を指すので原理的にズレない
 （72 skill × 5 root = 360 通りを realpath で照合し別実体 0 件・2026-09-22 実測）。
 
@@ -761,7 +765,7 @@ name とディレクトリ名の不一致は自前・第三者を問わず
 `FAIL S6` とする。description の意味的類似・発火競合は決定論的 lint の対象外で、トリアージで扱う。
 
 さらに `S8` として、各 skill 直下の `scripts/tests/` にある `test_*.py` を
-`python3 -m pytest -q <skill>/scripts/tests` で実行する。テストが赤ければ `FAIL S8`
+`pytest -q <skill>/scripts/tests` で実行する（mise の global tool。pytest の版は `~/.config/mise/config.toml` と `mise.lock` で固定）。テストが赤ければ `FAIL S8`
 として exit code に反映する（テストが赤いまま skill を編集させないため、warn ではなく fail）。
 `pytest` を持つ skill が 1 件も無ければ「S8: pytest を持つ skill が無い」と明示し、対象0件を
 黙って合格扱いにしない。`pytest` 自体が使えない環境、または環境変数

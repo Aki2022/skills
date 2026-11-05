@@ -83,6 +83,99 @@ class DiscoveryTests(unittest.TestCase):
             self.assertEqual(_run(canon, search), 0,
                              "退役マーカーつきは対象外であるべき")
 
+    def test_symlink_to_a_canon_file_is_not_a_shelf(self):
+        """正典直下のファイル（例: mise.toml）を指す symlink は配線先ではない。
+
+        mise は見た repo の mise.toml を状態ディレクトリへ symlink で記録する。
+        その中に正典の mise.toml を指すものがあると、状態ディレクトリを
+        「1冊ずつの配線先」と誤認し、全 skill が配線されていないと報告してしまう
+        （2026-11-04 に 2146 件の誤検出として実測）。
+        正の対照として、本物の skill 棚は引き続き見つかることも確かめる。
+        """
+        with TemporaryDirectory() as d:
+            tmp = Path(d)
+            canon = _canon(tmp, ["own-a-run", "own-b-run"]).resolve()
+            (canon / "mise.toml").write_text("[tools]\n")
+            state = tmp / "state" / "tracked-configs"
+            state.mkdir(parents=True)
+            (state / "53d40e8b4963a274").symlink_to(canon / "mise.toml")
+            real = _wire(tmp / "search" / "tool" / "skills", canon, ["own-a-run"])
+
+            found = mod.discover(canon, [tmp / "state", tmp / "search"], 3)
+
+            self.assertEqual(found, {real: "per-skill"},
+                             f"配線先ではないものを棚として数えた: {found}")
+
+    def test_symlink_into_a_skill_file_is_not_a_shelf(self):
+        """skill の内部ファイルを指す symlink（~/.local/bin の個別スクリプト配線など）は棚ではない。
+
+        棚は skill ディレクトリ単位で配線する。個別スクリプトへの配線は監査の対象から外し、
+        宙ぶらりんは CLI の報告で別に出す。
+        """
+        with TemporaryDirectory() as d:
+            tmp = Path(d)
+            canon = _canon(tmp, ["own-a-run"]).resolve()
+            (canon / "own-a-run" / "scripts").mkdir()
+            (canon / "own-a-run" / "scripts" / "tool.py").write_text("print('x')\n")
+            bin_dir = tmp / "search" / "bin"
+            bin_dir.mkdir(parents=True)
+            (bin_dir / "tool").symlink_to(canon / "own-a-run" / "scripts" / "tool.py")
+
+            found = mod.discover(canon, [tmp / "search"], 3)
+
+            self.assertEqual(found, {}, f"個別スクリプトを棚として数えた: {found}")
+
+
+class CliLinkTests(unittest.TestCase):
+    """CLI の bin の宙ぶらりんは、skill の配線とは別に報告する（RESULT には入れない）。"""
+
+    def _run_capture(self, argv):
+        import contextlib
+        import io
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = mod.main(argv)
+        return rc, buf.getvalue()
+
+    def test_dangling_cli_link_is_reported_apart_and_does_not_fail(self):
+        with TemporaryDirectory() as d:
+            tmp = Path(d)
+            canon = _canon(tmp, ["own-a-run"]).resolve()
+            search = tmp / "search"
+            _wire(search / "some-tool" / "skills", canon, ["own-a-run"])
+            cli = tmp / "bin"
+            cli.mkdir()
+            (cli / "ok-tool").write_text("#!/bin/sh\n")
+            (cli / "ok-tool").chmod(0o755)
+            (cli / "valid").symlink_to(cli / "ok-tool")
+            (cli / "radian").symlink_to(tmp / "gone" / "radian")
+
+            rc, out = self._run_capture(
+                ["--canonical", str(canon), "--search", str(search), "--cli-bin", str(cli)])
+
+            self.assertEqual(rc, 0, out)
+            self.assertIn("RESULT: OK", out)
+            self.assertIn("CLI 宙を指している: radian", out)
+            self.assertNotIn("CLI 宙を指している: valid", out)
+            self.assertIn("CLI 検査", out, "CLI を見た範囲を言うべき")
+            self.assertNotIn("FAIL", out)
+
+    def test_missing_cli_bin_says_so_and_does_not_fail(self):
+        with TemporaryDirectory() as d:
+            tmp = Path(d)
+            canon = _canon(tmp, ["own-a-run"]).resolve()
+            search = tmp / "search"
+            _wire(search / "some-tool" / "skills", canon, ["own-a-run"])
+
+            rc, out = self._run_capture(
+                ["--canonical", str(canon), "--search", str(search),
+                 "--cli-bin", str(tmp / "no-such-bin")])
+
+            self.assertEqual(rc, 0, out)
+            self.assertIn("CLI 検査", out)
+            self.assertIn("無い", out, "見ていないことを言うべき")
+
 
 class ParityTests(unittest.TestCase):
     def _one_root(self, tmp: Path, wired: list[str], canon_names: list[str]):

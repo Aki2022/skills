@@ -44,7 +44,7 @@ if [ "${SKILL_LINT_SKIP_PYTEST:-}" = "1" ]; then
   pytest_skip_reason="環境変数 SKILL_LINT_SKIP_PYTEST=1"
 elif ! command -v python3 >/dev/null 2>&1; then
   pytest_skip_reason="python3 が見つからない"
-elif ! python3 -m pytest --version >/dev/null 2>&1; then
+elif ! pytest --version >/dev/null 2>&1; then
   pytest_skip_reason="pytest が使えない"
 fi
 [ -n "$pytest_skip_reason" ] && note "S8: skip（$pytest_skip_reason のため pytest を実行しない）"
@@ -176,7 +176,13 @@ for root in "${roots[@]}"; do
     if [ -z "$pytest_skip_reason" ] && [ -d "${dir}scripts/tests" ] \
       && ls "${dir}scripts/tests"/test_*.py >/dev/null 2>&1; then
       pytest_ran=$((pytest_ran + 1))
-      pytest_out=$(python3 -m pytest -q "${dir}scripts/tests" 2>&1)
+      reqs="${dir}scripts/tests/requirements.txt"
+      if [ -f "$reqs" ]; then
+        # 依存を宣言した skill は、宣言どおりの環境で走らせる。uv の共有キャッシュを使うので venv は増えない。
+        pytest_out=$(uv run --quiet --no-project --with-requirements "$reqs" -- pytest -q "${dir}scripts/tests" 2>&1)
+      else
+        pytest_out=$(pytest -q "${dir}scripts/tests" 2>&1)
+      fi
       pytest_rc=$?
       summary=$(printf '%s\n' "$pytest_out" | tail -1)
       if [ "$pytest_rc" -ne 0 ]; then
@@ -239,7 +245,7 @@ for root in "${roots[@]}"; do
     fail "S10: audit_skill_wiring.py が無い: $s10_audit"
   elif ! s10_report=$(python3 "$s10_audit" --canonical "$s10_live" 2>&1); then
     # coverage: と RESULT: は判定ではなく報告なので note 側に出す
-    printf '%s\n' "$s10_report" | grep -vE '^(OK |coverage:|RESULT:)' | while IFS= read -r s10_line; do
+    printf '%s\n' "$s10_report" | grep -vE '^(OK |coverage:|RESULT:|CLI )' | while IFS= read -r s10_line; do
       [ -n "$s10_line" ] && fail "S10 $s10_line"
     done
     note "S10 $(printf '%s\n' "$s10_report" | grep '^coverage:' || true)"
@@ -247,6 +253,10 @@ for root in "${roots[@]}"; do
   else
     note "S10 $(printf '%s\n' "$s10_report" | grep '^coverage:' || echo '配線を検査した')"
   fi
+  # CLI の行は skill の配線の判定ではない。fail にはせず、成否によらず note として出す
+  printf '%s\n' "${s10_report:-}" | grep '^CLI ' | while IFS= read -r s10_line; do
+    note "S10 $s10_line"
+  done
 done
 if [ "$s10_ran" -eq 0 ]; then
   note "S10: skip（実正典 $HOME/.agents/skills を lint していないため配線は検査しない）"

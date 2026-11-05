@@ -134,7 +134,7 @@ du -sh /Applications/.*.rollback 2>/dev/null
 `skill_lint.sh` の S8 から走る。実アプリには触らない。
 
 ```bash
-python3 -m pytest -q ~/.agents/skills/own-seat2-build/scripts/tests
+pytest -q ~/.agents/skills/own-seat2-build/scripts/tests
 ```
 
 **この検査が見ていないもの**を承知しておく。`ps` を `pgrep` に戻しても偽 bundle の

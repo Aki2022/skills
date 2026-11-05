@@ -8,9 +8,12 @@ sanitize_pptx.py — pptxgenjs 産 pptx の「PowerPoint 修復エラー」要�
      要素）が混入する → スキーマ違反で PowerPoint が修復を要求（LibreOffice/python-pptx
      は許容するため④のレンダリング検証では検出できない）
   2) <c:marker> が <c:dLbls> の後に出力される（CT_LineSer 等の子要素順序は marker が先）
-  3) defineSlideMaster の slideNumber オプションは idx="4294967295" の不正プレース
+  3) bar 系で chartColors を点ごとに指定すると <c:dPt> が <c:dLbls> の後に出力される（dPt が先・全チャート種）
+  4) 2D の bar/line/area/radar にも 3 つ目の <c:axId>（系列軸）が出るが <c:serAx> が無い → 3 つ目を落とす
+  5) defineSlideMaster の slideNumber オプションは idx="4294967295" の不正プレース
      ホルダを吐く（deck_helpers v3 は不使用。検出したら警告のみ＝手動対応）
-  4) pptxgenjs はプリセット図形の adjustment 値（吹き出しの尻尾位置等）を公開しないため、
+  6) スライド内で <p:cNvPr id> が重複する（表＋図形の組合せで発生）→ 2 回目以降を振り直す
+  7) pptxgenjs はプリセット図形の adjustment 値（吹き出しの尻尾位置等）を公開しないため、
      deck_helpers.speechBubble() 等は shape 名に `<名前>@adj1=..,adj2=..` とエンコードする。
      本スクリプトが <a:avLst> へ <a:gd> を注入して印を除去する（2026-08-27 追加。
      --check は未注入の印を NG として検出する）
@@ -133,6 +136,34 @@ def fix_callout_adjustments(data: bytes, name: str):
     return ET.tostring(root, encoding="UTF-8", xml_declaration=True), n
 
 
+def fix_duplicate_shape_ids(data: bytes, name: str):
+    """スライド内で重複する <p:cNvPr id> を振り直す（(fixed_bytes, n_fixes)）。
+    PowerPoint はスライド内の図形 ID の重複で「修復」を要求する（2026-10-19 実測、pptxgenjs 4.0.1 の表＋図形の組合せで発生）。
+    最大 ID + 1 から順に、2 回目以降の出現だけを書き換える。ID は同スライド内でしか参照されない。"""
+    _reject_dtd(data, name)
+    text = data.decode("utf-8")
+    ids = re.findall(r'<p:cNvPr id="(\d+)"', text)
+    if len(ids) == len(set(ids)):
+        return data, 0
+    next_id = max(int(i) for i in ids) + 1
+    seen = set()
+    n = 0
+
+    def _sub(m):
+        nonlocal next_id, n
+        cur = m.group(1)
+        if cur in seen:
+            new = str(next_id)
+            next_id += 1
+            n += 1
+            return f'<p:cNvPr id="{new}"'
+        seen.add(cur)
+        return m.group(0)
+
+    text = re.sub(r'<p:cNvPr id="(\d+)"', _sub, text)
+    return text.encode("utf-8"), n
+
+
 def fix_chart_xml(data: bytes, name: str = "chart.xml"):
     """(fixed_bytes, n_fixes) を返す。修正不要なら n_fixes=0。"""
     _reject_dtd(data, name)
@@ -154,6 +185,29 @@ def fix_chart_xml(data: bytes, name: str = "chart.xml"):
                         ser.remove(marker)
                         ser.insert(list(ser).index(dlbls), marker)
                         n += 1
+    # 3) dPt（点ごとの書式。bar の chartColors を点ごとに指定すると出る）は dLbls より前が正
+    #    （CT_BarSer 等: …invertIfNegative, pictureOptions, dPt*, dLbls…）。pptxgenjs は dLbls の後に出力し、
+    #    PowerPoint が「修復」を要求する（2026-10-19 実測。LibreOffice は黙って描く）。全チャート種の ser が対象
+    for ser in root.iter(f"{{{C}}}ser"):
+        dlbls = ser.find(f"{{{C}}}dLbls")
+        if dlbls is None:
+            continue
+        late = [d for d in ser.findall(f"{{{C}}}dPt") if list(ser).index(d) > list(ser).index(dlbls)]
+        for d in late:
+            ser.remove(d)
+            ser.insert(list(ser).index(dlbls), d)
+            n += 1
+    # 4) 2D の bar/line/area/radar に 3 つ目の <c:axId>（系列軸 ID）が出るが、対応する <c:serAx> が無い
+    #    （pptxgenjs 4.0.1 は bar3D 以外でも無条件に 3 つ出す。CT_BarChart 等の axId は 2 つ固定で、
+    #    PowerPoint が「修復」を要求する。2026-10-19 実測）。serAx が無ければ 3 つ目以降の axId を落とす
+    ser_ax_ids = {ax.find(f"{{{C}}}axId").get("val") for ax in root.iter(f"{{{C}}}serAx") if ax.find(f"{{{C}}}axId") is not None}
+    for tag in ("barChart", "bar3DChart", "lineChart", "areaChart", "radarChart"):
+        for chart in root.iter(f"{{{C}}}{tag}"):
+            ax_ids = chart.findall(f"{{{C}}}axId")
+            for extra in ax_ids[2:]:
+                if extra.get("val") not in ser_ax_ids:
+                    chart.remove(extra)
+                    n += 1
     if n == 0:
         return data, 0
     out = ET.tostring(root, encoding="UTF-8", xml_declaration=True)
@@ -174,7 +228,8 @@ def main():
         names = z.namelist()
         for name in names:
             data = z.read(name)
-            if name.startswith("ppt/charts/chart") and name.endswith(".xml"):
+            # inject_template.py 後は chart1 が g_chart1.xml 等に改名されるため、charts/ 直下の .xml を全て対象にする
+            if name.startswith("ppt/charts/") and "/_rels/" not in name and name.endswith(".xml"):
                 fixed, n = fix_chart_xml(data, name)
                 if n:
                     issues += n
@@ -197,6 +252,11 @@ def main():
                     issues += n
                     fixes[name] = fixed
                     print(f"callout-adj fix: {name} ({n} shapes)")
+                fixed, n = fix_duplicate_shape_ids(fixes.get(name, data), name)
+                if n:
+                    issues += n
+                    fixes[name] = fixed
+                    print(f"shape-id fix: {name} ({n} duplicate ids)")
             if name.endswith(".xml") and b'idx="4294967295"' in data:
                 # 情報表示のみ（issues に数えない）: 実ファイルで PowerPoint が dt ph の
                 # idx=4294967295 を許容する反例を確認済み（2026-07-13）。修復トリガーとしては

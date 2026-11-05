@@ -105,6 +105,35 @@ def test_install_builds_shim_and_payload(tmp_path, claude_src):
     assert os.access(shim, os.X_OK)
 
 
+def test_clone_does_not_inherit_quarantine(tmp_path, codex_src):
+    """コピー元の quarantine を clone に持ち越さない。
+
+    ditto は既定で quarantine を運ぶ。ダウンロード由来の印を持つ本体を複製すると、
+    ad-hoc 署名の clone がそのまま Gatekeeper に止められる（Codex-Seat2 で
+    2026-11-04 に実測。画面は "Apple could not verify ... free of malware"）。
+    clone は手元の script が作るもので、ダウンロードの印は引き継がない。
+    """
+    marked = subprocess.run(
+        ["xattr", "-w", "com.apple.quarantine",
+         "0181;6aea6041;test;00000000-0000-0000-0000-000000000000", str(codex_src)],
+        capture_output=True, text=True,
+    )
+    assert marked.returncode == 0, marked.stderr
+    # 前提が成立していないと検査が空振りする。コピー元に本当に付いたことを確かめる
+    precondition = subprocess.run(
+        ["xattr", "-p", "com.apple.quarantine", str(codex_src)],
+        capture_output=True, text=True,
+    )
+    assert precondition.returncode == 0, "コピー元に quarantine が付いていない（検査が空振り）"
+
+    assert run(tmp_path, "--install", "codex").returncode == 0
+    listing = subprocess.run(
+        ["xattr", "-r", "-l", str(tmp_path / "Codex-Seat2.app")],
+        capture_output=True, text=True,
+    ).stdout
+    assert "com.apple.quarantine" not in listing, listing
+
+
 def test_identity_is_patched(tmp_path, claude_src):
     run(tmp_path, "--install", "claude")
     info = info_of(tmp_path / "Claude-Seat2.app")

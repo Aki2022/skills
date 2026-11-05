@@ -122,6 +122,20 @@ clone_seat() {
 
   rm -rf "$staging"
   ditto "$src" "$staging"
+  # The clone is made here, so it must not carry the source's download marker. A
+  # copy of a quarantined vendor app is ad-hoc signed and Gatekeeper then blocks it
+  # on first launch (seen on Codex-Seat2, 2026-11-04). `ditto --noqtn` does not
+  # strip it on this macOS, so remove it explicitly and check that none is left.
+  # The check reads into a variable, not a pipe: with pipefail, a grep -q that
+  # exits early can make a surviving quarantine look absent.
+  xattr -dr com.apple.quarantine "$staging"
+  listing=$(xattr -r -l "$staging")
+  case "$listing" in
+    *com.apple.quarantine*)
+      echo "ERROR: quarantine still set on $staging" >&2
+      return 1
+      ;;
+  esac
 
   mv "$staging/Contents/MacOS/$exe" "$staging/Contents/MacOS/$payload"
   write_shim "$seat" "$staging/Contents/MacOS/$exe" "$payload"

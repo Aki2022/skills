@@ -418,7 +418,8 @@ def test_l1_checks_real_generated_config_and_zero_targets(project):
     assert subprocess.run(argv, capture_output=True).returncode == 2
     config.write_bytes((root / 'design/.resolved/tailwind.config.cjs').read_bytes())
     html.write_text('<html><body></body></html>')
-    assert subprocess.run(argv, capture_output=True).returncode == 1
+    run = subprocess.run(argv, capture_output=True, text=True)
+    assert run.returncode == 1 and 'RESULT: FAIL' in run.stdout, run.stdout + run.stderr
     # Change an input outside the validator: a stale generated manifest must fail.
     (root / 'design/DESIGN.md').write_text('changed')
     assert subprocess.run(argv, capture_output=True).returncode == 2
@@ -709,9 +710,13 @@ def test_l1_rejects_missing_declared_tailwind_target(project):
     check(project)
     (root/'index.html').write_text('<html lang="en"><meta name="viewport" content="width=device-width">'
         '<style>:focus-visible{outline:auto}@media(min-width:1px){}</style><main><h1>Fixture</h1></main></html>')
-    run=subprocess.run([sys.executable,str(SKILL.parent/'own-web-design/scripts/audit_html.py'),
+    audit=SKILL.parent/'own-web-design/scripts/audit_html.py'
+    assert audit.is_file(),'sibling audit_html.py is missing; exit code 2 alone would not prove the tailwind check'
+    assert not (root/'app/tailwind.config.cjs').exists()
+    run=subprocess.run([sys.executable,str(audit),
         str(root/'index.html'),'--manifest',str(root/'design/.resolved/web.json')],capture_output=True,text=True)
-    assert run.returncode==2,run.stdout
+    assert run.returncode==2,run.stdout+run.stderr
+    assert json.loads(run.stdout)=={'exit_code':2,'errors':['FileNotFoundError: invalid or unavailable input']},run.stdout+run.stderr
 
 
 def test_sync_rejects_symlinked_targets_and_rolls_back_partial_failure(project,monkeypatch):

@@ -17,8 +17,9 @@ sanitize_pptx.py — pptxgenjs 産 pptx の「PowerPoint 修復エラー」要�
      deck_helpers.speechBubble() 等は shape 名に `<名前>@adj1=..,adj2=..` とエンコードする。
      本スクリプトが <a:avLst> へ <a:gd> を注入して印を除去する（2026-08-27 追加。
      --check は未注入の印を NG として検出する）
-  8) <a:p> の途中に 2 つ目以降の <a:pPr>（ラン単位）→ 先頭 1 つだけ残す（ISO 29500-4 で INVALID）
-  9) p:cNvPr の descr の絶対パス → ファイル名だけにする（ローカルの情報を納品物に残さない）
+  8) round2SameRect の調整名 adj → adj1（仕様では adj1/adj2。PowerPoint の既定と違う半径を取りこぼさないため）
+  9) <a:p> の途中に 2 つ目以降の <a:pPr>（ラン単位）→ 先頭 1 つだけ残す（ISO 29500-4 で INVALID）
+  10) p:cNvPr の descr の絶対パス → ファイル名だけにする（ローカルの情報を納品物に残さない）
 
 使い方:
   python3 sanitize_pptx.py output.pptx          # in-place 修正
@@ -171,6 +172,28 @@ def fix_duplicate_shape_ids(data: bytes, name: str):
     return text.encode("utf-8"), n
 
 
+# 仕様（presetShapeDefinitions）で調整ハンドルが adj1/adj2 の図形。pptxgenjs は adj の名前で出す。
+_ROUND2_SHAPES = {"round2SameRect"}
+
+
+def fix_round2_adj_names(data: bytes, name: str):
+    """round2SameRect の調整ハンドル名 adj を adj1 にする（(fixed_bytes, n_fixes)）。
+    仕様の preset 定義では round2SameRect の調整は adj1 と adj2 で、adj は無い（2026-11-06 に LibreOffice 版の
+    presetShapeDefinitions で確認）。roundRect の adj は仕様どおりなので触らない。adj2 は補わない（既定値 0）。"""
+    _reject_dtd(data, name)
+    root = _fromstring(data)
+    n = 0
+    for geom in root.iter(f"{{{A}}}prstGeom"):
+        if geom.get("prst") in _ROUND2_SHAPES:
+            for gd in geom.iter(f"{{{A}}}gd"):
+                if gd.get("name") == "adj":
+                    gd.set("name", "adj1")
+                    n += 1
+    if n == 0:
+        return data, 0
+    return ET.tostring(root, encoding="UTF-8", xml_declaration=True), n
+
+
 def fix_paragraph_ppr(data: bytes, name: str):
     """スライド XML の <a:p> 内の <a:pPr> を直す（(fixed_bytes, n_fixes)）。
     CT_TextParagraph は pPr を先頭に 1 回だけ置く。pptxgenjs 4.0.1 はラン単位で <a:pPr> を出すことがあり、
@@ -312,6 +335,11 @@ def main():
                     issues += n
                     fixes[name] = fixed
                     print(f"callout-adj fix: {name} ({n} shapes)")
+                fixed, n = fix_round2_adj_names(fixes.get(name, data), name)
+                if n:
+                    issues += n
+                    fixes[name] = fixed
+                    print(f"round2 adj fix: {name} ({n} shapes)")
                 fixed, n = fix_duplicate_shape_ids(fixes.get(name, data), name)
                 if n:
                     issues += n

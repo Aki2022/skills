@@ -265,3 +265,25 @@ def test_duplicate_id_is_found_when_name_precedes_id(tmp_path: Path) -> None:
     assert len(ids) == len(set(ids)) == 4
     text = part_bytes(pptx, "ppt/slides/slide1.xml").decode("utf-8")
     assert text == original.replace('<p:cNvPr name="Table" id="2"/>', '<p:cNvPr name="Table" id="4"/>')
+
+
+def shape_gds(tree: ET.Element, shape_name: str) -> list[tuple[str | None, str | None]]:
+    for sp_el in tree.iter(f"{{{NS_P}}}sp"):
+        if sp_el.find(f".//{{{NS_P}}}cNvPr").get("name") == shape_name:
+            return [(g.get("name"), g.get("fmla")) for g in sp_el.iter(f"{{{NS_A}}}gd")]
+    raise AssertionError(f"shape {shape_name!r} not found")
+
+
+# --- 採用（仕様で確認）: round2SameRect の調整名は adj1。roundRect の adj は変えない ---
+
+def test_round2sameRect_adj_is_renamed_to_adj1_and_roundrect_is_kept(tmp_path: Path) -> None:
+    shapes = (
+        sp(2, "Round2", "round2SameRect", av='<a:gd name="adj" fmla="val 16667"/>')
+        + sp(3, "Round", "roundRect", av='<a:gd name="adj" fmla="val 16667"/>')
+    )
+    pptx = write_pptx(tmp_path / "d.pptx", {"ppt/slides/slide1.xml": slide(shapes)})
+    assert_detected_then_fixed(pptx)
+    tree = part_tree(pptx, "ppt/slides/slide1.xml")
+    assert shape_gds(tree, "Round2") == [("adj1", "val 16667")]
+    # roundRect の調整ハンドルは仕様どおり adj（改名しない）
+    assert shape_gds(tree, "Round") == [("adj", "val 16667")]

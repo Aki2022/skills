@@ -20,6 +20,10 @@ sanitize_pptx.py — pptxgenjs 産 pptx の「PowerPoint 修復エラー」要�
   8) round2SameRect の調整名 adj → adj1（仕様では adj1/adj2。PowerPoint の既定と違う半径を取りこぼさないため）
   9) <a:p> の途中に 2 つ目以降の <a:pPr>（ラン単位）→ 先頭 1 つだけ残す（ISO 29500-4 で INVALID）
   10) p:cNvPr の descr の絶対パス → ファイル名だけにする（ローカルの情報を納品物に残さない）
+  11) round2SameRect の調整値（adj1/adj2）を 0〜50000 に収める。超えると PowerPoint はその図形で
+      解析を止め、以降の図形を全て捨てる（2026-10-19、PowerPoint の修復版との差分で確定。XSD は値域を見ない）
+  12) スライドの <p:bgPr> に <a:effectLst/> が無ければ補う（無いと PowerPoint が修復を要求し得る。
+      2026-10-19、PowerPoint の修復版との差分で確定）
 
 使い方:
   python3 sanitize_pptx.py output.pptx          # in-place 修正
@@ -194,6 +198,52 @@ def fix_round2_adj_names(data: bytes, name: str):
     return ET.tostring(root, encoding="UTF-8", xml_declaration=True), n
 
 
+def fix_round2_adj_range(data: bytes, name: str):
+    """round2SameRect の調整値（adj1/adj2）を 0〜50000 に収める（(fixed_bytes, n_fixes)）。
+    仕様の調整値の範囲は 0〜50000。pptxgenjs の半径が min(w,h)/2 を超えると 50000 を超え、PowerPoint は
+    その図形で解析を止めて以降の図形を全て捨てる（2026-10-19 実測: adj1=60000/100000 で 26 個・36 個が消えた）。
+    他の図形（roundRect 等）は、この実測の対象外なので触らない。"""
+    _reject_dtd(data, name)
+    root = _fromstring(data)
+    n = 0
+    for geom in root.iter(f"{{{A}}}prstGeom"):
+        if geom.get("prst") in _ROUND2_SHAPES:
+            for gd in geom.iter(f"{{{A}}}gd"):
+                if gd.get("name") not in ("adj1", "adj2"):
+                    continue
+                m = re.match(r"val (-?\d+)$", gd.get("fmla", ""))
+                if m:
+                    v = int(m.group(1))
+                    clamped = min(max(v, 0), 50000)
+                    if clamped != v:
+                        gd.set("fmla", f"val {clamped}")
+                        n += 1
+    if n == 0:
+        return data, 0
+    return ET.tostring(root, encoding="UTF-8", xml_declaration=True), n
+
+
+def fix_bgpr_effect_list(data: bytes, name: str):
+    """スライドの <p:bgPr> に <a:effectLst/> が無ければ補う（(fixed_bytes, n_fixes)）。
+    fill の直後（extLst があればその前）に空の effectLst を入れる。effectDag がある場合は補わない。
+    無いと PowerPoint が修復を要求し得る（2026-10-19 実測、実物の 4 スライドで修復版との差分を確認）。"""
+    _reject_dtd(data, name)
+    root = _fromstring(data)
+    n = 0
+    for bgpr in root.iter(f"{{{P_NS}}}bgPr"):
+        if bgpr.find(f"{{{A}}}effectLst") is None and bgpr.find(f"{{{A}}}effectDag") is None:
+            idx = len(list(bgpr))
+            for i, c in enumerate(list(bgpr)):
+                if c.tag == f"{{{A}}}extLst":
+                    idx = i
+                    break
+            bgpr.insert(idx, ET.Element(f"{{{A}}}effectLst"))
+            n += 1
+    if n == 0:
+        return data, 0
+    return ET.tostring(root, encoding="UTF-8", xml_declaration=True), n
+
+
 def fix_paragraph_ppr(data: bytes, name: str):
     """スライド XML の <a:p> 内の <a:pPr> を直す（(fixed_bytes, n_fixes)）。
     CT_TextParagraph は pPr を先頭に 1 回だけ置く。pptxgenjs 4.0.1 はラン単位で <a:pPr> を出すことがあり、
@@ -340,6 +390,11 @@ def main():
                     issues += n
                     fixes[name] = fixed
                     print(f"round2 adj fix: {name} ({n} shapes)")
+                fixed, n = fix_round2_adj_range(fixes.get(name, data), name)
+                if n:
+                    issues += n
+                    fixes[name] = fixed
+                    print(f"round2 adj range fix: {name} ({n} values outside 0-50000)")
                 fixed, n = fix_duplicate_shape_ids(fixes.get(name, data), name)
                 if n:
                     issues += n
@@ -350,6 +405,11 @@ def main():
                     issues += n
                     fixes[name] = fixed
                     print(f"paragraph fix: {name} ({n} issues: 段落途中の a:pPr)")
+                fixed, n = fix_bgpr_effect_list(fixes.get(name, data), name)
+                if n:
+                    issues += n
+                    fixes[name] = fixed
+                    print(f"bgPr fix: {name} ({n} issues: 背景の effectLst)")
                 fixed, n = fix_descr_paths(fixes.get(name, data), name)
                 if n:
                     issues += n

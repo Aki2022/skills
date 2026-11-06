@@ -334,3 +334,62 @@ def test_round2sameRect_adj_is_renamed_to_adj1_and_roundrect_is_kept(tmp_path: P
     assert shape_gds(tree, "Round2") == [("adj1", "val 16667")]
     # roundRect の調整ハンドルは仕様どおり adj（改名しない）
     assert shape_gds(tree, "Round") == [("adj", "val 16667")]
+
+
+# --- 採用（PowerPoint の修復版との差分で確定, 2026-10-19）: round2SameRect の調整値は 0〜50000 ---
+
+def test_round2same_rect_adj_outside_0_50000_is_clamped(tmp_path: Path) -> None:
+    shapes = (
+        sp(2, "Big", "round2SameRect", av='<a:gd name="adj1" fmla="val 60000"/><a:gd name="adj2" fmla="val 100000"/>')
+        + sp(3, "Neg", "round2SameRect", av='<a:gd name="adj1" fmla="val -5"/>')
+        + sp(4, "Ok", "round2SameRect", av='<a:gd name="adj1" fmla="val 16667"/>')
+    )
+    pptx = write_pptx(tmp_path / "d.pptx", {"ppt/slides/slide1.xml": slide(shapes)})
+    assert_detected_then_fixed(pptx)
+    tree = part_tree(pptx, "ppt/slides/slide1.xml")
+    assert shape_gds(tree, "Big") == [("adj1", "val 50000"), ("adj2", "val 50000")]
+    assert shape_gds(tree, "Neg") == [("adj1", "val 0")]
+    assert shape_gds(tree, "Ok") == [("adj1", "val 16667")]
+
+
+def test_adj_of_other_shapes_is_not_clamped(tmp_path: Path) -> None:
+    # 実測の対象は round2SameRect だけ。他の図形の調整値は、この規則で変えない
+    shapes = sp(2, "Callout", "wedgeRectCallout", av='<a:gd name="adj1" fmla="val 60000"/>')
+    pptx = write_pptx(tmp_path / "d.pptx", {"ppt/slides/slide1.xml": slide(shapes)})
+    assert run(pptx, "--check").returncode == 0
+    tree = part_tree(pptx, "ppt/slides/slide1.xml")
+    assert shape_gds(tree, "Callout") == [("adj1", "val 60000")]
+
+
+# --- 採用（PowerPoint の修復版との差分で確定, 2026-10-19）: 背景の effectLst は空でも必要 ---
+
+@pytest.mark.parametrize(
+    ("bgpr_body", "expected"),
+    [
+        pytest.param(
+            '<a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill>',
+            ["solidFill", "effectLst"],
+            id="fill-only",
+        ),
+        pytest.param(
+            '<a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill><a:extLst/>',
+            ["solidFill", "effectLst", "extLst"],
+            id="effectLst-before-extLst",
+        ),
+    ],
+)
+def test_bgpr_without_effect_list_gets_empty_one_after_fill(tmp_path: Path, bgpr_body: str, expected: list[str]) -> None:
+    bg = f"<p:bg><p:bgPr>{bgpr_body}</p:bgPr></p:bg>"
+    pptx = write_pptx(tmp_path / "d.pptx", {"ppt/slides/slide1.xml": slide(sp(2, "A", "rect"), bg=bg)})
+    assert_detected_then_fixed(pptx)
+    bgpr = part_tree(pptx, "ppt/slides/slide1.xml").find(f".//{{{NS_P}}}bgPr")
+    assert [local(c) for c in bgpr] == expected
+
+
+def test_bgpr_with_effect_list_is_left_alone(tmp_path: Path) -> None:
+    bg = (
+        '<p:bg><p:bgPr><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill>'
+        "<a:effectLst/></p:bgPr></p:bg>"
+    )
+    pptx = write_pptx(tmp_path / "d.pptx", {"ppt/slides/slide1.xml": slide(sp(2, "A", "rect"), bg=bg)})
+    assert run(pptx, "--check").returncode == 0

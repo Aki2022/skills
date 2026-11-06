@@ -191,6 +191,7 @@ python3 <skill>/scripts/set_fonts.py output.pptx        # 必須: BIZ UDPGothic 
 # ④.5（人間の画像OK）後・⑤の最終成果物化（テンプレ注入 Phase 1）:
 python3 <skill>/scripts/inject_template.py output.pptx <skill>/style-guide/template_v3.pptx 最終成果物.pptx
 python3 <skill>/scripts/set_fonts.py 最終成果物.pptx     # 必須: テンプレ由来部品もBIZ UDPGothicに統一
+python3 <skill>/scripts/xsd_validate_pptx.py 最終成果物.pptx  # ⑤必須: XSD で全部品 VALID（exit 0）を確認してから PDF 化・納品（OOXML_SCHEMA_DIR の設定が要る）
 ```
 
 **`sanitize_pptx.py` はビルドの必須最終工程**（冪等）。pptxgenjs 4.0.1 は折れ線/散布図/レーダーの
@@ -313,6 +314,7 @@ imagegen-prompt-convention.md §10（型スライド=厳格 / 自由形=ブラ�
 - `scripts/set_fonts.py` — **ビルド後必須**のフォント統一（全XMLの a:latin/a:ea/a:cs を BIZ UDPGothic に書き換え。ビルド直後と inject後の最終ファイルの2回実行・冪等）
 - `scripts/sanitize_pptx.py` — **ビルド後必須**のPowerPoint修復エラー矯正（チャートXMLスキーマ違反・負extentの修正。gotchas §15-17）
 - `scripts/finalize_human_pptx.py` — **人間が PowerPoint で編集・保存した版の納品用コピー**: 最終更新者名の除去・フォント統一・sanitize 検査・XSD 検証を 1 コマンドで（入力は変更しない。`references/edit-mode.md` B-4）
+- `scripts/xsd_validate_pptx.py` — **⑤納品前必須**: 全 XML 部品を ISO 29500-4 の XSD で検証（exit 0 以外は納品しない。LibreOffice と python-pptx は違反を黙って通し、PowerPoint だけが「修復」を出す。2026-10-19 実測）。スキーマの場所は環境変数 `OOXML_SCHEMA_DIR` か `--schemas` で指定する（既定の場所は探さない）
 - `scripts/inject_template.py` — **④.5（人間の画像確認OK）後の最終成果物化**: template_v3.pptx を土台に生成スライドを移植（人間がマスター準拠スライドを追加できる形にする）
 - `scripts/check_feedback.py` — **③開始前の必須プリフライト**: `feedback.json` の verdict が
   全て ok か確認する（②の人間承認を飛ばして③へ進むのを機械的に防ぐ）

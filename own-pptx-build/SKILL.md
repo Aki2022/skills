@@ -312,6 +312,7 @@ imagegen-prompt-convention.md §10（型スライド=厳格 / 自由形=ブラ�
 - `scripts/normalize_icons.py` — image_gen産**イラスト**の透過処理（`--illustrations`。ラインアイコンには使わない——material-icons.md）
 - `scripts/set_fonts.py` — **ビルド後必須**のフォント統一（全XMLの a:latin/a:ea/a:cs を BIZ UDPGothic に書き換え。ビルド直後と inject後の最終ファイルの2回実行・冪等）
 - `scripts/sanitize_pptx.py` — **ビルド後必須**のPowerPoint修復エラー矯正（チャートXMLスキーマ違反・負extentの修正。gotchas §15-17）
+- `scripts/finalize_human_pptx.py` — **人間が PowerPoint で編集・保存した版の納品用コピー**: 最終更新者名の除去・フォント統一・sanitize 検査・XSD 検証を 1 コマンドで（入力は変更しない。`references/edit-mode.md` B-4）
 - `scripts/inject_template.py` — **④.5（人間の画像確認OK）後の最終成果物化**: template_v3.pptx を土台に生成スライドを移植（人間がマスター準拠スライドを追加できる形にする）
 - `scripts/check_feedback.py` — **③開始前の必須プリフライト**: `feedback.json` の verdict が
   全て ok か確認する（②の人間承認を飛ばして③へ進むのを機械的に防ぐ）

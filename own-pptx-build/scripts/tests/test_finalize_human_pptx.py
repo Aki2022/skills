@@ -87,8 +87,9 @@ def test_refuses_to_overwrite_source(tmp_path):
 
 
 def test_fails_when_validation_fails(tmp_path):
-    """XSD だけが落とす違反（段落途中の a:pPr）を入れた pptx は、[xsd] の段で exit 1（INVALID）として
-    止まり、出力を残さない。スキーマの場所が無い exit 2 で落ちた場合は、検証の検査にならないので区別する。"""
+    """XSD だけが落とす違反（p:sld 直下の、スキーマに無い要素 p:bogus）を入れた pptx は、[xsd] の段で
+    exit 1（INVALID）として止まり、出力を残さない。段落途中の a:pPr は sanitize が先に直す（#60）ため、
+    ここでは使わない。スキーマの場所が無い exit 2 で落ちた場合は、検証の検査にならないので区別する。"""
     src = make_human_pptx(tmp_path / "human.pptx")
     slide = (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
@@ -96,9 +97,8 @@ def test_fails_when_validation_fails(tmp_path):
         'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:spTree>'
         '<p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/>'
         '<p:sp><p:nvSpPr><p:cNvPr id="2" name="T"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr/>'
-        '<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="ja-JP"/><a:t>X</a:t></a:r>'
-        '<a:pPr algn="r"/></a:p></p:txBody></p:sp>'
-        '</p:spTree></p:cSld></p:sld>'
+        '<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="ja-JP"/><a:t>X</a:t></a:r></a:p></p:txBody></p:sp>'
+        '</p:spTree></p:cSld><p:bogus/></p:sld>'
     )
     tmp = src.with_suffix(".tmp")
     with zipfile.ZipFile(src) as zin, zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zout:

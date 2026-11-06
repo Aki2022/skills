@@ -17,6 +17,8 @@ sanitize_pptx.py — pptxgenjs 産 pptx の「PowerPoint 修復エラー」要�
      deck_helpers.speechBubble() 等は shape 名に `<名前>@adj1=..,adj2=..` とエンコードする。
      本スクリプトが <a:avLst> へ <a:gd> を注入して印を除去する（2026-08-27 追加。
      --check は未注入の印を NG として検出する）
+  8) <a:p> の途中に 2 つ目以降の <a:pPr>（ラン単位）→ 先頭 1 つだけ残す（ISO 29500-4 で INVALID）
+  9) p:cNvPr の descr の絶対パス → ファイル名だけにする（ローカルの情報を納品物に残さない）
 
 使い方:
   python3 sanitize_pptx.py output.pptx          # in-place 修正
@@ -169,6 +171,48 @@ def fix_duplicate_shape_ids(data: bytes, name: str):
     return text.encode("utf-8"), n
 
 
+def fix_paragraph_ppr(data: bytes, name: str):
+    """スライド XML の <a:p> 内の <a:pPr> を直す（(fixed_bytes, n_fixes)）。
+    CT_TextParagraph は pPr を先頭に 1 回だけ置く。pptxgenjs 4.0.1 はラン単位で <a:pPr> を出すことがあり、
+    XSD（ISO 29500-4 pml.xsd）では INVALID になる（2026-11-06 確認）。
+    先頭に無ければ最初の pPr を先頭へ移し、余分な pPr は落とす。落とす pPr の属性は比べていない
+    （属性が食い違うとき、どちらが正しいかは未確認）。"""
+    _reject_dtd(data, name)
+    root = _fromstring(data)
+    n = 0
+    for para in root.iter(f"{{{A}}}p"):
+        children = list(para)
+        pprs = [c for c in children if c.tag == f"{{{A}}}pPr"]
+        if not pprs:
+            continue
+        if children[0] is not pprs[0]:
+            para.remove(pprs[0])
+            para.insert(0, pprs[0])
+            n += 1
+        for extra in pprs[1:]:
+            para.remove(extra)
+            n += 1
+    if n == 0:
+        return data, 0
+    return ET.tostring(root, encoding="UTF-8", xml_declaration=True), n
+
+
+def fix_descr_paths(data: bytes, name: str):
+    """p:cNvPr の descr に入った絶対パスをファイル名だけにする（(fixed_bytes, n_fixes)）。
+    ローカルのパス（ユーザー名を含みうる）が納品物に残るのを防ぐ（vibe-guard）。XSD 上は文字列なので違反ではない。"""
+    _reject_dtd(data, name)
+    root = _fromstring(data)
+    n = 0
+    for cnv in root.iter(f"{{{P_NS}}}cNvPr"):
+        d = cnv.get("descr")
+        if d and (d.startswith("/") or re.match(r"^[A-Za-z]:[\\/]", d)):
+            cnv.set("descr", d.replace("\\", "/").rsplit("/", 1)[-1])
+            n += 1
+    if n == 0:
+        return data, 0
+    return ET.tostring(root, encoding="UTF-8", xml_declaration=True), n
+
+
 # CT_*Ser（ECMA-376 DrawingML Chart）の子要素の順序。同じ rank の要素は、同じ種類の系列には同時に現れない。
 SER_CHILD_RANK = {
     "idx": 0, "order": 1, "tx": 2, "spPr": 3,
@@ -273,6 +317,16 @@ def main():
                     issues += n
                     fixes[name] = fixed
                     print(f"shape-id fix: {name} ({n} duplicate ids)")
+                fixed, n = fix_paragraph_ppr(fixes.get(name, data), name)
+                if n:
+                    issues += n
+                    fixes[name] = fixed
+                    print(f"paragraph fix: {name} ({n} issues: 段落途中の a:pPr)")
+                fixed, n = fix_descr_paths(fixes.get(name, data), name)
+                if n:
+                    issues += n
+                    fixes[name] = fixed
+                    print(f"descr fix: {name} ({n} issues: descr の絶対パス)")
             if name.endswith(".xml") and b'idx="4294967295"' in data:
                 # 情報表示のみ（issues に数えない）: 実ファイルで PowerPoint が dt ph の
                 # idx=4294967295 を許容する反例を確認済み（2026-07-13）。修復トリガーとしては

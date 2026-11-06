@@ -265,3 +265,50 @@ def test_duplicate_id_is_found_when_name_precedes_id(tmp_path: Path) -> None:
     assert len(ids) == len(set(ids)) == 4
     text = part_bytes(pptx, "ppt/slides/slide1.xml").decode("utf-8")
     assert text == original.replace('<p:cNvPr name="Table" id="2"/>', '<p:cNvPr name="Table" id="4"/>')
+
+
+def shape_descr(tree: ET.Element, shape_name: str) -> str | None:
+    for cnv in tree.iter(f"{{{NS_P}}}cNvPr"):
+        if cnv.get("name") == shape_name:
+            return cnv.get("descr")
+    raise AssertionError(f"shape {shape_name!r} not found")
+
+
+# --- 採用（XSD で確認）: 段落途中の a:pPr は INVALID。先頭 1 つだけ残す -------------
+
+def test_extra_ppr_inside_a_paragraph_is_removed(tmp_path: Path) -> None:
+    para1 = (
+        '<a:p><a:pPr algn="l"/><a:r><a:rPr lang="ja-JP"/><a:t>一</a:t></a:r>'
+        '<a:pPr algn="l"/><a:r><a:rPr lang="ja-JP"/><a:t>二</a:t></a:r></a:p>'
+    )
+    para2 = (
+        '<a:p><a:r><a:rPr lang="ja-JP"/><a:t>X</a:t></a:r>'
+        '<a:pPr algn="r"/><a:r><a:rPr lang="ja-JP"/><a:t>Y</a:t></a:r></a:p>'
+    )
+    txbody = f"<p:txBody><a:bodyPr/><a:lstStyle/>{para1}{para2}</p:txBody>"
+    pptx = write_pptx(tmp_path / "d.pptx", {"ppt/slides/slide1.xml": slide(sp(2, "Text", "rect", txbody=txbody))})
+    assert_detected_then_fixed(pptx)
+    paras = part_tree(pptx, "ppt/slides/slide1.xml").findall(f".//{{{NS_A}}}p")
+    # 段落の先頭に pPr が 1 つだけ。pPr は先頭へ、ラン（r）の順序は保つ
+    assert [[local(c) for c in p] for p in paras] == [["pPr", "r", "r"], ["pPr", "r", "r"]]
+    assert [[t.text for t in p.iter(f"{{{NS_A}}}t")] for p in paras] == [["一", "二"], ["X", "Y"]]
+    assert paras[1].find(f"{{{NS_A}}}pPr").get("algn") == "r"
+
+
+# --- 採用: descr の絶対パスはファイル名だけ（ユーザー名などのローカル情報を残さない）---
+
+def test_absolute_path_in_descr_is_reduced_to_file_name(tmp_path: Path) -> None:
+    shapes = (
+        sp(2, "PicA", "rect", descr="/example/dir/photo.png")
+        + sp(3, "PicB", "rect", descr="C:\\example\\dir\\chart.png")
+        + sp(4, "PicC", "rect", descr="売上推移の図")
+        + sp(5, "PicD", "rect", descr="https://example.com/a.png")
+    )
+    pptx = write_pptx(tmp_path / "d.pptx", {"ppt/slides/slide1.xml": slide(shapes)})
+    assert_detected_then_fixed(pptx)
+    tree = part_tree(pptx, "ppt/slides/slide1.xml")
+    assert shape_descr(tree, "PicA") == "photo.png"
+    assert shape_descr(tree, "PicB") == "chart.png"
+    # パスでない代替テキストは変えない
+    assert shape_descr(tree, "PicC") == "売上推移の図"
+    assert shape_descr(tree, "PicD") == "https://example.com/a.png"

@@ -197,6 +197,9 @@ LibreOffice / python-pptx は寛容なので④のレンダリング検証では
 - `sanitize_pptx.py` にも防御実装済み（slides/layouts/masters/notesSlides の負 extent を
   flip 変換で矯正）。修復エラー3兄弟（§15 slideNumber・§16 チャートXML・§17 負extent）は
   すべて sanitize_pptx.py が検出・矯正する。
+- 同じく sanitize_pptx.py が矯正するもの（2026-10-19、PowerPoint の修復版との差分で確定。XSD では検出できない）:
+  round2SameRect の調整値（adj1/adj2）が 0〜50000 を超えると、PowerPoint はその図形以降を捨てる。
+  スライドの `<p:bgPr>` に `<a:effectLst/>` が無いと修復を要求し得る。
 
 ## 18. キーメッセージ28ptは全角33字が上限（2026-07-14 実測）
 

@@ -46,6 +46,14 @@ Every browser session you open is yours to close. Orphaned automation browsers l
 - **If a close command is denied or fails**: the session is still alive. Retry with an allowed equivalent, or tell the user it is still running — never silently move on. A denied cleanup that goes unmentioned becomes an orphaned process the user discovers hours later.
 - **At end of work**: verify, don't assume. `playwright-cli list` should show no browsers; if the repo has a doctor script (e.g. `./bin/chrome-agent-doctor`), run it and confirm it reports no automation processes. Include the final browser state in your report to the user.
 
+## On-disk artifacts — mind the working directory
+
+`playwright-cli` writes its console logs, page snapshots and traces to `.playwright-cli/` relative to the current working directory by default. Control where they land by choosing where you run the command.
+
+- Do not run a browser command with the working directory inside a data or content repository (a notes vault, an asset tree, any repo whose `.gitignore` is an allowlist). Run it from the code repository you are working in, or from a scratch directory, and pass absolute paths for anything you need to read or write.
+- If artifacts do land somewhere they do not belong, the durable fix is an ignore rule in that repository plus `git rm --cached` for whatever already reached the index — not deleting the files. Snapshots can contain UI text such as account and drive names, so a repository that tracks them can also trip secret or local-info scanners.
+- At end of work, check for a stray `.playwright-cli/` the same way you check for stray sessions.
+
 ## Escalation
 
 - Falling back to the user's normal browser/profile requires explicit user approval first: state the reason, target site, scope of actions, and how you'll clean up.

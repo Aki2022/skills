@@ -1275,6 +1275,33 @@ def build_review(root: Path, today: Optional[date] = None) -> dict:
                            (last_review_date(root).isoformat() if last_review_date(root) else "never")}
 
 
+# Headings write_review regenerates. Any other "## " section already in the review file
+# was written by hand (the own-docs-maintain record, for one) and is carried over.
+REVIEW_GENERATED_HEADINGS = (
+    "## Demote candidates",
+    "## Split candidates",
+    "## All current-truth documents",
+)
+
+
+def hand_written_review_sections(path: Path) -> list[str]:
+    """The ``## `` sections of an existing review file that write_review does not generate.
+
+    The file is regenerated on every ``--report`` run. Before this carried them over, a
+    hand-appended record (the 2026-11-07 own-docs-maintain section) was erased silently.
+    Text written under a generated heading is still regenerated; only separate ``## ``
+    sections survive, and any header text above the first ``## `` is regenerated too.
+    """
+    if not path.is_file():
+        return []
+    chunks = re.split(r"(?m)^(?=## )", path.read_text())[1:]
+    return [
+        chunk.strip("\n")
+        for chunk in chunks
+        if chunk.splitlines()[0].strip() not in REVIEW_GENERATED_HEADINGS
+    ]
+
+
 def write_review(root: Path, today: Optional[date] = None) -> Path:
     today = today or date.today()
     root = Path(root).resolve()
@@ -1315,7 +1342,11 @@ def write_review(root: Path, today: Optional[date] = None) -> Path:
     log_dir = root / "docs/log"
     log_dir.mkdir(parents=True, exist_ok=True)
     path = log_dir / f"review-{today.strftime('%Y%m%d')}.md"
-    path.write_text("\n".join(lines))
+    body = "\n".join(lines)
+    kept = hand_written_review_sections(path)
+    if kept:
+        body = body.rstrip("\n") + "\n\n" + "\n\n".join(kept) + "\n"
+    path.write_text(body)
     return path
 
 

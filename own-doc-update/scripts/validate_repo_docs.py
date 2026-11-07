@@ -984,6 +984,10 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
         fm = parse_front_matter(index_path)
         if fm is None:
             errors.append("docs/00_index.md: broken front matter")
+        elif not index_path.read_text().startswith("---"):
+            # parse_front_matter reads "no opening fence" as an empty mapping, which used to
+            # reach the warning below. The index has no front matter at all: that is an error.
+            errors.append("docs/00_index.md: front matter missing (the file must open with ---)")
         elif "updated_at" not in fm:
             warnings.append("docs/00_index.md: missing updated_at in front matter")
         route_baselined(

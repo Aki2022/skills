@@ -1984,3 +1984,20 @@ class NextActionRequiredTest(ValidateRepoDocsV2Test):
             any("Next Actions" in e and "fresh-empty" in e for e in errors),
             f"免除が残っている: {errors}",
         )
+
+
+class IndexFrontMatterFenceTest(ValidateRepoDocsV2Test):
+    def test_index_without_opening_fence_is_an_error(self):
+        # No opening --- means there is no front matter at all: a broken index, not a
+        # missing optional key. As a warning it let docs-check pass with the index broken.
+        root = self.make_repo()
+        (root / "docs/00_index.md").write_text("updated_at: 2026-07-19\ncurrent_focus: []\n---\n\n# 00 Index\n")
+        errors, _w = MODULE.validate_repo(root)
+        self.assertTrue(any("00_index.md" in e and "front matter" in e for e in errors), errors)
+
+    def test_index_with_empty_front_matter_stays_a_warning(self):
+        root = self.make_repo()
+        (root / "docs/00_index.md").write_text("---\ncurrent_focus: []\n---\n\n# 00 Index\n")
+        errors, warnings = MODULE.validate_repo(root)
+        self.assertFalse(any("00_index.md" in e for e in errors), errors)
+        self.assertTrue(any("00_index.md" in w and "updated_at" in w for w in warnings), warnings)

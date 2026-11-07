@@ -770,6 +770,28 @@ class ReviewTest(HygieneFixture):
         MODULE.write_review(root, today=date(2026, 9, 19))
         report = MODULE.run(root, fix=False, report=False, today=date(2026, 9, 19))
         self.assertEqual(report["report"]["R8_review_overdue"]["count"], 0)
+    def test_review_keeps_hand_written_sections_across_regeneration(self):
+        # docs-fix --report regenerates today's review file. A section written into it by
+        # hand (the own-docs-maintain record) must survive, or it is lost without a trace.
+        # Found 2026-11-07: docs-fix deleted that record from review-20261107.md.
+        root = self.make_repo()
+        self.build(root)
+        path = MODULE.write_review(root, today=date(2026, 9, 19))
+        path.write_text(path.read_text() + "\n## own-docs-maintain（2026-09-19）\n\n- 判定: 0 件\n")
+        MODULE.write_review(root, today=date(2026, 9, 19))
+        MODULE.write_review(root, today=date(2026, 9, 19))
+        text = path.read_text()
+        self.assertEqual(text.count("## own-docs-maintain（2026-09-19）"), 1, text)
+        self.assertIn("- 判定: 0 件", text)
+        self.assertIn("- [ ] archive `docs/guides/orphan-big.md`", text)
+
+    def test_report_run_keeps_hand_written_review_section(self):
+        root = self.make_repo()
+        self.build(root)
+        path = MODULE.write_review(root, today=date(2026, 9, 19))
+        path.write_text(path.read_text() + "\n## own-docs-maintain（2026-09-19）\n\n- 判定: 0 件\n")
+        MODULE.run(root, fix=False, report=True, today=date(2026, 9, 19))
+        self.assertIn("## own-docs-maintain（2026-09-19）", path.read_text())
 
 
 class ContextBudgetTest(HygieneFixture):

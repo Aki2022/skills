@@ -58,4 +58,4 @@ infoarch-author dom --root . --outline lp-xxx # 描画物をブラウザで開�
 - `references/contract.md` — ディレクトリ・原子・アウトラインの契約、検査の code 一覧、期限の扱い、描画物の確認（工場が埋めるアンカー）。
 - `references/schema/` — `info_arch.yaml`（版 2）・`channels/*.yaml`（版 2）・`outlines/*.yaml`（版 1）の JSON Schema。
 - `references/expiry.json` — 証拠・固定値の期限の初期値。
-- `fixtures/red-cases.json` — 必須の赤ケース。自己テストは `python3 -m pytest -q <skill>/scripts/tests`。
+- `fixtures/red-cases.json` — 必須の赤ケース。自己テストは `uv run --no-project --with-requirements <skill>/scripts/tests/requirements.txt -- pytest -q <skill>/scripts/tests`。

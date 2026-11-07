@@ -78,10 +78,12 @@ After each answer, update the draft before asking the next question:
 - record only the resolved outcome and important rationale, not the interview transcript;
 - keep unresolved branches in `Open Questions`;
 - mark each material branch as `open`, `settled`, `deferred`, or `out-of-scope`; do not silently collapse a branch into an assumption;
-- store the single next question in `Next Question` so an interrupted session can resume;
+- keep exactly one item tagged `【次の質問】` at the top of `Open Questions` so an interrupted session can resume;
 - update `updated_at`.
 
-When revising an existing spec, compare the proposed intent with current guides and active work. Record mismatches under `Impact on Existing System`; do not rewrite guides to pretend the behavior is already implemented.
+Keep this scaffolding inside `Open Questions`, never under its own heading. `own-doc-update`'s `validate_repo_docs.py` rejects `Acceptance Criteria`, `Impact on Existing System` and `Next Question` headings in `docs/specs/` because they are work-unit facts; measured 2026-11-07, a draft built from the old template failed `docs-check` on all three.
+
+When revising an existing spec, compare the proposed intent with current guides and active work. Record each mismatch as an `Open Questions` item tagged `【影響】`; do not rewrite guides to pretend the behavior is already implemented.
 
 ## Reach convergence
 
@@ -92,7 +94,7 @@ Treat the grill as complete only when the spec has:
 - stable domain terms;
 - observable requirements and representative edge cases;
 - relevant constraints and tradeoffs;
-- testable acceptance criteria;
+- testable acceptance: product capabilities stated under `Requirements`, and delivery proofs recorded as `Open Questions` items tagged `【受入】`;
 - every material decision-tree branch has a terminal status (`settled`, `deferred`, or `out-of-scope`);
 - no hidden open decision, only explicitly deferred ones;
 - an identified impact on existing guides, code, and active work.
@@ -101,13 +103,12 @@ Then summarize the resulting decisions, stress-tested assumptions, and deferred 
 
 If the user says no, continue the grill. If the user approves:
 
-1. Set `status: active` and remove `Next Question`.
-2. Retire the interview scaffolding: split `Acceptance Criteria` — capabilities the product
-   must have become present-tense entries under `Requirements`; anything phrased as what a
-   delivery proves or measures goes to the work unit — then remove the section, and move
-   `Impact on Existing System` to the work unit that will reconcile it. Leaving either in an
-   active spec makes the spec state work-unit facts that expire: once the work completes, the
-   spec is telling readers about a gate or a mismatch that no longer exists.
+1. Set `status: active` and remove the `【次の質問】` item.
+2. Retire the interview scaffolding: move every `【受入】` item (what a delivery proves or
+   measures) and every `【影響】` item (a mismatch to reconcile) to the work unit that will do
+   that work, and delete them from the spec. Leaving either in an active spec makes the spec
+   state work-unit facts that expire: once the work completes, the spec is telling readers
+   about a gate or a mismatch that no longer exists.
 3. Remove resolved items from `Open Questions`.
 4. Update the spec and `docs/00_index.md` descriptions as current intent.
 5. Run the repository docs validator from `own-doc-update` when available.
@@ -116,7 +117,7 @@ If the user says no, continue the grill. If the user approves:
 
 ## Stop safely
 
-If the session ends before approval, leave the spec as `draft`, preserve `Open Questions` and `Next Question`, and state that implementation must not start from it yet.
+If the session ends before approval, leave the spec as `draft`, preserve `Open Questions` including its `【次の質問】` item, and state that implementation must not start from it yet.
 
 Never during this skill:
 

@@ -77,6 +77,10 @@ LINK_RE = re.compile(r"\]\(([^)\s]+\.md)(?:#[^)\s]*)?\)")
 # The whole `[text](target.md)`, used to carry links out of a cut description.
 LINK_FULL_RE = re.compile(r"\[[^\]]*\]\([^)\s]+\.md(?:#[^)\s]*)?\)")
 SELF_LINK_RE = re.compile(r"\[([^\]\s]+\.md)\]\(\1\)")
+# Only a docs id (ISSUE-…, WS-…, ADR-…, SPEC-…, GUIDE-…) may replace its path as the
+# label. Other labels keep the path: `[index-202609]` loses the `/` before the date
+# and consumer identifier-leak checks then read it as a project id.
+DOC_ID_STEM_RE = re.compile(r"^(?:ISSUE|WS|ADR|SPEC|GUIDE)-")
 BARE_PATH_RE = re.compile(r"^[ \t]*[-*+][ \t]+docs/")
 HEADING_RE = re.compile(r"^[ \t]{0,3}#{1,6}[ \t]+")
 FENCE_RE = re.compile(r"^[ \t]{0,3}(`{3,}|~{3,})")
@@ -545,7 +549,10 @@ def fit_index_budget(content: str, log_name: str, reserved: int = 0) -> tuple[st
         return content, [], None
     # `[issues/X.md](issues/X.md)` says the path twice; the id alone routes the
     # same (index_entries matches on the target) and is what the template uses.
-    content = SELF_LINK_RE.sub(lambda m: f"[{Path(m.group(1)).stem}]({m.group(1)})", content)
+    content = SELF_LINK_RE.sub(
+        lambda m: f"[{Path(m.group(1)).stem}]({m.group(1)})" if DOC_ID_STEM_RE.match(Path(m.group(1)).stem) else m.group(0),
+        content,
+    )
     if len(content.encode()) <= budget:
         return content, [], None
     pristine = content.splitlines(keepends=True)

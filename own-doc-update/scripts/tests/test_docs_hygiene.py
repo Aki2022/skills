@@ -582,6 +582,29 @@ class TableShapeTest(HygieneFixture):
         self.assertIn("ファイル", log)
         self.assertNotIn("-" * 200, log)
 
+    def test_self_link_shortening_keeps_non_id_labels(self):
+        # Shortening `[issues/X.md](issues/X.md)` to the id saves bytes, but a
+        # log link shortened to `[index-202609]` loses the `/` before the date,
+        # and consumer identifier-leak checks then read it as a project id
+        # (biz_ops WS-20261003-hygiene-keeps-index-log-link-labels).
+        root = self.make_repo()
+        index = root / "docs/00_index.md"
+        rows = "".join(
+            f"| [issues/ISSUE-2026{n:04d}-slug-{n}.md](issues/ISSUE-2026{n:04d}-slug-{n}.md) | active |\n"
+            for n in range(400)
+        )
+        log_link = "- [log/index-202609.md](log/index-202609.md) — 2026-09 の経緯\n"
+        # An over-long header row is moved to the log, so the pass writes the
+        # index (it only writes when it moved or cut something).
+        header = "| " + "ファイル".ljust(700) + " | 状態 |"
+        index.write_text(index.read_text() + "\n## Log\n\n" + log_link + "\n## Active Issues\n\n" + header + "\n| --- | --- |\n" + rows)
+        self.assertGreater(index.stat().st_size, MODULE.INDEX_TARGET_BYTES)
+        MODULE.run(root, fix=True, report=False, today=date(2026, 9, 19))
+        text = index.read_text()
+        self.assertEqual(text.count("| [ISSUE-2026"), 400, "id links are still shortened")
+        self.assertIn("[log/index-202609.md](log/index-202609.md)", text)
+        self.assertNotIn("[index-202609]", text)
+
 
 class WrappedBulletTest(HygieneFixture):
     def test_wrapped_bullet_is_one_logical_line(self):

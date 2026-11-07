@@ -116,12 +116,19 @@ def test_cli_writes_catalog_ledger_and_delta(tmp_path):
     assert len(json.loads(run.stdout)["new_ids"]) == 7
 
 
+BUNDLED_ARCHIVE = Path(__file__).parents[2] / "catalog" / "upstream" / "dads-markdown-20261021.zip"
+
+
 def test_real_archive_has_all_560_headings():
-    # Opt in to the locally supplied upstream archive without embedding its path.
-    source = os.environ.get("DADS_TEST_ARCHIVE")
-    if not source:
-        pytest.skip("set DADS_TEST_ARCHIVE to exercise the local upstream ZIP")
-    result, ledger, _ = generate_catalog(source, "2026-10-14")
+    # DADS_TEST_ARCHIVE overrides the bundled upstream ZIP (catalog/upstream/, see NOTICE.md).
+    override = os.environ.get("DADS_TEST_ARCHIVE")
+    if override:
+        source, version = override, "2026-10-14"
+    elif BUNDLED_ARCHIVE.is_file():
+        source, version = str(BUNDLED_ARCHIVE), "2026-10-21"
+    else:
+        pytest.skip("no upstream ZIP: set DADS_TEST_ARCHIVE or bundle catalog/upstream/")
+    result, ledger, _ = generate_catalog(source, version)
     assert result["source"]["documents"] == {"foundations": 8, "components": 49}
     expected = []
     with zipfile.ZipFile(source) as z:

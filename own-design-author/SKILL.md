@@ -70,6 +70,6 @@ design-author check --repo <repo>
 
 ## 検証と範囲
 
-`references/contract.md` に runtime・ハッシュ・対応範囲、`fixtures/red-cases.json` に必須の赤ケースがある。自己テストは `python3 -m pytest -q <skill>/scripts/tests`。実上流の全件照合は `DADS_TEST_ARCHIVE` に手元のzipを指定する。未指定のテストskipを照合済みと報告しない。
+`references/contract.md` に runtime・ハッシュ・対応範囲、`fixtures/red-cases.json` に必須の赤ケースがある。自己テストは `uv run --no-project --with-requirements <skill>/scripts/tests/requirements.txt -- pytest -q <skill>/scripts/tests`。実上流の全件照合は `DADS_TEST_ARCHIVE` に手元のzipを指定する。未指定のテストskipを照合済みと報告しない。
 
 pptx 工場は従属WSが終わるまで `design/` を読まない。資料presetは現在webプレビュー用で、pptxの準拠を保証しない。L0/L1/L2をLLMで代替しない。必要な非決定論レビューは決定論検査の後に行う。

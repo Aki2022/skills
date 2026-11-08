@@ -99,7 +99,20 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--max-age-days", type=int, default=90)
     ap.add_argument("--plugins-file", action="append", type=Path, default=[],
                     help="Claude Code installed_plugins.json (repeatable; default: ~/.claude/plugins/)")
+    ap.add_argument("--only-drift", action="store_true",
+                    help="print only WARN drift lines (for the session-start hook); silent otherwise")
     a = ap.parse_args(argv)
+    if a.only_drift:
+        import io
+        from contextlib import redirect_stdout
+        rest = [x for x in (sys.argv[1:] if argv is None else argv) if x != "--only-drift"]
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = main(rest)
+        for line in buf.getvalue().splitlines():
+            if line.startswith("WARN drift"):
+                print(line)
+        return rc
     plugin_files = a.plugins_file or [Path.home() / ".claude" / "plugins" / "installed_plugins.json"]
     installed = load_installed_plugins(plugin_files)
     compared = skipped = drift = 0
@@ -145,7 +158,7 @@ def main(argv: list[str] | None = None) -> int:
                        if r.get("installPath")]
             sources = [s for s in sources if s.is_dir()]
             if not sources:
-                print(f"SKIP plugin {d}: {plugin} not installed")
+                print(f"SKIP plugin {d}: {plugin} has no install path on disk (not installed, or its cache was cleaned)")
             else:
                 record = next(r for r in records
                               if (Path(r.get("installPath", "")) / e.get("plugin_path", "")).is_dir())

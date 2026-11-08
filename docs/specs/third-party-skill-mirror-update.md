@@ -82,6 +82,8 @@ Scenarios:
 - F6：同期の途中で失敗したら、正典の中身と台帳を元に戻す。
 - F7：台帳の `plugin` と `plugin_path` がある entry について、`check_mirrors.py` は導入版と正典を比べ、違えば `WARN drift` を出す（exit 0）。
 - F8：`check_mirrors.py` の RESULT 行に、同値を比べた件数・SKIP 件数・drift 件数を出す。
+- F10：ずれの検査は、既存の起動時チェック `check_session_fast.sh` の中で `--only-drift` として回し、ずれがある時だけ 1 行出す。入口を増やさない（Claude の各席と Codex に登録済みの入口を使う）。
+- F11：plugin の自動更新は、サードパーティ marketplace も含めて on にする（所有者の判断、2026-11-08）。
 - F9：cloudflare の固定版（2b1ffd2）と agents-sdk の注記（unverified-local-snapshot）は、所有者が同期を決めるまで変えない。
 
 ### Quality
@@ -103,7 +105,8 @@ Scenarios:
 
 ## Deferred Decisions
 
-- 既存 mirror へ `plugin` と `plugin_path` を書き足すこと。trigger：所有者が対象の plugin を導入したとき（書き足すまで drift 検査はその entry を見ない）。
+- `local_copy` から出所が分かる 5 件（eli5・karpathy-guidelines・claude-automation-recommender・claude-md-improver・frontend-design）には `plugin` を書いた。それ以外の mirror へ書き足すこと。trigger：所有者が対象の plugin を導入したとき（書き足すまで drift 検査はその entry を見ない）。
+- 自動更新で、Claude が読む plugin の中身は差分の確認なしに新しくなる。これを許すかの見直し。trigger：自動更新で問題が起きたとき。
 - 鮮度の閾値（90 日）の見直し。trigger：drift 検査の運用が一巡した後。
 
 ## Open Questions

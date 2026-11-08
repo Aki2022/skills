@@ -132,6 +132,28 @@ class CheckMirrorsTest(unittest.TestCase):
             self.assertIn("OK plugin foo", out)
             self.assertIn("plugin drift 0", out)
 
+    def _run_only_drift(self, root: Path, plugins_file: Path):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = MODULE.main([str(root), "--plugins-file", str(plugins_file), "--only-drift"])
+        return rc, buf.getvalue()
+
+    def test_only_drift_prints_just_the_drift_line(self):
+        """起動時 hook 用: ずれがある時だけ 1 行。scope 行や OK 行は出さない。"""
+        with TemporaryDirectory() as tmp:
+            root, plugins = self._plugin_setup(tmp, plugin_body="---\nname: foo\n---\nnew\n")
+            rc, out = self._run_only_drift(root, plugins)
+            self.assertEqual(rc, 0, out)
+            self.assertEqual([l for l in out.splitlines() if l], [l for l in out.splitlines() if l.startswith("WARN drift foo")])
+            self.assertEqual(len(out.splitlines()), 1, out)
+
+    def test_only_drift_is_silent_without_drift(self):
+        with TemporaryDirectory() as tmp:
+            root, plugins = self._plugin_setup(tmp, plugin_body="---\nname: foo\n---\nbody\n")
+            rc, out = self._run_only_drift(root, plugins)
+            self.assertEqual(rc, 0, out)
+            self.assertEqual(out, "")
+
     def test_parser_decodes_quoted_metadata_with_spaces(self):
         entries = MODULE.parse_manifest(
             'mirrors:\n  - dir: foo\n    local_copy: "~/plugin cache/skill"\n'

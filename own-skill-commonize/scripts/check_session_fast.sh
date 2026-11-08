@@ -23,6 +23,9 @@ plugin_args=()
 for f in "$HOME"/.claude*/plugins/installed_plugins.json; do
   [ -f "$f" ] && plugin_args+=(--plugins-file "$f")
 done
+for f in "$HOME"/.claude*/plugins/known_marketplaces.json; do
+  [ -f "$f" ] && plugin_args+=(--marketplaces-file "$f")
+done
 if [ ${#plugin_args[@]} -gt 0 ]; then
   drift="$(python3 "$HERE/check_mirrors.py" "$(cd "$HERE/../.." && pwd)" "${plugin_args[@]}" --only-drift 2>/dev/null)"
   if [ -n "$drift" ]; then

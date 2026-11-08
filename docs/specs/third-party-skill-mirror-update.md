@@ -84,6 +84,7 @@ Scenarios:
 - F8：`check_mirrors.py` の RESULT 行に、同値を比べた件数・SKIP 件数・drift 件数を出す。
 - F10：ずれの検査は、既存の起動時チェック `check_session_fast.sh` の中で `--only-drift` として回し、ずれがある時だけ 1 行出す。入口を増やさない（Claude の各席と Codex に登録済みの入口を使う）。
 - F11：plugin の自動更新は、サードパーティ marketplace も含めて on にする（所有者の判断、2026-11-08）。
+- F12：新しい版の受け口は、まず marketplace の写し（`known_marketplaces.json` の installLocation）とする。plugin は入れない（文脈に何も載らず、有効・無効や cache の管理が要らない）。写しに実体が無い plugin（source が別リポジトリ）だけ、plugin を入れてその置き場と比べる（所有者の判断、2026-11-08）。写しの版は `.git` から、無ければ `.gcs-sha`（公式の写し。文書化されていない印）から読む。
 - F9：cloudflare の固定版（2b1ffd2）と agents-sdk の注記（unverified-local-snapshot）は、所有者が同期を決めるまで変えない。
 
 ### Quality
@@ -105,7 +106,7 @@ Scenarios:
 
 ## Deferred Decisions
 
-- `local_copy` から出所が分かる 5 件（eli5・karpathy-guidelines・claude-automation-recommender・claude-md-improver・frontend-design）には `plugin` を書いた。それ以外の mirror へ書き足すこと。trigger：所有者が対象の plugin を導入したとき（書き足すまで drift 検査はその entry を見ない）。
+- `local_copy` から出所が分かる 5 件は対応を書いた（eli5 は plugin、karpathy-guidelines・claude-automation-recommender・claude-md-improver・frontend-design は marketplace の写し）。それ以外の mirror へ書き足すこと。trigger：所有者が対象の plugin を導入したとき（書き足すまで drift 検査はその entry を見ない）。
 - 自動更新で、Claude が読む plugin の中身は差分の確認なしに新しくなる。これを許すかの見直し。trigger：自動更新で問題が起きたとき。
 - 鮮度の閾値（90 日）の見直し。trigger：drift 検査の運用が一巡した後。
 

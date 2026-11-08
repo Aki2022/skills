@@ -154,6 +154,59 @@ class CheckMirrorsTest(unittest.TestCase):
             self.assertEqual(rc, 0, out)
             self.assertEqual(out, "")
 
+    def _marketplace_setup(self, tmp: str, *, clone_body: str):
+        root = self._setup(tmp, with_local_copy=False)
+        with open(root / "mirrors.yaml", "a") as fh:
+            fh.write('    marketplace: "mk"\n    marketplace_path: "plugins/foo-plugin/skills/foo"\n')
+        clone = Path(tmp) / "marketplaces" / "mk"
+        _write(clone / "plugins" / "foo-plugin" / "skills" / "foo" / "SKILL.md", clone_body)
+        _write(clone / "plugins" / "foo-plugin" / "skills" / "foo" / "LICENSE.txt", "MIT\n")
+        known = Path(tmp) / "known_marketplaces.json"
+        known.write_text('{"mk": {"source": {"source": "github", "repo": "x/y"}, '
+                         f'"installLocation": "{clone}", "lastUpdated": "2026-11-08T00:00:00Z"}}}}')
+        return root, known
+
+    def _run_marketplaces(self, root: Path, known: Path, *extra: str):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = MODULE.main([str(root), "--marketplaces-file", str(known), *extra])
+        return rc, buf.getvalue()
+
+    def test_positive_control_marketplace_drift_is_reported_as_warn(self):
+        """陽性対照: marketplace の写しが正典と違う → WARN drift（exit 0）。"""
+        with TemporaryDirectory() as tmp:
+            root, known = self._marketplace_setup(tmp, clone_body="---\nname: foo\n---\nnew\n")
+            rc, out = self._run_marketplaces(root, known)
+            self.assertEqual(rc, 0, out)
+            self.assertIn("WARN drift foo: marketplace mk", out)
+            self.assertIn("plugin drift 1", out)
+
+    def test_marketplace_matching_canon_is_ok_and_only_drift_is_silent(self):
+        with TemporaryDirectory() as tmp:
+            root, known = self._marketplace_setup(tmp, clone_body="---\nname: foo\n---\nbody\n")
+            rc, out = self._run_marketplaces(root, known)
+            self.assertEqual(rc, 0, out)
+            self.assertIn("OK marketplace foo", out)
+            rc, out = self._run_marketplaces(root, known, "--only-drift")
+            self.assertEqual(out, "")
+
+    def test_marketplace_snapshot_without_git_uses_gcs_sha_as_pin(self):
+        """公式 marketplace の写しは .git を持たず .gcs-sha に 40 桁 SHA を置く（2026-11-08 実測）。"""
+        with TemporaryDirectory() as tmp:
+            root, known = self._marketplace_setup(tmp, clone_body="---\nname: foo\n---\nnew\n")
+            sha = "0412be76f50ab4f4f8abff3753efa9269fbbca5b"
+            (Path(tmp) / "marketplaces" / "mk" / ".gcs-sha").write_text(sha)
+            _, out = self._run_marketplaces(root, known)
+            self.assertIn(f"marketplace mk {sha} differs", out)
+            self.assertIn(f"--version {sha}", out)
+
+    def test_marketplace_drift_shows_in_only_drift(self):
+        with TemporaryDirectory() as tmp:
+            root, known = self._marketplace_setup(tmp, clone_body="---\nname: foo\n---\nnew\n")
+            _, out = self._run_marketplaces(root, known, "--only-drift")
+            self.assertEqual(len(out.splitlines()), 1, out)
+            self.assertTrue(out.startswith("WARN drift foo"), out)
+
     def test_parser_decodes_quoted_metadata_with_spaces(self):
         entries = MODULE.parse_manifest(
             'mirrors:\n  - dir: foo\n    local_copy: "~/plugin cache/skill"\n'

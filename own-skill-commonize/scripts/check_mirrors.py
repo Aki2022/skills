@@ -93,12 +93,57 @@ def load_installed_plugins(paths: list[Path]) -> dict[str, list[dict]]:
     return found
 
 
+def load_marketplaces(paths: list[Path]) -> dict[str, Path]:
+    """marketplace name -> local clone (installLocation) that exists on disk."""
+    found: dict[str, Path] = {}
+    for path in paths:
+        try:
+            data = json.loads(path.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        for name, record in (data.items() if isinstance(data, dict) else []):
+            loc = record.get("installLocation") if isinstance(record, dict) else None
+            if loc and Path(loc).is_dir() and name not in found:
+                found[name] = Path(loc)
+    return found
+
+
+def clone_head(clone: Path) -> str:
+    """Commit SHA of a marketplace clone, read from .git without running git.
+
+    The official marketplace is delivered as a snapshot without .git; it carries
+    the commit in a `.gcs-sha` file (measured 2026-11-08, not documented).
+    """
+    marker = clone / ".gcs-sha"
+    if not (clone / ".git").exists() and marker.is_file():
+        value = marker.read_text().strip()
+        if len(value) == 40 and all(ch in "0123456789abcdef" for ch in value):
+            return value
+    git = clone / ".git"
+    try:
+        head = (git / "HEAD").read_text().strip()
+        if not head.startswith("ref: "):
+            return head
+        ref = head[5:]
+        ref_file = git / ref
+        if ref_file.is_file():
+            return ref_file.read_text().strip()
+        for line in (git / "packed-refs").read_text().splitlines():
+            if line.endswith(" " + ref):
+                return line.split(" ", 1)[0]
+    except OSError:
+        pass
+    return "unknown"
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("root", nargs="?", default=str(Path.home() / ".agents" / "skills"))
     ap.add_argument("--max-age-days", type=int, default=90)
     ap.add_argument("--plugins-file", action="append", type=Path, default=[],
                     help="Claude Code installed_plugins.json (repeatable; default: ~/.claude/plugins/)")
+    ap.add_argument("--marketplaces-file", action="append", type=Path, default=[],
+                    help="Claude Code known_marketplaces.json (repeatable; default: ~/.claude/plugins/)")
     ap.add_argument("--only-drift", action="store_true",
                     help="print only WARN drift lines (for the session-start hook); silent otherwise")
     a = ap.parse_args(argv)
@@ -115,6 +160,8 @@ def main(argv: list[str] | None = None) -> int:
         return rc
     plugin_files = a.plugins_file or [Path.home() / ".claude" / "plugins" / "installed_plugins.json"]
     installed = load_installed_plugins(plugin_files)
+    market_files = a.marketplaces_file or [Path.home() / ".claude" / "plugins" / "known_marketplaces.json"]
+    clones = load_marketplaces(market_files)
     compared = skipped = drift = 0
     root = Path(a.root).expanduser()
     manifest = root / "mirrors.yaml"
@@ -169,6 +216,20 @@ def main(argv: list[str] | None = None) -> int:
                     drift += 1
                 else:
                     print(f"OK plugin {d}: matches {plugin} {pin}")
+        market = e.get("marketplace")
+        if market:
+            clone = clones.get(market)
+            source = clone / e.get("marketplace_path", "") if clone else None
+            if source is None or not source.is_dir():
+                print(f"SKIP marketplace {d}: {market} clone or {e.get('marketplace_path', '')} not on disk")
+            else:
+                pin = clone_head(clone)
+                if tree_digest(target) != tree_digest(source):
+                    print(f"WARN drift {d}: marketplace {market} {pin} differs from the canon; "
+                          f"sync with mirror_skill.sh --update-existing --source-dir {source} --version {pin}")
+                    drift += 1
+                else:
+                    print(f"OK marketplace {d}: matches {market} {pin}")
         fa = e.get("fetched_at")
         try:
             age = (date.today() - date.fromisoformat(fa)).days if fa else None

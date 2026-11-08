@@ -78,7 +78,6 @@ Issue files in docs/issues/ that declare `workstream: <this id>`. Generated from
 (create_issue.py, docs_hygiene.py --fix); do not edit between the markers.
 
 <!-- own-doc-update:generated split-issues begin -->
-- [ISSUE-20261108-mirror-sync-update-existing](../issues/ISSUE-20261108-mirror-sync-update-existing.md) — plugin の版から正典へ置き換える同期（--update-existing の移植と修正）
 - [ISSUE-20261108-retire-wip-mirror-branch](../issues/ISSUE-20261108-retire-wip-mirror-branch.md) — 移植後に wip/stash-mirror-skill-20261001 を削除する
 <!-- own-doc-update:generated split-issues end -->
 

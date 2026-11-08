@@ -1,12 +1,12 @@
 ---
 schema_version: 2
 id: ISSUE-20261108-mirror-sync-update-existing
-status: in_progress
+status: archived
 workstream: WS-20261108-third-party-skill-mirror-sync
 created_at: 2026-11-08
 updated_at: 2026-11-08
 branch: "WS-20261108-third-party-skill-mirror-sync"
-pr: ""
+pr: "https://github.com/Aki2022/skills/pull/79"
 related_specs: [docs/specs/third-party-skill-mirror-update.md]
 related_guides: []
 guide_impact: none
@@ -30,8 +30,7 @@ as of 2026-11-08 — `--update-existing`（dry-run と `--apply`、完全 SHA �
 
 ## Next Actions
 
-1. PR を merge し、Completion の残りを埋めて status: complete と archive_issue.py で閉じる
-2. その後 ISSUE-20261108-retire-wip-mirror-branch へ進む
+1. なし。続きは ISSUE-20261108-retire-wip-mirror-branch（wip 枝の削除、所有者の確認待ち）
 
 <!-- First bullet = the very next command or step (or what unblocks a blocked issue). Required once work starts; the validator rejects an empty section. -->
 
@@ -44,6 +43,7 @@ as of 2026-11-08 — `--update-existing`（dry-run と `--apply`、完全 SHA �
 
 ## Log
 
+- 2026-11-08 — PR #79 を merge（143b89d）。
 - 2026-11-08 — wip の update 節を土台に main から作り直した。wip にあった欠陥（指定しない注記・local_copy の消失、版が unknown に戻る、HEAD を取る）は、欄の保持と完全 SHA 必須で塞いだ。
 
 ## Completion
@@ -52,6 +52,6 @@ as of 2026-11-08 — `--update-existing`（dry-run と `--apply`、完全 SHA �
 - [x] Specs updated if direction or requirements changed
 - [x] Guide impact classified before implementation
 - [x] Guides updated in the same slice if implemented behavior changed
-- [ ] Branch merged and cleaned up (or intentionally kept — note why)
-- [ ] 00_index.md updated
-- [ ] Moved to docs/issues/archive/ when complete
+- [x] Branch merged and cleaned up (or intentionally kept — note why)
+- [x] 00_index.md updated
+- [x] Moved to docs/issues/archive/ when complete

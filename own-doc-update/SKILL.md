@@ -329,6 +329,8 @@ Scripts in `scripts/`:
   checklist of closure candidates; `--apply-sweep <file>` archives its `[x]` rows
   and stamps the file (a review file's archive rows work the same way). `--review`
   writes `docs/log/review-YYYYMMDD.md`, the re-weighting of guides/specs/ADRs (due every 14 days)
+  (a same-day rerun writes nothing when unchanged and keeps `[x]`/`keep:` judgments when it
+  overwrites; if a judged row vanished it writes `review-YYYYMMDD-N.md` and leaves the old file untouched)
   (R8 reports when it is overdue); `--report` writes it too, so every close-session
   reviews. R9 reports the context budget (digest drops, oversized docs, hot-set size).
   A6 regenerates the ownership lists from front matter and drops the hand-written rows

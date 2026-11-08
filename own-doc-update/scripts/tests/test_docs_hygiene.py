@@ -6,6 +6,7 @@ see it, and the fix must leave the validator with no new errors.
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -792,6 +793,112 @@ class ReviewTest(HygieneFixture):
         path.write_text(path.read_text() + "\n## own-docs-maintain（2026-09-19）\n\n- 判定: 0 件\n")
         MODULE.run(root, fix=False, report=True, today=date(2026, 9, 19))
         self.assertIn("## own-docs-maintain（2026-09-19）", path.read_text())
+
+
+class ReviewSameDayTest(HygieneFixture):
+    """A same-day --review rerun must not drop the reviewer's judgments."""
+
+    DAY = date(2026, 9, 19)
+    ORPHAN = "- [ ] archive `docs/guides/orphan-big.md`"
+    POLICY = "- [ ] archive `docs/specs/policy.md`"
+
+    def setUp(self):
+        super().setUp()
+        self.root = self.make_repo()
+        ReviewTest.build(self, self.root)
+        self.log = self.root / "docs/log"
+
+    def review(self) -> Path:
+        return MODULE.write_review(self.root, today=self.DAY)
+
+    def judge(self, path: Path) -> None:
+        text = path.read_text()
+        text = text.replace(self.ORPHAN, self.ORPHAN.replace("[ ]", "[x]"))
+        text = text.replace(self.POLICY, self.POLICY + " \u2014 keep: still cited elsewhere")
+        text = re.sub(r"(?m)^(- \[ \] split `docs/guides/orphan-big.md`.*)$",
+                      lambda m: m.group(1) + "\n  - keep: splitting next quarter", text, count=1)
+        path.write_text(text + "\n## own-docs-maintain\n\n- hand note\n")
+
+    def names(self) -> list[str]:
+        return sorted(p.name for p in self.log.glob("review-*.md"))
+
+    def test_a_identical_rerun_writes_nothing(self):
+        path = self.review()
+        before = path.read_bytes()
+        self.assertEqual(self.review(), path)
+        self.assertEqual(path.read_bytes(), before)
+        self.judge(path)
+        judged = path.read_bytes()
+        self.assertEqual(self.review(), path)
+        self.assertEqual(path.read_bytes(), judged)
+        self.assertEqual(self.names(), ["review-20260919.md"])
+
+    def test_b_changed_rerun_overwrites_and_carries_every_judgment(self):
+        path = self.review()
+        self.judge(path)
+        (self.root / "docs/guides/orphan-two.md").write_text("---\nupdated_at: 2026-03-01\n---\n# Two\n")
+        again = self.review()
+        self.assertEqual(again, path)
+        self.assertEqual(self.names(), ["review-20260919.md"])
+        text = path.read_text()
+        self.assertIn("- [x] archive `docs/guides/orphan-big.md`", text)
+        self.assertIn(self.POLICY + " \u2014 keep: still cited elsewhere", text)
+        self.assertIn("- [ ] split `docs/guides/orphan-big.md`", text)
+        self.assertIn("  - keep: splitting next quarter", text)
+        self.assertIn("orphan-two.md", text)
+        self.assertIn("## own-docs-maintain\n\n- hand note", text)
+        self.assertEqual(MODULE.kept_files_in(text), {"docs/specs/policy.md", "docs/guides/orphan-big.md"})
+
+    def test_c_vanished_judgment_goes_to_numbered_file(self):
+        path = self.review()
+        self.judge(path)
+        before = path.read_bytes()
+        (self.root / "docs/guides/orphan-big.md").unlink()
+        second = self.review()
+        self.assertEqual(second.name, "review-20260919-2.md")
+        self.assertEqual(path.read_bytes(), before)
+        text = second.read_text()
+        self.assertNotIn("orphan-big.md", text.split("## own-docs-maintain")[0])
+        self.assertIn("## own-docs-maintain\n\n- hand note", text)
+        self.assertIn("review-20260919-2.md", text)  # apply hint names the file it lives in
+        # an unchanged rerun now compares against the newest file of the day
+        self.assertEqual(self.review(), second)
+        self.assertEqual(self.names(), ["review-20260919-2.md", "review-20260919.md"])
+        # judging the -2 file and losing that row again moves on to -3
+        t2 = second.read_text()
+        second.write_text(t2.replace(self.POLICY, self.POLICY.replace("[ ]", "[x]")))
+        (self.root / "docs/specs/policy.md").unlink()
+        third = self.review()
+        self.assertEqual(third.name, "review-20260919-3.md")
+        self.assertIn("[x] archive `docs/specs/policy.md`", second.read_text())
+
+    def test_c_matched_judgments_follow_into_numbered_file(self):
+        path = self.review()
+        self.judge(path)
+        (self.root / "docs/guides/orphan-big.md").unlink()  # the ticked row vanishes
+        second = self.review()
+        self.assertEqual(second.name, "review-20260919-2.md")
+        text = second.read_text()
+        self.assertIn(self.POLICY + " \u2014 keep: still cited elsewhere", text)
+        self.assertNotIn("orphan-big.md", text.split("## own-docs-maintain")[0])
+
+    def test_d_numbered_files_count_as_reviews_of_that_date(self):
+        self.log.mkdir(parents=True, exist_ok=True)
+        (self.log / "review-20260919-2.md").write_text(
+            "## Demote candidates\n\n- [ ] archive `docs/guides/x.md` \u2014 keep: because\n")
+        self.assertEqual(MODULE.last_review_date(self.root), self.DAY)
+        self.assertIn("docs/guides/x.md", MODULE.recently_kept(self.root, self.DAY + timedelta(days=3)))
+        report = MODULE.run(self.root, fix=False, report=False, today=self.DAY)
+        self.assertEqual(report["report"]["R8_review_overdue"]["count"], 0)
+
+    def test_e_new_day_is_a_single_unnumbered_file(self):
+        path = self.review()
+        self.judge(path)
+        (self.root / "docs/guides/orphan-big.md").unlink()
+        nxt = MODULE.write_review(self.root, today=self.DAY + timedelta(days=1))
+        self.assertEqual(nxt.name, "review-20260920.md")
+        self.assertEqual(self.names(), ["review-20260919.md", "review-20260920.md"])
+        self.assertIn("previous review: 2026-09-19", nxt.read_text())
 
 
 class ContextBudgetTest(HygieneFixture):

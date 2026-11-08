@@ -113,6 +113,10 @@ mirrors:
     # local_copy が無い（built-in 等）場合は省略。同値検査は skip され鮮度検査のみ
     plugin: frontend-design@claude-plugins-official # 任意。plugin 由来なら drift 検査の対象になる
     plugin_path: skills/frontend-design # plugin の installPath からの相対パス
+    # plugin を入れずに marketplace の写しと比べる場合（推奨。入れないので文脈に何も載らない）は代わりに:
+    # marketplace: claude-plugins-official   # known_marketplaces.json の名前（autoUpdate を on にする）
+    # marketplace_path: plugins/frontend-design/skills/frontend-design  # 写しの中のパス
+    # 写しに実体があるのは、marketplace.json の source が相対パス（./plugins/...）の plugin だけ。
 
 retired:
   # 棚から下ろした skill。エントリの形は mirrors と同じで、reinstall 行1本で戻せる

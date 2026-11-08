@@ -93,5 +93,118 @@ class MirrorSkillLocalTest(unittest.TestCase):
                              (self.canonical / "retired-snapshot").resolve())
 
 
+FULL_SHA = "0123456789abcdef0123456789abcdef01234567"
+
+
+class MirrorSkillUpdateTest(unittest.TestCase):
+    """--update-existing: plugin の版から正典の現役 mirror を置き換える同期。"""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.base = Path(self.tmp.name)
+        self.canonical = self.base / "home" / ".agents" / "skills"
+        self.canonical.mkdir(parents=True)
+        _skill(self.canonical, "sample-skill", "old body")
+        self.ledger = self.canonical / "mirrors.yaml"
+        self.ledger_text = (
+            "mirrors:\n"
+            "  - dir: sample-skill\n"
+            '    upstream: "example/skills"\n'
+            '    upstream_path: "skills/sample-skill"\n'
+            '    upstream_version: "1111111111111111111111111111111111111111"\n'
+            "    fetched_at: 2026-01-01\n"
+            '    license: "Apache-2.0"\n'
+            '    reinstall: "example"\n'
+            '    plugin: "sample@example-market"\n'
+            '    local_copy: "~/plugin-cache/sample-skill"\n'
+            '    note: "pinned note that must survive"\n'
+            "\nretired:\n"
+        )
+        self.ledger.write_text(self.ledger_text, encoding="utf-8")
+        self.root = self.base / "home" / ".codex" / "skills"
+        self.root.mkdir(parents=True)
+        (self.root / "sample-skill").symlink_to(self.canonical / "sample-skill")
+        self.source = _skill(self.base / "plugin", "sample-skill", "new body")
+        self.env = os.environ.copy()
+        self.env.update({"AGENTS_SKILLS_ROOT": str(self.canonical)})
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def _update(self, *extra: str, name: str = "sample-skill", source: Path | None = None,
+                version: str | None = FULL_SHA):
+        argv = [
+            "bash", str(SCRIPT), "--upstream", "example/skills",
+            "--path", f"skills/{name}", "--name", name, "--license", "Apache-2.0",
+            "--source-dir", str(source or self.source), "--update-existing",
+            "--alias-root", str(self.root),
+        ]
+        if version is not None:
+            argv += ["--version", version]
+        argv += list(extra)
+        return subprocess.run(argv, env=self.env, text=True, capture_output=True, check=False)
+
+    def _body(self) -> str:
+        return (self.canonical / "sample-skill" / "SKILL.md").read_text(encoding="utf-8")
+
+    def test_without_apply_shows_diff_and_changes_nothing(self):
+        result = self._update()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("CHANGED SKILL.md", result.stdout)
+        self.assertIn("--apply", result.stdout)
+        self.assertIn("old body", self._body())
+        self.assertEqual(self.ledger.read_text(encoding="utf-8"), self.ledger_text)
+
+    def test_apply_replaces_contents_and_keeps_unspecified_ledger_fields(self):
+        result = self._update("--apply")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("new body", self._body())
+        ledger = self.ledger.read_text(encoding="utf-8")
+        self.assertEqual(ledger.count("  - dir: sample-skill"), 1)
+        self.assertIn(f'upstream_version: "{FULL_SHA}"', ledger)
+        self.assertIn('note: "pinned note that must survive"', ledger)
+        self.assertIn('local_copy: "~/plugin-cache/sample-skill"', ledger)
+        self.assertIn('plugin: "sample@example-market"', ledger)
+        self.assertNotIn("fetched_at: 2026-01-01", ledger)
+        self.assertEqual((self.root / "sample-skill").resolve(),
+                         (self.canonical / "sample-skill").resolve())
+
+    def test_apply_can_record_plugin_link_for_the_drift_check(self):
+        result = self._update("--apply", "--plugin", "sample@other-market",
+                              "--plugin-path", "skills/sample-skill")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        ledger = self.ledger.read_text(encoding="utf-8")
+        self.assertIn('plugin: "sample@other-market"', ledger)
+        self.assertIn('plugin_path: "skills/sample-skill"', ledger)
+        self.assertEqual(ledger.count("plugin:"), 1)
+
+    def test_update_requires_a_full_pin(self):
+        for version in (None, "unknown", "2b1ffd2"):
+            with self.subTest(version=version):
+                result = self._update("--apply", version=version)
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                self.assertIn("old body", self._body())
+                self.assertEqual(self.ledger.read_text(encoding="utf-8"), self.ledger_text)
+
+    def test_name_mismatch_changes_nothing(self):
+        wrong = _skill(self.base / "wrong", "other-skill", "wrong body")
+        result = self._update("--apply", source=wrong)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("old body", self._body())
+        self.assertEqual(self.ledger.read_text(encoding="utf-8"), self.ledger_text)
+
+    def test_update_of_inactive_name_is_refused(self):
+        _skill(self.base / "plugin", "not-mirrored")
+        result = self._update("--apply", name="not-mirrored",
+                              source=self.base / "plugin" / "not-mirrored")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.canonical / "not-mirrored").exists())
+
+    def test_update_and_reactivate_cannot_combine(self):
+        result = self._update("--apply", "--reactivate-retired")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("old body", self._body())
+
+
 if __name__ == "__main__":
     unittest.main()

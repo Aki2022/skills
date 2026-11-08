@@ -21,7 +21,7 @@ Read this file first. Do not scan all docs unless needed. Read the active workst
 
 ## Specs
 
-- [third-party-skill-mirror-update](specs/third-party-skill-mirror-update.md) — （draft）第三者 skill mirror の更新方式（承認・固定版・検証・旧版の扱い）を決める
+- [third-party-skill-mirror-update](specs/third-party-skill-mirror-update.md) — 第三者 skill を plugin の導入版から正典へ同期し、全 AI で共有する方針
 - [pptx-content-eval-loop](specs/pptx-content-eval-loop.md) — own-pptx-build の段階別コンテンツ評価における承認・評価者・対象・合格条件の方針
 
 

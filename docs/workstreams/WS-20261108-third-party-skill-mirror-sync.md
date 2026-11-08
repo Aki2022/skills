@@ -6,11 +6,11 @@ priority: medium
 due: none
 created_at: 2026-11-08
 updated_at: 2026-11-08
-branch: ""
+branch: "WS-20261108-third-party-skill-mirror-sync"
 pr: ""
 human_boundary_confirmed_at: 2026-11-08
-next_human_gate: spec の承認（draft から active へ）
-related_specs: []
+next_human_gate: wip 枝の削除と、各 mirror の同期実行の確認
+related_specs: [docs/specs/third-party-skill-mirror-update.md]
 related_guides: []
 ---
 
@@ -18,7 +18,12 @@ related_guides: []
 
 ## Goal
 
+どの AI からも同じ第三者 skill を同じ版で使えるようにする。plugin の導入版を正典へ同期する道具と、ずれを知らせる検査を main に入れ、wip 枝を片付ける。
+
 ## Success Criteria
+
+- `mirror_skill.py --update-existing` と `check_mirrors.py` の drift 検査が main に入り、テストとゲートが緑。
+- wip/stash-mirror-skill-20261001 が所有者の確認後に削除されている。
 
 ## Authorization Envelope
 
@@ -26,27 +31,27 @@ related_guides: []
 - Autonomous actions allowed: main から新しい枝を切る、テスト先行の実装、SKILL.md の更新、ローカル検査、ws の更新、作業枝の push と PR、ゲート通過後の merge
 - Confirm first: ネットワーク取得、plugin の導入と更新、正典の実ファイルの置き換え（同期の実行）、wip 枝の削除
 - Merge policy: ローカルのゲート（mise run verify と validate_repo_docs.py）通過で自動 merge（CI なし）
-- Cost or usage ceiling:
-- Out of scope:
+- Cost or usage ceiling: 従量課金なし
+- Out of scope: 上流から直接取る更新の自作、自動同期、既存 mirror の同期の実行
 
 ## Human Gates
 
 - Start gate: confirmed on 2026-11-08
-- Next gate: spec の承認（draft から active へ）
+- Next gate: wip 枝の削除と、各 mirror の同期実行の確認
   <!-- a named human checkpoint, or `none-workstream-complete` when nothing gates completion -->
-- Stop conditions:
+- Stop conditions: ゲート（skill_lint を作業場所に向けた実行、validate_repo_docs.py）が赤
 
 ## Issue Queue
 
 | Issue               | Status  | Depends on | Outcome            |
 | ------------------- | ------- | ---------- | ------------------ |
-| ISSUE-01-mirror-sync-spec-approval | pending | none       | mirror sync spec approval |
+| ISSUE-01-mirror-sync-spec-approval | complete | none       | spec を active にした（所有者の「実装して完成させましょう」、2026-11-08） |
 
 ### ISSUE-01-mirror-sync-spec-approval
 
-- status: pending
+- status: complete
 - depends_on: []
-- runnability: gated on spec の残りの判断（必須検証、検査の緑の扱い）と所有者による spec の承認
+- runnability: ready
   <!-- `ready`, or `gated on <the human decision / missing input>` — executors treat a missing value as gated and stop -->
 - guide_impact: none
 - related_guides: []
@@ -61,7 +66,11 @@ related_guides: []
 
 #### Current Status
 
+as of 2026-11-08 — 所有者の指示で spec を active にした。残っていた判断は推奨どおり（必須検証＝差分と name 一致、RESULT 行に SKIP 件数）。
+
 #### Next Actions
+
+1. なし（完了）
 
 ## Split Issues
 

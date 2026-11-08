@@ -86,6 +86,52 @@ class CheckMirrorsTest(unittest.TestCase):
             _, out = self._run(self._setup(tmp))
             self.assertIn("scope:", out)
 
+    def test_result_line_counts_skipped_parity(self):
+        """緑でも、比べなかった件数を RESULT 行に出す（空振りを隠さない）。"""
+        with TemporaryDirectory() as tmp:
+            rc, out = self._run(self._setup(tmp, with_local_copy=False))
+            self.assertEqual(rc, 0, out)
+            self.assertIn("parity compared 0, skipped 1", out)
+
+    def _plugin_setup(self, tmp: str, *, plugin_body: str):
+        root = self._setup(tmp, with_local_copy=False)
+        with open(root / "mirrors.yaml", "a") as fh:
+            fh.write('    plugin: "foo@market"\n    plugin_path: "skills/foo"\n')
+        install = Path(tmp) / "cache" / "market" / "foo" / "1.2.3"
+        _write(install / "skills" / "foo" / "SKILL.md", plugin_body)
+        _write(install / "skills" / "foo" / "LICENSE.txt", "MIT\n")
+        plugins_file = Path(tmp) / "installed_plugins.json"
+        plugins_file.write_text(
+            '{"version": 2, "plugins": {"foo@market": [{"scope": "user", '
+            f'"installPath": "{install}", "version": "1.2.3", '
+            '"gitCommitSha": "0123456789abcdef0123456789abcdef01234567"}]}}'
+        )
+        return root, plugins_file
+
+    def _run_plugins(self, root: Path, plugins_file: Path):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = MODULE.main([str(root), "--plugins-file", str(plugins_file)])
+        return rc, buf.getvalue()
+
+    def test_positive_control_plugin_drift_is_reported_as_warn(self):
+        """陽性対照: plugin の導入版が正典と違う → DRIFT を知らせる（exit 0）。"""
+        with TemporaryDirectory() as tmp:
+            root, plugins = self._plugin_setup(tmp, plugin_body="---\nname: foo\n---\nnew\n")
+            rc, out = self._run_plugins(root, plugins)
+            self.assertEqual(rc, 0, out)
+            self.assertIn("WARN drift foo", out)
+            self.assertIn("0123456789abcdef0123456789abcdef01234567", out)
+            self.assertIn("plugin drift 1", out)
+
+    def test_plugin_matching_canon_is_ok(self):
+        with TemporaryDirectory() as tmp:
+            root, plugins = self._plugin_setup(tmp, plugin_body="---\nname: foo\n---\nbody\n")
+            rc, out = self._run_plugins(root, plugins)
+            self.assertEqual(rc, 0, out)
+            self.assertIn("OK plugin foo", out)
+            self.assertIn("plugin drift 0", out)
+
     def test_parser_decodes_quoted_metadata_with_spaces(self):
         entries = MODULE.parse_manifest(
             'mirrors:\n  - dir: foo\n    local_copy: "~/plugin cache/skill"\n'

@@ -850,7 +850,7 @@ def recently_kept(root: Path, today: date) -> set[str]:
     if not log_dir.is_dir():
         return kept
     for path in list(log_dir.glob("sweep-*.md")) + list(log_dir.glob("review-*.md")):
-        m = re.search(r"(\d{4})(\d{2})(\d{2})\.md$", path.name)
+        m = re.search(r"(\d{4})(\d{2})(\d{2})(?:-\d+)?\.md$", path.name)
         if not m:
             continue
         try:
@@ -1162,19 +1162,28 @@ BARE_DOC_RE = re.compile(r"(?<![\w./(])(docs/(?:guides|specs|adrs)/[\w.-]+\.md)"
 ID_RE = re.compile(r"\b((?:ADR|SPEC|GUIDE)-[A-Za-z0-9][\w-]*)")
 
 
-def last_review_date(root: Path) -> Optional[date]:
-    """Date of the newest docs/log/review-YYYYMMDD.md, or None when never reviewed."""
+REVIEW_NAME_RE = re.compile(r"review-(\d{4})(\d{2})(\d{2})(?:-(\d+))?\.md")
+
+
+def last_review_date(root: Path, before: Optional[date] = None) -> Optional[date]:
+    """Date of the newest docs/log/review-YYYYMMDD[-N].md, or None when never reviewed.
+
+    A numbered file (a same-day rerun that could not overwrite) is a review of its
+    date. `before` keeps only dates strictly earlier (the review that preceded today's).
+    """
     log_dir = root / "docs/log"
     if not log_dir.is_dir():
         return None
     dates = []
     for path in log_dir.glob("review-*.md"):
-        m = re.fullmatch(r"review-(\d{4})(\d{2})(\d{2})\.md", path.name)
+        m = REVIEW_NAME_RE.fullmatch(path.name)
         if m:
             try:
-                dates.append(date(int(m.group(1)), int(m.group(2)), int(m.group(3))))
+                when = date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
             except ValueError:
                 continue
+            if before is None or when < before:
+                dates.append(when)
     return max(dates) if dates else None
 
 
@@ -1271,8 +1280,7 @@ def build_review(root: Path, today: Optional[date] = None) -> dict:
         tiers[r["tier"]] += 1
     return {"today": today.isoformat(), "docs": rows, "tiers": tiers,
             "demote_candidates": demote, "split_candidates": split,
-            "last_review": (last_review_date(root) or "never") if isinstance(last_review_date(root), str) else
-                           (last_review_date(root).isoformat() if last_review_date(root) else "never")}
+            "last_review": (lambda d: d.isoformat() if d else "never")(last_review_date(root, before=today))}
 
 
 # Headings write_review regenerates. Any other "## " section already in the review file
@@ -1300,6 +1308,72 @@ def hand_written_review_sections(path: Path) -> list[str]:
         for chunk in chunks
         if chunk.splitlines()[0].strip() not in REVIEW_GENERATED_HEADINGS
     ]
+
+
+REVIEW_ROW = re.compile(r"^- \[( |x|X)\] (archive|split) `([^`]+)`(.*)$")
+
+
+def _same_day_reviews(log_dir: Path, day: str) -> list[Path]:
+    """review-<day>.md then review-<day>-2.md, -3 ... in version order."""
+    found = []
+    for path in log_dir.glob(f"review-{day}*.md"):
+        m = REVIEW_NAME_RE.fullmatch(path.name)
+        if m and "".join(m.group(1, 2, 3)) == day:
+            found.append((int(m.group(4) or 1), path))
+    return [p for _n, p in sorted(found)]
+
+
+def _generated_part(text: str) -> str:
+    """The sections write_review regenerates; hand-written ``## `` sections are not rows."""
+    chunks = re.split(r"(?m)^(?=## )", text)
+    return "".join(c for c in chunks[1:] if c.splitlines()[0].strip() in REVIEW_GENERATED_HEADINGS)
+
+
+def review_judgments(text: str) -> dict[str, dict]:
+    """Per row path: the reviewer's tick, inline `keep:` note and `- keep:` sub-bullets.
+
+    Recognition matches apply_sweep (``[x]`` rows) and kept_files_in (``keep:``).
+    Rows with no judgment are omitted.
+    """
+    out: dict[str, dict] = {}
+    current: Optional[dict] = None
+    for line in _generated_part(text).splitlines():
+        m = REVIEW_ROW.match(line)
+        if m:
+            note = ""
+            if "keep:" in m.group(4):
+                note = m.group(4)[m.group(4).index("keep:"):]
+            current = {"ticked": m.group(1).lower() == "x", "note": note, "bullets": []}
+            key = (m.group(2), m.group(3))
+            out[key] = current
+            continue
+        if line.startswith("- "):
+            current = None
+            continue
+        if current is not None and re.match(r"^\s+- (?:keep|\u2014 keep):", line):
+            current["bullets"].append(line)
+    return {k: v for k, v in out.items() if v["ticked"] or v["note"] or v["bullets"]}
+
+
+def carry_review_judgments(generated: str, judgments: dict) -> Optional[str]:
+    """Put each judgment back on its row of freshly generated text; None if a row is gone."""
+    rows = {(m.group(2), m.group(3)) for m in map(REVIEW_ROW.match, generated.splitlines()) if m}
+    if any(key not in rows for key in judgments):
+        return None
+    out = []
+    for line in generated.splitlines():
+        m = REVIEW_ROW.match(line)
+        j = judgments.get((m.group(2), m.group(3))) if m else None
+        if j:
+            if j["ticked"]:
+                line = line.replace("- [ ]", "- [x]", 1)
+            if j["note"]:
+                line += " \u2014 " + j["note"]
+            out.append(line)
+            out.extend(j["bullets"])
+        else:
+            out.append(line)
+    return "\n".join(out) + ("\n" if generated.endswith("\n") else "")
 
 
 def write_review(root: Path, today: Optional[date] = None) -> Path:
@@ -1341,12 +1415,40 @@ def write_review(root: Path, today: Optional[date] = None) -> Path:
     lines.append("")
     log_dir = root / "docs/log"
     log_dir.mkdir(parents=True, exist_ok=True)
-    path = log_dir / f"review-{today.strftime('%Y%m%d')}.md"
-    body = "\n".join(lines)
-    kept = hand_written_review_sections(path)
-    if kept:
-        body = body.rstrip("\n") + "\n\n" + "\n\n".join(kept) + "\n"
-    path.write_text(body)
+    day = today.strftime("%Y%m%d")
+    base_name = f"review-{day}.md"
+    generated = "\n".join(lines)
+
+    def compose(name: str, text: str, sections: list[str]) -> str:
+        # the apply-sweep hint names the file it lives in
+        text = text.replace(base_name, name, 1)
+        if sections:
+            text = text.rstrip("\n") + "\n\n" + "\n\n".join(sections) + "\n"
+        return text
+
+    existing = _same_day_reviews(log_dir, day)
+    if not existing:
+        path = log_dir / base_name
+        path.write_text(compose(base_name, generated, []))
+        return path
+    latest = existing[-1]  # the newest version of today's review is the live one
+    old_text = latest.read_text()
+    sections = hand_written_review_sections(latest)
+    judgments = review_judgments(old_text)
+    carried = carry_review_judgments(generated, judgments)
+    if carried is not None:
+        body = compose(latest.name, carried, sections)
+        if body != old_text:
+            latest.write_text(body)
+        return latest
+    # a judged row no longer exists: keep the old file whole, write the new one beside it
+    number = 2
+    while (log_dir / f"review-{day}-{number}.md").exists():
+        number += 1
+    path = log_dir / f"review-{day}-{number}.md"
+    rows = {(m.group(2), m.group(3)) for m in map(REVIEW_ROW.match, generated.splitlines()) if m}
+    matched = {k: v for k, v in judgments.items() if k in rows}
+    path.write_text(compose(path.name, carry_review_judgments(generated, matched), sections))
     return path
 
 

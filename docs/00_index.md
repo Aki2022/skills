@@ -1,5 +1,5 @@
 ---
-updated_at: 2026-10-06
+updated_at: 2026-11-08
 current_focus: []
 ---
 
@@ -14,9 +14,14 @@ Read this file first. Do not scan all docs unless needed. Read the active workst
 
 ## Active Workstreams
 
+<!-- own-doc-update:generated active-workstreams begin -->
+- [WS-20261108-third-party-skill-mirror-sync](workstreams/WS-20261108-third-party-skill-mirror-sync.md) — 第三者 skill を plugin から正典へ同期し、全 AI で共有する · medium · due none
+<!-- own-doc-update:generated active-workstreams end -->
+
 
 ## Specs
 
+- [third-party-skill-mirror-update](specs/third-party-skill-mirror-update.md) — 第三者 skill を plugin の導入版から正典へ同期し、全 AI で共有する方針
 - [pptx-content-eval-loop](specs/pptx-content-eval-loop.md) — own-pptx-build の段階別コンテンツ評価における承認・評価者・対象・合格条件の方針
 
 

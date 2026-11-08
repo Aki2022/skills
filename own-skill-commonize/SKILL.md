@@ -92,7 +92,10 @@ plugin/built-in 2重6件を実測）。
    `~/.agents/vibe-guard/skills/own-vibeguard-harden` は nix 管理下にも置かれているが、
    **正典にも同名で存在し、3配線先すべてから見える**（2026-09-23 実測）。
    したがって「語数＝所属」の例外ではない。nix 側は配布のための複製で、正典が本体。
-5. 上流の更新への追随は**人間が起動する**（鮮度検査が警告したら再取得）。自動追随はしない。
+5. 上流の更新への追随は**人間が起動する**。自動追随はしない。上流からの取得・版の固定・更新は
+   Claude Code の plugin（marketplace と SHA 固定）に任せ、plugin の導入版を正典へ同期して全エージェントへ
+   配る（`docs/specs/third-party-skill-mirror-update.md`）。`check_mirrors.sh` が `WARN drift` で
+   plugin の導入版と正典のずれを知らせ、所有者が差分を確認してから `mirror_skill.sh --update-existing` で同期する。
 
 `mirrors.yaml` の形式:
 
@@ -107,6 +110,8 @@ mirrors:
     reinstall: npx degit anthropics/skills/skills/frontend-design ~/.agents/skills/frontend-design
     local_copy: ~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/skills/frontend-design
     # local_copy が無い（built-in 等）場合は省略。同値検査は skip され鮮度検査のみ
+    plugin: frontend-design@claude-plugins-official # 任意。plugin 由来なら drift 検査の対象になる
+    plugin_path: skills/frontend-design # plugin の installPath からの相対パス
 
 retired:
   # 棚から下ろした skill。エントリの形は mirrors と同じで、reinstall 行1本で戻せる
@@ -246,11 +251,30 @@ Codex plugin やローカル取得元にある第三者 skill も `scripts/mirro
 そのコピーを `--source-dir` に渡してから、正典への symlink に置き換える。
 `~/.codex*/` の認証・セッション・history・plugin cache は移動も共有もしない。
 
-### 第三者 skill を足す手順は script に閉じる
+### 第三者 skill の追加・同期は script に閉じる
 
 `scripts/mirror_skill.sh`（処理本体 `mirror_skill.py`）が「上流またはレビュー済みローカル source
 から複製 → `mirrors.yaml` へ登録 → per-skill 配線先4つへ symlink → 監査」を通しで行う。
 **手で4回やらない** — 途中で止めると必ず壊れる。
+
+既に `mirrors:` にある skill を新しい版へ置き換える（plugin が更新された後の同期）ときは
+`--update-existing` を付ける。
+
+```bash
+# 1. 差分だけ見る（何も書かない）
+bash scripts/mirror_skill.sh --update-existing --name <skill> --upstream <owner/repo> \
+  --path <upstream_path> --license "<実物から読んだライセンス>" \
+  --source-dir <plugin の installPath>/<plugin_path> --version <完全な 40 桁 SHA かタグ>
+# 2. 所有者が差分を確認したら、同じ引数に --apply を足して置き換える
+```
+
+- `--apply` が無い間は `ADDED / REMOVED / CHANGED` の一覧を出すだけで、正典も台帳も変えない。
+- `--version` は完全な 40 桁 SHA かタグに限る。短縮 SHA と `unknown` は拒否する（degit は短縮 SHA を解決できない）。
+- 台帳の行はその場で書き換え、引数で渡さない欄（`note`・`local_copy`・`plugin` など）は残す。
+- 置き換えや台帳の書き込みが途中で失敗したら、元の中身へ戻す。旧版はローカルに残さない（上流を
+  SSOT とし、台帳の完全 SHA から取り直す）。
+- `--plugin <plugin>@<marketplace>` と `--plugin-path` で plugin との対応を台帳に書くと、
+  `check_mirrors.sh` が以後のずれを `WARN drift` で知らせる。
 
 | 止まる場所 | 起きること |
 | --- | --- |
@@ -811,7 +835,7 @@ python3 scripts/sync_per_skill_aliases.py \
 ```
 
 実行タイミング: スキルの新規作成・編集・移動・削除の直後（この Skill の作業の一部として）。
-サードパーティ由来スキル（ミラー）の FAIL は**中身を手で直さず、上流から再取得して同期する**（ミラー規約: バイト同一）。同値・鮮度は `scripts/check_mirrors.sh` で確認する。第三者本文を手で直さず、修正対象は own-* の自前スキルのみとする。
+サードパーティ由来スキル（ミラー）の FAIL は**中身を手で直さず、上流から再取得して同期する**（ミラー規約: バイト同一。手段は `mirror_skill.sh --update-existing`）。同値・鮮度・plugin とのずれは `scripts/check_mirrors.sh` で確認する。第三者本文を手で直さず、修正対象は own-* の自前スキルのみとする。
 
 使用実績を定量化するときは `scripts/measure_skill_usage.py` を使う。Claude/Codex の履歴 root と
 正典 root を明示して、実ユーザーメッセージに残る `$skill` / `/skill` だけを account 別に集計する。

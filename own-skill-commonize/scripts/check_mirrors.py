@@ -9,6 +9,10 @@
              sha256）。local_copy が無い entry は SKIP（built-in 等は比較不可）。不一致は FAIL（exit 1）。
   freshness: fetched_at から max_age_days を超えていれば WARN（exit 0）。**上流の最新版は見ない**
              （ネットワークに出ない）ので、上流が更新されたかは分からない。空振りを含む警告として扱う。
+  drift    : entry に plugin（"<plugin>@<marketplace>"）と plugin_path があれば、Claude Code の
+             installed_plugins.json が指す導入版の <installPath>/<plugin_path> と正典を比べ、
+             違えば WARN drift（exit 0）。同期は mirror_skill.sh --update-existing で所有者が行う。
+  RESULT 行に parity の比較数・SKIP 数と drift 数を出す（緑でも比べていない件数を隠さない）。
 exit: 0 = OK/WARN のみ, 1 = FAIL あり, 2 = 台帳が無い・読めない
 PyYAML に依存しない（環境に無いため）。台帳は「- key: value」のフラットな list のみを想定する。
 """
@@ -74,11 +78,31 @@ def tree_digest(root: Path) -> str:
     return h.hexdigest()
 
 
+def load_installed_plugins(paths: list[Path]) -> dict[str, list[dict]]:
+    """plugin@marketplace -> install records, merged over every readable file."""
+    found: dict[str, list[dict]] = {}
+    for path in paths:
+        try:
+            data = json.loads(path.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        plugins = data.get("plugins", data) if isinstance(data, dict) else {}
+        for key, records in plugins.items():
+            records = records if isinstance(records, list) else [records]
+            found.setdefault(key, []).extend(r for r in records if isinstance(r, dict))
+    return found
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("root", nargs="?", default=str(Path.home() / ".agents" / "skills"))
     ap.add_argument("--max-age-days", type=int, default=90)
+    ap.add_argument("--plugins-file", action="append", type=Path, default=[],
+                    help="Claude Code installed_plugins.json (repeatable; default: ~/.claude/plugins/)")
     a = ap.parse_args(argv)
+    plugin_files = a.plugins_file or [Path.home() / ".claude" / "plugins" / "installed_plugins.json"]
+    installed = load_installed_plugins(plugin_files)
+    compared = skipped = drift = 0
     root = Path(a.root).expanduser()
     manifest = root / "mirrors.yaml"
     print(f"scope: parity = local_copy とのバイト同一（local_copy 無しは SKIP）/ "
@@ -103,13 +127,35 @@ def main(argv: list[str] | None = None) -> int:
             lcp = Path(os.path.expanduser(lc))
             if not lcp.is_dir():
                 print(f"SKIP parity {d}: local_copy not present: {lcp}")
+                skipped += 1
             elif tree_digest(target) != tree_digest(lcp):
                 print(f"FAIL parity {d}: differs from local_copy {lcp}")
                 fail = True
+                compared += 1
             else:
                 print(f"OK parity {d}")
+                compared += 1
         else:
             print(f"SKIP parity {d}: no local_copy (built-in 等・比較不可)")
+            skipped += 1
+        plugin = e.get("plugin")
+        if plugin:
+            records = installed.get(plugin, [])
+            sources = [Path(r["installPath"]) / e.get("plugin_path", "") for r in records
+                       if r.get("installPath")]
+            sources = [s for s in sources if s.is_dir()]
+            if not sources:
+                print(f"SKIP plugin {d}: {plugin} not installed")
+            else:
+                record = next(r for r in records
+                              if (Path(r.get("installPath", "")) / e.get("plugin_path", "")).is_dir())
+                pin = record.get("gitCommitSha") or record.get("version") or "unknown"
+                if tree_digest(target) != tree_digest(sources[0]):
+                    print(f"WARN drift {d}: plugin {plugin} {pin} differs from the canon; "
+                          f"sync with mirror_skill.sh --update-existing --source-dir {sources[0]} --version {pin}")
+                    drift += 1
+                else:
+                    print(f"OK plugin {d}: matches {plugin} {pin}")
         fa = e.get("fetched_at")
         try:
             age = (date.today() - date.fromisoformat(fa)).days if fa else None
@@ -121,7 +167,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"WARN stale {d}: fetched {age} days ago (> {a.max_age_days})")
         else:
             print(f"OK fresh {d}: {age} days")
-    print("RESULT:", "FAIL" if fail else "OK")
+    print("RESULT:", "FAIL" if fail else "OK",
+          f"(parity compared {compared}, skipped {skipped}; plugin drift {drift})")
     return 1 if fail else 0
 
 

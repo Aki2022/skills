@@ -15,7 +15,6 @@ Read this file first. Do not scan all docs unless needed. Read the active workst
 ## Active Workstreams
 
 <!-- own-doc-update:generated active-workstreams begin -->
-- [WS-20261108-third-party-skill-mirror-sync](workstreams/WS-20261108-third-party-skill-mirror-sync.md) — 第三者 skill を plugin から正典へ同期し、全 AI で共有する · medium · due none
 <!-- own-doc-update:generated active-workstreams end -->
 
 

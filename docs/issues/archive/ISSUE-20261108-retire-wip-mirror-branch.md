@@ -1,7 +1,7 @@
 ---
 schema_version: 2
 id: ISSUE-20261108-retire-wip-mirror-branch
-status: active
+status: archived
 workstream: WS-20261108-third-party-skill-mirror-sync
 created_at: 2026-11-08
 updated_at: 2026-11-08
@@ -24,11 +24,11 @@ guide_impact_reason: "枝の片付けだけで挙動は変えない"
 
 ## Current Status
 
-<!-- Snapshot for the next session, overwritten each time: first line `as of 2026-11-08 — <state in one sentence>`. History goes to ## Log, not here. -->
+as of 2026-11-08 — 所有者の承認（「削除していい」）を得て origin の wip/stash-mirror-skill-20261001（f8ee534）を削除した。git ls-remote --exit-code は 2（無し）。
 
 ## Next Actions
 
-1. mirror-sync-update-existing が main に入ったら、所有者に wip 枝の削除の確認を取る
+1. なし（完了）
 
 <!-- First bullet = the very next command or step (or what unblocks a blocked issue). Required once work starts; the validator rejects an empty section. -->
 
@@ -45,10 +45,10 @@ guide_impact_reason: "枝の片付けだけで挙動は変えない"
 
 ## Completion
 
-- [ ] Implementation completed or intentionally not needed
-- [ ] Specs updated if direction or requirements changed
-- [ ] Guide impact classified before implementation
-- [ ] Guides updated in the same slice if implemented behavior changed
-- [ ] Branch merged and cleaned up (or intentionally kept — note why)
-- [ ] 00_index.md updated
-- [ ] Moved to docs/issues/archive/ when complete
+- [x] Implementation completed or intentionally not needed
+- [x] Specs updated if direction or requirements changed
+- [x] Guide impact classified before implementation
+- [x] Guides updated in the same slice if implemented behavior changed
+- [x] Branch merged and cleaned up (or intentionally kept — note why)
+- [x] 00_index.md updated
+- [x] Moved to docs/issues/archive/ when complete

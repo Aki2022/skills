@@ -1,7 +1,7 @@
 ---
 schema_version: 2
 id: WS-20261108-third-party-skill-mirror-sync
-status: active
+status: archived
 priority: medium
 due: none
 created_at: 2026-11-08
@@ -9,7 +9,7 @@ updated_at: 2026-11-08
 branch: "WS-20261108-third-party-skill-mirror-sync"
 pr: ""
 human_boundary_confirmed_at: 2026-11-08
-next_human_gate: wip 枝の削除と、各 mirror の同期実行の確認
+next_human_gate: none-workstream-complete
 related_specs: [docs/specs/third-party-skill-mirror-update.md]
 related_guides: []
 ---
@@ -37,7 +37,7 @@ related_guides: []
 ## Human Gates
 
 - Start gate: confirmed on 2026-11-08
-- Next gate: wip 枝の削除と、各 mirror の同期実行の確認
+- Next gate: none-workstream-complete
   <!-- a named human checkpoint, or `none-workstream-complete` when nothing gates completion -->
 - Stop conditions: ゲート（skill_lint を作業場所に向けた実行、validate_repo_docs.py）が赤
 
@@ -78,7 +78,6 @@ Issue files in docs/issues/ that declare `workstream: <this id>`. Generated from
 (create_issue.py, docs_hygiene.py --fix); do not edit between the markers.
 
 <!-- own-doc-update:generated split-issues begin -->
-- [ISSUE-20261108-retire-wip-mirror-branch](../issues/ISSUE-20261108-retire-wip-mirror-branch.md) — 移植後に wip/stash-mirror-skill-20261001 を削除する
 <!-- own-doc-update:generated split-issues end -->
 
 ## Decisions
@@ -87,10 +86,10 @@ Record only decisions that are difficult to reverse or surprising without contex
 
 ## Completion
 
-- [ ] Every issue meets its acceptance criteria
-- [ ] Every issue records guide impact as required or none
-- [ ] Required guides describe current implemented behavior
-- [ ] Specs reflect any changed direction or requirements
-- [ ] Next human gate reached or the workstream intentionally stopped
-- [ ] 00_index.md updated
-- [ ] Workstream archived when complete
+- [x] Every issue meets its acceptance criteria
+- [x] Every issue records guide impact as required or none
+- [x] Required guides describe current implemented behavior
+- [x] Specs reflect any changed direction or requirements
+- [x] Next human gate reached or the workstream intentionally stopped
+- [x] 00_index.md updated
+- [x] Workstream archived when complete

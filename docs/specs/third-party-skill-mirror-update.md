@@ -28,7 +28,7 @@ affected_workstreams: [WS-20261108-third-party-skill-mirror-sync]
 | playwright-cli | 固定版 b85c7a7（完全 SHA） | 成功 | 不一致。共通 10 のうち 7 が内容で異なり、片側だけのファイルが 1 ずつ |
 | cloudflare | 固定版 2b1ffd2（短縮 SHA） | 失敗：`could not find commit hash for 2b1ffd2` | 比較できず |
 | cloudflare | HEAD | 成功（解決した SHA は出力に出ない） | 不一致。ローカルのみ 191、共通 129 はすべて異なる |
-| drawio | 版 unknown | 成功（HEAD） | 不一致。SKILL.md が異なり、HEAD のみ `scripts/find-shapes.js` |
+| drawio | 版 unknown | 成功（HEAD） | 不一致。SKILL.md が異なり、HEAD のみ上流の find-shapes.js（スクリプト、正典には無い） |
 
 Claude Code の plugin（公式ドキュメント、2026-11-08 調査。導入記録はローカルで確認）：marketplace は ref と 40 桁の SHA で固定でき、サードパーティの自動更新は既定で off、導入記録に `version` と `gitCommitSha` がある。更新前の差分表示と承認、Codex・Gemini への配布は無い。
 

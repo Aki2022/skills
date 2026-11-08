@@ -94,8 +94,9 @@ plugin/built-in 2重6件を実測）。
    したがって「語数＝所属」の例外ではない。nix 側は配布のための複製で、正典が本体。
 5. 上流の更新への追随は**人間が起動する**。自動追随はしない。上流からの取得・版の固定・更新は
    Claude Code の plugin（marketplace と SHA 固定）に任せ、plugin の導入版を正典へ同期して全エージェントへ
-   配る（`docs/specs/third-party-skill-mirror-update.md`）。`check_mirrors.sh` が `WARN drift` で
-   plugin の導入版と正典のずれを知らせ、所有者が差分を確認してから `mirror_skill.sh --update-existing` で同期する。
+   配る（`docs/specs/third-party-skill-mirror-update.md`）。サードパーティ marketplace も `autoUpdate` を on にし、
+   起動時の `check_session_fast.sh`（内部で `check_mirrors.py --only-drift`）が plugin の導入版と正典のずれを
+   `WARN drift` の 1 行で知らせる（ずれが無ければ無言）。所有者が差分を確認してから `mirror_skill.sh --update-existing` で同期する。
 
 `mirrors.yaml` の形式:
 

@@ -198,6 +198,8 @@ mirrors:
     license: "MIT (plugin manifest); Apache-2.0 (upstream repository LICENSE; unresolved)"
     reinstall: "npx degit anthropics/claude-plugins-community/eli5/skills/eli5 ~/.agents/skills/eli5"
     local_copy: "~/.claude/plugins/cache/claude-community/eli5/1.0.0/skills/eli5"
+    plugin: "eli5@claude-community"
+    plugin_path: "skills/eli5"
     note: "Upstream repository LICENSE says Apache-2.0 while the Claude plugin manifest says MIT; conflict unresolved."
 
   - dir: karpathy-guidelines
@@ -208,6 +210,8 @@ mirrors:
     license: "MIT (skill frontmatter; repository root LICENSE absent)"
     reinstall: "npx degit forrestchang/andrej-karpathy-skills/skills/karpathy-guidelines ~/.agents/skills/karpathy-guidelines"
     local_copy: "~/.claude-seat2/plugins/cache/karpathy-skills/andrej-karpathy-skills/1.0.0/skills/karpathy-guidelines"
+    plugin: "andrej-karpathy-skills@karpathy-skills"
+    plugin_path: "skills/karpathy-guidelines"
 
   - dir: claude-automation-recommender
     upstream: "anthropics/claude-plugins-official"
@@ -217,6 +221,8 @@ mirrors:
     license: "Apache-2.0 (upstream repository LICENSE)"
     reinstall: "npx degit anthropics/claude-plugins-official/plugins/claude-code-setup/skills/claude-automation-recommender ~/.agents/skills/claude-automation-recommender"
     local_copy: "~/.claude-seat2/plugins/cache/claude-plugins-official/claude-code-setup/1.0.0/skills/claude-automation-recommender"
+    plugin: "claude-code-setup@claude-plugins-official"
+    plugin_path: "skills/claude-automation-recommender"
 
   - dir: claude-md-improver
     upstream: "anthropics/claude-plugins-official"
@@ -226,6 +232,8 @@ mirrors:
     license: "Apache-2.0 (upstream repository LICENSE)"
     reinstall: "npx degit anthropics/claude-plugins-official/plugins/claude-md-management/skills/claude-md-improver ~/.agents/skills/claude-md-improver"
     local_copy: "~/.claude-seat2/plugins/cache/claude-plugins-official/claude-md-management/1.0.0/skills/claude-md-improver"
+    plugin: "claude-md-management@claude-plugins-official"
+    plugin_path: "skills/claude-md-improver"
     note: "Mirrored independently; keep the hybrid plugin active for its command feature."
 
   - dir: frontend-design
@@ -236,6 +244,8 @@ mirrors:
     license: "Apache-2.0 (upstream repository LICENSE)"
     reinstall: "npx degit anthropics/claude-plugins-official/plugins/frontend-design/skills/frontend-design ~/.agents/skills/frontend-design"
     local_copy: "~/.claude-seat2/plugins/cache/claude-plugins-official/frontend-design/6bfd4e0c6d3d/skills/frontend-design"
+    plugin: "frontend-design@claude-plugins-official"
+    plugin_path: "skills/frontend-design"
     note: "Reactivated retired entry and refreshed its older snapshot from the installed plugin source."
 
   - dir: yomiyasu

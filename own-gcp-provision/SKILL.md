@@ -28,11 +28,11 @@ description: |
 
 > **CLI と SDK は認証経路が違う**（重要）
 >
-> - gcloud / bq CLI は `.mise.toml` の `CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT` を読む。
+> - gcloud / bq CLI は mise 設定（`.mise.toml` または `mise.toml`）の `CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT` を読む。
 > - Node / Python の Google SDK は**この変数を読まない**。ADC
 >   (`~/.config/gcloud/application_default_credentials.json`) を見る。
 > - ADC はグローバル単一ファイルなので複数リポジトリで衝突する。
->   そこで **per-repo ADC ファイルを分離**し、`.mise.toml` の `GOOGLE_APPLICATION_CREDENTIALS`
+>   そこで **per-repo ADC ファイルを分離**し、mise 設定の `GOOGLE_APPLICATION_CREDENTIALS`
 >   で切り替える（Step 6.5）。SDK を使うリポジトリでは必須。
 >
 > **「鍵レス」の正確な意味**：SA キー（JSON 鍵）はディスクに置かない。ただし per-repo ADC には
@@ -160,9 +160,13 @@ GOOGLE_CLOUD_QUOTA_PROJECT = "${PROJECT_ID}"
 # SDK・gcloud がこのSAになりすます（鍵レス）※CLIのみ有効。SDKはStep 6.5のADCを使う
 CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT = "${SA_EMAIL}"
 # SDK(Node/Python)用 ADC。CLIのIMPERSONATE変数はSDKに効かないため必須（Step 6.5で生成）
-GOOGLE_APPLICATION_CREDENTIALS = "${HOME}/.config/gcloud/${REPO_NAME}_adc.json"
+GOOGLE_APPLICATION_CREDENTIALS = "{{env.HOME}}/.config/gcloud/${REPO_NAME}_adc.json"
 EOF
 ```
+
+> ファイル名は `.mise.toml` でも `mise.toml`（ドットなし）でもよい。既に `mise.toml` がある repo は
+> そちらに `[env]` を足す（`refresh_adc.sh` は両方を走査する）。ホームは `{{env.HOME}}` で書き、
+> repo に個人のパスを残さない。
 
 > `GOOGLE_CLOUD_PROJECT` と `CLOUDSDK_CORE_PROJECT` は別物。両方必要。
 > SDK（Python/R）は前者、gcloud/bq CLI は後者を参照する。
@@ -184,9 +188,12 @@ mise run reauth
 bash ~/.agents/skills/own-gcp-provision/refresh_adc.sh
 ```
 
-このヘルパーは `~/code/*/.mise.toml` を走査し、`CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT`
-を持つ全リポジトリの per-repo ADC を生成・更新し、`GOOGLE_APPLICATION_CREDENTIALS` 行が
-無ければ `.mise.toml` に追記する。最後にグローバル ADC を素のユーザー認証へ戻す
+このヘルパーは `~/code/*/.mise.toml` と `~/code/*/mise.toml`（ドットなし）の両方を走査し、
+`CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT` を持つ全リポジトリの per-repo ADC を生成・更新し、
+`GOOGLE_APPLICATION_CREDENTIALS` 行がどちらのファイルにも無ければ、SA を書いている方の `[env]` に
+追記する（値はホームを `{{env.HOME}}` で書く）。1 つの repo の 2 つのファイルが別々の SA を指すときは、
+何も書かずに exit 1 で止まる。書く前に対象だけ確かめるときは `refresh_adc.sh --list`
+（ADC も設定ファイルも書かない。gcloud も source ADC も要らない）。最後にグローバル ADC を素のユーザー認証へ戻す
 （未設定リポジトリが誤った SA で動くのを防ぐ）。
 利用者向けの通常導線は各 repo の `mise run reauth` で、repo-local に起動しても
 裏側では全 repo の per-repo ADC 整合性をまとめて更新しうる。
@@ -203,7 +210,7 @@ bash ~/.agents/skills/own-gcp-provision/refresh_adc.sh
 ### Step 7: mise trust
 
 ```bash
-cd "${REPO_PATH}" && /opt/homebrew/bin/mise trust .mise.toml
+cd "${REPO_PATH}" && /opt/homebrew/bin/mise trust   # .mise.toml / mise.toml のどちらでも
 ```
 
 ### Step 8: end-to-end 検証
@@ -272,7 +279,7 @@ CLI は SA だが SDK だけユーザーになる場合は Step 6.5 の per-repo
 | `PERMISSION_DENIED: Failed to impersonate`                                                            | IAM 未反映 or TokenCreator 未付与                                            | Step 5 のリトライを待つ。それでも失敗なら Step 4 を再実行                                            |
 | `SESSION_USER()` がユーザーアカウントを返す                                                           | impersonation が効いていない                                                 | `CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT` 環境変数を確認                                           |
 | `bq: Reauthentication failed`                                                                         | 土台のユーザー認証が期限切れ（RAPT など）                                    | `bash ~/.agents/skills/own-gcp-provision/re-auth.sh` を実行                                   |
-| SDK だけ `Caller does not have required permission to use project` / `serviceusage` エラー            | per-repo ADC 未生成。SDK がグローバル ADC（別 SA）を見ている                 | Step 6.5 の `refresh_adc.sh` を実行し、`.mise.toml` に `GOOGLE_APPLICATION_CREDENTIALS` があるか確認 |
-| CLI は SA だが SDK だけユーザー/別 SA で動く                                                          | `GOOGLE_APPLICATION_CREDENTIALS` 未設定 or 指す ADC が古い                   | `.mise.toml` を確認し `refresh_adc.sh` を再実行                                                      |
+| SDK だけ `Caller does not have required permission to use project` / `serviceusage` エラー            | per-repo ADC 未生成。SDK がグローバル ADC（別 SA）を見ている                 | `refresh_adc.sh --list` に repo が挙がるか確かめ、`refresh_adc.sh` を実行。mise 設定に `GOOGLE_APPLICATION_CREDENTIALS` があるか確認 |
+| CLI は SA だが SDK だけユーザー/別 SA で動く                                                          | `GOOGLE_APPLICATION_CREDENTIALS` 未設定 or 指す ADC が古い                   | mise 設定を確認し `refresh_adc.sh` を再実行                                                          |
 | `application_default_credentials.json must be authorized_user ... got 'impersonated_service_account'` | active gcloud config の `auth/impersonate_service_account` が ADC 作成に混入 | `re-auth.sh` を使って一時 `CLOUDSDK_CONFIG` で user ADC を作る                                       |
 | `gcloud: No such file or directory`                                                                   | constrained shell の PATH に Google Cloud SDK が無い                         | `re-auth.sh` / `refresh_adc.sh` の自動検出を使う。手動なら SDK の bin を PATH に追加                 |

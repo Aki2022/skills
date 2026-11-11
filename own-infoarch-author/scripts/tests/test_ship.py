@@ -657,3 +657,11 @@ def test_maintain_fails_on_expired_shipped_evidence(repo):
     commit(repo, 'expired proof')
     code, out, _ = maintain(repo)
     assert code == 2 and any('IA_EXPIRED_SHIPPED' in e for e in out['errors']), out
+
+
+def test_session_close_runs_step_2_5_without_docs_governance():
+    """Step 2.5 is keyed on design/ and design/info_arch/, not on docs/: no docs path may jump past it."""
+    text = (SKILL.parent / 'own-session-close/SKILL.md').read_text()
+    assert 'go straight to Step 3' not in text
+    no_docs = [line for line in text.splitlines() if line.startswith('- **No `docs/` governance**')]
+    assert len(no_docs) == 1 and 'Step 2.5' in no_docs[0], no_docs

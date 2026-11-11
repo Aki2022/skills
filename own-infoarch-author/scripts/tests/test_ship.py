@@ -513,6 +513,19 @@ def test_doctor_rejects_a_dispatcher_that_drops_the_scanner(repo, tmp_path):
     assert code == 2 and any('dispatcher' in e for e in out['errors']), out
 
 
+@pytest.mark.parametrize('swallow', [
+    DISPATCHER.replace('"$ext" "$refs_file"\n', '"$ext" "$refs_file" || true\n'),
+    DISPATCHER.replace('set -euo pipefail\n', ''),  # without errexit only the last extension's exit survives
+])
+def test_doctor_rejects_a_dispatcher_that_does_not_propagate_the_gate_exit(repo, tmp_path, swallow):
+    assert swallow != DISPATCHER
+    hooks, env = hooks_harness(tmp_path, swallow)
+    shutil.copy2(EXTENSION, hooks / 'pre-push.d/61-infoarch-ship')
+    enable_marker(repo)
+    code, out, _ = ship(repo, '--doctor', env=env)
+    assert code == 2 and any('exit' in e for e in out['errors']), out
+
+
 # ---- real push through the installed vibe-guard -------------------------------------------------
 
 def copy_guard_hooks(guard, harness):

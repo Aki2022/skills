@@ -146,7 +146,7 @@ holdout はそのまま引き継ぐ。回答の policy が今の共有 policy �
 | `infoarch-author ship --root .` | HEAD を検査するだけ。出荷しない。作業ツリーは clean で、検査の後も同じコミットでなければ失格 |
 | `infoarch-author ship --root . --channel <media>` | 正式の入口。緑なら、同じコミットのまま `ship_command` を実行する（shlex で argv に分け、シェルは通さない。`INFOARCH_SHIP_COMMIT`・`INFOARCH_SHIP_TREE`・`INFOARCH_SHIP_CHANNEL` を渡す）。実行の後に作業ツリーが変わっていたら失格 |
 | `infoarch-author ship --root . --pre-push --refs-file F` | refs の各行（`<local ref> <local sha> <remote ref> <remote sha>`）を全部読む。削除（local sha が全部 0）は飛ばす。push される各コミットについて、(1) そのコミット自身の木、(2) チャネルの `merge_base` との予測マージ木、(3) 同じ push が `merge_base` の枝（`origin/main` なら `refs/heads/main`）も更新するなら、その新しいコミットとの予測マージ木、を検査する。同じ木は 1 回だけ検査する。`merge_base` は push されるコミット自身のチャネル定義から読む。無ければ止まる |
-| `infoarch-author ship --root . --doctor` | 設定の診断。`ship_command` か `merge_base` の無い出荷チャネル、マーカー（`.vibe-guard/infoarch-ship.enabled`）の欠落、スキャナを保つ pre-push の dispatcher と拡張（`hooks/pre-push.d/61-infoarch-ship` と同じ中身）の欠落を失格にする |
+| `infoarch-author ship --root . --doctor` | 設定の診断。`ship_command` か `merge_base` の無い出荷チャネル、マーカー（`.vibe-guard/infoarch-ship.enabled`）の欠落、スキャナを保つ pre-push の dispatcher と拡張（`hooks/pre-push.d/61-infoarch-ship` と同じ中身）の欠落、拡張の終了コードを伝えない dispatcher を失格にする。dispatcher は、`ROOT=` の行を一時ディレクトリに差し替えた写しを、失敗する拡張と成功する拡張で実際に走らせて確かめる（本物のスキャナと導入済みの拡張は走らせない） |
 
 `--pre-push` の終了コードは 0 か 2 だけ（dispatcher は 0 以外で push を止めるので、警告は `warnings` に載せて 0 で返す）。他の入口は 0 / 1（警告）/ 2。
 pre-push の拡張は、マーカーのある repo だけで動く（opt-in）。マーカーは、作業ツリーのファイルに加えて、push されるコミット・push で置き換えられる側のコミット・HEAD・remote-tracking の枝のどれかにコミットされていれば有効とみなす。手元のファイルを消しても止まらない。コミットでマーカーを消す push は、置き換えられる側か `merge_base` にマーカーが残る間は検査され、消したことを stderr と `warnings` に出す（黙って外れない）。コミットされたマーカーが `1` の通常ファイルでなければ止まる。マーカーがあれば、壊れたマーカー・refs の欠落・検査の失格はすべて push を止める。

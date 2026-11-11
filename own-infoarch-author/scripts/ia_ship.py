@@ -9,7 +9,8 @@
 - pre-push: every pushed commit itself, its predicted merge into each channel `merge_base`, and its predicted
   merge into the commit this same push sets that base branch to. Deleted refs ship nothing.
 - doctor: a configuration diagnostic. A shipping channel without ship_command or merge_base, a missing or
-  invalid marker, and a missing scanner-preserving dispatcher or IA extension are failures.
+  invalid marker, a missing scanner-preserving dispatcher or IA extension, and a dispatcher that does not
+  propagate an extension's failing exit are failures.
 - maintain: the IA trigger of own-session-close Step 2.5. One line; skips when design/info_arch/ is absent.
 
 Git plumbing is reused from own-design-author's ship gate (hook-free environment, clean-commit binding).
@@ -414,6 +415,51 @@ def pre_push(root, refs_file, date):
 
 # ---- doctor ------------------------------------------------------------------------------------
 
+def _dispatcher_propagates(text):
+    """Run a copy of the dispatcher against probe extensions: a failing one must make the whole hook fail.
+
+    The copy is re-rooted (its ROOT= line) into a temporary vibe-guard-shaped directory with a stub scanner, so
+    neither the real scanner nor the installed extensions run. A dispatcher that also fails with only passing
+    probes is rejected too, so a hook that always exits nonzero does not read as propagating.
+    """
+    lines = text.splitlines()
+    if not any(line.startswith('ROOT=') for line in lines):
+        raise ValueError('cannot verify that the pre-push dispatcher propagates an extension exit (no ROOT= line)')
+    with tempfile.TemporaryDirectory(prefix='infoarch-doctor-') as temporary:
+        sandbox = Path(temporary).resolve()
+        hooks = sandbox / 'git-hooks'
+        (hooks / 'pre-push.d').mkdir(parents=True)
+        (sandbox / 'bin').mkdir()
+        calls = sandbox / 'calls'
+
+        def script(path, body):
+            path.write_text('#!/bin/sh\n' + body)
+            path.chmod(0o755)
+
+        script(sandbox / 'bin/vibe-guard', 'cat >/dev/null\n')
+        copy = hooks / 'pre-push'
+        copy.write_text('\n'.join('ROOT=' + shlex.quote(str(sandbox)) if line.startswith('ROOT=') else line
+                                  for line in lines) + '\n')
+        copy.chmod(0o755)
+        env = _design_ship().hook_free_env()
+        env['PATH'] = str(sandbox / 'bin') + os.pathsep + env.get('PATH', '')
+
+        def run(first):
+            script(hooks / 'pre-push.d/00-probe', f'echo 00 >> {shlex.quote(str(calls))}\nexit {first}\n')
+            script(hooks / 'pre-push.d/99-probe', f'echo 99 >> {shlex.quote(str(calls))}\nexit 0\n')
+            calls.unlink(missing_ok=True)
+            code = subprocess.run([str(copy), 'probe', 'probe'], input='', capture_output=True, text=True,
+                                  env=env, cwd=sandbox, timeout=60).returncode
+            return code, calls.read_text().split() if calls.exists() else []
+
+        code, called = run(0)
+        if code != 0 or '00' not in called:
+            raise ValueError('pre-push dispatcher does not run passing extensions with exit 0; its exit cannot be trusted')
+        code, called = run(3)
+        if code == 0 or '00' not in called:
+            raise ValueError('pre-push dispatcher does not propagate a failing extension exit (the IA gate could not stop a push)')
+
+
 def doctor(root):
     root = Path(root).resolve()
     errors, shipping = [], []
@@ -448,10 +494,11 @@ def doctor(root):
         text = hook.read_text()
         if 'pre-push.d' not in text or '"$ext"' not in text or 'scan-push' not in text:
             raise ValueError('scanner-preserving pre-push dispatcher missing')
+        _dispatcher_propagates(text)
         if (not extension.is_file() or not os.access(extension, os.X_OK)
                 or extension.read_bytes() != (SKILL / 'hooks' / EXTENSION).read_bytes()):
             raise ValueError('current IA pre-push extension missing (' + EXTENSION + ')')
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
         errors.append(str(exc))
     return {'exit_code': 2 if errors else 0, 'errors': errors, 'channels': shipping,
             'production_protected': False, 'scope': 'configuration-diagnostic'}

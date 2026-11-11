@@ -49,7 +49,7 @@ infoarch-author skeleton --root . --outline lp-xxx [--out DIR]  # アウトラ�
 infoarch-author dom --root . --outline lp-xxx # 描画物をブラウザで開き、アンカー・順序・固定値の表示を確かめる
 infoarch-author judge --root . [--dom-report dom.json]  # 意味の判定（表記ゆれ・強調・未登録の主張・妥当性）を共有の判定台帳から読む。Jev は呼ばない
 infoarch-author ship --root . --channel web   # 出荷の正式の入口。出荷されるコミット（git の中身）で tree → check → dom → judge が緑の時だけ ship_command を実行する
-infoarch-author ship --root . --doctor        # ship_command・merge_base の無い出荷チャネルと、pre-push の未導入を失格にする
+infoarch-author ship --root . --doctor        # ship_command・merge_base の無い出荷チャネル、pre-push の未導入、拡張の失格を伝えない dispatcher を失格にする
 infoarch-author maintain --root .             # セッション終了の Step 2.5。design/info_arch/ が無ければ 1 行で skip
 ```
 

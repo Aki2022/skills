@@ -665,3 +665,20 @@ def test_session_close_runs_step_2_5_without_docs_governance():
     assert 'go straight to Step 3' not in text
     no_docs = [line for line in text.splitlines() if line.startswith('- **No `docs/` governance**')]
     assert len(no_docs) == 1 and 'Step 2.5' in no_docs[0], no_docs
+
+
+# ---- the PATH entry is a symlink to the wrapper ----------------------------------------------------
+
+def test_wrapper_runs_through_absolute_and_relative_symlinks(tmp_path):
+    bindir = tmp_path / 'bin'
+    bindir.mkdir()
+    absolute = bindir / 'infoarch-author'
+    absolute.symlink_to(SCRIPTS / 'infoarch-author')
+    chained = tmp_path / 'other' / 'ia'
+    chained.parent.mkdir()
+    chained.symlink_to(os.path.relpath(absolute, chained.parent))  # relative link to the absolute link
+    for link in (absolute, chained):
+        proc = subprocess.run([str(link), 'maintain', '--root', str(tmp_path), '--date', TODAY], cwd=tmp_path,
+                              capture_output=True, text=True, env=dict(os.environ, DESIGN_AUTHOR_PYTHON=sys.executable))
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+        assert json.loads(proc.stdout)['status'] == 'skipped'

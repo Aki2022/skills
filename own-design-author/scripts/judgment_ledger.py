@@ -30,14 +30,19 @@ def validate_policy(policy):
     if type(policy['schema_version']) is not int or policy['schema_version']!=1 or not all(isinstance(policy[k],str) and policy[k].strip() for k in ('model','prompt_version')):
         raise ValueError('invalid judgment policy version/model')
     probability(policy['theta'])
-    if not isinstance(policy['prompts'],dict) or set(policy['prompts'])!=KINDS or any(not isinstance(v,str) or not v.strip() for v in policy['prompts'].values()):
+    # A ledger pinned before a kind joined the shared policy names a subset of the
+    # known kinds; it is stale (digest differs -> migrate), not malformed.
+    if (not isinstance(policy['prompts'],dict) or not policy['prompts'] or not set(policy['prompts'])<=KINDS
+            or any(not isinstance(v,str) or not v.strip() for v in policy['prompts'].values())):
         raise ValueError('invalid judgment prompts')
     return policy
 
 
 def read_policy():
-    raw=POLICY.read_bytes()
-    return validate_policy(json.loads(raw)),hashlib.sha256(raw).hexdigest()
+    raw=POLICY.read_bytes();policy=validate_policy(json.loads(raw))
+    # The central policy itself must cover every kind design and IA judge.
+    if set(policy['prompts'])!=KINDS:raise ValueError('invalid judgment prompts')
+    return policy,hashlib.sha256(raw).hexdigest()
 
 
 def load_policy():

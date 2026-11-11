@@ -411,3 +411,26 @@ def test_same_policy_migrate_cannot_bypass_refresh_score_and_holdout_retention()
     with pytest.raises(ValueError,match='holdout'):
         from judgment_ledger import refresh_ledger
         refresh_ledger(before,after,load_policy())
+
+
+def test_ledger_from_the_pre_ia_policy_reports_policy_change_and_migrates():
+    # Before the IA kinds joined the shared policy (skills #86) a ledger pinned only
+    # doc-relevance and na-rationale under design-evidence-v1. Such a ledger is stale,
+    # not malformed: L0 must say "migrate", and migrate must accept it as the old side.
+    current=load_policy()
+    legacy={**current,'prompt_version':'design-evidence-v1',
+        'prompts':{k:current['prompts'][k] for k in ('doc-relevance','na-rationale')}}
+    old_row=candidate('doc-relevance','dads-000001','A clear policy.',{'title':'Brand'},policy=legacy)
+    new_row=candidate('doc-relevance','dads-000001','A clear policy.',{'title':'Brand'},policy=current)
+    unmeasured={'source':'unmeasured'}
+    old=current_ledger([old_row],[0.2],legacy,holdout=unmeasured)
+    new=current_ledger([new_row],[0.3],current,holdout=unmeasured)
+    with pytest.raises(ValueError,match='policy changed; migrate'):evaluate([new_row],old,policy=current)
+    migrated=migrate_ledger(old,new,current)
+    assert migrated['migration']['previous_policy']['prompt_version']=='design-evidence-v1'
+    assert [(r['before_score'],r['after_score']) for r in migrated['migration']['inputs']]==[(0.2,0.3)]
+    assert evaluate([new_row],migrated,policy=current)['screened'][0]['score']==0.3
+    # An unknown kind or an empty prompt set is still malformed, not merely old.
+    for prompts in ({},{**legacy['prompts'],'unknown-kind':'x'}):
+        with pytest.raises(ValueError,match='invalid judgment prompts'):
+            migrate_ledger(current_ledger([old_row],[0.2],{**legacy,'prompts':prompts},holdout=unmeasured),new,current)

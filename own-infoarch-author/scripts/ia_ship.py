@@ -1,10 +1,13 @@
 """IA ship gate and maintenance (ISSUE-05): the shipped SHA, never the working tree, is what gets checked.
 
-- gate: on a clean commit, run the deterministic `check`, `dom` on every shipped HTML output, and `judge`
-  (read-only against the shared judgment ledger). A shipped outline's uncovered judgment stops the gate;
-  a score at or above theta goes to a human (warning), because the emphasis gate is still undecided.
+- gate: one commit, read from git objects through a detached worktree of it (tracked files only). `tree` refuses
+  symlinked IA inputs and shipped outputs that are not regular files in the commit (HTML or not); then the
+  deterministic `check` (every ship:true channel needs at least one outline), `dom` on every shipped HTML output,
+  and `judge` (read-only against the shared judgment ledger). A shipped outline's uncovered judgment stops the
+  gate; a score at or above theta goes to a human (warning), because the emphasis gate is still undecided.
 - channel: `ship_command` is the formal entry. It runs only after a green gate on the same commit.
-- pre-push: the same gate on the predicted merge of each pushed commit into the channel's `merge_base`.
+- pre-push: every pushed commit itself, its predicted merge into each channel `merge_base`, and its predicted
+  merge into the commit this same push sets that base branch to. Deleted refs ship nothing.
 - doctor: a configuration diagnostic. A shipping channel without ship_command or merge_base, a missing or
   invalid marker, and a missing scanner-preserving dispatcher or IA extension are failures.
 - maintain: the IA trigger of own-session-close Step 2.5. One line; skips when design/info_arch/ is absent.
@@ -21,6 +24,7 @@ import os
 from pathlib import Path
 import shlex
 import subprocess
+import sys
 import tempfile
 
 import check
@@ -31,6 +35,9 @@ from common import INFO_ARCH_DIR, SKILL, YamlError, load_ref, load_yaml
 EXTENSION = 'pre-push.d/61-infoarch-ship'
 MARKER = Path('.vibe-guard/infoarch-ship.enabled')
 HTML_SUFFIXES = ('.html', '.htm')
+FILE_MODES = ('100644', '100755')
+SYMLINK_MODE = '120000'
+TREE_MODE = '040000'
 
 
 def _design_ship():
@@ -67,13 +74,111 @@ def _outline_of(judgment_id):
     return ident.split('/', 1)[0].split('@', 1)[0]
 
 
-def gate(root, date, *, source=None, predicted=False):
-    """-> (result, model). Check, render and judge one committed tree; never deploys."""
+# ---- what the commit holds (git objects, not the working tree) ------------------------------------
+
+def _kind(root, commit, path):
+    """'file' | 'symlink' | 'tree' | 'other' | 'missing' for `path` in `commit`, read from git objects.
+
+    Every parent is walked, so a path under a symlinked directory reads as 'symlink', never as the link's target.
+    """
+    parts, mode = path.split('/'), None
+    for i, name in enumerate(parts):
+        parent = '/'.join(parts[:i])
+        try:
+            rows = _git_raw(root, 'ls-tree', '-z', commit + ':' + parent if parent else commit)
+        except ValueError:
+            return 'missing'
+        mode = next((meta.split()[0] for meta, _, entry in (row.partition('\t') for row in rows.split('\0'))
+                     if entry == name and meta), None)
+        if mode is None:
+            return 'missing'
+        if mode == SYMLINK_MODE:
+            return 'symlink'
+        if i < len(parts) - 1 and mode != TREE_MODE:
+            return 'missing'
+    return {TREE_MODE: 'tree', SYMLINK_MODE: 'symlink'}.get(mode, 'file' if mode in FILE_MODES else 'other')
+
+
+def _input_findings(root, commit):
+    """The IA inputs the gate reads must be committed as files: a symlink would make the check read elsewhere."""
+    out = []
+    base = INFO_ARCH_DIR.as_posix()
+    kind = _kind(root, commit, base)
+    if kind == 'symlink':
+        out.append(('IA_SHIP_SYMLINK', f'{base} はシンボリックリンク（出荷する木の中身として読めない）', base))
+    elif kind == 'tree':
+        for row in _git_raw(root, 'ls-tree', '-r', '-z', commit + ':' + base).split('\0'):
+            meta, _, entry = row.partition('\t')
+            if meta and meta.split()[0] == SYMLINK_MODE:
+                out.append(('IA_SHIP_SYMLINK', f'{base}/{entry} はシンボリックリンク（出荷する木の中身として読めない）', f'{base}/{entry}'))
+    if _kind(root, commit, judge.LEDGER.as_posix()) == 'symlink':
+        out.append(('IA_SHIP_SYMLINK', f'{judge.LEDGER.as_posix()} はシンボリックリンク', judge.LEDGER.as_posix()))
+    return out
+
+
+def _output_findings(root, commit, m, shipped):
+    """Every output of a shipped outline, HTML or not, must be a regular file in the shipped commit."""
+    out = []
+    for oid in shipped:
+        for path in m.outlines[oid][1]['outputs']:
+            kind = _kind(root, commit, path)
+            if kind == 'symlink':
+                out.append(('IA_SHIP_SYMLINK', f'{oid}: 成果物 {path} はシンボリックリンク（出荷する木の中身として読めない）', path))
+            elif kind != 'file':
+                out.append(('IA_SHIP_OUTPUT_MISSING', f'{oid}: 成果物 {path} が出荷するコミットに通常ファイルとして無い', path))
+    return out
+
+
+def _tree_stage(stage, rows):
+    stage['findings'] += [{'level': 'fail', 'code': code, 'message': msg, 'path': path} for code, msg, path in rows]
+    stage['counts'] = {k: sum(f['level'] == k for f in stage['findings']) for k in ('fail', 'warn', 'info')}
+    stage['exit_code'] = 2 if stage['counts']['fail'] else 0
+
+
+@contextmanager
+def checkout(root, commit):
+    """A detached worktree of `commit`: tracked content only, so ignored files and later edits are never read."""
+    with tempfile.TemporaryDirectory(prefix='infoarch-ship-') as temporary:
+        snapshot = Path(temporary) / 'checkout'
+        _git(root, 'worktree', 'add', '--detach', str(snapshot), commit)
+        try:
+            yield snapshot.resolve()
+        finally:
+            _git(root, 'worktree', 'remove', '--force', str(snapshot))
+
+
+# ---- gate ----------------------------------------------------------------------------------------
+
+def gate(root, date, *, commit=None, source=None, predicted=False):
+    """-> (result, model). Check, render and judge one commit read from git objects; never deploys.
+
+    Without `commit` the clean HEAD of `root` is gated (and must still be the same commit afterwards).
+    """
     root = Path(root).resolve()
-    commit, tree = _clean_commit(root)
+    bound = commit is None
+    if bound:
+        commit, tree = _clean_commit(root)
+    else:
+        commit = _git(root, 'rev-parse', '--verify', commit + '^{commit}')
+        tree = _git(root, 'rev-parse', commit + '^{tree}')
+    # The snapshot has no node_modules: rendering resolves Playwright from this checkout unless told otherwise.
+    os.environ.setdefault('INFOARCH_PLAYWRIGHT_DIR', str(root))
+    with checkout(root, commit) as snapshot:
+        result, m = _evaluate(snapshot, commit, tree, date, source, predicted)
+    if bound and _clean_commit(root) != (commit, tree):
+        raise ValueError('source changed during the IA ship gate')
+    return result, m
+
+
+def _evaluate(root, commit, tree, date, source, predicted):
     result = {'exit_code': 0, 'commit': commit, 'tree': tree, 'source_commit': source or commit,
               'predicted_merge': predicted, 'evaluated_on': date, 'stages': [], 'errors': [], 'warnings': [],
               'shipped_outlines': [], 'deployment': 'not-requested'}
+    m = None
+    # Inputs are read before check (so check never reads through a link); outputs are added once outlines are known.
+    files = {'stage': 'tree', 'exit_code': 0, 'counts': {}, 'targets': {'commit': commit}, 'findings': []}
+    result['stages'].append(files)
+    _tree_stage(files, _input_findings(root, commit))
 
     def finish(error=None):
         if error:
@@ -83,19 +188,29 @@ def gate(root, date, *, source=None, predicted=False):
             result['warnings'] += _messages(stage, 'warn')
         result['exit_code'] = 2 if result['errors'] else max([s['exit_code'] for s in result['stages']], default=0)
         if _clean_commit(root) != (commit, tree):
-            raise ValueError('source changed during the IA ship gate')
+            raise ValueError('the IA ship gate changed the checked snapshot')
         return result, m
 
+    if files['exit_code'] == 2:
+        return finish('IA ship inputs are not committed files')
     report, m = check.check(root, date)
     result['stages'].append(_stage('check', report))
     if report.exit_code == 2:
         return finish('IA check failed')
-    if not any(row['ship'] for _, row in m.channels.values()):
+    channels = sorted(name for name, (_, row) in m.channels.items() if row['ship'])
+    if not channels:
         return finish('no ship:true IA channel declared; nothing ships through the IA gate')
     shipped = shipped_outlines(m)
     result['shipped_outlines'] = shipped
-    if not shipped:
-        return finish('zero shipped IA outlines (an empty gate is not a pass)')
+    per_channel = {name: [oid for oid in shipped if m.outlines[oid][1]['channel'] == name] for name in channels}
+    result['channels'] = per_channel
+    empty = [name for name, oids in per_channel.items() if not oids]
+    if empty:
+        return finish('ship:true IA channel with zero outlines (an empty gate is not a pass): ' + ', '.join(empty))
+    _tree_stage(files, _output_findings(root, commit, m, shipped))
+    files['targets'] = {'commit': commit, 'outputs': sum(len(m.outlines[oid][1]['outputs']) for oid in shipped)}
+    if files['exit_code'] == 2:
+        return finish('shipped IA outputs are not committed files')
 
     with tempfile.TemporaryDirectory(prefix='infoarch-ship-') as temporary:
         dom_paths, rendered, skipped, findings, screens = [], [], [], [], 0
@@ -183,22 +298,48 @@ def load_yaml_text(text):
     return safe_load_text(text)
 
 
-@contextmanager
-def predicted_checkout(root, base_ref, source):
-    base = _git(root, 'rev-parse', '--verify', base_ref + '^{commit}')
+def _is_zero(sha):
+    return set(sha) == {'0'}
+
+
+def _commit_or_none(root, sha):
+    try:
+        return _git(root, 'rev-parse', '--verify', '--quiet', sha + '^{commit}')
+    except ValueError:
+        return None
+
+
+def predicted_commit(root, base, source):
+    """A synthetic merge of `source` into `base`; never referenced or pushed."""
     # A conflict or a missing merge base makes git fail, and that stops the push.
     tree = _git(root, 'merge-tree', '--write-tree', base, source).splitlines()[0]
-    # The synthetic commit is never referenced or pushed; it takes the pushing user's configured identity,
-    # and a checkout with no identity fails here, which stops the push.
-    synthetic = _git(root, '-c', 'user.name=IA Gate', 'commit-tree', tree, '-p', source, '-p', base,
-                     input='IA predicted merge validation\n')
-    with tempfile.TemporaryDirectory(prefix='infoarch-ship-') as temporary:
-        snapshot = Path(temporary) / 'checkout'
-        _git(root, 'worktree', 'add', '--detach', str(snapshot), synthetic)
-        try:
-            yield snapshot
-        finally:
-            _git(root, 'worktree', 'remove', '--force', str(snapshot))
+    # It takes the pushing user's configured email; a checkout with no identity fails here, which stops the push.
+    return _git(root, '-c', 'user.name=IA Gate', 'commit-tree', tree, '-p', source, '-p', base,
+                input='IA predicted merge validation\n')
+
+
+def _marker_enabled(root, rev):
+    """Whether `rev` commits a valid marker. A committed marker that is not a one-line "1" file stops the push."""
+    kind = _kind(root, rev, MARKER.as_posix())
+    if kind == 'missing':
+        return False
+    if kind != 'file' or _git_raw(root, 'show', rev + ':' + MARKER.as_posix()).strip() != '1':
+        raise ValueError('invalid IA ship marker committed in ' + rev[:12] + '; shipment stopped')
+    return True
+
+
+def _bases(root, base_ref, pushed):
+    """The merge base as it is now, plus what this same push sets the branch behind it to."""
+    bases = [_git(root, 'rev-parse', '--verify', base_ref + '^{commit}')]
+    try:
+        full = _git(root, 'rev-parse', '--symbolic-full-name', base_ref)
+    except ValueError:
+        full = ''
+    if full.startswith('refs/remotes/') and full.count('/') >= 3:
+        full = 'refs/heads/' + full.split('/', 3)[3]
+    if full.startswith('refs/heads/') and pushed.get(full) and pushed[full] not in bases:
+        bases.append(pushed[full])
+    return bases
 
 
 def pre_push(root, refs_file, date):
@@ -208,41 +349,67 @@ def pre_push(root, refs_file, date):
     records = Path(refs_file).read_text().splitlines()
     if not records:
         raise ValueError('zero push refs')
-    sources = []
+    updates, pushed = [], {}
     for row in records:
         parts = row.split()
         if len(parts) != 4:
             raise ValueError('invalid push ref record')
-        sha = parts[1]
-        if set(sha) == {'0'}:
-            continue
+        _, sha, remote_ref, remote_sha = parts
+        if _is_zero(sha):
+            continue  # a deleted ref ships nothing
         if _git(root, 'rev-parse', '--verify', sha + '^{commit}') != sha:
             raise ValueError('push source must be a commit')
-        if sha not in sources:
-            sources.append(sha)
-    # The snapshot has no node_modules: rendering resolves Playwright from the pushing checkout unless told otherwise.
-    os.environ.setdefault('INFOARCH_PLAYWRIGHT_DIR', str(root))
-    checks = []
-    for source in sources:
-        channels = _channels_at(root, source)
+        updates.append((sha, remote_ref, remote_sha))
+        pushed[remote_ref] = sha
+    # The extension decides whether this repository's gate is on; once called, every pushed commit is gated.
+    checks, warnings, seen = [], [], set()
+
+    def run(target, source, base_ref=None, base=None):
+        tree = _git(root, 'rev-parse', target + '^{tree}')
+        if tree in seen:
+            return None  # the same tree was already gated in this push
+        seen.add(tree)
+        result, _ = gate(root, date, commit=target, source=source, predicted=base is not None)
+        if base is not None:
+            result.update(merge_base=base_ref, merge_base_commit=base)
+        checks.append(result)
+        return result if result['exit_code'] == 2 else None
+
+    for sha, remote_ref, remote_sha in updates:
+        channels = _channels_at(root, sha)
+        if not _marker_enabled(root, sha):
+            # Removing the committed marker does not switch the gate off for the push that removes it: say so.
+            before = [] if _is_zero(remote_sha) else [_commit_or_none(root, remote_sha)]
+            before += [_commit_or_none(root, row['merge_base']) for row in channels.values() if isinstance(row.get('merge_base'), str)]
+            if any(rev and _marker_enabled(root, rev) for rev in before):
+                note = (f'{remote_ref}: this push removes {MARKER.as_posix()}; the IA ship gate still checks it '
+                        'while the remote branch or the merge base keeps the marker')
+                warnings.append(note)
+                print('warning: ' + note, file=sys.stderr)
         if not channels:
             raise ValueError('no ship:true IA channel in the pushed commit; the enabled IA gate cannot pass it')
         missing = sorted(name for name, row in channels.items() if not isinstance(row.get('merge_base'), str) or not row['merge_base'])
         if missing:
             raise ValueError('ship:true IA channel without merge_base (no predicted merge): ' + ', '.join(missing))
+        # The pushed commit itself: an old red commit pushed to a new branch can be green once merged.
+        failed = run(sha, sha)
         for base_ref in sorted({row['merge_base'] for row in channels.values()}):
-            with predicted_checkout(root, base_ref, source) as snapshot:
-                predicted = _channels_at(snapshot, 'HEAD')
+            if failed:
+                break
+            for base in _bases(root, base_ref, pushed):
+                synthetic = predicted_commit(root, base, sha)
+                predicted = _channels_at(root, synthetic)
                 if set(predicted) != set(channels) or any(predicted[n].get('merge_base') != channels[n].get('merge_base') for n in channels):
                     raise ValueError('predicted tree changed IA ship coverage or merge base')
-                result, _ = gate(snapshot, date, source=source, predicted=True)
-                result['merge_base'] = base_ref
-                checks.append(result)
-                if result['exit_code'] == 2:
-                    return {'exit_code': 2, 'errors': ['predicted merge IA ship gate failed'], 'checks': checks}
+                failed = run(synthetic, sha, base_ref, base)
+                if failed:
+                    break
+        if failed:
+            what = 'predicted merge IA ship gate failed' if failed['predicted_merge'] else 'pushed commit IA ship gate failed'
+            return {'exit_code': 2, 'errors': [what], 'checks': checks, 'warnings': warnings}
     # The pre-push dispatcher stops on any nonzero exit: warnings travel in the body, only failures exit 2.
-    return {'exit_code': 0, 'checks': checks, 'warnings': [w for c in checks for w in c['warnings']],
-            'skipped': [] if sources else ['deleted refs only; no shipment']}
+    return {'exit_code': 0, 'checks': checks, 'warnings': warnings + [w for c in checks for w in c['warnings']],
+            'skipped': [] if updates else ['deleted refs only; no shipment']}
 
 
 # ---- doctor ------------------------------------------------------------------------------------

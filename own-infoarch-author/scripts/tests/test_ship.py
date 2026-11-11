@@ -113,10 +113,11 @@ def test_green_gate_binds_the_committed_sha_and_never_deploys(repo):
     code, out, _ = ship(repo)
     assert code == 0, out
     assert out['commit'] == run_git(repo, 'rev-parse', 'HEAD').stdout.strip()
-    assert [s['stage'] for s in out['stages']] == ['check', 'dom', 'judge']
-    assert out['shipped_outlines'] == ['deck-smb']
+    assert [s['stage'] for s in out['stages']] == ['tree', 'check', 'dom', 'judge']
+    assert out['shipped_outlines'] == ['deck-smb'] and out['channels'] == {'deck': ['deck-smb']}
+    assert out['stages'][0]['targets']['outputs'] == 1  # the deck (not HTML) is still checked to be in the commit
     assert out['deployment'] == 'not-requested' and not (repo / '.shipment.json').exists()
-    judge = out['stages'][2]
+    judge = out['stages'][3]
     assert judge['uncovered'] == [] and judge['screened'] > 0
 
 
@@ -126,7 +127,7 @@ def test_expired_proof_referenced_by_a_shipped_outline_stops_the_gate(repo):
     code, out, _ = ship(repo)
     assert code == 2, out
     assert 'IA_EXPIRED_SHIPPED' in codes(out)
-    assert [s['stage'] for s in out['stages']] == ['check']  # stops before dom, judge and deploy
+    assert [s['stage'] for s in out['stages']] == ['tree', 'check']  # stops before dom, judge and deploy
 
 
 def test_dirty_tree_is_not_shipped(repo):
@@ -140,6 +141,46 @@ def test_zero_ship_channels_is_not_a_pass(repo):
     commit(repo, 'nothing ships')
     code, out, _ = ship(repo)
     assert code == 2 and 'no ship:true IA channel' in ' '.join(out['errors'])
+
+
+def test_a_ship_channel_with_zero_outlines_is_not_a_pass(repo):
+    """Another channel shipping something does not make an empty one green."""
+    dump(repo / 'design/info_arch/channels/flyer.yaml', {**SHIP_DECK, 'media': 'flyer', 'outputs': ['flyers/*.pdf']})
+    commit(repo, 'a shipping channel nobody uses')
+    code, out, _ = ship(repo)
+    assert code == 2 and any('flyer' in e and 'zero' in e for e in out['errors']), out
+
+
+def test_a_shipped_output_must_be_a_committed_file(repo):
+    """A non-HTML output is checked too, against the commit: an ignored copy on disk does not count."""
+    run_git(repo, 'rm', '-q', '--cached', 'decks/smb.pptx')
+    (repo / '.gitignore').write_text('.shipment.json\ndecks/\n')
+    commit(repo, 'deck ignored, still on disk')
+    assert (repo / 'decks/smb.pptx').is_file()
+    code, out, _ = ship(repo)
+    assert code == 2 and 'IA_SHIP_OUTPUT_MISSING' in codes(out), out
+
+
+def test_gate_reads_inputs_from_the_commit_not_from_ignored_files(repo):
+    """An ignored ledger on disk would cover every judgment; the commit has none, so the shipped outline is uncovered."""
+    run_git(repo, 'rm', '-q', '--cached', 'design/judgments.json')
+    (repo / '.gitignore').write_text('.shipment.json\ndesign/judgments.json\n')
+    commit(repo, 'ledger ignored, still on disk')
+    assert (repo / 'design/judgments.json').is_file()
+    code, out, _ = ship(repo)
+    assert code == 2 and 'IA_SHIP_UNCOVERED' in codes(out), out
+
+
+@pytest.mark.parametrize('path', ['decks/smb.pptx', 'design/info_arch/info_arch.yaml'])
+def test_symlinks_in_shipped_paths_are_refused(repo, tmp_path, path):
+    target = repo / path
+    outside = tmp_path / ('outside-' + target.name)
+    outside.write_bytes(target.read_bytes())
+    target.unlink()
+    target.symlink_to(outside)
+    commit(repo, 'shipped path is a symlink')
+    code, out, _ = ship(repo)
+    assert code == 2 and 'IA_SHIP_SYMLINK' in codes(out), out
 
 
 def test_uncovered_judgment_of_a_shipped_outline_stops_but_a_draft_does_not(repo):
@@ -207,15 +248,15 @@ def refs_file(tmp_path, *shas):
     return path
 
 
-def test_pushing_an_expired_reference_stops_on_the_predicted_merge_tree(repo, tmp_path):
+def test_pushing_an_expired_reference_stops_on_the_pushed_commit(repo, tmp_path):
     run_git(repo, 'checkout', '-qb', 'topic')
     expire_shipped_proof(repo)
     sha = commit(repo, 'expired proof on a topic')
     code, out, _ = ship(repo, '--pre-push', '--refs-file', str(refs_file(tmp_path, sha)))
     assert code == 2, out
-    assert 'predicted merge IA ship gate failed' in out['errors']
+    assert 'pushed commit IA ship gate failed' in out['errors']
     check = out['checks'][0]
-    assert check['predicted_merge'] is True and check['source_commit'] == sha
+    assert check['predicted_merge'] is False and check['commit'] == check['source_commit'] == sha
     assert 'IA_EXPIRED_SHIPPED' in codes(check)
     assert len(run_git(repo, 'worktree', 'list', '--porcelain').stdout.split('worktree ')) == 2  # snapshot removed
 
@@ -247,9 +288,59 @@ def test_two_green_branches_fail_on_their_predicted_merge(repo, tmp_path):
     run_git(repo, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
     run_git(repo, 'checkout', '-q', 'topic')
     code, out, _ = ship(repo, '--pre-push', '--refs-file', str(refs_file(tmp_path, topic)))
-    assert code == 2, out
-    assert 'IA_EXPIRED_SHIPPED' in codes(out['checks'][0])
+    assert code == 2 and 'predicted merge IA ship gate failed' in out['errors'], out
+    own, merged = out['checks']
+    assert not own['predicted_merge'] and own['exit_code'] == 0  # the topic commit alone is green
+    assert merged['predicted_merge'] and 'IA_EXPIRED_SHIPPED' in codes(merged)
     assert run_git(repo, 'rev-parse', 'HEAD').stdout.strip() == topic and base
+
+
+def test_pre_push_checks_the_pushed_commit_itself(repo, tmp_path):
+    """An old red commit pushed to a new branch: its merge into the fixed main is green, the commit is not."""
+    expire_shipped_proof(repo)
+    bad = commit(repo, 'expired proof')
+    dump(repo / 'design/info_arch/info_arch.yaml', fresh_ssot())
+    commit(repo, 'refresh the proof date')
+    run_git(repo, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
+    refs = tmp_path / 'old-bad'
+    refs.write_text(f'refs/heads/old-bad {bad} refs/heads/old-bad {"0" * 40}\n')
+    code, out, _ = ship(repo, '--pre-push', '--refs-file', str(refs))
+    assert code == 2, out
+    own = [c for c in out['checks'] if not c['predicted_merge']]
+    assert own and own[0]['commit'] == bad and 'IA_EXPIRED_SHIPPED' in codes(own[0]), out
+
+
+def test_refs_pushed_together_are_merged_with_each_other(repo, tmp_path):
+    """main and topic are pushed at once: topic is green against origin/main but red against the pushed main."""
+    ssot = fresh_ssot()
+    ssot['proofs']['prf-0002'] = {'state': 'proposed', 'provenance': 'owner', 'text': '満足度調査',
+                                  'source': '調査票', 'supports': ['msg-0002'], 'as_of': '2026-10-01'}
+    ssot['ledger']['next']['prf'] = 3
+    dump(repo / 'design/info_arch/info_arch.yaml', ssot)
+    cover_ledger(repo)
+    old = commit(repo, 'second proof, used by nobody')
+    run_git(repo, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
+    run_git(repo, 'checkout', '-qb', 'topic')
+    deck = {**copy.deepcopy(DECK), 'channel': 'deck'}
+    deck['pages'][0]['sections'][0]['proofs'] = ['prf-0001', 'prf-0002']
+    dump(repo / 'design/info_arch/outlines/deck-smb.yaml', deck)
+    cover_ledger(repo)
+    topic = commit(repo, 'ship the second proof')
+    run_git(repo, 'checkout', '-q', 'main')
+    ssot['proofs']['prf-0002']['as_of'] = '2024-01-01'
+    dump(repo / 'design/info_arch/info_arch.yaml', ssot)
+    main = commit(repo, 'second proof is old (nobody ships it on main)')
+    alone = tmp_path / 'alone'
+    alone.write_text(f'refs/heads/topic {topic} refs/heads/topic {"0" * 40}\n')
+    code, out, _ = ship(repo, '--pre-push', '--refs-file', str(alone))
+    assert code == 0, out  # origin/main has not moved yet
+    together = tmp_path / 'together'
+    together.write_text(f'refs/heads/main {main} refs/heads/main {old}\n'
+                        f'refs/heads/topic {topic} refs/heads/topic {"0" * 40}\n')
+    code, out, _ = ship(repo, '--pre-push', '--refs-file', str(together))
+    assert code == 2, out
+    red = [c for c in out['checks'] if 'IA_EXPIRED_SHIPPED' in codes(c)]
+    assert red and red[0]['predicted_merge'] and red[0]['source_commit'] == topic and red[0]['merge_base_commit'] == main, out
 
 
 def test_green_push_passes_and_deleted_refs_only_skip(repo, tmp_path):
@@ -311,18 +402,84 @@ def test_extension_is_opt_in_and_fails_closed_once_enabled(repo, tmp_path):
     assert blocked.returncode == 2 and 'IA_EXPIRED_SHIPPED' in blocked.stdout
 
 
+def enable_marker(root):
+    (root / '.vibe-guard').mkdir(exist_ok=True)
+    shutil.copy2(SKILL / 'templates/infoarch-ship.enabled', root / '.vibe-guard/infoarch-ship.enabled')
+
+
+def gate_env():
+    return dict(os.environ, DESIGN_AUTHOR_PYTHON=sys.executable, INFOARCH_SHIP_COMMAND=str(SCRIPTS / 'infoarch-author'))
+
+
+def test_deleting_the_worktree_marker_does_not_disable_a_committed_gate(repo, tmp_path):
+    run_git(repo, 'checkout', '-qb', 'topic')
+    enable_marker(repo)
+    commit(repo, 'enable the IA ship gate')
+    expire_shipped_proof(repo)
+    red = commit(repo, 'expired proof')
+    (repo / '.vibe-guard/infoarch-ship.enabled').unlink()  # local deletion only: the pushed commit still enables it
+    blocked = run_extension(repo, str(refs_file(tmp_path, red)), env=gate_env())
+    assert blocked.returncode == 2 and 'IA_EXPIRED_SHIPPED' in blocked.stdout, blocked.stdout + blocked.stderr
+    # From a checkout whose HEAD and remote-tracking branches never had the marker: the pushed commit alone decides.
+    run_git(repo, 'checkout', '-q', 'main')
+    blocked = run_extension(repo, str(refs_file(tmp_path, red)), env=gate_env())
+    assert blocked.returncode == 2 and 'IA_EXPIRED_SHIPPED' in blocked.stdout, blocked.stdout + blocked.stderr
+
+
+def test_removing_the_marker_in_a_commit_is_reported_and_still_gated(repo, tmp_path):
+    run_git(repo, 'checkout', '-qb', 'topic')
+    enable_marker(repo)
+    enabled = commit(repo, 'enable the IA ship gate')
+    run_git(repo, 'rm', '-q', '.vibe-guard/infoarch-ship.enabled')
+    expire_shipped_proof(repo)
+    red = commit(repo, 'disable the gate and expire a shipped proof')
+    refs = tmp_path / 'refs'
+    # Only the commit this push replaces on the remote has the marker (origin/main never had it).
+    refs.write_text(f'refs/heads/topic {red} refs/heads/topic {enabled}\n')
+    blocked = run_extension(repo, str(refs), env=gate_env())
+    assert blocked.returncode == 2 and 'IA_EXPIRED_SHIPPED' in blocked.stdout, blocked.stdout + blocked.stderr
+    assert 'infoarch-ship.enabled' in blocked.stderr  # the removal is visible, not silent
+    dump(repo / 'design/info_arch/info_arch.yaml', fresh_ssot())
+    green = commit(repo, 'refresh the proof date')
+    refs.write_text(f'refs/heads/topic {green} refs/heads/topic {enabled}\n')
+    passed = run_extension(repo, str(refs), env=gate_env())
+    assert passed.returncode == 0 and 'infoarch-ship.enabled' in passed.stderr, passed.stdout + passed.stderr
+
+
+def test_a_new_branch_without_the_marker_is_gated_while_the_merge_base_has_it(repo, tmp_path):
+    run_git(repo, 'checkout', '-qb', 'topic')
+    enable_marker(repo)
+    commit(repo, 'enable the IA ship gate')
+    run_git(repo, 'update-ref', 'refs/remotes/origin/main', 'HEAD')  # the merge base now commits the marker
+    run_git(repo, 'checkout', '-qb', 'escape')
+    run_git(repo, 'rm', '-q', '.vibe-guard/infoarch-ship.enabled')
+    expire_shipped_proof(repo)
+    red = commit(repo, 'disable the gate on a new branch')
+    blocked = run_extension(repo, str(refs_file(tmp_path, red)), env=gate_env())  # remote sha is all zeros
+    assert blocked.returncode == 2 and 'IA_EXPIRED_SHIPPED' in blocked.stdout, blocked.stdout + blocked.stderr
+    assert 'infoarch-ship.enabled' in blocked.stderr
+
+
 def hooks_harness(tmp_path, dispatcher):
-    hooks = tmp_path / 'hooks'
+    """A vibe-guard-shaped root: ROOT/bin/vibe-guard (the scanner) and ROOT/git-hooks/{pre-push,pre-push.d/}."""
+    guard = tmp_path / 'guard'
+    hooks = guard / 'git-hooks'
     (hooks / 'pre-push.d').mkdir(parents=True)
-    (hooks / 'pre-push').write_text(dispatcher)
+    (guard / 'bin').mkdir()
+    (guard / 'bin/vibe-guard').write_text('#!/bin/sh\ncat >/dev/null\n')
+    (guard / 'bin/vibe-guard').chmod(0o755)
+    (hooks / 'pre-push').write_text(dispatcher.replace('@ROOT@', shlex.quote(str(guard))))
     (hooks / 'pre-push').chmod(0o755)
     config = tmp_path / 'gitconfig'
     config.write_text('[core]\n hooksPath = ' + str(hooks) + '\n')
     return hooks, dict(os.environ, DESIGN_AUTHOR_PYTHON=sys.executable, GIT_CONFIG_GLOBAL=str(config))
 
 
-DISPATCHER = ('#!/usr/bin/env bash\nrefs_file="$(mktemp)"\ntee "$refs_file" | vibe-guard scan-push "$@"\n'
-              'for ext in "$d"/pre-push.d/*; do "$ext" "$refs_file"; done\n')
+# The shape of vibe-guard's dispatcher: errexit makes any extension's nonzero exit stop the push.
+DISPATCHER = ('#!/usr/bin/env bash\nset -euo pipefail\nROOT=@ROOT@\nrefs_file="$(mktemp)"\n'
+              'trap \'rm -f "$refs_file"\' EXIT\ntee "$refs_file" | "$ROOT/bin/vibe-guard" scan-push "$@"\n'
+              'd="$ROOT/git-hooks/pre-push.d"\nfor ext in "$d"/*; do\n  [[ -x "$ext" ]] || continue\n'
+              '  "$ext" "$refs_file"\ndone\n')
 
 
 def test_doctor_disqualifies_missing_hook_marker_and_ship_command(repo, tmp_path):

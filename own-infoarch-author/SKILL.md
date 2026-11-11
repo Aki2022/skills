@@ -48,13 +48,14 @@ infoarch-author impact --root . --id fct-0001  # その原子を参照するア�
 infoarch-author skeleton --root . --outline lp-xxx [--out DIR]  # アウトラインから骨組みの HTML（アンカー・順序・固定値）を出す。工場はこれを崩さずにスタイリングする
 infoarch-author dom --root . --outline lp-xxx # 描画物をブラウザで開き、アンカー・順序・固定値の表示を確かめる
 infoarch-author judge --root . [--dom-report dom.json]  # 意味の判定（表記ゆれ・強調・未登録の主張・妥当性）を共有の判定台帳から読む。Jev は呼ばない
-infoarch-author ship --root . --channel web   # 出荷の正式の入口。出荷されるコミットで check → dom → judge が緑の時だけ ship_command を実行する
+infoarch-author ship --root . --channel web   # 出荷の正式の入口。出荷されるコミット（git の中身）で tree → check → dom → judge が緑の時だけ ship_command を実行する
 infoarch-author ship --root . --doctor        # ship_command・merge_base の無い出荷チャネルと、pre-push の未導入を失格にする
 infoarch-author maintain --root .             # セッション終了の Step 2.5。design/info_arch/ が無ければ 1 行で skip
 ```
 
 出荷は `ship --channel` を通す（`ship_command` を直接叩かない）。push は、マーカー（`templates/infoarch-ship.enabled` を
-`.vibe-guard/` に写す）のある repo で、vibe-guard の pre-push に `hooks/pre-push.d/61-infoarch-ship` を置くと、予測マージ木で止まる。
+`.vibe-guard/` に写してコミットする）のある repo で、vibe-guard の pre-push に `hooks/pre-push.d/61-infoarch-ship` を置くと、
+push される各コミットそのものと、その予測マージ木で止まる。手元のマーカーを消しても、コミットされたマーカーで動く。
 導入（マーカー・拡張・PATH）は repo ごとにオーナーの確認を取ってから行う。
 
 `scripts/infoarch-author` を PATH に置き、PyYAML と jsonschema のある Python を `DESIGN_AUTHOR_PYTHON` で選ぶ

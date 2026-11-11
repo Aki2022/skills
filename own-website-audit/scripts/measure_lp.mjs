@@ -22,7 +22,7 @@
 
 import { writeFileSync, existsSync, realpathSync, unlinkSync } from "node:fs";
 import {dirname} from "node:path";
-import {loadEnvironment,verifyRuntime,configureFonts,trackFonts,renderEvidence,compareRepeats} from "../../own-design-author/scripts/fixed_render.mjs";
+import {loadEnvironment,verifyRuntime,configureFonts,trackFonts,renderEvidence,compareRepeats,fixedLaunchOptions} from "../../own-design-author/scripts/fixed_render.mjs";
 import { loadManifest, collectDesign } from "../../own-design-author/scripts/resolved_contract.mjs";
 import { createRequire } from "node:module";
 
@@ -583,7 +583,7 @@ try {
   }
 } catch {console.error('fixed rendering environment unavailable or mismatched');process.exit(2);}
 let browser;
-try{browser=await chromium.launch(fixed?{executablePath:chromium.executablePath()}:{});}
+try{browser=await chromium.launch(fixed?fixedLaunchOptions(chromium):{});}
 catch{console.error('browser runtime unavailable');process.exit(2);}
 try{if(fixed)environment=await verifyRuntime(fixed,chromium,require('playwright/package.json').version,browser);}
 catch{await browser.close();console.error('fixed runtime mismatch');process.exit(2);}
@@ -598,6 +598,16 @@ const report = {
   uncovered: [...(manifest.coverage?.uncovered || []), 'pseudo-elements', 'shadow-dom', 'iframe-documents',...(fixed?[]:['fixed-render-environment'])],
 };
 
+// Stage reached when rendering stopped; reported with a fixed code, never a raw stack.
+let stage='context';
+const EXECUTION_ERRORS={navigate:'navigation',assets:'asset-decode',collect:'collect',axe:'axe',
+  contrast:'contrast-sampling',images:'image-sampling',evidence:'render-evidence',recheck:'fixed-inputs-changed'};
+function describeFailure(error){
+  const message=String(error&&error.message||error||'').split('\n')[0]
+    .replace(/(?:file:\/\/)?\/(?:Users|home|private|var|tmp)\/[^\s'")]+/g,'<path>').slice(0,200);
+  const code=/did not stabilize/.test(message)?'render-unstable':(EXECUTION_ERRORS[stage]||'render-'+stage);
+  return {code,message};
+}
 try {
 for(let repeat=0;repeat<(fixed?2:1);repeat++){
 for (const scheme of schemes) {
@@ -632,8 +642,10 @@ for (const scheme of schemes) {
     });
 
     // Background prefetch/analytics streams do not define visual readiness.
+    stage='navigate';
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
     // 遅延読み込みを確定させる（未読込を「壊れている」と誤判定しないため）
+    stage='assets';
     await page.evaluate(() =>
       document.querySelectorAll("img").forEach((i) => (i.loading = "eager")),
     );
@@ -645,8 +657,10 @@ for (const scheme of schemes) {
     });
     await page.waitForTimeout(700);
 
+    stage='collect';
     const data = await page.evaluate(collect, T);
     data.design = await page.evaluate(collectDesign, manifest);
+    stage='axe';
     data.axe = {violations:[], incomplete:[], unavailable:false};
     if (axePath && existsSync(axePath)) {
       await page.addScriptTag({path:axePath});
@@ -665,6 +679,7 @@ for (const scheme of schemes) {
 
     // 画像・グラデの上に乗った文字は、背後の実画素からコントラストを出す。
     // CSS の背景色だけで判定すると body の地と比べてしまい誤検知になる。
+    stage='contrast';
     for (const t of data.pendingContrast) {
       try {
         const q = await measureRegion(page, t);
@@ -701,6 +716,7 @@ for (const scheme of schemes) {
     delete data.pendingContrast;
 
     // 合成後の画素で画像領域を評価する
+    stage='images';
     data.imageLightness = [];
     for (const region of data.imageRegions) {
       try {
@@ -721,19 +737,30 @@ for (const scheme of schemes) {
         });
       }
     }
+    stage='evidence';
     if(fixed)data.render_evidence=await renderEvidence(page,context,fixed,requests);
+    stage='context';
     report.runs.push({ scheme, width, ...(fixed?{repeat}:{}), ...data });
     await context.close();
   }
 }
 }
 if(fixed){
+  stage='recheck';
   const reloaded=loadEnvironment(fixed.path,fixed.root,viewports,schemes);
   if(reloaded.config_sha256!==fixed.config_sha256)throw Error('environment changed');
   await verifyRuntime(reloaded,chromium,require('playwright/package.json').version,browser);
 }
-} catch {
-  console.error('rendering failed or fixed inputs changed');process.exitCode=2;
+} catch (error) {
+  const failure=describeFailure(error);
+  report.execution_error=failure.code;
+  report.environment={...(report.environment||{}),repeat_equal:false};
+  report.failures.push({id:'render-execution-failed',stage,error:failure.code,detail:failure.message,
+    at:report.runs.length+' completed runs'});
+  if(!report.uncovered.includes('render-execution-failed'))report.uncovered.push('render-execution-failed');
+  // A failed render still leaves a fresh diagnostic report; the gate reads its reason.
+  if(jsonOut)writeFileSync(jsonOut,JSON.stringify(report,null,2));
+  console.error('rendering failed: '+failure.code+' at '+stage+': '+failure.message);process.exitCode=2;
 } finally {
   await browser.close();
 }

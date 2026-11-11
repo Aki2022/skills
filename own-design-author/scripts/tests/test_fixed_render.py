@@ -99,3 +99,19 @@ def test_fixed_two_runs_detect_fallback_instability_and_runtime_mismatch(project
         assert 'browser runtime unavailable' in run.stderr and data is None
     finally:
         server.shutdown();server.server_close();thread.join()
+
+
+def test_fixed_launch_disables_gpu_rasterization_for_every_fixed_browser():
+    # GPU raster tiles change by one level between identical full-page captures
+    # (measured 2026-11-11 on macOS 27.2: 2 hashes in 20 captures; 1 with software raster).
+    js=('import {fixedLaunchOptions} from '+json.dumps(HELPER.as_uri())+';'
+        'console.log(JSON.stringify(fixedLaunchOptions({executablePath:()=>"/fixed/chromium"})));')
+    run=subprocess.run([NODE,'--input-type=module','-e',js],capture_output=True,text=True)
+    assert run.returncode==0,run.stderr
+    options=json.loads(run.stdout)
+    assert options['executablePath']=='/fixed/chromium'
+    assert '--disable-gpu-rasterization' in options['args']
+    # Probe and measurement must launch the same way, or the pinned runtime describes another renderer.
+    assert 'chromium.launch(fixedLaunchOptions(chromium))' in HELPER.read_text()
+    measure=(SKILL.parent/'own-website-audit/scripts/measure_lp.mjs').read_text()
+    assert 'fixedLaunchOptions(chromium)' in measure and 'executablePath:chromium.executablePath()}' not in measure

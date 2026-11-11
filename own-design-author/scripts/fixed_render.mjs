@@ -17,8 +17,16 @@ function fingerprint(chromium,playwrightVersion,browser) {
     platform:process.platform,arch:process.arch,os_release:os.release()};
 }
 
+// GPU raster tiles differ by one level between identical full-page captures on some
+// hosts; software raster keeps repeated captures byte-identical. Probe and
+// measurement launch the same renderer through this one function.
+export const FIXED_LAUNCH_ARGS=Object.freeze(['--disable-gpu-rasterization']);
+export function fixedLaunchOptions(chromium) {
+  return {executablePath:chromium.executablePath(),args:[...FIXED_LAUNCH_ARGS]};
+}
+
 export async function probe(chromium, playwrightVersion) {
-  const browser=await chromium.launch({executablePath:chromium.executablePath()});
+  const browser=await chromium.launch(fixedLaunchOptions(chromium));
   try { return fingerprint(chromium,playwrightVersion,browser); }
   finally { await browser.close(); }
 }

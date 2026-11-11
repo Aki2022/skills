@@ -43,9 +43,9 @@ description: |
 作業開始前に以下を確認すること:
 
 ```bash
-# ユーザー認証が生きているか
-gcloud auth print-access-token 2>&1 | head -1
-# → トークンが返れば OK。エラーなら `gcloud auth login` を先に実行
+# ユーザー認証が生きているか（token の値は画面にも変数にも出さない）
+if gcloud auth print-access-token >/dev/null 2>&1; then echo "auth OK"; else echo "auth NG"; fi
+# → auth OK なら進む。auth NG なら `gcloud auth login` を先に実行
 ```
 
 認証が切れていたらユーザーに `gcloud auth login` の実行を依頼して止まること。
@@ -131,17 +131,19 @@ IAM 変更は即時反映されない。トークンが取れるまでリトラ�
 
 ```bash
 echo "IAM 反映待ち..."
+READY=""
 for i in $(seq 1 6); do
-  TOKEN=$(gcloud auth print-access-token \
-    --impersonate-service-account="${SA_EMAIL}" 2>/dev/null)
-  if [ -n "$TOKEN" ]; then
+  # token は捨てて、取れたかどうか（exit code）だけを見る
+  if gcloud auth print-access-token \
+    --impersonate-service-account="${SA_EMAIL}" >/dev/null 2>&1; then
+    READY=1
     echo "✅ ${i}回目で反映完了"
     break
   fi
   echo "  ${i}/6 まだ反映中... (10秒待機)"
   sleep 10
 done
-[ -z "$TOKEN" ] && echo "❌ 60秒経過しても反映されず。数分後に再試行を" && exit 1
+[ -z "$READY" ] && echo "❌ 60秒経過しても反映されず。数分後に再試行を" && exit 1
 ```
 
 ### Step 6: .mise.toml 作成

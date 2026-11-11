@@ -22,6 +22,35 @@ def run_git(root,env,*args,allowed=(0,)):
     return run
 
 
+def copy_guard_hooks(guard,harness):
+    """Copy installed hooks into a fixture harness that the test may rewrite.
+
+    Package-managed guards install read-only hooks; copytree keeps that mode,
+    so the copy is made owner-writable. The installed hooks are never touched.
+    """
+    target=harness/'git-hooks'
+    shutil.copytree(guard/'git-hooks',target)
+    for path in (target,*target.rglob('*')):
+        path.chmod(path.stat().st_mode|0o200)
+    return target
+
+
+def test_guard_hooks_copy_is_writable_when_the_installed_hooks_are_read_only(tmp_path):
+    # Package-managed guards (e.g. a read-only store) install hooks without write permission.
+    source=tmp_path/'installed/git-hooks';(source/'pre-push.d').mkdir(parents=True)
+    hook=source/'pre-push';hook.write_text('#!/bin/sh\nROOT=/installed\n')
+    extension=source/'pre-push.d/60-design-ship';extension.write_text('#!/bin/sh\n')
+    for path in (hook,extension):path.chmod(0o555)
+    (source/'pre-push.d').chmod(0o555);source.chmod(0o555)
+    try:
+        copied=copy_guard_hooks(tmp_path/'installed',tmp_path/'harness')
+        (copied/'pre-push').write_text('#!/bin/sh\nROOT=/harness\n')
+        shutil.copy2(SKILL/'hooks/pre-push.d/60-design-ship',copied/'pre-push.d/60-design-ship')
+        assert os.access(copied/'pre-push',os.X_OK)
+    finally:
+        for path in (source,source/'pre-push.d'):path.chmod(0o755)
+
+
 def browser_project(project,env):
     root,_=project
     run_git(root,env,'checkout','-b','fixture-design')
@@ -102,7 +131,7 @@ def test_push_and_mise_share_ship_gate_without_bypassing_scanner(project,tmp_pat
     global_config=Path(os.environ.get('GIT_CONFIG_GLOBAL',str(Path.home()/'.gitconfig')))
     before=hashlib.sha256(global_config.read_bytes()).hexdigest()
     harness=tmp_path/'guard';(harness/'bin').mkdir(parents=True)
-    shutil.copytree(guard/'git-hooks',harness/'git-hooks')
+    copy_guard_hooks(guard,harness)
     hook=harness/'git-hooks/pre-push';lines=hook.read_text().splitlines()
     assert any(line.startswith('ROOT=') for line in lines)
     hook.write_text('\n'.join('ROOT='+shlex.quote(str(harness)) if line.startswith('ROOT=') else line for line in lines)+'\n')

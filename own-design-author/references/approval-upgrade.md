@@ -1,7 +1,7 @@
 # 人間確認とハッシュに基づく承認
 
 正典はbiz_opsのSPEC-design-system-standardizationと
-ADR-20261022-defer-approval-signatures。所有者が2026-10-22に署名必須のDeferredを承認した。
+ADR-20261111-defer-approval-signatures。署名必須のDeferredは2026-10-22から実装済みで、所有者が2026-11-11に承認して記録した。
 
 ## 実装と境界
 

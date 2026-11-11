@@ -160,11 +160,15 @@ def test_uncovered_judgment_of_a_shipped_outline_stops_but_a_draft_does_not(repo
     assert 'IA_JUDGE_UNCOVERED' in codes(out) and 'IA_SHIP_UNCOVERED' not in codes(out)
 
 
-def test_review_scores_go_to_a_human_without_stopping(repo):
+def test_review_scores_go_to_a_human_without_stopping(repo, tmp_path):
     cover_ledger(repo, score=jl.load_policy()['theta'])
-    commit(repo, 'every judgment at theta')
+    sha = commit(repo, 'every judgment at theta')
     code, out, _ = ship(repo)
     assert code == 1 and 'IA_JUDGE_REVIEW' in codes(out), out
+    # The dispatcher stops a push on any nonzero exit, so pre-push reports warnings but exits 0 (only 2 stops).
+    code, out, _ = ship(repo, '--pre-push', '--refs-file', str(refs_file(tmp_path, sha)))
+    assert code == 0 and out['exit_code'] == 0, out
+    assert any('IA_JUDGE_REVIEW' in w for w in out['warnings']), out
 
 
 # ---- ship_command is the formal entry ---------------------------------------------------------

@@ -240,7 +240,8 @@ def pre_push(root, refs_file, date):
                 checks.append(result)
                 if result['exit_code'] == 2:
                     return {'exit_code': 2, 'errors': ['predicted merge IA ship gate failed'], 'checks': checks}
-    return {'exit_code': max([c['exit_code'] for c in checks], default=0), 'checks': checks,
+    # The pre-push dispatcher stops on any nonzero exit: warnings travel in the body, only failures exit 2.
+    return {'exit_code': 0, 'checks': checks, 'warnings': [w for c in checks for w in c['warnings']],
             'skipped': [] if sources else ['deleted refs only; no shipment']}
 
 

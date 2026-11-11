@@ -99,3 +99,59 @@ def test_fixed_two_runs_detect_fallback_instability_and_runtime_mismatch(project
         assert 'browser runtime unavailable' in run.stderr and data is None
     finally:
         server.shutdown();server.server_close();thread.join()
+
+
+def test_fixed_launch_disables_gpu_rasterization_for_every_fixed_browser():
+    # GPU raster tiles change by one level between identical full-page captures
+    # (measured 2026-11-11 on macOS 27.2: 2 hashes in 20 captures; 1 with software raster).
+    js=('import {fixedLaunchOptions} from '+json.dumps(HELPER.as_uri())+';'
+        'console.log(JSON.stringify(fixedLaunchOptions({executablePath:()=>"/fixed/chromium"})));')
+    run=subprocess.run([NODE,'--input-type=module','-e',js],capture_output=True,text=True)
+    assert run.returncode==0,run.stderr
+    options=json.loads(run.stdout)
+    assert options['executablePath']=='/fixed/chromium'
+    assert '--disable-gpu-rasterization' in options['args']
+    # Probe and measurement must launch the same way, or the pinned runtime describes another renderer.
+    assert 'chromium.launch(fixedLaunchOptions(chromium))' in HELPER.read_text()
+    measure=(SKILL.parent/'own-website-audit/scripts/measure_lp.mjs').read_text()
+    assert 'fixedLaunchOptions(chromium)' in measure and 'executablePath:chromium.executablePath()}' not in measure
+
+
+def test_render_failure_detail_never_carries_raw_error_text():
+    # Persisted reports and gate errors carry only fixed, allow-listed details:
+    # raw messages can hold URLs with tokens or local paths (with spaces) outside any pattern.
+    leaking=['failed at /opt/team/axe.js','page.goto: net::ERR at https://example.invalid/?token=review-sentinel',
+             'Cannot open /Users/someone/My Files/secret.js','random failure with key=sk-review-sentinel']
+    js=('import {describeRenderFailure} from '+json.dumps(HELPER.as_uri())+';'
+        'const rows=JSON.parse(process.argv[1]).map(m=>describeRenderFailure(new Error(m),"navigate"));'
+        'rows.push(describeRenderFailure(new Error("render did not stabilize within three captures"),"evidence"));'
+        'rows.push(describeRenderFailure(new Error("page.evaluate: EncodingError: The source image cannot be decoded. at https://x.invalid/a.png"),"assets"));'
+        'console.log(JSON.stringify(rows));')
+    run=subprocess.run([NODE,'--input-type=module','-e',js,json.dumps(leaking)],capture_output=True,text=True)
+    assert run.returncode==0,run.stderr
+    rows=json.loads(run.stdout)
+    text=json.dumps(rows)
+    for marker in ('/opt/team','example.invalid','token=','My Files','secret.js','sk-review','x.invalid'):
+        assert marker not in text
+    assert rows[0]=={'code':'navigation','message':'unlisted error; rerun the measurement locally to read it'}
+    assert rows[4]=={'code':'render-unstable','message':'render did not stabilize within three captures'}
+    assert rows[5]=={'code':'asset-decode','message':'a visible image could not be decoded'}
+
+
+def test_render_mode_is_part_of_the_pinned_runtime(tmp_path):
+    # A pin measured under another raster mode must not be accepted silently.
+    binary=tmp_path/'chromium';binary.write_bytes(b'fixture-binary')
+    js=('import {verifyRuntime} from '+json.dumps(HELPER.as_uri())+';import os from "node:os";'
+        'import {createHash} from "node:crypto";import {readFileSync} from "node:fs";'
+        'const chromium={executablePath:()=>process.argv[1]};const browser={version:()=>"1.0"};'
+        'const base={browser_version:"1.0",browser_sha256:createHash("sha256").update(readFileSync(process.argv[1])).digest("hex"),'
+        'playwright_version:"9.9.9",node_version:process.version,platform:process.platform,arch:process.arch,os_release:os.release()};'
+        'const out={};'
+        'for (const [name,runtime] of Object.entries({legacy:base,gpu:{...base,launch_args:""},'
+        'software:{...base,launch_args:"--disable-gpu-rasterization"}})){'
+        'try{await verifyRuntime({config:{runtime,fonts:[],viewports:[],schemes:[]}},chromium,"9.9.9",browser);out[name]="accepted";}'
+        'catch{out[name]="rejected";}}'
+        'console.log(JSON.stringify(out));')
+    run=subprocess.run([NODE,'--input-type=module','-e',js,str(binary)],capture_output=True,text=True)
+    assert run.returncode==0,run.stderr
+    assert json.loads(run.stdout)=={'legacy':'rejected','gpu':'rejected','software':'accepted'}

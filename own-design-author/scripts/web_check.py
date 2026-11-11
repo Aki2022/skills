@@ -93,6 +93,10 @@ def main():
             report['stages'].append({'stage':'L2','exit_code':l2.returncode,'target_env':row['env'],'profile':profile})
             if l2.returncode:
                 report['exit_code']=l2.returncode
+                reason=next((f for f in measured.get('failures',[]) if isinstance(f,dict) and f.get('id')=='render-execution-failed'),None)
+                if reason:
+                    report['errors'].append('L2 '+row['env']+' failed at '+str(reason.get('stage'))+': '
+                        +str(reason.get('error'))+' ('+str(reason.get('detail',''))[:200]+')')
                 report['errors'].append('L2 failed; inspect the generated report or rerun the measurement command')
                 print(json.dumps(report,ensure_ascii=False));return report['exit_code']
         report['exit_code']=l0['exit_code']

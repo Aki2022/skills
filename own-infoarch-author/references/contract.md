@@ -102,7 +102,7 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 | --- | --- | --- | --- |
 | `ia-name-variant` | セクション（正式名称が 1 つ以上ある時） | 固定値を展開した文案 | 正式名称の一覧 |
 | `ia-unregistered-claim` | セクション | 固定値を展開した文案 | メッセージ・課題・証拠・使った固定値 |
-| `ia-audience-fit` | アウトライン | 全セクションの役割と文案（順に） | 対象者（label・situation・desired_action）と brief |
+| `ia-audience-fit` | アウトライン | 全セクションの役割と文案（順に） | 対象者（label・situation・desired_action・優先順位のメッセージを順に）と brief。優先順位を入れ替えると判定のキーが変わる |
 | `ia-emphasis` | 成果物 × 画面幅 | `dom` が切り出した最初の画面の文言 | 対象者と、その 1 位のメッセージ |
 
 score は「問題がある確率」。θ 以上は IA_JUDGE_REVIEW（要確認）として人に回し、score だけで失格にしない。
@@ -117,7 +117,7 @@ infoarch-author judge --root . --dom-report dom.json --answers <dir>/judgment-an
 python3 <own-design-author>/scripts/judgment_ledger.py record|refresh --repo . --replacement replacement.json [--write]
 ```
 
-`--replacement-out` は共有の台帳の置き換えを作る。design の行は全部残し、IA は現在の候補に対する実回答だけを入れ、古い IA の行は落とす。
+`--replacement-out` は共有の台帳の置き換えを作る。design の行は全部残し、IA は現在の候補に対する実回答だけを入れ、古い IA の行は落とす。回答ファイルは `judgment_run.py` と同じ読み手で検査する（形・policy・候補のハッシュ・score と raw_answer の一致）。出力先は新規作成だけで、既存のファイル・symlink（親ディレクトリを含む）には書かない。
 holdout はそのまま引き継ぐ。回答の policy が今の共有 policy と違えば止める（migrate が要る）。既にあるファイルは上書きしない。
 
 | code | 内容 |
@@ -125,10 +125,10 @@ holdout はそのまま引き継ぐ。回答の policy が今の共有 policy �
 | IA_JUDGE_REFUSED | check が失格している（先に直す） |
 | IA_JUDGE_NO_TARGETS | 判定の候補が 0 件 |
 | IA_JUDGE_LEDGER | 台帳が読めない・policy と合わない・symlink |
-| IA_JUDGE_DOM_FAILED / IA_JUDGE_DOM_REPORT | 合格していない描画を判定に使おうとした・最初の画面の行が無いか読めない |
+| IA_JUDGE_DOM_FAILED / IA_JUDGE_DOM_REPORT | 合格していない描画を判定に使おうとした・最初の画面の行が無いか読めない・アウトラインの成果物と画面幅に無い行か重複（行の本文は報告に出さない） |
 | IA_JUDGE_UNCOVERED（warn） | 台帳に無い判定がある（未カバー） |
 | IA_JUDGE_REVIEW（warn） | score が θ 以上（要確認） |
-| IA_JUDGE_EMPHASIS_MISSING（出荷される HTML なら warn、他は info） | 最初の画面の入力が無く、強調を判定していない |
+| IA_JUDGE_EMPHASIS_MISSING（出荷される HTML なら warn、他は info） | 最初の画面の入力が無く、強調を判定していない。dom の報告が一部の成果物・画面幅だけなら、足りない組ごとに出る |
 
 報告は `uncovered`（未カバー）・`screened`（台帳にあり。「問題なし」の保証ではない）・`missing`（入力が無く判定していない）を分けて出す。
 

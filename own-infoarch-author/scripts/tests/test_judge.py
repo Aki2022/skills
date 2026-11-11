@@ -253,3 +253,91 @@ def test_dom_first_screens_name_their_outline(repo, monkeypatch):
     monkeypatch.setattr(dom, 'snapshot', lambda root, html, vps: [dict(snap, viewport=v) for v in vps])
     report = dom.run(repo, 'lp-municipal', DATE)
     assert report.first_screens and all(s['outline'] == 'lp-municipal' for s in report.first_screens)
+
+
+# --- external review 2026-11-11 (WS-20261022 ISSUE-04) ---
+
+def test_partial_dom_report_leaves_the_unrendered_viewport_missing(repo, tmp_path):
+    only_mobile = dom_report(tmp_path / 'm.json', screens=[
+        {'outline': 'lp-municipal', 'file': 'site/index.html', 'viewport': 'mobile', 'text': '運用の手間が半分になります'}])
+    code, out, rows = candidates(repo, '--dom-report', str(only_mobile))
+    assert [r['id'] for r in rows if r['input']['kind'] == 'ia-emphasis'] == ['ia-emphasis:lp-municipal/site/index.html@mobile']
+    gap = [m for m in out['missing'] if m['kind'] == 'ia-emphasis' and m['outline'] == 'lp-municipal']
+    assert gap == [{'kind': 'ia-emphasis', 'outline': 'lp-municipal', 'file': 'site/index.html', 'viewport': 'desktop',
+                    'shipped_html': True, 'reason': 'dom の報告（first_screens）にこの画面幅が無い'}]
+    assert 'IA_JUDGE_EMPHASIS_MISSING' in [f['code'] for f in out['findings'] if f['level'] == 'warn']
+
+
+def test_dom_rows_for_unknown_file_viewport_or_duplicates_are_rejected(repo, tmp_path):
+    base = {'outline': 'lp-municipal', 'file': 'site/index.html', 'viewport': 'mobile', 'text': 'x'}
+    for screens in ([dict(base, file='site/other.html')], [dict(base, viewport='tablet')], [base, base]):
+        code, out = cli('judge', '--root', str(repo), '--date', DATE, '--dom-report', str(dom_report(tmp_path / 'r.json', screens=screens)))
+        assert code == 2 and 'IA_JUDGE_DOM_REPORT' in [f['code'] for f in out['findings']], screens
+
+
+def test_invalid_dom_row_text_does_not_leak_into_findings(repo, tmp_path):
+    secret = '社外秘の未公開コピー'
+    report = dom_report(tmp_path / 'r.json', screens=[{'outline': 'x', 'file': 'a', 'viewport': 'm', 'text': secret}])
+    code, out = cli('judge', '--root', str(repo), '--date', DATE, '--dom-report', str(report))
+    assert code == 2 and secret not in json.dumps(out, ensure_ascii=False)
+
+
+def test_priority_order_is_part_of_the_audience_fit_and_emphasis_keys(repo):
+    _, _, before = candidates(repo)
+    ssot = __import__('yaml').safe_load((repo / 'design/info_arch/info_arch.yaml').read_text(encoding='utf-8'))
+    p = ssot['audiences']['aud-0001']['priorities']
+    p[1], p[2] = p[2], p[1]
+    dump(repo / 'design/info_arch/info_arch.yaml', ssot)
+    _, _, after = candidates(repo)
+    fit = lambda rows: {r['id']: r['judgment_hash'] for r in rows if r['input']['kind'] == 'ia-audience-fit'}
+    assert fit(before)['ia-audience-fit:lp-municipal'] != fit(after)['ia-audience-fit:lp-municipal']
+    # The other audience's outline is untouched.
+    assert fit(before)['ia-audience-fit:deck-smb'] == fit(after)['ia-audience-fit:deck-smb']
+    ctx = next(r for r in after if r['id'] == 'ia-audience-fit:lp-municipal')['input']['context']
+    assert [m['id'] for m in ctx['audience']['priorities']] == p
+
+
+def _answers_file(tmp_path, rows, patch=None):
+    policy = jl.load_policy()
+    data = {'schema_version': 1, 'status': 'model-answers-unlabeled', 'policy': policy,
+            'rows': [{'candidate': r, 'score': 0.25, 'raw_answer': {'type': 'noul', 'noul': 0.25}} for r in rows]}
+    for i, row in (patch or {}).items():
+        data['rows'][i].update(row)
+    path = tmp_path / 'judgment-answers.json'
+    path.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
+    return path
+
+
+def test_replacement_rejects_a_score_that_differs_from_the_raw_answer(repo, tmp_path):
+    _, _, rows = candidates(repo)
+    answers = _answers_file(tmp_path, rows, patch={0: {'score': 0.9}})
+    code, out = cli('judge', '--root', str(repo), '--date', DATE, '--answers', str(answers), '--replacement-out', str(tmp_path / 'r.json'))
+    assert code == 2 and not (tmp_path / 'r.json').exists()
+
+
+def test_replacement_out_never_follows_a_symlink(repo, tmp_path):
+    _, _, rows = candidates(repo)
+    answers = _answers_file(tmp_path, rows)
+    victim = tmp_path / 'victim.json'
+    link = tmp_path / 'r.json'
+    link.symlink_to(victim)
+    code, _ = cli('judge', '--root', str(repo), '--date', DATE, '--answers', str(answers), '--replacement-out', str(link))
+    assert code == 2 and not victim.exists()
+    linked_dir = tmp_path / 'linked'
+    linked_dir.symlink_to(tmp_path / 'real', target_is_directory=True)
+    (tmp_path / 'real').mkdir()
+    code, _ = cli('judge', '--root', str(repo), '--date', DATE, '--answers', str(answers), '--replacement-out', str(linked_dir / 'r.json'))
+    assert code == 2 and not (tmp_path / 'real/r.json').exists()
+
+
+def test_replacement_out_is_created_exclusively(repo, tmp_path, monkeypatch):
+    _, _, rows = candidates(repo)
+    answers = _answers_file(tmp_path, rows)
+    target = tmp_path / 'r.json'
+    target.write_text('someone else', encoding='utf-8')
+    # Simulate the file appearing after any existence check: the write itself must refuse.
+    monkeypatch.setattr(Path, 'exists', lambda self, **k: False)
+    with pytest.raises((FileExistsError, ValueError)):
+        judge.run(repo, DATE, [], answers, target)
+    monkeypatch.undo()
+    assert target.read_text(encoding='utf-8') == 'someone else'

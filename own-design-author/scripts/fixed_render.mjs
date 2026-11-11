@@ -14,13 +14,33 @@ const exact = (value,keys) => value && typeof value==='object' && !Array.isArray
 function fingerprint(chromium,playwrightVersion,browser) {
   return {browser_version:browser.version(),browser_sha256:sha(readFileSync(chromium.executablePath())),
     playwright_version:playwrightVersion,node_version:process.version,
-    platform:process.platform,arch:process.arch,os_release:os.release()};
+    platform:process.platform,arch:process.arch,os_release:os.release(),
+    // The raster mode changes pixels, so a pin made under another mode must not match.
+    launch_args:FIXED_LAUNCH_ARGS.join(' ')};
 }
 
 // GPU raster tiles differ by one level between identical full-page captures on some
 // hosts; software raster keeps repeated captures byte-identical. Probe and
 // measurement launch the same renderer through this one function.
 export const FIXED_LAUNCH_ARGS=Object.freeze(['--disable-gpu-rasterization']);
+
+// Reports and gate errors persist only fixed codes and allow-listed details. Raw
+// error text can carry URLs with tokens or local paths that no pattern reliably masks.
+const FAILURE_STAGES={navigate:'navigation',assets:'asset-decode',collect:'collect',axe:'axe',
+  contrast:'contrast-sampling',images:'image-sampling',evidence:'render-evidence',recheck:'fixed-inputs-changed'};
+const FAILURE_DETAILS=[
+  [/render did not stabilize within three captures/,'render did not stabilize within three captures','render-unstable'],
+  [/visible assets did not become ready/,'visible assets did not become ready within 10 seconds',null],
+  [/EncodingError|cannot be decoded/,'a visible image could not be decoded',null],
+  [/environment changed/,'fixed rendering environment changed during measurement',null],
+  [/fixed runtime mismatch/,'fixed runtime changed during measurement',null],
+];
+export function describeRenderFailure(error,stage) {
+  const text=String(error&&error.message||error||'');
+  const known=FAILURE_DETAILS.find(([pattern])=>pattern.test(text));
+  return {code:(known&&known[2])||FAILURE_STAGES[stage]||'render-'+String(stage).replace(/[^a-z-]/g,''),
+    message:known?known[1]:'unlisted error; rerun the measurement locally to read it'};
+}
 export function fixedLaunchOptions(chromium) {
   return {executablePath:chromium.executablePath(),args:[...FIXED_LAUNCH_ARGS]};
 }
@@ -36,7 +56,7 @@ export function loadEnvironment(path,root,widths,schemes) {
   if(path!==resolve(root,'design/render-environment.json') || realpathSync(path)!==path)throw Error('invalid environment location');
   const bytes=readFileSync(path);const config=JSON.parse(bytes);
   if(!exact(config,'schema_version,runtime,clock,locale,timezone,device_scale_factor,reduced_motion,viewports,schemes,fonts') ||
-    config.schema_version!==1 || !exact(config.runtime,'browser_version,browser_sha256,playwright_version,node_version,platform,arch,os_release') ||
+    config.schema_version!==1 || !exact(config.runtime,'browser_version,browser_sha256,playwright_version,node_version,platform,arch,os_release,launch_args') ||
     Object.values(config.runtime).some(v=>typeof v!=='string'||!v) || !/^[a-f0-9]{64}$/.test(config.runtime.browser_sha256) ||
     typeof config.clock!=='string' || new Date(config.clock).toISOString()!==config.clock ||
     typeof config.locale!=='string'||!config.locale || typeof config.timezone!=='string'||!config.timezone ||

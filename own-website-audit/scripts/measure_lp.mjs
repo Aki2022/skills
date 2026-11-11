@@ -22,7 +22,7 @@
 
 import { writeFileSync, existsSync, realpathSync, unlinkSync } from "node:fs";
 import {dirname} from "node:path";
-import {loadEnvironment,verifyRuntime,configureFonts,trackFonts,renderEvidence,compareRepeats,fixedLaunchOptions} from "../../own-design-author/scripts/fixed_render.mjs";
+import {loadEnvironment,verifyRuntime,configureFonts,trackFonts,renderEvidence,compareRepeats,fixedLaunchOptions,describeRenderFailure} from "../../own-design-author/scripts/fixed_render.mjs";
 import { loadManifest, collectDesign } from "../../own-design-author/scripts/resolved_contract.mjs";
 import { createRequire } from "node:module";
 
@@ -600,14 +600,6 @@ const report = {
 
 // Stage reached when rendering stopped; reported with a fixed code, never a raw stack.
 let stage='context';
-const EXECUTION_ERRORS={navigate:'navigation',assets:'asset-decode',collect:'collect',axe:'axe',
-  contrast:'contrast-sampling',images:'image-sampling',evidence:'render-evidence',recheck:'fixed-inputs-changed'};
-function describeFailure(error){
-  const message=String(error&&error.message||error||'').split('\n')[0]
-    .replace(/(?:file:\/\/)?\/(?:Users|home|private|var|tmp)\/[^\s'")]+/g,'<path>').slice(0,200);
-  const code=/did not stabilize/.test(message)?'render-unstable':(EXECUTION_ERRORS[stage]||'render-'+stage);
-  return {code,message};
-}
 try {
 for(let repeat=0;repeat<(fixed?2:1);repeat++){
 for (const scheme of schemes) {
@@ -752,7 +744,7 @@ if(fixed){
   await verifyRuntime(reloaded,chromium,require('playwright/package.json').version,browser);
 }
 } catch (error) {
-  const failure=describeFailure(error);
+  const failure=describeRenderFailure(error,stage);
   report.execution_error=failure.code;
   report.environment={...(report.environment||{}),repeat_equal:false};
   report.failures.push({id:'render-execution-failed',stage,error:failure.code,detail:failure.message,

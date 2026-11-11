@@ -86,7 +86,8 @@ L1/L2が通っても、未カバー規則が消えたとは扱わない。出荷
   "schema_version": 1,
   "runtime": {"browser_version":"<exact-version>","browser_sha256":"<sha256>",
     "playwright_version":"<exact-version>","node_version":"<exact-version>",
-    "platform":"<platform>","arch":"<arch>","os_release":"<exact-release>"},
+    "platform":"<platform>","arch":"<arch>","os_release":"<exact-release>",
+    "launch_args":"--disable-gpu-rasterization"},
   "clock":"2020-01-01T00:00:00.000Z","locale":"ja-JP","timezone":"UTC",
   "device_scale_factor":1,"reduced_motion":"reduce",
   "viewports":[{"width":375,"height":812},{"width":1280,"height":900}],
@@ -107,9 +108,9 @@ fontsのpathはrepo相対の通常ファイル。SHA256を実測し、同一orig
 shadow DOM・iframe内のglyphは未カバーのまま。読み込み前からCDPのfontsUpdatedも記録し、実familyのsrcが登録URLに結び付かない場合は失格。同名のdata URI・local()・インライン生成FontFaceでpinを迂回しない。
 フォントのライセンス・配布可否はプロジェクトが確認し、必要なNOTICEを同梱する。
 
-固定環境のChromiumは `fixedLaunchOptions`（`--disable-gpu-rasterization`）で起動し、probeと測定で同じ描画経路を使う。
+固定環境のChromiumは `fixedLaunchOptions`（`--disable-gpu-rasterization`）で起動し、probeと測定で同じ描画経路を使う。起動引数はruntimeの`launch_args`としてpinし、別の描画方式で測ったpinは一致しない（作り直す）。
 GPUラスタでは同じ全画面撮影が1段階ずつ揺れることがある（2026-11-11 macOS 27.2で20枚中2種類、ソフトウェアラスタで1種類）。
-描画が止まった時は、測定が段階（stage）と固定コード（例 `render-unstable`・`asset-decode`）入りの診断レポートを残し、ゲートのerrorsに理由を出す。
+描画が止まった時は、測定が段階（stage）と固定コード（例 `render-unstable`・`asset-decode`）入りの診断レポートを残し、ゲートのerrorsに理由を出す。詳細は許可済みの固定文だけで、生のエラー文（URL・パスを含みうる）は保存しない。
 時計はページ遷移前にPlaywrightのsetFixedTimeを適用し、Dateを固定する。タイマーは動作を続ける。
 DPR・viewport・reduced-motion・locale・timezoneはcontextで指定し、ページ側の実値も照合する。
 service workerはブロックし、各組合せを新しいcontextで実行する。

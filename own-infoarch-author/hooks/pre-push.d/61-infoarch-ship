@@ -1,14 +1,35 @@
 #!/usr/bin/env sh
 # vibe-guard passes the preserved refs file after its scanner has consumed stdin.
-# Opt-in per repository through .vibe-guard/infoarch-ship.enabled; once enabled, every failure stops the push.
+# Opt-in per repository through .vibe-guard/infoarch-ship.enabled. The committed marker counts as well as the
+# working-tree file: the gate runs when the file is here, or when a pushed commit, the commit a pushed ref
+# replaces, or a remote-tracking branch commits it. Deleting the file locally therefore does not switch the gate
+# off, and a push that removes it is still gated (the gate reports the removal). Once on, every failure stops the push.
 set -eu
 repo=$(git rev-parse --show-toplevel) || exit 2
-marker="$repo/.vibe-guard/infoarch-ship.enabled"
-[ -e "$marker" ] || [ -L "$marker" ] || exit 0
-[ -f "$marker" ] && [ ! -L "$marker" ] && [ "$(cat "$marker")" = "1" ] || {
-  echo 'invalid IA ship marker; shipment stopped' >&2
-  exit 2
-}
+rel=.vibe-guard/infoarch-ship.enabled
+marker="$repo/$rel"
+enabled=
+if [ -e "$marker" ] || [ -L "$marker" ]; then
+  [ -f "$marker" ] && [ ! -L "$marker" ] && [ "$(cat "$marker")" = "1" ] || {
+    echo 'invalid IA ship marker; shipment stopped' >&2
+    exit 2
+  }
+  enabled=1
+fi
+committed() { git -C "$repo" cat-file -e "$1:$rel" 2>/dev/null; }
+if [ -z "$enabled" ] && [ "$#" -eq 1 ] && [ -f "$1" ]; then
+  while read -r _ local_sha _ remote_sha; do
+    for sha in "$local_sha" "$remote_sha"; do
+      case "$sha" in *[!0]*) if committed "$sha"; then enabled=1; fi ;; esac
+    done
+  done < "$1"
+fi
+if [ -z "$enabled" ]; then
+  for tip in HEAD $(git -C "$repo" for-each-ref --format='%(objectname)' refs/remotes); do
+    if committed "$tip"; then enabled=1; break; fi
+  done
+fi
+[ -n "$enabled" ] || exit 0
 [ "$#" -eq 1 ] && [ -f "$1" ] || {
   echo 'missing preserved push refs; shipment stopped' >&2
   exit 2

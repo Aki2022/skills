@@ -121,11 +121,12 @@ Actions` names the very next step; `## Log` has a dated bullet for today's chang
 Summaries of what happened go there, not into the index and not into a guide.
 
 Skip this step only when the repo has no `docs/` governance (`docs/00_index.md`
-absent). Say so, then go straight to Step 3.
+absent). Say so, then continue with Step 2.5 — it does not depend on `docs/`.
 
 ### Step 2.5 — design and information-architecture maintenance
 
-Run both commands below; each prints one line. Treat their exit codes the same way.
+This step is keyed on `design/` and `design/info_arch/`, not on `docs/`: run it even when
+Step 2 was skipped. Run both commands below; each prints one line. Treat their exit codes the same way.
 
 Run `design-author maintain --repo <repo>` through the existing PATH (or the
 runtime's existing `DESIGN_AUTHOR_PYTHON` with the discovered skill script).
@@ -206,10 +207,11 @@ present only those deletion targets and obtain one confirmation before acting.
 
 ## When part of the flow doesn't apply
 
-- **No `docs/` governance** → skip Step 2, run Step 1 and Step 3 only.
+- **No `docs/` governance** → skip Step 2, run Step 1, Step 2.5 (it keys on `design/` and
+  `design/info_arch/`, not on `docs/`) and Step 3.
 - **Nothing to document** (pure refactor with no behavior/API change, and
   own-doc-update concludes "guide impact: none") → record that conclusion, then
-  Step 3.
+  Step 2.5 and Step 3.
 - **Already on a clean main with nothing to merge** → own-doc-update may still have
   index/workstream updates; otherwise own-session-close is a no-op beyond confirming the
   clean state. Say so rather than inventing work.

@@ -13,10 +13,12 @@ The gate only reads the ledger. It never calls a model: missing judgments are "u
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
 import check
+import dom
 from common import Report
 
 DESIGN_SCRIPTS = Path(__file__).resolve().parents[2] / 'own-design-author/scripts'
@@ -24,13 +26,24 @@ LEDGER = Path('design/judgments.json')
 IA_PREFIX = 'ia-'
 
 
-def _jl():
+def _design_path():
     if not (DESIGN_SCRIPTS / 'judgment_ledger.py').is_file():
         raise RuntimeError('own-design-author/scripts/judgment_ledger.py が無い（判定台帳は design と共有）')
     if str(DESIGN_SCRIPTS) not in sys.path:
         sys.path.insert(0, str(DESIGN_SCRIPTS))
+
+
+def _jl():
+    _design_path()
     import judgment_ledger
     return judgment_ledger
+
+
+def _jr():
+    # The answers file is validated and the output path guarded by the same reader that wrote them.
+    _design_path()
+    import judgment_run
+    return judgment_run
 
 
 def _expand(copy, facts):
@@ -59,7 +72,10 @@ def outline_candidates(oid, outline, ssot, policy, jl):
                              for f in dict.fromkeys(check.PLACEHOLDER.findall(s.get('copy', '')))]}
             rows.append(jl.candidate('ia-unregistered-claim', ident, text, ctx, policy=policy))
     aud = ssot.get('audiences', {}).get(outline['audience'], {})
-    fit_ctx = {'outline': oid, 'audience': {k: aud.get(k) for k in ('label', 'situation', 'desired_action')},
+    # The priority order is what the fit is judged against, so reordering it must invalidate the judgment.
+    priorities = [{'id': p, 'text': ssot.get('messages', {}).get(p, {}).get('text', '')} for p in aud.get('priorities') or []]
+    fit_ctx = {'outline': oid, 'audience': {**{k: aud.get(k) for k in ('label', 'situation', 'desired_action')},
+                                            'priorities': priorities},
                'brief': outline.get('brief', {})}
     rows.append(jl.candidate('ia-audience-fit', oid, '\n'.join(lines), fit_ctx, policy=policy))
     return rows
@@ -75,9 +91,19 @@ def emphasis_candidates(oid, outline, ssot, screens, policy, jl):
             for s in screens]
 
 
-def read_dom_reports(paths, outlines, report):
-    """-> {outline id: [first screens]}; a failed or malformed render is never judged."""
-    screens = {}
+def expected_screens(outline, channels):
+    """(file, viewport) pairs `dom` renders for an outline: its HTML outputs times the channel's viewports."""
+    ch = channels.get(outline['channel'])
+    viewports = (ch[1].get('viewports') if ch else None) or dom.DEFAULT_VIEWPORTS
+    return [(o, v['name']) for o in outline['outputs'] if Path(o).suffix.lower() in dom.HTML_SUFFIXES for v in viewports]
+
+
+def read_dom_reports(paths, expected, report):
+    """-> {outline id: [first screens]}; a failed or malformed render is never judged.
+
+    `expected` maps outline id -> the (file, viewport) pairs dom renders. A row outside them, or a duplicate,
+    fails; row text is never echoed into findings (it is unpublished copy)."""
+    screens, seen = {}, set()
     for path in paths:
         data = json.loads(Path(path).read_text(encoding='utf-8'))
         if data.get('exit_code') != 0:
@@ -87,11 +113,15 @@ def read_dom_reports(paths, outlines, report):
         if not isinstance(rows, list) or not rows:
             report.add('fail', 'IA_JUDGE_DOM_REPORT', f'{path}: first_screens が空（対象 0 件を合格にしない）')
             continue
-        for s in rows:
-            if (not isinstance(s, dict) or s.get('outline') not in outlines
-                    or not all(isinstance(s.get(k), str) and s[k].strip() for k in ('file', 'viewport', 'text'))):
-                report.add('fail', 'IA_JUDGE_DOM_REPORT', f'{path}: 最初の画面の行が読めない・アウトラインが無い（{str(s)[:80]}）')
+        for i, s in enumerate(rows):
+            ok = (isinstance(s, dict) and all(isinstance(s.get(k), str) and s[k].strip() for k in ('outline', 'file', 'viewport', 'text'))
+                  and (s['file'], s['viewport']) in expected.get(s['outline'], ()))
+            key = (s['outline'], s['file'], s['viewport']) if ok else None
+            if not ok or key in seen:
+                report.add('fail', 'IA_JUDGE_DOM_REPORT',
+                           f'{path}: first_screens[{i}] が読めない（型・未知のアウトライン/成果物/画面幅・重複のどれか）')
                 continue
+            seen.add(key)
             screens.setdefault(s['outline'], []).append(s)
     return screens
 
@@ -122,9 +152,35 @@ def evaluate(rows, ledger, *, missing, policy=None, jl=None):
                    id=w['id'], judgment_hash=w['judgment_hash'], score=w['score'])
     for m in report.missing:
         # A shipped HTML outline without its first screen is a gap (warn); other media are reported as missing only.
+        where = f'{m["outline"]}/{m["file"]}@{m["viewport"]}' if 'viewport' in m else m['outline']
         report.add('warn' if m.get('shipped_html') else 'info', 'IA_JUDGE_EMPHASIS_MISSING',
-                   f'{m["outline"]}: 最初の画面の入力（dom の報告）が無いので強調を判定していない')
+                   f'{where}: 最初の画面の入力（dom の報告）が無いので強調を判定していない')
     return report
+
+
+def read_answers(path, policy):
+    """judgment_run.py's own reader: shape, policy, candidate hashes, and score == raw_answer.noul."""
+    jr = _jr()
+    if not jr._safe_path(Path(path)):
+        raise ValueError(f'回答ファイルが symlink: {path}')
+    try:
+        answers, _ = jr._answers(Path(path), policy)
+    except jr.api.ClassificationError as exc:
+        raise ValueError(f'回答ファイルが読めない・policy と合わない・score と raw_answer が違う（{exc}）') from None
+    return answers
+
+
+def write_new(target, text):
+    """Create `target` exclusively: never overwrite, never follow a symlink (the path or any parent)."""
+    target = Path(target)
+    if not _jr()._safe_path(target):
+        raise ValueError(f'出力先が symlink を通る: {target}')
+    try:
+        fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)
+    except FileExistsError:
+        raise ValueError(f'上書きしない: {target}') from None
+    with os.fdopen(fd, 'w', encoding='utf-8') as f:
+        f.write(text)
 
 
 def replacement(ledger, rows, answers, policy, jl):
@@ -160,17 +216,22 @@ def run(root, date, dom_reports=(), answers=None, replacement_out=None):
     jl = _jl()
     policy = jl.load_policy()
     pre = Report(level='judge', evaluated_on=date)
-    screens = read_dom_reports(dom_reports, m.outlines, pre)
+    expected = {oid: expected_screens(outline, m.channels) for oid, (_, outline) in m.outlines.items()}
+    screens = read_dom_reports(dom_reports, expected, pre)
     rows, missing = [], []
     for oid, (_, outline) in sorted(m.outlines.items()):
         rows += outline_candidates(oid, outline, m.ssot, policy, jl)
+        ch = m.channels.get(outline['channel'])
+        shipped = bool(ch and ch[1].get('ship'))
         if oid in screens:
             rows += emphasis_candidates(oid, outline, m.ssot, screens[oid], policy, jl)
+            # A partial report (some files or viewports only) must not read as covered.
+            got = {(s['file'], s['viewport']) for s in screens[oid]}
+            missing += [{'kind': 'ia-emphasis', 'outline': oid, 'file': f, 'viewport': v, 'shipped_html': shipped,
+                         'reason': 'dom の報告（first_screens）にこの画面幅が無い'}
+                        for f, v in expected[oid] if (f, v) not in got]
         else:
-            ch = m.channels.get(outline['channel'])
-            shipped_html = bool(ch and ch[1].get('ship')) and any(
-                Path(o).suffix.lower() in ('.html', '.htm') for o in outline['outputs'])
-            missing.append({'kind': 'ia-emphasis', 'outline': oid, 'shipped_html': shipped_html,
+            missing.append({'kind': 'ia-emphasis', 'outline': oid, 'shipped_html': shipped and bool(expected[oid]),
                             'reason': 'dom の報告（first_screens）が渡されていない'})
     try:
         ledger = read_ledger(root)
@@ -185,9 +246,6 @@ def run(root, date, dom_reports=(), answers=None, replacement_out=None):
                       'by_kind': {k: sum(r['input']['kind'] == k for r in rows) for k in sorted({r['input']['kind'] for r in rows})}}
     summary = None
     if answers is not None and report.exit_code < 2:
-        out, summary = replacement(ledger, rows, json.loads(Path(answers).read_text(encoding='utf-8')), policy, jl)
-        target = Path(replacement_out)
-        if target.exists():
-            raise ValueError(f'上書きしない: {target}')
-        target.write_text(json.dumps(out, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+        out, summary = replacement(ledger, rows, read_answers(answers, policy), policy, jl)
+        write_new(replacement_out, json.dumps(out, ensure_ascii=False, indent=2) + '\n')
     return report, rows, summary

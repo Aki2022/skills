@@ -85,6 +85,12 @@ def maintain_design(root, *, catalog_dir=None, today=None, force=False):
               'judgment_candidates': [], 'errors': []}
     if not design.exists():
         return {**result, 'reason': 'design/ absent'}
+    config_path = design / 'design.yaml'
+    if (not design.is_symlink() and design.is_dir() and not config_path.exists() and not config_path.is_symlink()
+            and (design / 'info_arch').is_dir()
+            and {p.name for p in design.iterdir()} <= {'info_arch', 'judgments.json'}):
+        # IA-only: no design system to check here. Anything else without design.yaml still fails below.
+        return {**result, 'reason': 'design/design.yaml absent; IA-only design/ (infoarch-author maintain checks design/info_arch/)'}
     catalog_dir = Path(catalog_dir or CATALOG)
     today = today or date.today()
     try:

@@ -39,6 +39,22 @@ def test_no_design_skips_as_one_cli_line(tmp_path):
     assert json.loads(cli.stdout)['status'] == 'skipped'
 
 
+def test_ia_only_design_dir_skips_but_any_other_design_input_still_fails(tmp_path):
+    # An IA-only repository keeps design/info_arch/ and the shared judgment ledger, but no design system.
+    repo = tmp_path / 'ia-only'
+    subprocess.run(['git', 'init', '-q', str(repo)], check=True)
+    (repo / 'design/info_arch').mkdir(parents=True)
+    (repo / 'design/info_arch/info_arch.yaml').write_text('schema_version: 2\n')
+    (repo / 'design/judgments.json').write_text('{}\n')
+    result = maintain_design(repo)
+    assert result['exit_code'] == 0 and result['status'] == 'skipped', result
+    assert 'design.yaml' in result['reason'] and 'infoarch-author maintain' in result['reason']
+    # A design/ with anything else and no design.yaml is a broken design system, never a skip.
+    (repo / 'design/tokens').mkdir()
+    result = maintain_design(repo)
+    assert result['exit_code'] == 2 and result['status'] == 'failed', result
+
+
 def test_first_run_generates_real_manifest_then_clean_run_skips(project):
     root, _ = ready(project)
     result = run(project)

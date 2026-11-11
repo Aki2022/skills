@@ -1,5 +1,10 @@
 {
   "version": 1,
   "note": "証拠・固定値の期限の初期値（日数）。明示の expires が無く as_of だけがある時、as_of からこの日数を過ぎたら期限切れ。evergreen: true の固定値は期限を持たない。プロジェクトの info_arch.yaml の policy.expiry_days で上書きできる。365 日は出典の無い目安で、1 年ごとに数字を見直す運用を想定した値。",
-  "expiry_days": {"proof": 365, "fact": 365}
+  "expiry_days": {
+    "proof": 365,
+    "fact": 365
+  },
+  "due_within_days": 30,
+  "due_note": "セッション終了の Step 2.5（infoarch-author maintain）が「期限が近い」と挙げる日数。出典の無い目安で、期限切れの 1 か月前に気づける値として置いた。--within-days で変えられる。"
 }

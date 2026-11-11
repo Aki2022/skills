@@ -87,8 +87,8 @@ def resolve(*, root, approvals, profiles):
     report = {key: [] for key in CATEGORIES}
     report['executed'].append({'id': 'ia-deterministic', 'exit_code': 2 if errors else run.returncode,
                                'targets': targets['sections'], 'counts': targets})
-    report['missing'].append({'id': 'ia-semantic-judgments', 'reason': 'IA semantic judgment integration is not implemented; deterministic IA check does not judge meaning'})
-    report['skipped'].append({'id': 'ia-dom', 'reason': 'L0 does not run the implemented rendered IA check; run infoarch-author dom separately'})
+    report['missing'].append({'id': 'ia-semantic-judgments', 'reason': 'design L0 does not read IA judgments; the IA ship gate (infoarch-author ship) reads them from the shared ledger'})
+    report['skipped'].append({'id': 'ia-dom', 'reason': 'design L0 does not render; the IA ship gate (infoarch-author ship) runs dom on shipped HTML outputs'})
     return {'contract': CONTRACT, 'governance': governance, 'targets': targets,
             'media': {medium: {'governance': governance, 'targets': targets} for medium in profiles},
             'approval_hashes': {}, 'must_approval_keys': [], 'errors': errors, 'warnings': warnings, 'report': report}

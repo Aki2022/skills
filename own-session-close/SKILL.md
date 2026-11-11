@@ -123,7 +123,9 @@ Summaries of what happened go there, not into the index and not into a guide.
 Skip this step only when the repo has no `docs/` governance (`docs/00_index.md`
 absent). Say so, then go straight to Step 3.
 
-### Step 2.5 — design maintenance
+### Step 2.5 — design and information-architecture maintenance
+
+Run both commands below; each prints one line. Treat their exit codes the same way.
 
 Run `design-author maintain --repo <repo>` through the existing PATH (or the
 runtime's existing `DESIGN_AUTHOR_PYTHON` with the discovered skill script).
@@ -142,6 +144,17 @@ failure remains. Do not turn an unfinished design gate into a successful
 closeout. A repository without `design/` can use a one-line skip even when the
 command is unavailable. Include generated recommendations in the work unit's
 Next Actions, then continue to Step 3; do not approve them automatically.
+
+Then run `infoarch-author maintain --root <repo>` the same way (PATH, or the runtime's
+`DESIGN_AUTHOR_PYTHON` with the discovered **own-infoarch-author** script). It prints
+one line and skips repositories without `design/info_arch/` — even when the command
+is unavailable, that skip is one line. Otherwise it runs the deterministic IA check,
+reads the shared judgment ledger without calling a model, and lists SSOT/outline
+changes, the outlines they impact, evidence and facts falling due, and uncovered
+judgments. On exit 1, put the due evidence and uncovered judgments into the work
+unit's Next Actions; on exit 2 or a missing command when `design/info_arch/`
+exists, read **own-infoarch-author** and stop the integration phase if the failure
+remains. It never edits the SSOT, outlines or the ledger.
 
 ### Step 3 — own-git-clean
 

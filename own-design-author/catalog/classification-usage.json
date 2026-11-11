@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "attempted_judgments": 1369,
+  "attempted_judgments": 1390,
   "batches": [
     {
       "model": "jev-1.13.0",
@@ -1728,6 +1728,39 @@
       "input_tokens": 6550,
       "output_tokens": 55,
       "usage_derived_usd": 0.0002751
+    },
+    {
+      "purpose": "design-evidence",
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "request_sha256": "a8219f60c86492af0a467cba1fcdf288d08f0b996eed90fae6c8faaae5965f53",
+      "duration_seconds": 0.493067,
+      "input_tokens": 2603,
+      "output_tokens": 174,
+      "usage_derived_usd": 0.000109326
+    },
+    {
+      "purpose": "design-evidence",
+      "model": "jev-1.13.0",
+      "questions": 10,
+      "status": "succeeded",
+      "request_sha256": "b24db01ee7f835b8561fd240027cab020681069c5f2834a635b3a071ce99ebce",
+      "duration_seconds": 0.186627,
+      "input_tokens": 3337,
+      "output_tokens": 174,
+      "usage_derived_usd": 0.000140154
+    },
+    {
+      "purpose": "design-evidence",
+      "model": "jev-1.13.0",
+      "questions": 1,
+      "status": "succeeded",
+      "request_sha256": "3a7348009bedcd630c510c40c35ebf2d59ccb84001683a7d11d4284480f97ac3",
+      "duration_seconds": 0.170443,
+      "input_tokens": 622,
+      "output_tokens": 21,
+      "usage_derived_usd": 2.6124000000000003e-05
     }
   ]
 }

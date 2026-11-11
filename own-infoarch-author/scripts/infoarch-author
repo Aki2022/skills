@@ -1,6 +1,15 @@
 #!/usr/bin/env sh
 set -eu
-script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+# Follow symlinks so a PATH entry (e.g. ~/.local/bin/infoarch-author) still finds the skill's scripts.
+script_file=$0
+while [ -L "$script_file" ]; do
+  target=$(readlink "$script_file")
+  case "$target" in
+    /*) script_file=$target ;;
+    *) script_file=$(dirname -- "$script_file")/$target ;;
+  esac
+done
+script_dir=$(CDPATH= cd -- "$(dirname -- "$script_file")" && pwd)
 py="${DESIGN_AUTHOR_PYTHON:-python3}"
 if ! command -v "$py" >/dev/null 2>&1; then
   printf '{"exit_code": 2, "error": "interpreter not found: set DESIGN_AUTHOR_PYTHON to a Python with PyYAML and jsonschema"}\n'

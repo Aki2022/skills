@@ -5,7 +5,7 @@
 ## ディレクトリ
 
 - `info_arch.yaml`：伝え方の SSOT（7 つの原子と id 台帳）。承認の状態は持たない。変更は他の変更と同じく、検査が緑なら自律マージする（人のレビューは置かない）。記録は git の履歴が持つ。
-- `channels/<media>.yaml`：成果物の置き場所と出し方の宣言だけ。中身は `media`（ファイル名と一致）・`outputs`（repo 相対の glob）・`ship`・`ship_command`（`ship: true` なら必須）・`viewports`。
+- `channels/<media>.yaml`：成果物の置き場所と出し方の宣言だけ。中身は `media`（ファイル名と一致）・`outputs`（repo 相対の glob）・`ship`・`ship_command`（`ship: true` なら必須。出荷の正式の入口が実行する）・`merge_base`（pre-push の予測マージの相手。出荷チャネルで無いと doctor が失格）・`viewports`。
 - `outlines/<成果物 id>.yaml`：成果物ごとの構造化アウトライン。AI が書き、人は保守しない。`id` はファイル名と一致する。
 - `INFO_ARCH.md`：散文。原子を id で参照するだけで、値を持たない。
 
@@ -132,6 +132,29 @@ holdout はそのまま引き継ぐ。回答の policy が今の共有 policy �
 
 報告は `uncovered`（未カバー）・`screened`（台帳にあり。「問題なし」の保証ではない）・`missing`（入力が無く判定していない）を分けて出す。
 
-## この版に無いもの
+## 出荷ゲートと維持（`ship`・`maintain`）
 
-出荷ゲート（ship_command からの実行）と doctor（ISSUE-05）。
+出荷ゲートは、作業ツリーではなく、出荷されるコミット（clean な HEAD、または予測マージ木）に対して走る。順番は次のとおりで、失格の段で止まる。
+1. `check`（決定論）。出荷チャネル（`ship: true`）が 0 件、または出荷されるアウトラインが 0 件なら失格（空のゲートを合格にしない）。
+2. `dom`：出荷されるアウトラインのうち HTML の成果物を持つものを、実ブラウザで描画して確かめる。HTML が無いアウトラインは `skipped` に記録する。
+3. `judge`：`dom` の最初の画面を渡して、共有の判定台帳を読む。出荷されるアウトラインの判定が台帳に無ければ `IA_SHIP_UNCOVERED`（失格）。出荷しないアウトラインの未カバーは `IA_JUDGE_UNCOVERED`（警告）のまま。θ 以上は `IA_JUDGE_REVIEW`（警告。人に回す。強調でゲートを止めるかは未決）。
+
+| 入口 | 何をするか |
+| --- | --- |
+| `infoarch-author ship --root .` | HEAD を検査するだけ。出荷しない |
+| `infoarch-author ship --root . --channel <media>` | 正式の入口。緑なら、同じコミットのまま `ship_command` を実行する（shlex で argv に分け、シェルは通さない。`INFOARCH_SHIP_COMMIT`・`INFOARCH_SHIP_TREE`・`INFOARCH_SHIP_CHANNEL` を渡す）。実行の後に作業ツリーが変わっていたら失格 |
+| `infoarch-author ship --root . --pre-push --refs-file F` | push される各コミットを、チャネルの `merge_base` と予測マージした木（一時 worktree）で検査する。`merge_base` は push されるコミット自身のチャネル定義から読む。無ければ止まる |
+| `infoarch-author ship --root . --doctor` | 設定の診断。`ship_command` か `merge_base` の無い出荷チャネル、マーカー（`.vibe-guard/infoarch-ship.enabled`）の欠落、スキャナを保つ pre-push の dispatcher と拡張（`hooks/pre-push.d/61-infoarch-ship` と同じ中身）の欠落を失格にする |
+
+pre-push の拡張は、マーカーのある repo だけで動く（opt-in）。マーカーがあれば、壊れたマーカー・refs の欠落・検査の失格はすべて push を止める。
+拡張は `INFOARCH_SHIP_COMMAND`（既定は PATH の `infoarch-author`）を呼ぶ。予測マージ木には node_modules が無いので、`INFOARCH_PLAYWRIGHT_DIR` が無ければ push している checkout を使う。
+出力は 1 行の JSON。CI での出荷ゲートは持たない（spec の Deferred）。
+
+`infoarch-author maintain --root .` は own-session-close の Step 2.5 から呼ぶ。`design/info_arch/` が無ければ 1 行で skip する。
+あれば `check` と `judge`（台帳を読むだけ。ブラウザは使わない）を走らせ、次を 1 行の JSON で返す。
+- `due`：期限が `references/expiry.json` の `due_within_days` 日以内に来る証拠・固定値と、それを参照するアウトライン（出荷されるか）。
+- `changed_paths`：出荷チャネルの `merge_base` からのコミット済みの差分と、未コミットの差分（`design/info_arch/` の中だけ）。
+- `impacted_outlines`：変わった原子を参照するアウトライン（正式名称と声が変わったら全部）。
+- `uncovered_judgments`：台帳に無い判定の数（Jev で取得する候補）。
+
+終了コードは 0（整合）・1（期限が近い・未カバー・警告）・2（失格）。台帳もアウトラインも書き換えない。

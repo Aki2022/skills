@@ -1,7 +1,9 @@
 # 変更・期限・版更新の維持検査
 
 `design-author maintain --repo .` をセッション終了のStep 2.5から呼ぶ。
-`design/`のないrepoは1行のJSONでskipする。モデル・ネットワーク・承認記録を使わない。
+`design/`のないrepoは1行のJSONでskipする。`design/`に`info_arch/`と共有の判定台帳（`judgments.json`）しか無く
+`design.yaml`も無いrepo（IAだけ）も1行でskipし、IAは`infoarch-author maintain`に任せる。それ以外の物があって`design.yaml`が無ければ失格。
+モデル・ネットワーク・承認記録を使わない。
 `--force` は変更の有無にかかわらずL0を再実行する。
 
 成功した検査のcommitと実装/policy/カタログの指紋を

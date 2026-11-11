@@ -1,9 +1,10 @@
-"""own-infoarch-author CLI: check (deterministic), dom, judge (judgment ledger reader), skeleton, impact. Never writes approvals."""
+"""own-infoarch-author CLI: check (deterministic), dom, judge (judgment ledger reader), ship (gate), maintain, skeleton, impact. Never writes approvals."""
 from __future__ import annotations
 
 import argparse
 import datetime as dt
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -11,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import check  # noqa: E402
 import dom  # noqa: E402
+import ia_ship  # noqa: E402
 import judge  # noqa: E402
 import skeleton  # noqa: E402
 
@@ -52,6 +54,41 @@ def cmd_judge(args):
         out['replacement'] = summary
     _print(out)
     return report.exit_code
+
+
+def _line(obj):
+    print(json.dumps(obj, ensure_ascii=False, sort_keys=True, default=str))
+
+
+def cmd_ship(args):
+    """Ship gate: one JSON line; any refusal is a failure (2), never a pass."""
+    date = args.date or dt.date.today().isoformat()
+    dt.date.fromisoformat(date)
+    try:
+        if args.doctor:
+            result = ia_ship.doctor(args.root)
+        elif args.pre_push:
+            result = ia_ship.pre_push(args.root, args.refs_file, date)
+        elif args.channel:
+            result = ia_ship.ship_channel(args.root, args.channel, date)
+        else:
+            result, _ = ia_ship.gate(args.root, date)
+    except (ValueError, OSError, KeyError, TypeError, subprocess.SubprocessError) as exc:
+        result = {'exit_code': 2, 'errors': [str(exc) or type(exc).__name__]}
+    _line(result)
+    return result['exit_code']
+
+
+def cmd_maintain(args):
+    """own-session-close Step 2.5: one JSON line; skips when design/info_arch/ is absent."""
+    date = args.date or dt.date.today().isoformat()
+    dt.date.fromisoformat(date)
+    try:
+        result = ia_ship.maintain(args.root, date, args.within_days)
+    except (ValueError, OSError, KeyError, TypeError, subprocess.SubprocessError) as exc:
+        result = {'exit_code': 2, 'status': 'failed', 'errors': [str(exc) or type(exc).__name__]}
+    _line(result)
+    return result['exit_code']
 
 
 def cmd_skeleton(args):
@@ -109,6 +146,20 @@ def main(argv=None):
     j.add_argument('--answers', help='judgment-answers.json from judgment_run.py')
     j.add_argument('--replacement-out', help='write the shared-ledger replacement here (never overwrites)')
     j.set_defaults(fn=cmd_judge)
+    s = sub.add_parser('ship', help='ship gate on the committed SHA: check, dom of shipped HTML, judge; --channel runs ship_command only when green')
+    s.add_argument('--root', default='.')
+    s.add_argument('--date', help='evaluation date YYYY-MM-DD (default: today)')
+    mode = s.add_mutually_exclusive_group()
+    mode.add_argument('--channel', help='the formal entry: gate, then run this channel\'s ship_command on the same commit')
+    mode.add_argument('--pre-push', action='store_true', help='gate the predicted merge of each pushed commit into merge_base')
+    mode.add_argument('--doctor', action='store_true', help='diagnose ship_command, merge_base, marker and the pre-push extension')
+    s.add_argument('--refs-file', help='pre-push refs preserved by the dispatcher')
+    s.set_defaults(fn=cmd_ship)
+    mt = sub.add_parser('maintain', help='own-session-close Step 2.5: changed SSOT/outlines, evidence falling due, uncovered judgments')
+    mt.add_argument('--root', default='.')
+    mt.add_argument('--date', help='evaluation date YYYY-MM-DD (default: today)')
+    mt.add_argument('--within-days', type=int, help='due window in days (default: references/expiry.json due_within_days)')
+    mt.set_defaults(fn=cmd_maintain)
     k = sub.add_parser('skeleton', help='print or write the HTML skeleton (anchors, order, facts) of an outline for a factory to style')
     k.add_argument('--root', default='.')
     k.add_argument('--outline', required=True)

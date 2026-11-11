@@ -8,6 +8,9 @@ import math
 from pathlib import Path
 
 POLICY = Path(__file__).resolve().parents[1]/'references/judgment-policy.json'
+# One shared policy for design and IA (ADR-20261111-ia-judgments-share-design-policy-and-ledger, biz_ops).
+KINDS = frozenset({'doc-relevance','na-rationale',
+    'ia-name-variant','ia-emphasis','ia-unregistered-claim','ia-audience-fit'})
 
 
 def digest(value):
@@ -27,7 +30,7 @@ def validate_policy(policy):
     if type(policy['schema_version']) is not int or policy['schema_version']!=1 or not all(isinstance(policy[k],str) and policy[k].strip() for k in ('model','prompt_version')):
         raise ValueError('invalid judgment policy version/model')
     probability(policy['theta'])
-    if not isinstance(policy['prompts'],dict) or set(policy['prompts'])!={'doc-relevance','na-rationale'} or any(not isinstance(v,str) or not v.strip() for v in policy['prompts'].values()):
+    if not isinstance(policy['prompts'],dict) or set(policy['prompts'])!=KINDS or any(not isinstance(v,str) or not v.strip() for v in policy['prompts'].values()):
         raise ValueError('invalid judgment prompts')
     return policy
 

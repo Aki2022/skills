@@ -127,7 +127,7 @@ def run(root, outline_id, date, runs=2):
             per_vp = [s[i] for s in series]
             for code, level, msg in compare_runs(per_vp) or compare(o, m.ssot, per_vp[0], out):
                 report.add(level, code, f'{out} {msg}', out)
-            first_screens.append({'file': out, 'viewport': vp['name'], 'text': per_vp[0]['first_screen']})
+            first_screens.append({'outline': outline_id, 'file': out, 'viewport': vp['name'], 'text': per_vp[0]['first_screen']})
     report.targets = {'files': files, 'viewports': len(viewports) if files else 0}
     report.first_screens = first_screens
     return report

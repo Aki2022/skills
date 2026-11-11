@@ -92,6 +92,46 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 
 見えるかどうかは、要素とその祖先の display / visibility / opacity と、大きさで判定する。コントラストや画面外への配置（clip-path・transform）は、デザイン側の L2 が持つ。
 
+## 意味の判定（`judge`）
+
+意味の判定は Jev が行い、その結果を判定台帳に固定する。検査は台帳だけを読み、その場で Jev を呼ばない。
+方針ファイル（モデル・θ・プロンプト）・台帳（`design/judgments.json`）・使用量の台帳（累計 2,000 判定）は、own-design-author と共有する
+（own-design-author の `references/judgments-and-modules.md`）。
+
+| 種類 | 単位 | 入力の本文 | 文脈 |
+| --- | --- | --- | --- |
+| `ia-name-variant` | セクション（正式名称が 1 つ以上ある時） | 固定値を展開した文案 | 正式名称の一覧 |
+| `ia-unregistered-claim` | セクション | 固定値を展開した文案 | メッセージ・課題・証拠・使った固定値 |
+| `ia-audience-fit` | アウトライン | 全セクションの役割と文案（順に） | 対象者（label・situation・desired_action）と brief |
+| `ia-emphasis` | 成果物 × 画面幅 | `dom` が切り出した最初の画面の文言 | 対象者と、その 1 位のメッセージ |
+
+score は「問題がある確率」。θ 以上は IA_JUDGE_REVIEW（要確認）として人に回し、score だけで失格にしない。
+強調の判定でゲートを止めるかは、最初の実回答で精度を測ってから決める（spec）。
+
+```sh
+infoarch-author dom --root . --outline lp-xxx > dom.json
+infoarch-author judge --root . --dom-report dom.json                       # 台帳の読み取り（本文は出さない）
+infoarch-author judge --root . --dom-report dom.json --include-candidates > candidates.json   # Jev に渡す候補（文案を含む）
+python3 <own-design-author>/scripts/judgment_run.py --candidates candidates.json --answers <dir>/judgment-answers.json --limit 50 [--execute]
+infoarch-author judge --root . --dom-report dom.json --answers <dir>/judgment-answers.json --replacement-out replacement.json
+python3 <own-design-author>/scripts/judgment_ledger.py record|refresh --repo . --replacement replacement.json [--write]
+```
+
+`--replacement-out` は共有の台帳の置き換えを作る。design の行は全部残し、IA は現在の候補に対する実回答だけを入れ、古い IA の行は落とす。
+holdout はそのまま引き継ぐ。回答の policy が今の共有 policy と違えば止める（migrate が要る）。既にあるファイルは上書きしない。
+
+| code | 内容 |
+| --- | --- |
+| IA_JUDGE_REFUSED | check が失格している（先に直す） |
+| IA_JUDGE_NO_TARGETS | 判定の候補が 0 件 |
+| IA_JUDGE_LEDGER | 台帳が読めない・policy と合わない・symlink |
+| IA_JUDGE_DOM_FAILED / IA_JUDGE_DOM_REPORT | 合格していない描画を判定に使おうとした・最初の画面の行が無いか読めない |
+| IA_JUDGE_UNCOVERED（warn） | 台帳に無い判定がある（未カバー） |
+| IA_JUDGE_REVIEW（warn） | score が θ 以上（要確認） |
+| IA_JUDGE_EMPHASIS_MISSING（出荷される HTML なら warn、他は info） | 最初の画面の入力が無く、強調を判定していない |
+
+報告は `uncovered`（未カバー）・`screened`（台帳にあり。「問題なし」の保証ではない）・`missing`（入力が無く判定していない）を分けて出す。
+
 ## この版に無いもの
 
-Jev の判定台帳（表記ゆれ・強調）、出荷ゲート、工場の接続。
+出荷ゲート（ship_command からの実行）と doctor（ISSUE-05）。

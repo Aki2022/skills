@@ -1,4 +1,4 @@
-"""own-infoarch-author CLI: check (deterministic), impact (reverse lookup). Never writes approvals."""
+"""own-infoarch-author CLI: check (deterministic), dom, judge (judgment ledger reader), skeleton, impact. Never writes approvals."""
 from __future__ import annotations
 
 import argparse
@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import check  # noqa: E402
 import dom  # noqa: E402
+import judge  # noqa: E402
 import skeleton  # noqa: E402
 
 
@@ -32,6 +33,23 @@ def cmd_dom(args):
     report = dom.run(args.root, args.outline, date)
     out = report.to_dict()
     out['first_screens'] = getattr(report, 'first_screens', [])
+    _print(out)
+    return report.exit_code
+
+
+def cmd_judge(args):
+    date = args.date or dt.date.today().isoformat()
+    dt.date.fromisoformat(date)
+    if bool(args.answers) != bool(args.replacement_out):
+        raise ValueError('--answers と --replacement-out は一緒に使う')
+    report, rows, summary = judge.run(args.root, date, args.dom_report or [], args.answers, args.replacement_out)
+    out = report.to_dict()
+    out['screened'] = getattr(report, 'screened', [])
+    out['missing'] = getattr(report, 'missing', [])
+    if args.include_candidates:
+        out['judgment_candidates'] = rows
+    if summary is not None:
+        out['replacement'] = summary
     _print(out)
     return report.exit_code
 
@@ -83,6 +101,14 @@ def main(argv=None):
     d.add_argument('--outline', required=True)
     d.add_argument('--date', help='evaluation date YYYY-MM-DD (default: today)')
     d.set_defaults(fn=cmd_dom)
+    j = sub.add_parser('judge', help='Jev judgment candidates and a read-only check against the shared judgment ledger')
+    j.add_argument('--root', default='.')
+    j.add_argument('--date', help='evaluation date YYYY-MM-DD (default: today)')
+    j.add_argument('--dom-report', action='append', help='JSON output of `dom` whose first_screens feed the emphasis judgment (repeatable)')
+    j.add_argument('--include-candidates', action='store_true', help='print judgment_candidates (contains copy text) for judgment_run.py')
+    j.add_argument('--answers', help='judgment-answers.json from judgment_run.py')
+    j.add_argument('--replacement-out', help='write the shared-ledger replacement here (never overwrites)')
+    j.set_defaults(fn=cmd_judge)
     k = sub.add_parser('skeleton', help='print or write the HTML skeleton (anchors, order, facts) of an outline for a factory to style')
     k.add_argument('--root', default='.')
     k.add_argument('--outline', required=True)

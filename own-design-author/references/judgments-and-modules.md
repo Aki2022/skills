@@ -84,7 +84,7 @@ refreshは同一policyのschema2だけで、旧行と追加・削除・保持し
 
 ## 版・モデル・thetaの変更
 
-中央policyを変えたら古い台帳とmanifestは失効する。同じ入力集合への新しい実回答を用意し、新旧scoreと閾値判定差分を記録する。実ラベルがあれば同じid・同じ正解ラベルも維持する。旧schema1は同一policyで完全candidateを持つschema2へ更新してからpolicyを変える。
+中央policyを変えたら古い台帳とmanifestは失効する。判定の種類が中央policyに加わる前の台帳（種類が既知の種類の一部だけのもの）も、壊れた台帳ではなく失効した台帳として読み、L0はmigrateを案内する。同じ入力集合への新しい実回答を用意し、新旧scoreと閾値判定差分を記録する。実ラベルがあれば同じid・同じ正解ラベルも維持する。旧schema1は同一policyで完全candidateを持つschema2へ更新してからpolicyを変える。
 
 ```sh
 python3 <skill>/scripts/judgment_ledger.py migrate --repo . --replacement new-answers.json

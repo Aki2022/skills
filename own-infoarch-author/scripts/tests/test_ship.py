@@ -84,8 +84,7 @@ def repo(tmp_path):
     root = tmp_path / 'repo'
     root.mkdir()
     run_git(root, 'init', '-q', '-b', 'main')
-    run_git(root, 'config', 'user.name', 'Fixture Owner')
-    run_git(root, 'config', 'user.email', 'fixture@example.org')
+    run_git(root, 'config', 'user.name', 'Fixture Owner')  # the email comes from the runner's git identity
     deck = {**copy.deepcopy(DECK), 'channel': 'deck'}
     write_repo(root, ssot=fresh_ssot(), channels=(SHIP_DECK, DRAFT_WEB), outlines=(LP_DRAFT, deck))
     (root / 'decks').mkdir()

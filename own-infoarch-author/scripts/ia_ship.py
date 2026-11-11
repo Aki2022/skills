@@ -188,8 +188,10 @@ def predicted_checkout(root, base_ref, source):
     base = _git(root, 'rev-parse', '--verify', base_ref + '^{commit}')
     # A conflict or a missing merge base makes git fail, and that stops the push.
     tree = _git(root, 'merge-tree', '--write-tree', base, source).splitlines()[0]
-    synthetic = _git(root, '-c', 'user.name=IA Gate', '-c', 'user.email=ia-gate@example.invalid',
-                     'commit-tree', tree, '-p', source, '-p', base, input='IA predicted merge validation\n')
+    # The synthetic commit is never referenced or pushed; it takes the pushing user's configured identity,
+    # and a checkout with no identity fails here, which stops the push.
+    synthetic = _git(root, '-c', 'user.name=IA Gate', 'commit-tree', tree, '-p', source, '-p', base,
+                     input='IA predicted merge validation\n')
     with tempfile.TemporaryDirectory(prefix='infoarch-ship-') as temporary:
         snapshot = Path(temporary) / 'checkout'
         _git(root, 'worktree', 'add', '--detach', str(snapshot), synthetic)

@@ -17,8 +17,9 @@ description: >-
 # marketing-automation-core の機能を選んで入れる入口
 
 この skill は入口だけを持つ。何を取り込むかを決めるのはこの repo の人で、AI は材料を
-見せて 1 問ずつ聞く。core が出しているのは npm の機能だけではない。全体の一覧は core の
-`docs/guides/consumer-adoption-menu.md`（採用メニュー）が正典で、npm の catalog はその一部。
+見せて 1 問ずつ聞く。core が出しているのは npm の機能だけではない。全体の一覧（採用メニュー）は
+core の `packages/marketing-core/capabilities/adoption-menu.json` が正典で、npm の catalog はその一部。
+人が読む版は `docs/guides/consumer-adoption-menu.md`（表はテストで JSON と突き合わせてある）。
 catalog に無いことを「core に無い」と言わない。
 
 ## 1. core の checkout を見つける
@@ -28,16 +29,18 @@ core の CLI と catalog は、core の正典の checkout から読む。どこ�
 
 1. 環境変数 `MARKETING_CORE_DIR` があれば、それを core の checkout とみなす。
 2. 無ければ人に 1 回だけ場所を聞く。推測で探し回らない。
-3. `$MARKETING_CORE_DIR/packages/marketing-core/bin/capabilities.cjs` と
-   `$MARKETING_CORE_DIR/packages/marketing-core/capabilities/catalog.json` が両方あることを確かめる。
+3. `$MARKETING_CORE_DIR/packages/marketing-core/bin/capabilities.cjs`、
+   `$MARKETING_CORE_DIR/packages/marketing-core/capabilities/catalog.json`、
+   `$MARKETING_CORE_DIR/packages/marketing-core/capabilities/adoption-menu.json` がすべてあることを確かめる。
    無ければ止まって人に伝える。
 4. catalog の `sharedVersion` を人に見せる。入れるのはこの版になる。
 
 ## 2. 採用メニューを見せて、目的を聞く
 
-core の checkout の `docs/guides/consumer-adoption-menu.md` を読み、目的ごとの一覧
-（開発・検査、外部サービス接続、サイト計測、データ、改善・承認、レポート・通知、運用）を
-平易な言葉で見せる。最初の問いは「何に困っているか・何をしたいか」。答えから、次のどれに進むかを決める。
+core の checkout の `adoption-menu.json` を読み、`items` を `purpose` ごとにまとめて平易な言葉で見せる。
+各 item の `state`（使えるか・まだか）、`needsNpm`（package.json と .npmrc が要るか）、`route`（次に従う手順）を
+そのまま伝え、`state` を言い換えて良く見せない。最初の問いは「何に困っているか・何をしたいか」。
+答えから、合う item の `route` に進む。主な行き先は次のとおり。
 
 - **標準 CI**: core の `docs/guides/ci-standard.md` の「Calling it」に従う。npm の準備は要らない。
 - **隔離 runner**: ADR-20261111 の 4 段（owner が token の対象に repo を足す → agent が並走の PR で一致を確かめる →
@@ -45,8 +48,10 @@ core の checkout の `docs/guides/consumer-adoption-menu.md` を読み、目的
 - **GCP の認証**: user 単位の own-gcp-provision。
 - **docs の決まり**: own-doc-update。
 - **npm の機能（catalog の capability）**: 下の 3 と 4 へ進む。
-- **core が出していないもの**（deploy の manifest、Cloud Run の job、汎用の GCP API など）: メニューの
-  「Not offered by core」を見せ、この repo で作るものだと伝える。
+- **承認カードの滞留報告**: `core` を入れたあと、core の checkout の
+  `.agents/skills/own-marketing-approval-implement/SKILL.md` を読む（consumer には配られない）。
+- **core が出していないもの**（deploy の manifest、Cloud Run の job、汎用の GCP API など）: `notOffered` を見せ、
+  この repo で作るものだと伝える。
 
 ## 3. npm の機能を選ぶ前の診断
 
@@ -82,9 +87,10 @@ node "$MARKETING_CORE_DIR/packages/marketing-core/bin/capabilities.cjs" start --
    `prerequisites`（先に要るもの）、`effects`（使うと外で起きること・費用）、
    `hostRequirements`（React など repo 側に要るもの）、`requiredAuthScopes`。
 4. 人に選んでもらう。複数でもよい。決めるのは人で、AI は推しを 1 つ言ってよいが選ばない。
-5. catalog にもメニューにも合うものが無ければ、3 つに分けて人に見せる。
+5. catalog にもメニューにも合うものが無ければ、メニューの `outsideTheMenu` に従って 3 つに分けて人に見せる。
    (a) core の設定や plugin で表せる → その方法を示す。
-   (b) ほかの repo にも役立つ汎用の不足 → core の repo で `own-marketing-capability-escalate` の流れ（要望の issue）。
+   (b) ほかの repo にも役立つ汎用の不足 → core の checkout の
+   `.agents/skills/own-marketing-capability-escalate/SKILL.md` を読み、その流れ（core への要望の issue）に従う。
    (c) この repo だけの事情 → この repo で作る。どれに当たるかは人と決め、勝手に作り始めない。
 
 ## 5. 決めたことを残す

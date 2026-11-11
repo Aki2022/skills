@@ -47,6 +47,7 @@ infoarch-author check --root .              # SSOT・チャネル・アウトラ
 infoarch-author impact --root . --id fct-0001  # その原子を参照するアウトラインと成果物を列挙
 infoarch-author skeleton --root . --outline lp-xxx [--out DIR]  # アウトラインから骨組みの HTML（アンカー・順序・固定値）を出す。工場はこれを崩さずにスタイリングする
 infoarch-author dom --root . --outline lp-xxx # 描画物をブラウザで開き、アンカー・順序・固定値の表示を確かめる
+infoarch-author judge --root . [--dom-report dom.json]  # 意味の判定（表記ゆれ・強調・未登録の主張・妥当性）を共有の判定台帳から読む。Jev は呼ばない
 ```
 
 `scripts/infoarch-author` を PATH に置き、PyYAML と jsonschema のある Python を `DESIGN_AUTHOR_PYTHON` で選ぶ
@@ -55,7 +56,7 @@ infoarch-author dom --root . --outline lp-xxx # 描画物をブラウザで開�
 
 ## 参照
 
-- `references/contract.md` — ディレクトリ・原子・アウトラインの契約、検査の code 一覧、期限の扱い、描画物の確認（工場が埋めるアンカー）。
+- `references/contract.md` — ディレクトリ・原子・アウトラインの契約、検査の code 一覧、期限の扱い、描画物の確認（工場が埋めるアンカー）、意味の判定（判定台帳）。
 - `references/schema/` — `info_arch.yaml`（版 2）・`channels/*.yaml`（版 2）・`outlines/*.yaml`（版 1）の JSON Schema。
 - `references/expiry.json` — 証拠・固定値の期限の初期値。
 - `fixtures/red-cases.json` — 必須の赤ケース。自己テストは `uv run --no-project --with-requirements <skill>/scripts/tests/requirements.txt -- pytest -q <skill>/scripts/tests`。

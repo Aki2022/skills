@@ -8,7 +8,8 @@ description: "repo 直下 design/info_arch/ の「伝え方の SSOT」（対象�
 `design/info_arch/` は、repo の伝え方の唯一の正典。視覚の `design/` の兄弟モジュールで、スタイリングではなく
 「誰に・何を・どの順で・どれだけ強く・どんな話し方で伝えるか」を持つ。
 この skill は、SSOT から成果物ごとの**構造化アウトライン**を作り（作る側）、SSOT とアウトラインの整合を検査する（保守する側）。
-工場 skill はアウトラインを受け取って描画するだけで、情報設計の判断はしない。
+工場 skill はアウトラインを受け取って描画するだけで、情報設計の判断はしない。描画した物は `evaluate` で、
+設計どおりか（文言・順序・固定値は決定論、意味は Jev の判定台帳）を確かめ、warn / error を出す。
 
 ## 重要ルール
 
@@ -48,6 +49,8 @@ infoarch-author impact --root . --id fct-0001  # その原子を参照するア�
 infoarch-author skeleton --root . --outline lp-xxx [--out DIR]  # アウトラインから骨組みの HTML（アンカー・順序・固定値）を出す。工場はこれを崩さずにスタイリングする
 infoarch-author dom --root . --outline lp-xxx # 描画物をブラウザで開き、アンカー・順序・固定値の表示を確かめる
 infoarch-author judge --root . [--dom-report dom.json]  # 意味の判定（表記ゆれ・強調・未登録の主張・妥当性）を共有の判定台帳から読む。Jev は呼ばない
+infoarch-author evaluate --root . [--outline lp-xxx]   # 作った物の評価の入口。check → dom → judge を順に走らせ、報告と終了コードを 1 つにする（工場は描画後に必ず走らせる）
+infoarch-author evaluate --root . --outline lp-xxx --acquire --answers-dir DIR --limit 50 [--execute]  # 足りない Jev 判定を上限つきで取って台帳に記録し、評価し直す（--execute が無ければ見積もりだけ）
 infoarch-author ship --root . --channel web   # 出荷の正式の入口。出荷されるコミット（git の中身）で tree → check → dom → judge が緑の時だけ ship_command を実行する
 infoarch-author ship --root . --doctor        # ship_command・merge_base の無い出荷チャネル、pre-push の未導入、拡張の失格を伝えない dispatcher を失格にする
 infoarch-author maintain --root .             # セッション終了の Step 2.5。design/info_arch/ が無ければ 1 行で skip

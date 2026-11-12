@@ -2,14 +2,16 @@
 
 The browser does the parsing and rendering; this module only compares its snapshot with the outline:
 every message / problem the outline uses has a visible anchor, the anchors appear in the outline's order
-(as a subsequence of the rendered order, so a repeated call to action is fine), every fact the copy refers
-to is shown with the SSOT value, and two runs give the same snapshot. The first-screen text is passed on to
+(as a subsequence of the rendered order, so a repeated call to action is fine), each section's visible text is
+the outline's copy (facts expanded), every fact the copy refers to is shown with the SSOT value, and two runs give
+the same snapshot. Visible text outside every anchor is reported, and passed on to the judgement ledger as a claim. The first-screen text is passed on to
 the Jev judgement ledger (ISSUE-04); nothing here judges meaning.
 """
 from __future__ import annotations
 
 import json
 import subprocess
+import unicodedata
 from pathlib import Path
 
 import check
@@ -38,8 +40,33 @@ def expected(outline):
     return seq, facts
 
 
+def _section_pages(outline, output):
+    pages = outline['pages']
+    if output and len(pages) == len(outline['outputs']):
+        pages = [pages[outline['outputs'].index(output)]]
+    return pages
+
+
+def expected_copy(outline, ssot, output=None):
+    """{(kind, id): {normalized copy}} — the text each anchor must show, facts expanded to their SSOT value."""
+    values = {fid: str(f.get('value', '')) for fid, f in ssot['facts'].items()}
+    out = {}
+    for p in _section_pages(outline, output):
+        for s in p['sections']:
+            text = _copy_norm(check.PLACEHOLDER.sub(lambda m: values.get(m.group(1), m.group(0)), s['copy']))
+            key = ('problem', s['problem']) if 'problem' in s else ('msg', s['message']) if 'message' in s else None
+            if key:
+                out.setdefault(key, set()).add(text)
+    return out
+
+
 def _norm(text):
     return ' '.join((text or '').split())
+
+
+def _copy_norm(text):
+    """Copy as read: width-folded (NFKC) and with every whitespace removed (line breaks are layout, not copy)."""
+    return ''.join(unicodedata.normalize('NFKC', text or '').split())
 
 
 def _is_subsequence(want, have):
@@ -70,6 +97,20 @@ def compare(outline, ssot, snap, output=None):
     present = [k for k in seq if k in set(rendered)]
     if not _is_subsequence(present, rendered):
         out.append(('IA_DOM_ORDER', 'fail', f'{vp}: 描画の順 {[k[1] for k in rendered]} がアウトラインの順 {[k[1] for k in seq]} と違う'))
+    for key, copies in expected_copy(outline, ssot, output).items():
+        shown = [a for a in anchors if (a['kind'], a['id']) == key and a['visible']]
+        if not shown:
+            continue  # missing or hidden is reported above
+        matches = [a for a in shown if _copy_norm(a['text']) in copies]
+        # The text itself is not echoed: it is unpublished copy and may be long.
+        if not matches:
+            out.append(('IA_DOM_COPY_DRIFT', 'fail', f'{vp}: {key[1]} の表示がアウトラインの文案と違う（文言を変えずにスタイリングする）'))
+        elif len(matches) < len(shown):
+            out.append(('IA_DOM_COPY_EXTRA', 'warn', f'{vp}: {key[1]} の繰り返し {len(shown) - len(matches)} か所が文案と違う'))
+    unanchored = _norm(snap.get('unanchored'))
+    if unanchored:
+        out.append(('IA_DOM_UNANCHORED_TEXT', 'warn',
+                    f'{vp}: どのアンカーにも属さない表示の文言が {len(unanchored)} 文字ある（判定台帳で主張として判定する）'))
     values = {fid: f.get('value') for fid, f in ssot['facts'].items()}
     for fid in facts:
         shown = [a for a in anchors if a['kind'] == 'fact' and a['id'] == fid]
@@ -107,7 +148,7 @@ def run(root, outline_id, date, runs=2):
     rel, o = m.outlines[outline_id]
     ch = m.channels.get(o['channel'])
     viewports = (ch[1].get('viewports') if ch else None) or DEFAULT_VIEWPORTS
-    first_screens, files = [], 0
+    first_screens, unanchored, files = [], [], 0
     for out in o['outputs']:
         path = Path(root) / out
         if path.suffix.lower() not in HTML_SUFFIXES:
@@ -128,6 +169,9 @@ def run(root, outline_id, date, runs=2):
             for code, level, msg in compare_runs(per_vp) or compare(o, m.ssot, per_vp[0], out):
                 report.add(level, code, f'{out} {msg}', out)
             first_screens.append({'outline': outline_id, 'file': out, 'viewport': vp['name'], 'text': per_vp[0]['first_screen']})
+            if _norm(per_vp[0].get('unanchored')):
+                unanchored.append({'outline': outline_id, 'file': out, 'viewport': vp['name'], 'text': _norm(per_vp[0]['unanchored'])})
     report.targets = {'files': files, 'viewports': len(viewports) if files else 0}
     report.first_screens = first_screens
+    report.unanchored = unanchored
     return report

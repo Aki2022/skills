@@ -79,6 +79,8 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 - 読み取る前に、ページが落ち着くのを待つ：network idle の後に 1 秒（表示を始めるタイマーのため）、さらに実行中のアニメーションとトランジションが終わるまで最大 5 秒。終わらないアニメーションがあっても読み取り、2 回の描画の比較で揺れを報告する。
 - 同じ入力を 2 回描画し、結果が違えば IA_DOM_UNSTABLE（判定に使わない）。
 - 最初の画面の文言（各画面幅）を報告の `first_screens` に出す。強調の判定（Jev の判定台帳）の入力になる。
+- 各アンカーの表示の文言（`innerText`）を、アウトラインの文案（固定値を SSOT の値に展開）と比べる。NFKC で幅をそろえ、空白と改行をすべて除いてから比べる（改行は見た目で、文言ではない）。同じアンカーが繰り返されるときは、見えているうちの 1 つが文案と一致すればよい。報告に表示の文言は出さない。
+- どのアンカー（メッセージ・課題・固定値）にも属さない、見えている文言を報告の `unanchored`（成果物 × 画面幅）に出す。判定台帳では、支える根拠の無い主張として `ia-unregistered-claim` で判定する。
 
 | code | 内容 |
 | --- | --- |
@@ -88,6 +90,9 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 | IA_DOM_ORDER | 見えているアンカーの描画順（上から）に、アウトラインの順が部分列として現れない（行動喚起の繰り返しは可） |
 | IA_DOM_FACT_MISSING / IA_DOM_FACT_VALUE | 文案が参照する固定値の表示が無い・SSOT の値と違う（空白は正規化して比べる） |
 | IA_DOM_UNSTABLE | 2 回の描画で結果が違う |
+| IA_DOM_COPY_DRIFT | 見えているアンカーのどれも、アウトラインの文案と一致しない（工場が文言を変えた） |
+| IA_DOM_COPY_EXTRA（warn） | 繰り返したアンカーのうち、文案と違うものがある（文案と一致するものは別にある） |
+| IA_DOM_UNANCHORED_TEXT（warn） | どのアンカーにも属さない、見えている文言がある（文字数だけを報告する） |
 | IA_DOM_OUTPUT_MISSING / IA_DOM_UNCOVERED（warn） | 成果物のファイルが無い・HTML 以外（未カバー） |
 | IA_DOM_PLAYWRIGHT | Playwright を解決できない・描画に失敗した |
 
@@ -102,7 +107,7 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 | 種類 | 単位 | 入力の本文 | 文脈 |
 | --- | --- | --- | --- |
 | `ia-name-variant` | セクション（正式名称が 1 つ以上ある時） | 固定値を展開した文案 | 正式名称の一覧 |
-| `ia-unregistered-claim` | セクション | 固定値を展開した文案 | メッセージ・課題・証拠・使った固定値 |
+| `ia-unregistered-claim` | セクション。加えて、成果物 × 画面幅ごとのアンカーの外の文言（id の末尾が `#unanchored`） | 固定値を展開した文案。アンカーの外は `dom` の `unanchored` | メッセージ・課題・証拠・使った固定値。アンカーの外は、すべて空（支える根拠が無い） |
 | `ia-audience-fit` | アウトライン | 全セクションの役割と文案（順に） | 対象者（label・situation・desired_action・優先順位のメッセージを順に）と brief。優先順位を入れ替えると判定のキーが変わる |
 | `ia-emphasis` | 成果物 × 画面幅 | `dom` が切り出した最初の画面の文言 | 対象者と、その 1 位のメッセージ |
 
@@ -126,12 +131,36 @@ holdout はそのまま引き継ぐ。回答の policy が今の共有 policy �
 | IA_JUDGE_REFUSED | check が失格している（先に直す） |
 | IA_JUDGE_NO_TARGETS | 判定の候補が 0 件 |
 | IA_JUDGE_LEDGER | 台帳が読めない・policy と合わない・symlink |
-| IA_JUDGE_DOM_FAILED / IA_JUDGE_DOM_REPORT | 合格していない描画を判定に使おうとした・最初の画面の行が無いか読めない・アウトラインの成果物と画面幅に無い行か重複（行の本文は報告に出さない） |
+| IA_JUDGE_DOM_FAILED / IA_JUDGE_DOM_REPORT | 失格した（終了コード 0・1 以外の）描画を判定に使おうとした・最初の画面の行が無いか読めない・`first_screens` か `unanchored` に、アウトラインの成果物と画面幅に無い行か重複がある（行の本文は報告に出さない）。警告だけの描画（アンカーの外の文言など）は判定に使う |
 | IA_JUDGE_UNCOVERED（warn） | 台帳に無い判定がある（未カバー） |
 | IA_JUDGE_REVIEW（warn） | score が θ 以上（要確認） |
 | IA_JUDGE_EMPHASIS_MISSING（出荷される HTML なら warn、他は info） | 最初の画面の入力が無く、強調を判定していない。dom の報告が一部の成果物・画面幅だけなら、足りない組ごとに出る |
 
 報告は `uncovered`（未カバー）・`screened`（台帳にあり。「問題なし」の保証ではない）・`missing`（入力が無く判定していない）を分けて出す。
+
+## 作った物の評価（`evaluate`）
+
+`infoarch-author evaluate --root . [--outline <id> ...]` は、作った物の評価の入口。工場は描画した後に必ず走らせる。
+
+1. `check`。失格なら描画しない（`dom` と `judge` は `skipped`）。
+2. 指定したアウトライン（無ければ全部）ごとに `dom`。1 つでも失格なら判定しない（`judge` は `skipped`）。
+3. `dom` の報告（`first_screens`・`unanchored`）を渡して `judge`。
+
+報告は 1 つで、同じ指摘は 1 回だけ出す。終了コードは全段の最大（0 / 1 / 2）。`stages` に段ごとの終了コードを載せる。
+判定の候補（文案を含む）は出さない（必要なら `judge --include-candidates`）。
+
+| code | 内容 |
+| --- | --- |
+| IA_EVALUATE_OUTLINE | 指定したアウトラインが無い |
+| IA_EVALUATE_ACQUIRE | Jev の判定を取れない（上限超過・認証・通信・台帳の記録の失敗） |
+
+`--acquire --answers-dir DIR --limit N` は、台帳に無い判定を Jev で取る。
+
+- `--execute` が無ければ見積もりだけ（件数と要求数。キーを読まず、通信せず、何も書かない）。
+- `--execute` があれば、own-design-author の `judgment_run`（共有の使用量台帳。累計の上限を超えるなら 1 件も送らない）で取り、回答を `DIR/judgment-answers.json` に足す（次の実行で続きから取る）。
+- 取った回答から台帳の置き換えを作り、`judgment_ledger.py` で記録する（台帳が無ければ record、あれば refresh）。その後、評価をやり直す。
+- 評価が失格している時は取らない（`acquisition.status: refused`）。
+- 従量課金なので、`--execute` は実行の前に件数と上限を確かめる。
 
 ## 出荷ゲートと維持（`ship`・`maintain`）
 

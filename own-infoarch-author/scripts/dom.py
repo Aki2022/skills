@@ -112,6 +112,15 @@ def compare(outline, ssot, snap, output=None):
         out.append(('IA_DOM_UNANCHORED_TEXT', 'warn',
                     f'{vp}: どのアンカーにも属さない表示の文言が {len(unanchored)} 文字ある（判定台帳で主張として判定する）'))
     values = {fid: f.get('value') for fid, f in ssot['facts'].items()}
+    for a in anchors:
+        # A fact anchor this page does not refer to may only show a registered value; otherwise it would wrap
+        # arbitrary text that no other check reads.
+        if a['kind'] != 'fact' or a['id'] in facts:
+            continue
+        if a['id'] not in values:
+            out.append(('IA_DOM_ANCHOR_UNKNOWN', 'fail', f'{vp}: 固定値のアンカー {a["id"]} は SSOT に無い'))
+        elif _norm(a['text']) != _norm(values.get(a['id'])):
+            out.append(('IA_DOM_FACT_VALUE', 'fail', f'{vp}: 固定値 {a["id"]} の表示が SSOT の値「{values.get(a["id"])}」と違う'))
     for fid in facts:
         shown = [a for a in anchors if a['kind'] == 'fact' and a['id'] == fid]
         if not shown:
@@ -120,6 +129,24 @@ def compare(outline, ssot, snap, output=None):
             if _norm(a['text']) != _norm(values.get(fid)):
                 out.append(('IA_DOM_FACT_VALUE', 'fail', f'{vp}: 固定値 {fid} の表示「{_norm(a["text"])}」が SSOT の値「{values.get(fid)}」と違う'))
     return out
+
+
+def unjudged_text(outline, ssot, snap, output=None):
+    """Visible text no deterministic check vouches for: text outside every anchor, and repeats of an anchor whose
+    text is not the outline's copy. Both go to the judgment ledger as claims with nothing behind them."""
+    parts = [_norm(snap.get('unanchored'))]
+    for key, copies in expected_copy(outline, ssot, output).items():
+        parts += [_norm(a['text']) for a in snap['anchors']
+                  if (a['kind'], a['id']) == key and a['visible'] and _copy_norm(a['text']) not in copies]
+    return ' '.join(p for p in parts if p)
+
+
+def report_dict(rep):
+    """A dom report as `judge` reads it (evaluate and the ship gate both hand it on)."""
+    data = rep.to_dict()
+    data['first_screens'] = getattr(rep, 'first_screens', [])
+    data['unanchored'] = getattr(rep, 'unanchored', [])
+    return data
 
 
 def compare_runs(snaps):
@@ -169,8 +196,9 @@ def run(root, outline_id, date, runs=2):
             for code, level, msg in compare_runs(per_vp) or compare(o, m.ssot, per_vp[0], out):
                 report.add(level, code, f'{out} {msg}', out)
             first_screens.append({'outline': outline_id, 'file': out, 'viewport': vp['name'], 'text': per_vp[0]['first_screen']})
-            if _norm(per_vp[0].get('unanchored')):
-                unanchored.append({'outline': outline_id, 'file': out, 'viewport': vp['name'], 'text': _norm(per_vp[0]['unanchored'])})
+            loose = unjudged_text(o, m.ssot, per_vp[0], out)
+            if loose:
+                unanchored.append({'outline': outline_id, 'file': out, 'viewport': vp['name'], 'text': loose})
     report.targets = {'files': files, 'viewports': len(viewports) if files else 0}
     report.first_screens = first_screens
     report.unanchored = unanchored

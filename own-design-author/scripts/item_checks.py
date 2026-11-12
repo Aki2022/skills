@@ -5,8 +5,11 @@ same catalog, so one reviewed map serves all of them. Every catalog item has exa
 
 - machine: code checks the item on each rendered page. A checker is either gated by L2 (its failure already
   stops the render stage) or collected by L2 per page and enforced per adopted item after rendering.
-- decision: the item is a choice the repository makes once (which variant, when to use a component, what the
-  text says). It is verified at adoption time: DESIGN.md states the choice and the owner approved that item.
+- decision: the item is a choice each repository makes (which variant, when to use a component, what the text
+  says), so the skill cannot ship a check for it. The repository declares one in design/checks (a page rule:
+  count, text or style, run on every rendered page; or a judgment statement for AFM) and cites it as rule:<id>.
+  Writing the choice in DESIGN.md and approving it is not verification: a decision without a declared check is
+  uncovered. The owner still approves the item, and the approval hash covers the cited rule.
 - judgment: only items that need a visual judgment code cannot make go to the on-device model (AFM).
 An item the map does not route, or a machine item whose tokens the design system lacks, is uncovered.
 """
@@ -35,6 +38,8 @@ TOKEN_NEEDS = {'palette:color': 'color', 'palette:fontFamily': 'fontFamily', 'pa
                'palette:fontSize': 'dimension', 'palette:spacing': 'dimension',
                'palette:fontWeight': 'fontWeight', 'palette:shadow': 'shadow'}
 EVIDENCE_TOKENS = {'color': 'palette:color', 'fontFamily': 'palette:fontFamily'}
+# Rule kinds a repository declares that run on every rendered page; 'judgment' sends its statement to AFM.
+PAGE_KINDS = {'count', 'text', 'style', 'judgment'}
 
 
 def document_key(item):
@@ -79,19 +84,38 @@ def active_checkers(tokens):
     return {c for c in L2_GATED | COLLECTED if c not in TOKEN_NEEDS or TOKEN_NEEDS[c] in types}
 
 
+def mapped_route(item, mapping):
+    row = mapping['_index'].get((document_key(item), heading_path(item)))
+    return row['route'] if row else None
+
+
 def route(item, evidence, tokens, rules, mapping, active):
-    """Return (route, checkers, reason): route is machine, decision, afm or uncovered."""
+    """Return (route, checkers, reason): route is machine, afm or uncovered."""
+    page_checks, judged = [], []
     for ref in evidence:
         kind, _, target = ref.partition(':')
         if kind == 'rule' and target in rules:
-            return 'machine', ['rule:' + target], ''
-        if kind == 'token' and target in tokens and EVIDENCE_TOKENS.get(tokens[target]['type']) in active:
-            return 'machine', [EVIDENCE_TOKENS[tokens[target]['type']]], ''
+            if rules[target]['kind'] == 'judgment':
+                judged.append('rule:' + target)
+            else:
+                page_checks.append('rule:' + target)
+    if page_checks:
+        return 'machine', sorted(page_checks), ''
     row = mapping['_index'].get((document_key(item), heading_path(item)))
+    for ref in evidence:
+        kind, _, target = ref.partition(':')
+        if kind == 'rule' and target in rules and rules[target]['kind'] not in PAGE_KINDS:
+            return 'machine', ['rule:' + target], ''
+        # A cited token proves only that the value exists; it verifies an item the map does not route, nothing more.
+        if row is None and kind == 'token' and target in tokens and EVIDENCE_TOKENS.get(tokens[target]['type']) in active:
+            return 'machine', [EVIDENCE_TOKENS[tokens[target]['type']]], ''
+    if judged:
+        return 'afm', [], ''
     if row is None:
         return 'uncovered', [], 'the skill map does not route this catalog item'
     if row['route'] == 'decision':
-        return 'decision', [], ''
+        return 'uncovered', [], ('design decision has no declared check: declare a count/text/style rule '
+                                 '(or a judgment statement) in design/checks and cite it as rule:<id>')
     if row['route'] == 'judgment':
         return 'afm', [], ''
     missing = sorted(TOKEN_NEEDS[c] for c in row['checkers'] if c not in active)

@@ -1,0 +1,23 @@
+{
+  "comment": "Starting points for the checks a repository declares for its design decisions (catalog items routed 'decision'). Copy a rule into design/checks/<name>.yaml, change the selectors and values to the decision written in DESIGN.md, and cite it from the item as rule:<id>. 'for' names the catalog heading path each example was written for. Prefer count/text/style; use judgment only when the decision cannot be stated as selectors, text or computed style.",
+  "for": {
+    "dialog-actions": "components/modal-dialog > ユースケース",
+    "dialog-not-for-links": "components/modal-dialog > 注意が必要なケース",
+    "accordion-single-heading": "components/accordion > コンポーネント要素",
+    "polite-form": "supplements/writing > ライティング",
+    "banned-terms": "supplements/writing > ライティング",
+    "focus-ring-color": "foundations/color > 機能カラー > フォーカスカラー",
+    "primary-button-radius": "foundations/corner-shapes > 角の形状の違いによる強調表現",
+    "card-use": "components/card > ユースケース"
+  },
+  "rules": [
+    {"id": "dialog-actions", "kind": "count", "scope": ["dialog", "[role=dialog]"], "targets": ["button"], "minimum": 1, "maximum": 2},
+    {"id": "dialog-not-for-links", "kind": "count", "targets": ["a[aria-haspopup=dialog]", "a[data-opens=dialog]"], "maximum": 0},
+    {"id": "accordion-single-heading", "kind": "count", "scope": ["details"], "targets": [":scope > summary"], "minimum": 1, "maximum": 1},
+    {"id": "polite-form", "kind": "text", "targets": ["main"], "pattern": "(である|だ)。"},
+    {"id": "banned-terms", "kind": "text", "targets": ["body"], "pattern": "こちら|クリック"},
+    {"id": "focus-ring-color", "kind": "style", "targets": ["a[href]", "button", "input", "select", "textarea"], "property": "outline-color", "state": "focus", "allowlist": ["token:color.primary"]},
+    {"id": "primary-button-radius", "kind": "style", "targets": ["button.primary"], "property": "border-top-left-radius", "allowlist": ["8px"]},
+    {"id": "card-use", "kind": "judgment", "targets": [".card", "[data-component=card]"], "statement": "Cards group one item's summary and a single link to its details; they never hold forms or long text."}
+  ]
+}

@@ -380,6 +380,63 @@ export function collectItemChecks(manifest) {
         if (style[property] !== 'normal' && !spaces.has(style[property])) add('palette:spacing', el, property + ' ' + style[property]);
     if (!shadows.has(style.boxShadow)) add('palette:shadow', el, 'box-shadow');
   }
+  // rules the repository declared for its own design decisions (design/checks), run on every rendered page
+  const declared = Object.fromEntries((manifest.rules || []).map(rule => [rule.id, rule]));
+  for (const id of want) {
+    if (!id.startsWith('rule:')) continue;
+    const rule = declared[id.slice(5)];
+    const row = results[id];
+    if (!rule) { row.checked = false; continue; }
+    const within = (root, selectors) => selectors.flatMap(selector => [...root.querySelectorAll(selector)]).filter(shown);
+    try {
+      const scopes = rule.scope ? within(document, rule.scope) : [document];
+      const outside = (n) => (rule.minimum !== undefined && n < rule.minimum) || n > (rule.maximum ?? Infinity);
+      let applicable = 0;
+      if (rule.kind === 'count') {
+        applicable = rule.scope ? scopes.length : 1;
+        for (const scope of scopes) {
+          const n = within(scope, rule.targets).length;
+          if (outside(n)) add(id, scope === document ? document.body : scope, 'count ' + n);
+        }
+      } else if (rule.kind === 'text') {
+        const pattern = new RegExp(rule.pattern, 'gu');
+        const targets = within(document, rule.targets);
+        applicable = targets.length;
+        const bound = rule.maximum ?? (rule.minimum === undefined ? 0 : Infinity);
+        for (const el of targets) {
+          const n = (textOf(el).match(pattern) || []).length;
+          if ((rule.minimum !== undefined && n < rule.minimum) || n > bound) add(id, el, 'matches ' + n);
+        }
+      } else if (rule.kind === 'style') {
+        const property = rule.property;
+        const probeEl = document.createElement('div');
+        probeEl.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none';
+        document.body.append(probeEl);
+        const allowed = new Set((rule.resolved_allowlist || rule.allowlist).map(value => {
+          probeEl.style.removeProperty(property);
+          probeEl.style.setProperty(property, value);
+          return probeEl.style.getPropertyValue(property) ? getComputedStyle(probeEl).getPropertyValue(property) : null;
+        }).filter(Boolean));
+        probeEl.remove();
+        const targets = scopes.flatMap(scope => within(scope, rule.targets));
+        applicable = targets.length;
+        for (const el of targets) {
+          if (rule.state === 'focus') el.focus({focusVisible: true});
+          const value = getComputedStyle(el).getPropertyValue(property);
+          if (rule.state === 'focus') el.blur();
+          if (!allowed.has(value)) add(id, el, property + ' ' + value);
+        }
+      } else if (rule.kind === 'judgment') {
+        applicable = within(document, rule.targets).length;
+      }
+      presence[id] = applicable;
+    } catch (error) {
+      // An invalid selector or pattern must fail the item, so the rule counts as applicable but unmeasured.
+      presence[id] = 1;
+      row.checked = false;
+      row.sample = [String(error.message || error).slice(0, 120)];
+    }
+  }
   return {presence, results, uncovered:['margin (auto centering is indistinguishable after layout)', 'pseudo-elements', 'shadow-dom',
     'keyboard behaviour and state changes (no interaction is simulated)']};
 }

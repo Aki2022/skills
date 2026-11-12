@@ -81,7 +81,7 @@ covered と excluded の重複、宣言していない検査対象の参照、�
 限界: 対応が正しいか（その URL が本当にその画面を描くか）は宣言を信じる。
 動的な経路（`[id]` 等）や認証の後ろの画面は、描画用の状態を用意できるまで理由付きで対象外にする。
 
-## 採用した項目の確かめ方（コード・採用時の決定・AFM）
+## 採用した項目の確かめ方（skillのコード・repoが宣言する検査・AFM）
 
 カタログの全項目は、skillが持つ対応表`references/item-checks.json`で、次のどれか1つに割り当て済み。
 割り当ては見出しの完全な経路（小見出しまで）で指す。repoごとには書かない。全repoが同じカタログを使うので、skillで一度だけ見直す。
@@ -90,17 +90,38 @@ covered と excluded の重複、宣言していない検査対象の参照、�
 | 経路 | 対象 | 確かめ方 |
 |---|---|---|
 | `machine` | 値・構造・属性で言える規則（色・文字・余白・影・コントラスト・押せる大きさ・見出し・ラベル・属性の禁止など） | L2が測った結果で、画面ごとにコードで確かめる |
-| `decision` | repoが一度決めること（どの型を使うか、いつ部品を使うか、文章の方針、階層の体系、ロゴやライティングの方針など） | 採用時に確かめる。DESIGN.mdに決め方を書き、オーナーがその項目を承認していれば合格。pushごと・画面ごとには判定しない |
+| `decision` | repoごとに決めること（どの型を使うか、いつ部品を使うか、文章の方針、階層の体系、ロゴやライティングの方針など） | skillは検査を持てないので、repoが`checks/*.yaml`に検査を宣言し、項目から`rule:<id>`で指す。宣言した検査は画面ごとにコードで確かめる。DESIGN.mdに書いて承認しただけでは合格しない |
 | `judgment` | 画面を見ないと判断できないもの（色だけで区別していないか、余白で関係性を示しているか、カードの見た目など） | 部品がある画面だけ、AFMで判定する |
 
 L0は採用した項目（`defined`）ごとに経路を決める。mustかどうかは関係ない。
 
-1. 証拠に宣言的rule、またはcolor・fontFamilyのトークンがある → `machine`。
-2. それ以外は対応表の経路に従う。`machine`でも、比べる種類のトークン（dimension・fontWeight・shadow等）がなければ`uncovered`（理由つき）。
-3. 対応表にない項目 → `uncovered`。
+1. 証拠に画面の検査（count・text・style）を指す`rule:`がある → `machine`（その検査で確かめる）。
+2. 証拠にそれ以外の宣言的ruleがある → `machine`（L0・L1で測れないruleは未カバーとして出荷で止まる）。
+3. 証拠に`judgment`のruleがある → `afm`。AFMにはカタログの文ではなく、repoが書いた判定文を渡す。
+4. それ以外は対応表の経路に従う。`decision`は`uncovered`（検査の宣言がない）。`machine`でも、比べる種類のトークン（dimension・fontWeight・shadow等）がなければ`uncovered`（理由つき）。
+5. 対応表にない項目 → color・fontFamilyのトークンを証拠に持てば`machine`（palette）、なければ`uncovered`。
+   対応表にある項目では、トークンを挙げただけでは確かめたことにならない（値があることしか言えないため）。
 
+`decision`の項目は、宣言した検査に加えてオーナーの承認も要る。承認のハッシュは指したruleの中身を含むので、ruleを変えると承認し直しになる。
 `--ship`では、`uncovered`の項目と、承認されていない`decision`の項目があれば停止する。
-割り当ては`.resolved/web.json`の`coverage.items`（machine・decision・afm・uncovered）と`coverage.item_routes`に入る。
+割り当ては`.resolved/web.json`の`coverage.items`（machine・afm・uncovered）と`coverage.item_routes`に入る。`coverage.decisions`はそのうちrepoの決定の項目。
+
+### repoが決定ごとに宣言する検査
+
+`checks/*.yaml`の`rules`に書く。任意のコードは書けない。ひな形は`references/decision-rule-examples.json`（どのカタログ項目向けかも書いてある）。
+
+| kind | 書くこと | 失格になる条件 |
+|---|---|---|
+| `count` | `targets`（数える要素のselector）、`minimum`か`maximum`、任意で`scope`（この中ごとに数える） | `scope`の要素ごとに、中の`targets`の数が範囲外 |
+| `text` | `targets`（文を読む要素）、`pattern`（正規表現）、任意で`minimum`・`maximum`（既定は0件まで） | 要素ごとの一致数が範囲外 |
+| `style` | `targets`、`property`（CSSのプロパティ名）、`allowlist`（値か`token:<path>`）、任意で`state: focus`、`scope` | 要素の計算済みの値が許可した値と違う。`state: focus`ならフォーカスしてから読む |
+| `judgment` | `targets`（あれば判定する要素）、`statement`（判定させる決定の文） | AFMが沿っていないと判定する（精度を測るまで警告） |
+
+- 検査は、そのselectorに合う要素がある画面だけに効く。合う要素がなければその画面では対象外（n/a）。
+- どの画面でも一度も合わなかった検査は警告する。selectorの書き間違いで何も確かめていない状態を、合格と見分けるため。
+- ブラウザが受け付けないselector・正規表現は、対象外ではなく「測れなかった」として失格にする。
+- `style`の`token:<path>`がトークンにないとL0で失格。
+- 画面の操作（開閉・入力・ホバー）を伴う決定は確かめられない。`state`はfocusだけ。
 L2に渡す検査と部品のselectorは`item_checks`に入る。
 
 ### 検査の種類

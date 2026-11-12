@@ -1,4 +1,5 @@
-"""Every adopted (defined) item is verified: by code where the skill's map says code can, by AFM only for the rest."""
+"""Every adopted (defined) item is verified: by code where the skill's map says code can, by a check the repository
+declares for its own design decisions (test_decision_checks.py), and by AFM only for visual judgments."""
 import json
 import os
 from pathlib import Path
@@ -74,7 +75,8 @@ def test_every_catalog_item_has_exactly_one_route_with_known_checkers():
 def test_color_token_item_is_machine_checked(project):
     result = check(project)
     assert result['manifest']['web']['coverage']['items'] == {
-        'machine': ['dads-000001'], 'decision': [], 'afm': [], 'uncovered': []}
+        'machine': ['dads-000001'], 'afm': [], 'uncovered': []}
+    assert result['manifest']['web']['coverage']['decisions'] == []
     assert result['afm_candidates'] == []
 
 
@@ -106,8 +108,8 @@ def test_mapped_item_is_machine_when_its_tokens_exist_and_uncovered_when_not(pro
 @pytest.mark.parametrize('path,route', [
     ('余白ルールの例', 'machine'),
     ('余白の種類 > パディング', 'machine'),
-    ('余白の種類', 'decision'),                            # defines the kinds of space
-    ('余白の種類 > マージン', 'decision'),
+    ('余白の種類', 'uncovered'),                           # a decision: needs the repository's own check
+    ('余白の種類 > マージン', 'uncovered'),
     ('余白ルールの例 > 余白による関係性の明示', 'afm'),     # meaning, not a value
 ])
 def test_only_the_exact_heading_path_is_mapped(project, path, route):
@@ -115,17 +117,6 @@ def test_only_the_exact_heading_path_is_mapped(project, path, route):
     use_catalog_item(project, catalog_item('foundations/spacing', path))
     add_tokens(root, {'space': {'md': dimension(16)}})
     assert check(project)['manifest']['web']['coverage']['item_routes']['dads-000001']['route'] == route
-
-
-def test_design_decision_is_verified_by_its_approval_not_per_page(project):
-    use_catalog_item(project, catalog_item('components/accordion', 'ユースケース'))
-    result = check(project, ship=True)
-    assert any('unapproved design decisions 1' in e for e in result['errors'])
-    approve_item(project)
-    result = check(project, ship=True)
-    assert not any('unapproved design decisions' in e for e in result['errors']), result['errors']
-    assert result['manifest']['web']['coverage']['items']['decision'] == ['dads-000001']
-    assert result['afm_candidates'] == []
 
 
 def test_judgment_item_carries_its_presence_selectors(project):

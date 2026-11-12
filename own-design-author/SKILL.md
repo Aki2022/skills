@@ -44,7 +44,7 @@ design-author check --repo <repo> --ship
 L0 はモデルを使わず、対象項目数・充足率・未判定・提案値・未カバーを出す。整合が通った時だけ `design/.resolved/<media>.json` と CSS、`assets.json` を生成する。失格時は古いマニフェストを残さない。L1/L2 はマニフェストだけを読む。L0だけで成果物の準拠合格を名乗らない。
 
 `--ship` は未承認mustと未カバー規則を失格にする（規則の未カバーはmust以外も失格）。hook/miseへの接続は `references/ship-gates.md`。既存hookを置き換えない。
-`defined` の全項目は、skillの対応表 `references/item-checks.json` で3つの確かめ方のどれかに乗る。値・構造で言えるものはコードで画面ごとに確かめる。repoが一度決めることは、DESIGN.mdの記述とオーナーの承認で採用時に確かめる。画面を見ないと判断できないものだけを、部品がある画面に限って端末内のApple Foundation Models（AFM）で判定する。どれにも乗らない項目は出荷で止まる。AFMの違反は精度を測るまで警告。詳細は `references/web-validation.md`。
+`defined` の全項目は、skillの対応表 `references/item-checks.json` で3つの確かめ方のどれかに乗る。値・構造で言えるものはコードで画面ごとに確かめる。repoごとに決めること（どの型をいつ使うか、文章の方針など）は、repoが `checks/*.yaml` に宣言した検査（数・文・計算済みスタイル）で画面ごとに確かめ、オーナーの承認も要る。DESIGN.mdに書いて承認しただけでは合格しない。画面を見ないと判断できないものだけを、部品がある画面に限って端末内のApple Foundation Models（AFM）で判定する。どれにも乗らない項目は出荷で止まる。AFMの違反は精度を測るまで警告。詳細は `references/web-validation.md`。
 push時の検査は、`design/design.yaml` を持つ全repoで pre-push の拡張が必ず回す。repoごとの有効化は要らない。
 `design-author sync` はL0通過後に宣言したTailwindとassetコピーを配置する。`design-check` はL0/L1/L2・ITEMS・AFM段を順に実行するためL2実施確認後に呼ぶ。
 L1/L2と生成Tailwindの使い方・制約は `references/web-validation.md` を読む。

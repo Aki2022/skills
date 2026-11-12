@@ -31,7 +31,8 @@ def page_evidence(root,endpoints,spec):
         runs=[r for r in measured.get('runs',[]) if r.get('repeat',0)==0]
         if not runs or any(not isinstance(r.get('item_checks'),dict) for r in runs):
             raise ValueError('L2 item check evidence missing')
-        presence={doc:max(int(r['item_checks']['presence'].get(doc,0)) for r in runs) for doc in spec['applicability']}
+        keys=list(spec['applicability'])+[c for c in spec['collect'] if c.startswith('rule:')]
+        presence={key:max(int(r['item_checks']['presence'].get(key,0)) for r in runs) for key in keys}
         results={}
         for checker in spec['collect']:
             rows=[r['item_checks']['results'].get(checker) for r in runs]
@@ -50,9 +51,16 @@ def verify_items(root,l0,endpoints,report):
     pages=page_evidence(root,endpoints,spec)
     machine,afm_pairs,failures,not_applicable,causes={},[],[],0,{}
     for ident,row in sorted(routes.items()):
-        if row['route'] not in ('machine','afm'):continue  # decisions are verified at adoption; uncovered stops in L0
+        if row['route'] not in ('machine','afm'):continue  # uncovered items already stop ship in L0
+        # Declared page rules apply only where their selectors match; other rules were verified in L0.
+        rule_checks=[c for c in row['checkers'] if c.startswith('rule:') and c in spec['collect']]
+        gate=rule_checks if row['route']=='machine' else [c for c in row.get('presence',[]) if c in spec['collect']]
+        only_rules=row['route']=='afm' or len(rule_checks)==len(row['checkers'])
         for page in pages:
-            if row['document'] in spec['applicability'] and page['presence'][row['document']]==0:
+            # A row checked only by declared rules applies where those rules' selectors match, not by the component.
+            absent=(all(page['presence'][c]==0 for c in gate) if gate and only_rules else
+                    row['document'] in spec['applicability'] and page['presence'][row['document']]==0)
+            if absent:
                 not_applicable+=1
                 machine.setdefault(ident,{})[page['env']]='n/a' if row['route']=='machine' else None
                 continue
@@ -60,7 +68,8 @@ def verify_items(root,l0,endpoints,report):
                 afm_pairs.append([ident,page['env']]);continue
             status='pass'
             for checker in row['checkers']:
-                if checker in L2_GATED or checker.startswith('rule:'):continue
+                if checker in L2_GATED or (checker.startswith('rule:') and checker not in spec['collect']):continue
+                if checker in rule_checks and page['presence'][checker]==0:continue
                 found=page['results'].get(checker)
                 if found is None:
                     cause=f"{page['env']}: {checker} was not measured"
@@ -70,6 +79,10 @@ def verify_items(root,l0,endpoints,report):
                 status='fail';failures.append(f"{ident} on {cause}");causes.setdefault(cause,[]).append(ident)
             machine.setdefault(ident,{})[page['env']]=status
     machine={k:{e:v for e,v in pages_.items() if v} for k,pages_ in machine.items()}
+    # A declared rule whose selectors match nothing on any page checked nothing: often a typo, never a pass.
+    for checker in sorted(c for c in spec['collect'] if c.startswith('rule:')):
+        if all(page['presence'][checker]==0 for page in pages):
+            report.setdefault('warnings',[]).append(f"rule {checker[5:]} never applied on any rendered page; check its selectors")
     record=inside(root/'design/.resolved','items.json')
     record.write_text(json.dumps({'schema_version':1,'pages':[p['env'] for p in pages],'machine':machine,
         'afm_pairs':afm_pairs,'failures':failures},ensure_ascii=False,indent=1))

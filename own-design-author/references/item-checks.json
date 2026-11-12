@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "comment": "Skill-owned map from catalog items to code checks, shared by every repository. 'paths' are exact catalog heading paths (headings joined by ' > '). Map an item only when the checker verifies what the item says; a '参考情報' (references) or example sub-item follows its parent. An item routes to machine only when every listed checker is active; otherwise it falls back to AFM. 'applicability' lists selectors that show a component is on a rendered page; a page without any of them makes the component's items not applicable there. A document absent from 'applicability' is always applicable.",
+  "comment": "Skill-owned map from catalog items to how each is verified, shared by every repository. 'paths' are exact catalog heading paths (headings joined by ' > '). machine: the listed checkers verify what the item says (an item is uncovered while a checker lacks the tokens it compares against). decision: a choice each repository makes, so the repository declares its own page rule (count/text/style, or a judgment statement) in design/checks and cites it; without one the item is uncovered. judgment: AFM judges the item on pages where the component is present. A '参考情報' (references) or example sub-item follows its parent. 'applicability' lists selectors that show a component is on a rendered page; a page without any of them makes the component's items not applicable there. A document absent from 'applicability' is always applicable.",
   "applicability": {
     "components/accordion": [
       "details",

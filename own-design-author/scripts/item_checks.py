@@ -27,6 +27,11 @@ def document_key(item):
     return str(item.get('document', '')).removesuffix('/index.md')
 
 
+def heading_path(item):
+    """The exact heading path of a catalog item; a sub-heading never inherits its parent's mapping."""
+    return ' > '.join(item.get('headings') or [item.get('title', '')])
+
+
 def load_map(path=MAP):
     data = json.loads(Path(path).read_text())
     if not isinstance(data, dict) or data.get('schema_version') != 1 or set(data) - {'schema_version', 'comment', 'applicability', 'checks'}:
@@ -40,8 +45,8 @@ def load_map(path=MAP):
     if not isinstance(checks, list):
         raise ValueError('invalid item checks')
     for row in checks:
-        if (not isinstance(row, dict) or set(row) != {'document', 'headings', 'checkers'}
-                or not isinstance(row['headings'], list) or not row['checkers']
+        if (not isinstance(row, dict) or set(row) != {'document', 'paths', 'checkers'}
+                or not isinstance(row['paths'], list) or not row['paths'] or not row['checkers']
                 or set(row['checkers']) - L2_GATED - COLLECTED):
             raise ValueError('unknown checker or malformed item check row')
     return data
@@ -60,9 +65,9 @@ def route(item, evidence, tokens, rules, mapping, active):
             return 'machine', ['rule:' + target]
         if kind == 'token' and target in tokens and EVIDENCE_TOKENS.get(tokens[target]['type']) in active:
             return 'machine', [EVIDENCE_TOKENS[tokens[target]['type']]]
-    document, heading = document_key(item), (item.get('headings') or [''])[0]
+    document, path = document_key(item), heading_path(item)
     for row in mapping['checks']:
-        if row['document'] == document and (not row['headings'] or heading in row['headings']):
+        if row['document'] == document and path in row['paths']:
             if set(row['checkers']) <= active:
                 return 'machine', sorted(row['checkers'])
     return 'afm', []

@@ -9,7 +9,7 @@ import pytest
 
 from test_core import project, write, check, approve, item, SKILL  # noqa: F401  (fixture reuse)
 from classify import load_policy, classify_response
-from item_checks import load_map, document_key, L2_GATED, COLLECTED
+from item_checks import load_map, document_key, heading_path, L2_GATED, COLLECTED
 
 
 def set_items(root, items):
@@ -26,7 +26,7 @@ def doc_section(root, anchor, body):
 def catalog_item(document, heading, grade='must'):
     """A fixture item that sits in a real catalog document/heading so the skill map applies to it."""
     row = item(grade=grade)
-    row.update({'document': document + '/index.md', 'title': heading, 'headings': [heading]})
+    row.update({'document': document + '/index.md', 'title': heading.split(' > ')[-1], 'headings': heading.split(' > ')})
     policy = load_policy()
     choice = 'global1-lp0-product0-presentation0' if grade == 'must' else 'global0-lp0-product0-presentation0'
     answer = {'type': 'choice', 'choice': choice, 'confidence': 1.0,
@@ -56,12 +56,15 @@ def dimension(value, unit='px'):
 def test_skill_map_names_real_catalog_headings_and_known_checkers():
     mapping = load_map()
     catalog = json.loads((SKILL / 'catalog/2026-10-14.json').read_text())
-    pairs = {(document_key(i), i['headings'][0]) for i in catalog['items']}
+    paths = {(document_key(i), heading_path(i)) for i in catalog['items']}
     documents = {document_key(i) for i in catalog['items']}
+    seen = set()
     for row in mapping['checks']:
         assert set(row['checkers']) <= L2_GATED | COLLECTED
-        for heading in row['headings']:
-            assert (row['document'], heading) in pairs, (row['document'], heading)
+        for path in row['paths']:
+            assert (row['document'], path) in paths, (row['document'], path)
+            assert (row['document'], path) not in seen, ('mapped twice', path)
+            seen.add((row['document'], path))
     assert set(mapping['applicability']) <= documents
 
 
@@ -85,13 +88,27 @@ def test_doc_only_item_outside_the_map_goes_to_afm(project):
 
 def test_mapped_item_is_machine_when_its_tokens_exist_and_afm_when_not(project):
     root, _ = project
-    use_catalog_item(project, catalog_item('foundations/spacing', '余白の種類'))
+    use_catalog_item(project, catalog_item('foundations/spacing', '余白ルールの例'))
     assert check(project)['manifest']['web']['coverage']['items']['afm'] == ['dads-000001']
     add_tokens(root, {'space': {'md': dimension(16)}})
     manifest = check(project)['manifest']['web']
     assert manifest['coverage']['item_routes']['dads-000001'] == {
         'route': 'machine', 'checkers': ['palette:spacing'], 'document': 'foundations/spacing'}
     assert manifest['item_checks']['collect'] == ['palette:spacing']
+
+
+@pytest.mark.parametrize('path,route', [
+    ('余白ルールの例', 'machine'),
+    ('余白の種類 > パディング', 'machine'),
+    ('余白の種類', 'afm'),                                # parent mixes padding and margin
+    ('余白の種類 > マージン', 'afm'),                      # margin is not measured
+    ('余白ルールの例 > 余白による関係性の明示', 'afm'),     # meaning, not a value
+])
+def test_only_the_exact_heading_path_is_mapped(project, path, route):
+    root, _ = project
+    use_catalog_item(project, catalog_item('foundations/spacing', path))
+    add_tokens(root, {'space': {'md': dimension(16)}})
+    assert check(project)['manifest']['web']['coverage']['item_routes']['dads-000001']['route'] == route
 
 
 def test_component_item_carries_its_presence_selectors(project):
@@ -208,7 +225,7 @@ def test_absent_component_skips_afm_entirely(rendered, project):
 
 def test_mapped_item_is_enforced_by_code_and_names_the_item(rendered, project):
     run, root, tmp_path = rendered
-    use_catalog_item(project, catalog_item('foundations/spacing', '余白の種類', grade='nice-to-have'))
+    use_catalog_item(project, catalog_item('foundations/spacing', '余白ルールの例', grade='nice-to-have'))
     code, result = run('<p style="padding:16px">ok</p>')
     assert code in (0, 1), result
     assert stages(result) == ['L0', 'L1', 'L2', 'ITEMS']

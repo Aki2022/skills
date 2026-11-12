@@ -53,6 +53,7 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 | IA_IMPACT_UNKNOWN_ID | `impact --id` に SSOT にも墓標にも無い id を渡した（空の結果を合格にしない） |
 | IA_OUTLINE_CUT_USED | brief.cut で削ると決めたメッセージを使った |
 | IA_OUTLINE_OFF_PRIORITY（warn） | 対象者の priorities に無いメッセージを使った |
+| IA_PRIORITY_UNSUPPORTED（warn） | proposed の対象者の priorities の先頭のメッセージを、proposed の証拠がどれも `supports` していない（`role` が cta・vision のものは主張ではないので対象外。2 番目以降は見ない） |
 | IA_EXPIRED_SHIPPED / IA_EXPIRED_UNSHIPPED（info） | 期限切れの証拠・固定値を、出荷チャネル（`ship: true`）のアウトラインが参照している／参照していない |
 
 ## 期限

@@ -265,22 +265,22 @@ def test_two_green_branches_fail_on_their_predicted_merge(repo, tmp_path):
     """The topic is green alone; main has since expired the proof the topic starts to ship."""
     base = run_git(repo, 'rev-parse', 'HEAD').stdout.strip()
     ssot = fresh_ssot()
-    ssot['proofs']['prf-0002'] = {'state': 'proposed', 'provenance': 'owner', 'text': '満足度調査',
+    ssot['proofs']['prf-0003'] = {'state': 'proposed', 'provenance': 'owner', 'text': '満足度調査',
                                   'source': '調査票', 'supports': ['msg-0002'], 'as_of': '2026-10-01'}
-    ssot['ledger']['next']['prf'] = 3
+    ssot['ledger']['next']['prf'] = 4
     dump(repo / 'design/info_arch/info_arch.yaml', ssot)
     cover_ledger(repo)
     base = commit(repo, 'second proof, used by nobody')
     run_git(repo, 'checkout', '-qb', 'topic')
     deck = {**copy.deepcopy(DECK), 'channel': 'deck'}
-    deck['pages'][0]['sections'][0]['proofs'] = ['prf-0001', 'prf-0002']
+    deck['pages'][0]['sections'][0]['proofs'] = ['prf-0001', 'prf-0003']
     dump(repo / 'design/info_arch/outlines/deck-smb.yaml', deck)
     cover_ledger(repo)
     topic = commit(repo, 'ship the second proof')
     code, out, _ = ship(repo)
     assert code == 0, out  # green on its own commit
     run_git(repo, 'checkout', '-q', 'main')
-    ssot['proofs']['prf-0002']['as_of'] = '2024-01-01'
+    ssot['proofs']['prf-0003']['as_of'] = '2024-01-01'
     dump(repo / 'design/info_arch/info_arch.yaml', ssot)
     commit(repo, 'second proof is old (nobody ships it yet)')
     code, out, _ = ship(repo)
@@ -313,21 +313,21 @@ def test_pre_push_checks_the_pushed_commit_itself(repo, tmp_path):
 def test_refs_pushed_together_are_merged_with_each_other(repo, tmp_path):
     """main and topic are pushed at once: topic is green against origin/main but red against the pushed main."""
     ssot = fresh_ssot()
-    ssot['proofs']['prf-0002'] = {'state': 'proposed', 'provenance': 'owner', 'text': '満足度調査',
+    ssot['proofs']['prf-0003'] = {'state': 'proposed', 'provenance': 'owner', 'text': '満足度調査',
                                   'source': '調査票', 'supports': ['msg-0002'], 'as_of': '2026-10-01'}
-    ssot['ledger']['next']['prf'] = 3
+    ssot['ledger']['next']['prf'] = 4
     dump(repo / 'design/info_arch/info_arch.yaml', ssot)
     cover_ledger(repo)
     old = commit(repo, 'second proof, used by nobody')
     run_git(repo, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
     run_git(repo, 'checkout', '-qb', 'topic')
     deck = {**copy.deepcopy(DECK), 'channel': 'deck'}
-    deck['pages'][0]['sections'][0]['proofs'] = ['prf-0001', 'prf-0002']
+    deck['pages'][0]['sections'][0]['proofs'] = ['prf-0001', 'prf-0003']
     dump(repo / 'design/info_arch/outlines/deck-smb.yaml', deck)
     cover_ledger(repo)
     topic = commit(repo, 'ship the second proof')
     run_git(repo, 'checkout', '-q', 'main')
-    ssot['proofs']['prf-0002']['as_of'] = '2024-01-01'
+    ssot['proofs']['prf-0003']['as_of'] = '2024-01-01'
     dump(repo / 'design/info_arch/info_arch.yaml', ssot)
     main = commit(repo, 'second proof is old (nobody ships it on main)')
     alone = tmp_path / 'alone'

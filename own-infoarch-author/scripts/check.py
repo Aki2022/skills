@@ -153,9 +153,34 @@ def check_ssot(m, report):
             report.add('fail', 'IA_ID_NOT_ISSUED', f'墓標 {old} は台帳が発行していない番号', path)
         if new is not None and m.atom(new) is None:
             report.add('fail', 'IA_TOMBSTONE_TARGET', f'墓標 {old} → {new} の先が無い', path)
+    check_lead_support(m, report)
     voices = [v for v, a in d['voices'].items() if a['state'] == 'proposed']
     if len(voices) > 1:
         report.add('fail', 'IA_VOICE_MULTIPLE', f'proposed の声が {len(voices)} 個ある（声はプロジェクトに 1 つ）: {voices}', path)
+
+
+NO_CLAIM_ROLES = {'cta', 'vision'}  # an invitation or an aspiration asserts nothing that needs proof
+
+
+def check_lead_support(m, report):
+    """Warn when an audience's lead message makes a claim that no proof supports.
+
+    Shape and references cannot tell whether a message is true, but they can tell that the one message an audience
+    hears first has nothing behind it. Only priorities[0]: later messages are often context, and warning on every
+    message would turn the warning into noise.
+    """
+    d = m.ssot
+    supported = {mid for p in d['proofs'].values() if p['state'] == 'proposed' for mid in p.get('supports', [])}
+    for aid, aud in d['audiences'].items():
+        if aud['state'] != 'proposed' or not aud.get('priorities'):
+            continue
+        lead = aud['priorities'][0]
+        msg = m.atom(lead)
+        if msg is None or msg['state'] != 'proposed' or msg.get('role') in NO_CLAIM_ROLES or lead in supported:
+            continue
+        report.add('warn', 'IA_PRIORITY_UNSUPPORTED',
+                   f'{aid} の 1 位のメッセージ {lead}（{msg.get("role")}）を支える証拠が無い（証拠を足すか、主張を下げる）',
+                   str(SSOT_PATH), id=lead)
 
 
 # ---- outlines ----------------------------------------------------------------------------

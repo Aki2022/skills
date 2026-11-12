@@ -15,7 +15,7 @@ RED = json.loads((SKILL / 'fixtures/red-cases.json').read_text(encoding='utf-8')
 
 SSOT = {
     'schema_version': 2,
-    'ledger': {'next': {'aud': 3, 'prb': 2, 'msg': 5, 'prf': 2, 'fct': 3, 'ent': 2, 'vce': 2},
+    'ledger': {'next': {'aud': 3, 'prb': 2, 'msg': 5, 'prf': 3, 'fct': 3, 'ent': 2, 'vce': 2},
                'tombstones': {'msg-0004': 'msg-0003'}},
     'audiences': {
         'aud-0001': {'state': 'proposed', 'provenance': 'owner', 'label': '自治体の情報部門', 'situation': '既存システムの運用が重い',
@@ -31,7 +31,9 @@ SSOT = {
         'msg-0003': {'state': 'proposed', 'provenance': 'owner', 'text': '資料を請求する', 'role': 'cta'},
     },
     'proofs': {'prf-0001': {'state': 'proposed', 'provenance': 'owner', 'text': '導入自治体の数', 'source': '導入台帳',
-                            'supports': ['msg-0002'], 'as_of': '2026-10-01'}},
+                            'supports': ['msg-0002'], 'as_of': '2026-10-01'},
+               'prf-0002': {'state': 'proposed', 'provenance': 'owner', 'text': '導入前後の運用時間の比較', 'source': '導入事例の計測',
+                            'supports': ['msg-0001'], 'as_of': '2026-10-01'}},
     'facts': {
         'fct-0001': {'state': 'proposed', 'provenance': 'owner', 'label': '導入社数', 'value': '100社以上', 'as_of': '2026-10-01'},
         'fct-0002': {'state': 'proposed', 'provenance': 'owner', 'label': '問い合わせ電話', 'value': '03-1234-5678', 'evergreen': True},
@@ -302,3 +304,55 @@ def test_wrapper_exits_2_when_interpreter_is_missing(tmp_path):
     proc = subprocess.run([str(SCRIPTS / 'infoarch-author'), 'check', '--root', str(tmp_path)],
                           capture_output=True, text=True, env=env, check=False)
     assert proc.returncode == 2, (proc.returncode, proc.stdout, proc.stderr)
+
+
+def _without_proof_for_msg_0001():
+    ssot = copy.deepcopy(SSOT)
+    del ssot['proofs']['prf-0002']
+    return ssot
+
+
+def test_top_priority_without_proof_is_a_warning(tmp_path):
+    """aud-0001 puts msg-0001 (a benefit) first, and no proof supports it: the lead claim is unsupported."""
+    write_repo(tmp_path, _without_proof_for_msg_0001())
+    rc, report = check(tmp_path)
+    assert rc == 1, report['findings']
+    hits = [f for f in report['findings'] if f['code'] == 'IA_PRIORITY_UNSUPPORTED']
+    assert [f['level'] for f in hits] == ['warn'], report['findings']
+    assert 'aud-0001' in hits[0]['message'] and 'msg-0001' in hits[0]['message']
+
+
+def test_only_the_top_priority_is_checked(tmp_path):
+    """aud-0002 also lists msg-0001, but second: only the lead message must carry proof."""
+    write_repo(tmp_path, _without_proof_for_msg_0001())
+    rc, report = check(tmp_path)
+    msgs = [f['message'] for f in report['findings'] if f['code'] == 'IA_PRIORITY_UNSUPPORTED']
+    assert len(msgs) == 1 and 'aud-0002' not in msgs[0], msgs
+
+
+@pytest.mark.parametrize('role', ['cta', 'vision'])
+def test_top_priority_that_makes_no_claim_needs_no_proof(tmp_path, role):
+    ssot = _without_proof_for_msg_0001()
+    ssot['messages']['msg-0001']['role'] = role
+    write_repo(tmp_path, ssot)
+    rc, report = check(tmp_path)
+    assert rc == 0 and 'IA_PRIORITY_UNSUPPORTED' not in codes(report, 'warn'), report['findings']
+
+
+def test_empty_proof_does_not_count_as_support(tmp_path):
+    ssot = _without_proof_for_msg_0001()
+    ssot['proofs']['prf-0002'] = {'state': 'empty', 'provenance': 'proposal', 'supports': ['msg-0001']}
+    write_repo(tmp_path, ssot)
+    rc, report = check(tmp_path)
+    assert rc == 1 and 'IA_PRIORITY_UNSUPPORTED' in codes(report, 'warn'), report['findings']
+
+
+def test_empty_audience_is_not_checked(tmp_path):
+    ssot = _without_proof_for_msg_0001()
+    ssot['audiences']['aud-0001'] = {'state': 'empty', 'provenance': 'proposal', 'priorities': ['msg-0001']}
+    ssot['problems']['prb-0001']['audience'] = 'aud-0002'
+    outline = copy.deepcopy(OUTLINE)
+    outline['audience'] = 'aud-0002'
+    write_repo(tmp_path, ssot, outlines=(outline, DECK))
+    rc, report = check(tmp_path)
+    assert rc == 0 and 'IA_PRIORITY_UNSUPPORTED' not in codes(report, 'warn'), report['findings']

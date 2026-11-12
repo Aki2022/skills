@@ -663,7 +663,8 @@ for (const scheme of schemes) {
           incomplete:result.incomplete.map(v => ({id:v.id, count:v.nodes.length})), unavailable:false};
       });
       // Item-enforced axe rules: measured here, judged per adopted item by design-check, never an L2 failure.
-      const axeItems = {'axe:button-name':['button-name'], 'axe:list':['list','listitem']};
+      const axeItems = {'axe:button-name':['button-name'], 'axe:list':['list','listitem'],
+        'axe:label':['label','select-name'], 'axe:link-name':['link-name']};
       const wanted = Object.keys(axeItems).filter(id => (manifest.item_checks?.collect || []).includes(id));
       if (wanted.length) {
         const rules = wanted.flatMap(id => axeItems[id]);

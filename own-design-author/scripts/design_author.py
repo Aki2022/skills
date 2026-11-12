@@ -453,8 +453,9 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
                 errors.append(f'blank/unknown item state: {ident}')
             item_values[ident] = evidence_values
             if status == 'defined':
-                way, checkers = item_checks.route(item, state.get('evidence',[]), tokens, rules, check_map, active)
-                item_routes[ident] = {'route':way, 'checkers':checkers, 'document':item_checks.document_key(item)}
+                way, checkers, why = item_checks.route(item, state.get('evidence',[]), tokens, rules, check_map, active)
+                item_routes[ident] = {'route':way, 'checkers':checkers, 'document':item_checks.document_key(item),
+                                      **({'reason':why} if why else {})}
                 if way == 'afm':
                     result['afm_candidates'].append(afm_candidate(ident,item_context,evidence_values))
         ledger=read_data(inside(design,'judgments.json')) if (design/'judgments.json').exists() else None
@@ -511,10 +512,26 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
             warnings.append(f'proposed values: {counts["proposed"]}')
         # Not a warning: L0 cannot judge artifacts, and a permanent yellow would hide real warnings.
         counts['afm'] = len(result['afm_candidates'])
+        for way in ('machine','decision'):
+            counts[way] = sum(1 for r in item_routes.values() if r['route']==way)
+        # A design decision is verified once, at adoption: DESIGN.md states it and the owner approved the item.
+        decision_unapproved = sorted(i for i,r in item_routes.items() if r['route']=='decision' and any(
+            resolved_by_media[m][1][i].get('approval_state')!='approved' for m in resolved_by_media))
+        route_uncovered = sorted(i for i,r in item_routes.items() if r['route']=='uncovered')
+        report['uncovered'].extend({'id':i,'reason':item_routes[i]['reason']} for i in route_uncovered)
+        report['uncovered'].extend({'id':i,'reason':'design decision not approved'} for i in decision_unapproved)
+        counts['uncovered']=len(report['uncovered'])
+        if route_uncovered:
+            warnings.append(f'adopted items with no way to verify them: {len(route_uncovered)}')
+        if decision_unapproved:
+            warnings.append(f'design decisions awaiting owner approval: {len(decision_unapproved)}')
         if counts['uncovered']:
             warnings.append(f'uncovered rules/spans: {counts["uncovered"]}; recorded or measured evidence required')
         if ship and (must_proposed or must_uncovered):
             errors.append(f'ship gate: proposed must {len(set(must_proposed))}, uncovered required evidence {len(set(must_uncovered))}')
+        if ship and (route_uncovered or decision_unapproved):
+            errors.append(f'ship gate: adopted items without a verification route {len(route_uncovered)}, '
+                          f'unapproved design decisions {len(decision_unapproved)}')
         assets = []
         for path in sorted((design/'assets').rglob('*')):
             if path.is_file():
@@ -538,7 +555,7 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
                 'minimums':profile['minimums'], 'tokens':resolved_by_media[medium][0], 'items':resolved_by_media[medium][1],
                 'css_variables':{t['css_name']:t['css'] for t in tokens.values()},
                 'tailwind_templates':tailwind_templates, 'artifacts':artifacts, 'rules':list(rules.values()), 'coverage':{'uncovered':sorted(uncovered_rules | {row['id'] for row in judged['uncovered']}),
-                    'items':{way:sorted(i for i,r in item_routes.items() if r['route']==way) for way in ('machine','afm')},
+                    'items':{way:sorted(i for i,r in item_routes.items() if r['route']==way) for way in ('machine','decision','afm','uncovered')},
                     'item_routes':item_routes},
                 'item_checks':{'collect':sorted({c for r in item_routes.values() for c in r['checkers']} & item_checks.COLLECTED),
                     'applicability':{d:check_map['applicability'][d] for d in sorted({r['document'] for r in item_routes.values()})

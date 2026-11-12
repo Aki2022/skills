@@ -75,7 +75,10 @@ def test_migration_requires_same_labeled_holdout_and_records_recall_delta(tmp_pa
 
 
 def define_doc(project):
-    root,_=project
+    # A prose-evidenced item must be one the skill map routes; a design decision is verified by its approval.
+    from test_item_coverage import catalog_item
+    root,catalogs=project
+    write(catalogs/'test-v1.json',{'schema_version':1,'version':'test-v1','items':[catalog_item('components/accordion','ユースケース')]})
     config=json.loads((root/'design/design.yaml').read_text())
     config['items']['dads-000001']={'state':'defined','evidence':['doc:DESIGN.md#dads-000001']}
     write(root/'design/design.yaml',config)

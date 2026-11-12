@@ -50,6 +50,7 @@ def verify_items(root,l0,endpoints,report):
     pages=page_evidence(root,endpoints,spec)
     machine,afm_pairs,failures,not_applicable,causes={},[],[],0,{}
     for ident,row in sorted(routes.items()):
+        if row['route'] not in ('machine','afm'):continue  # decisions are verified at adoption; uncovered stops in L0
         for page in pages:
             if row['document'] in spec['applicability'] and page['presence'][row['document']]==0:
                 not_applicable+=1

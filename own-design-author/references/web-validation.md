@@ -81,28 +81,39 @@ covered と excluded の重複、宣言していない検査対象の参照、�
 限界: 対応が正しいか（その URL が本当にその画面を描くか）は宣言を信じる。
 動的な経路（`[id]` 等）や認証の後ろの画面は、描画用の状態を用意できるまで理由付きで対象外にする。
 
-## 採用した項目の確かめ方（コードが先、AFMは残りだけ）
+## 採用した項目の確かめ方（コード・採用時の決定・AFM）
 
-L0は`defined`の全項目に確かめ方を割り当てる。mustかどうかは関係ない。順番は次の通り。
+カタログの全項目は、skillが持つ対応表`references/item-checks.json`で、次のどれか1つに割り当て済み。
+割り当ては見出しの完全な経路（小見出しまで）で指す。repoごとには書かない。全repoが同じカタログを使うので、skillで一度だけ見直す。
+カタログを更新して割り当てのない項目が出たら、その項目は`uncovered`になる。
+
+| 経路 | 対象 | 確かめ方 |
+|---|---|---|
+| `machine` | 値・構造・属性で言える規則（色・文字・余白・影・コントラスト・押せる大きさ・見出し・ラベル・属性の禁止など） | L2が測った結果で、画面ごとにコードで確かめる |
+| `decision` | repoが一度決めること（どの型を使うか、いつ部品を使うか、文章の方針、階層の体系、ロゴやライティングの方針など） | 採用時に確かめる。DESIGN.mdに決め方を書き、オーナーがその項目を承認していれば合格。pushごと・画面ごとには判定しない |
+| `judgment` | 画面を見ないと判断できないもの（色だけで区別していないか、余白で関係性を示しているか、カードの見た目など） | 部品がある画面だけ、AFMで判定する |
+
+L0は採用した項目（`defined`）ごとに経路を決める。mustかどうかは関係ない。
 
 1. 証拠に宣言的rule、またはcolor・fontFamilyのトークンがある → `machine`。
-2. skillが持つ対応表`references/item-checks.json`に、項目の文書と見出しの完全な経路（小見出しまで）が載っていて、必要な検査がすべて有効 → `machine`。
-   載せるのは、その検査が項目の言っていることを確かめられる時だけ。親の見出しに載っていても、小見出しは引き継がない（例: 「余白の種類 > パディング」は載せ、「余白の種類 > マージン」は載せない）。
-   「参考情報」や例の小見出しは、親と同じ検査で載せる。
-   対応表はrepoごとに書かない。全repoが同じカタログを使うので、skillで一度だけ見直す。
-   paletteの検査は、比べる種類のトークン（dimension・fontWeight・shadow等）がある時だけ有効。
-3. それ以外 → `afm`。
+2. それ以外は対応表の経路に従う。`machine`でも、比べる種類のトークン（dimension・fontWeight・shadow等）がなければ`uncovered`（理由つき）。
+3. 対応表にない項目 → `uncovered`。
 
-割り当ては`.resolved/web.json`の`coverage.items`と`coverage.item_routes`に入る。L2に渡す検査と部品のselectorは`item_checks`に入る。
+`--ship`では、`uncovered`の項目と、承認されていない`decision`の項目があれば停止する。
+割り当ては`.resolved/web.json`の`coverage.items`（machine・decision・afm・uncovered）と`coverage.item_routes`に入る。
+L2に渡す検査と部品のselectorは`item_checks`に入る。
 
 ### 検査の種類
 
-- L2で止まる検査: palette:color / fontFamily / radius、contrast、tap-target、heading-order、layout-overflow。
+- L2で止まる検査: palette:color / fontFamily / radius、contrast、tap-target、heading-order、layout-overflow、body-line-height、line-length。
   これらが失格ならL2で止まるので、項目の検証まで来た時点で合格している。
 - L2が測り、採用した項目にだけ効かせる検査（L2自体は止めない）:
-  - palette:fontSize / fontWeight / shadow / spacing（padding・gap。marginは自動の中央寄せと区別できないので測らない）
-  - dom:placeholder / readonly-input / disabled-input / maxlength / ol / positive-tabindex / date-input / table-span / vague-link-text / text-justify
-  - axe:button-name / list
+  - トークンの値: palette:fontSize / fontWeight / shadow / spacing（padding・gap。marginは自動の中央寄せと区別できないので測らない）
+  - コントラスト: contrast-nontext（入力欄・ボタン等の境界と背景が3:1以上）、contrast-icon（アイコンと背景が4.5:1以上）
+  - 属性・構造: placeholder・readonly・disabled・maxlength・pattern・ol・正のtabindex・`input type=date`・disabledのボタン・結合セル・thのない表・セルの配置（上寄せ、数値の右寄せ）・aria-expandedを持つ非ボタン・「ここ」リンク・リンクのカーソル・ボタンの文字のはみ出し・入力欄の高さ（36px以上）・ラベルが入力欄の上にあるか・貼り付け／コピーの禁止・フォーム内のaria-live・文字で作った箇条書き・h1が1つでtitleに含まれるか・アイコンだけのリンク／ボタン・ラベル付きの装飾アイコンの隠し忘れ・新規タブの予告・文中リンクの区別・全角空白での位置合わせ・長いイタリック・ページ背景の指定・ダイアログの枠線・見えないファイル選択・7枚以上のスライド・フォーカス順が上へ戻る
+  - axe: button-name、list、label、link-name
+
+各検査には、壊したページで必ず検出し、きれいなページでは何も出さないテストがある（`tests/test_item_collector.py`）。
 
 ### 部品の有無
 

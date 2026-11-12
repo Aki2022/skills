@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "comment": "Skill-owned map from catalog items to code checks, shared by every repository. 'paths' are exact catalog heading paths (headings joined by ' > '). Map an item only when the checker verifies what the item says; a '参考情報' (references) or example sub-item follows its parent. An item routes to machine only when every listed checker is active; otherwise it falls back to AFM. 'applicability' lists selectors that show a component is on a rendered page; a page without any of them makes the component's items not applicable there. A document absent from 'applicability' is always applicable.",
   "applicability": {
     "components/accordion": [
@@ -134,9 +134,128 @@
       "textarea"
     ]
   },
-  "checks": [
+  "routes": [
+    {
+      "document": "components/accordion",
+      "route": "decision",
+      "paths": [
+        "ユースケース",
+        "注意が必要なケース",
+        "関連コンポーネント",
+        "各種リソース",
+        "コンポーネント要素",
+        "コンポーネント要素 > サイズバリエーション",
+        "コンポーネント要素 > リターンリンクの使い方",
+        "配置",
+        "配置 > 良い例",
+        "配置 > 悪い例",
+        "コンテンツ",
+        "コンテンツ > ヘッダーは概要文にする",
+        "コンテンツ > ボディ内にはさまざまなコンポーネントを配置できる",
+        "コンテンツ > リターンリンクのラベルはヘッダーと揃える",
+        "ふるまい",
+        "ふるまい > ページ読み込み時に開いておくか閉じておくかを設定する"
+      ]
+    },
+    {
+      "document": "components/accordion",
+      "route": "judgment",
+      "paths": [
+        "ふるまい > リターンリンクはヘッダーへのページ内リンクとする"
+      ]
+    },
+    {
+      "document": "components/accordion",
+      "route": "machine",
+      "paths": [
+        "実装",
+        "実装 > details要素を使って実装する",
+        "実装 > カスタムコンポーネントとして実装する場合"
+      ],
+      "checkers": [
+        "dom:disclosure-semantics"
+      ]
+    },
+    {
+      "document": "components/blockquote",
+      "route": "decision",
+      "paths": [
+        "ユースケース",
+        "注意が必要なケース",
+        "各種リソース"
+      ]
+    },
+    {
+      "document": "components/bottom-navigation",
+      "route": "decision",
+      "paths": [
+        "\\[エラー]このコンポーネントの使用は非推奨です（deprecated）",
+        "本コンポーネントの非推奨理由",
+        "関連コンポーネント",
+        "各種リソース"
+      ]
+    },
+    {
+      "document": "components/breadcrumb",
+      "route": "decision",
+      "paths": [
+        "使い方",
+        "使い方 > 配置と仕様",
+        "各種リソース"
+      ]
+    },
     {
       "document": "components/button",
+      "route": "machine",
+      "paths": [
+        "仕様",
+        "仕様 > ボタンのサイズ（最小サイズの目安）",
+        "仕様 > ボタンのターゲット領域",
+        "ターゲットサイズの確保",
+        "ターゲットサイズの確保 > 参考情報"
+      ],
+      "checkers": [
+        "tap-target"
+      ]
+    },
+    {
+      "document": "components/button",
+      "route": "machine",
+      "paths": [
+        "仕様 > ボタンの幅"
+      ],
+      "checkers": [
+        "dom:text-overflow"
+      ]
+    },
+    {
+      "document": "components/button",
+      "route": "decision",
+      "paths": [
+        "使い方",
+        "使い方 > ボタンの重要度に合わせたスタイルの使用",
+        "使い方 > ボタン配置の考え方",
+        "使い方 > ボタンの配置と順序",
+        "使い方 > ボタンの無効化（disabled）における注意点",
+        "各種リソース",
+        "ラベルがアイコンだけのボタンに代替テキストを必ず指定する > \\[インフォメーション]aria-labelを用いる際の注意点"
+      ]
+    },
+    {
+      "document": "components/button",
+      "route": "machine",
+      "paths": [
+        "コントラスト要件",
+        "コントラスト要件 > 参考情報"
+      ],
+      "checkers": [
+        "contrast",
+        "contrast-nontext"
+      ]
+    },
+    {
+      "document": "components/button",
+      "route": "machine",
       "paths": [
         "コントラスト要件 > ボタンとラベルのコントラスト比"
       ],
@@ -146,6 +265,47 @@
     },
     {
       "document": "components/button",
+      "route": "machine",
+      "paths": [
+        "コントラスト要件 > ボタンと背景のコントラスト比"
+      ],
+      "checkers": [
+        "contrast-nontext"
+      ]
+    },
+    {
+      "document": "components/button",
+      "route": "judgment",
+      "paths": [
+        "ボタンの重要度を色の違いのみで区別しない",
+        "ボタンの重要度を色の違いのみで区別しない > 参考情報",
+        "無効ボタン（disabled）はタブフォーカスでアクセスできない > aria-disabledを用いる際の注意点"
+      ]
+    },
+    {
+      "document": "components/button",
+      "route": "machine",
+      "paths": [
+        "無効ボタン（disabled）はタブフォーカスでアクセスできない"
+      ],
+      "checkers": [
+        "dom:disabled-button"
+      ]
+    },
+    {
+      "document": "components/button",
+      "route": "machine",
+      "paths": [
+        "ページ遷移をもたらすボタンのhover時に指のカーソル（pointer）に変更する",
+        "ページ遷移をもたらすボタンのhover時に指のカーソル（pointer）に変更する > 参考情報"
+      ],
+      "checkers": [
+        "dom:link-cursor"
+      ]
+    },
+    {
+      "document": "components/button",
+      "route": "machine",
       "paths": [
         "ラベルがアイコンだけのボタンに代替テキストを必ず指定する",
         "ラベルがアイコンだけのボタンに代替テキストを必ず指定する > 参考情報"
@@ -156,6 +316,18 @@
     },
     {
       "document": "components/button",
+      "route": "machine",
+      "paths": [
+        "ボタンのフォーカス順序と表示順序に気をつける",
+        "ボタンのフォーカス順序と表示順序に気をつける > 参考情報"
+      ],
+      "checkers": [
+        "dom:focus-order"
+      ]
+    },
+    {
+      "document": "components/button",
+      "route": "machine",
       "paths": [
         "ボタンのフォーカス順序と表示順序に気をつける > \\[警告]フォーカスの順序を変更することを目的としてtabindex属性を使わないでください"
       ],
@@ -164,26 +336,447 @@
       ]
     },
     {
-      "document": "components/button",
+      "document": "components/card",
+      "route": "decision",
       "paths": [
-        "ターゲットサイズの確保",
-        "ターゲットサイズの確保 > 参考情報"
+        "ユースケース",
+        "注意が必要なケース",
+        "各種リソース",
+        "コンテンツ",
+        "コンテンツ > メインエリア",
+        "コンテンツ > イメージエリア",
+        "コンテンツ > サブエリア"
+      ]
+    },
+    {
+      "document": "components/card",
+      "route": "judgment",
+      "paths": [
+        "構成",
+        "外観",
+        "外観 > 背景色",
+        "外観 > 外周",
+        "外観 > 角の形状",
+        "外観 > エレベーション",
+        "ふるまい",
+        "ふるまい > クリッカブルエリア",
+        "テキストのみで構成されたカード",
+        "画像とテキストの組み合わせのカード",
+        "ダッシュボードのようなカード",
+        "ボタンのようなカード"
+      ]
+    },
+    {
+      "document": "components/carousel",
+      "route": "decision",
+      "paths": [
+        "ユースケース",
+        "ユースケース > ウェブサイト自体を象徴するグラフィックをファーストビューで展開したいとき",
+        "ユースケース > 見出しをともなうトピックのコンテナとして使用するとき",
+        "注意が必要なケース",
+        "注意が必要なケース > きちんと読んで欲しい情報を格納しない",
+        "注意が必要なケース > スライドを自動再生させない",
+        "注意が必要なケース > 複数の異なるトピックを同居させない",
+        "注意が必要なケース > ユースケース以外の目的で使用しない",
+        "各種リソース",
+        "カルーセルのタイプ",
+        "カルーセルのタイプ > 打ち出しタイプ",
+        "カルーセルのタイプ > コンテナタイプ",
+        "仕様",
+        "仕様 > ページ内でのカルーセル配置方法",
+        "マルチ",
+        "マルチ > 標準サイズ",
+        "マルチ > 幅狭サイズ",
+        "シングル",
+        "シングル > コンポーネント要素",
+        "シングル > 基本的な仕様",
+        "シングル > 幅および画像のふるまい",
+        "カルーセルを使用するべきかを慎重に検討する",
+        "カルーセルが必要な場合は本コンポーネントを使用する",
+        "カルーセルが必要な場合は本コンポーネントを使用する > 参考情報"
+      ]
+    },
+    {
+      "document": "components/carousel",
+      "route": "judgment",
+      "paths": [
+        "仕様 > スライド画像の作り方",
+        "マルチ > 確保しているアクセシビリティ",
+        "スライド内のテキストを短くする"
+      ]
+    },
+    {
+      "document": "components/carousel",
+      "route": "machine",
+      "paths": [
+        "スライドの数を少なくする"
       ],
       "checkers": [
-        "tap-target"
+        "dom:carousel-slides"
+      ]
+    },
+    {
+      "document": "components/checkbox",
+      "route": "machine",
+      "paths": [
+        "仕様",
+        "仕様 > パーツ"
+      ],
+      "checkers": [
+        "axe:label"
+      ]
+    },
+    {
+      "document": "components/checkbox",
+      "route": "decision",
+      "paths": [
+        "使い方",
+        "使い方 > 設計の原則",
+        "各種リソース"
+      ]
+    },
+    {
+      "document": "components/chip-label",
+      "route": "decision",
+      "paths": [
+        "ユースケース",
+        "注意が必要なケース",
+        "関連コンポーネント",
+        "各種リソース"
+      ]
+    },
+    {
+      "document": "components/chip-tag",
+      "route": "decision",
+      "paths": [
+        "ユースケース",
+        "注意が必要なケース",
+        "関連コンポーネント",
+        "各種リソース"
+      ]
+    },
+    {
+      "document": "components/combobox",
+      "route": "decision",
+      "paths": [
+        "ユースケース",
+        "注意が必要なケース",
+        "関連コンポーネント",
+        "各種リソース"
+      ]
+    },
+    {
+      "document": "components/date-picker",
+      "route": "decision",
+      "paths": [
+        "ユースケース",
+        "各種リソース",
+        "コンポーネント要素",
+        "コンポーネント要素 > 入力フィールド",
+        "コンポーネント要素 > 入力フィールド（エラー）",
+        "コンポーネント要素 > カレンダー",
+        "外観",
+        "外観 > 入力フィールドの表示タイプ",
+        "外観 > 入力フィールドのカスタマイズ",
+        "外観 > カレンダーを使用するとき",
+        "コンテンツ",
+        "コンテンツ > ラベル",
+        "コンテンツ > サポートテキスト"
+      ]
+    },
+    {
+      "document": "components/date-picker",
+      "route": "judgment",
+      "paths": [
+        "ふるまい",
+        "ふるまい > 入力フィールド",
+        "ふるまい > 入力フィールドのキーボード操作支援",
+        "ふるまい > カレンダー",
+        "文脈に応じて`autocomplete`を使用する",
+        "文脈に応じて`autocomplete`を使用する > 参考情報"
+      ]
+    },
+    {
+      "document": "components/date-picker",
+      "route": "machine",
+      "paths": [
+        "`<select>`要素および`<input type=\"date\">`要素の使用を避ける"
+      ],
+      "checkers": [
+        "dom:date-input"
+      ]
+    },
+    {
+      "document": "components/description-list",
+      "route": "decision",
+      "paths": [
+        "ユースケース",
+        "注意が必要なケース",
+        "関連コンポーネント",
+        "各種リソース"
+      ]
+    },
+    {
+      "document": "components/disclosure",
+      "route": "decision",
+      "paths": [
+        "ユースケース",
+        "注意が必要なケース",
+        "各種リソース",
+        "コンポーネント要素",
+        "コンポーネント要素 > リターンリンクの使い方",
+        "配置",
+        "配置 > 良い例",
+        "配置 > 悪い例",
+        "コンテンツ",
+        "コンテンツ > タイトルは簡潔で説明的にする",
+        "コンテンツ > タイトルでアクションを示唆することは避ける",
+        "コンテンツ > 開閉状態にかかわらずタイトルは一定にする",
+        "コンテンツ > リターンリンクのラベルはタイトルと揃える"
+      ]
+    },
+    {
+      "document": "components/disclosure",
+      "route": "judgment",
+      "paths": [
+        "ふるまい",
+        "ふるまい > リターンリンクはタイトルへのページ内リンクとする"
+      ]
+    },
+    {
+      "document": "components/disclosure",
+      "route": "machine",
+      "paths": [
+        "実装",
+        "実装 > `<details>`要素を使って実装する",
+        "実装 > カスタムコンポーネントとして実装する場合"
+      ],
+      "checkers": [
+        "dom:disclosure-semantics"
+      ]
+    },
+    {
+      "document": "components/divider",
+      "route": "decision",
+      "paths": [
+        "使い方",
+        "使い方 > ディバイダータイプ",
+        "使い方 > マージン",
+        "各種リソース"
+      ]
+    },
+    {
+      "document": "components/drawer",
+      "route": "decision",
+      "paths": [
+        "仕様",
+        "各種リソース"
+      ]
+    },
+    {
+      "document": "components/emergency-banner",
+      "route": "decision",
+      "paths": [
+        "仕様",
+        "仕様 > バナーのクリッカブルエリア",
+        "使い方",
+        "使い方 > 緊急時バナーの配置",
+        "使い方 > 緊急時バナーのタイトル",
+        "使い方 > 緊急時バナーを長期間に渡って掲示しない",
+        "使い方 > 緊急性の高い情報以外に使わない",
+        "使い方 > 長すぎるバナーデスクリプションを避ける",
+        "使い方 > バナーデスクリプションの構成",
+        "各種リソース"
+      ]
+    },
+    {
+      "document": "components/file-upload",
+      "route": "decision",
+      "paths": [
+        "ユースケース",
+        "各種リソース",
+        "外観",
+        "外観 > コンポーネント要素：通常時（ファイル未選択）",
+        "外観 > コンポーネント要素：ファイル選択時、エラー",
+        "ドラッグ＆ドロップの範囲の拡大"
+      ]
+    },
+    {
+      "document": "components/file-upload",
+      "route": "machine",
+      "paths": [
+        "必ずファイル選択ボタンを配置し、ドロップエリアのみで展開しない",
+        "必ずファイル選択ボタンを配置し、ドロップエリアのみで展開しない > 参考情報"
+      ],
+      "checkers": [
+        "dom:file-button"
+      ]
+    },
+    {
+      "document": "components/hamburger-menu-button",
+      "route": "decision",
+      "paths": [
+        "仕様",
+        "仕様 > デスクトップ・モバイル共通コンポーネント",
+        "仕様 > モバイル条件付きコンポーネント",
+        "使い方",
+        "使い方 > 配置",
+        "各種リソース"
+      ]
+    },
+    {
+      "document": "components/header-container",
+      "route": "decision",
+      "paths": [
+        "仕様",
+        "仕様 > ワイド",
+        "仕様 > ミディアム",
+        "仕様 > コンパクト",
+        "各種リソース"
       ]
     },
     {
       "document": "components/heading",
+      "route": "decision",
       "paths": [
-        "見出しレベルを飛ばさない"
+        "ユースケース",
+        "注意が必要なケース",
+        "関連コンポーネント",
+        "各種リソース",
+        "コンポーネント要素",
+        "文字サイズとスタイル",
+        "ショルダーとサブタイトル",
+        "無理に見出しを挿入しない",
+        "無理に見出しを挿入しない > 参考情報"
+      ]
+    },
+    {
+      "document": "components/heading",
+      "route": "machine",
+      "paths": [
+        "仕様",
+        "見出しレベルを飛ばさない",
+        "見出しを伴うコンポーネントを動的に挿入する場合に見出しのレベルをセクション構造に合わせる"
       ],
       "checkers": [
         "heading-order"
       ]
     },
     {
+      "document": "components/heading",
+      "route": "machine",
+      "paths": [
+        "見出しによる構造化"
+      ],
+      "checkers": [
+        "dom:h1-title"
+      ]
+    },
+    {
+      "document": "components/heading",
+      "route": "judgment",
+      "paths": [
+        "箇条書きリストと使い分ける",
+        "箇条書きリストと使い分ける > 不適切な例",
+        "箇条書きリストと使い分ける > 適切な例",
+        "箇条書きリストと使い分ける > 関連コンポーネント",
+        "説明リストと使い分ける",
+        "説明リストと使い分ける > 不適切な例",
+        "説明リストと使い分ける > 適切な例",
+        "説明リストと使い分ける > 関連コンポーネント"
+      ]
+    },
+    {
+      "document": "components/horizontal-menu",
+      "route": "decision",
+      "paths": [
+        "\\[インフォメーション]名称変更について",
+        "ユースケース",
+        "注意が必要なケース",
+        "関連コンポーネント",
+        "各種リソース"
+      ]
+    },
+    {
+      "document": "components/image",
+      "route": "decision",
+      "paths": [
+        "ユースケース",
+        "注意が必要なケース",
+        "各種リソース"
+      ]
+    },
+    {
       "document": "components/input-text",
+      "route": "decision",
+      "paths": [
+        "ユースケース",
+        "関連コンポーネント",
+        "各種リソース",
+        "コンテンツ",
+        "コンテンツ > 要否ラベル",
+        "コンテンツ > サポートテキスト",
+        "コンテンツ > エラーテキスト",
+        "コンテンツ > 穴埋め文章ではなく、項目ごとに入力する",
+        "編集不可フィールド（`readonly`）を使わない > 編集不可フィールドが許容される場合",
+        "編集不可フィールド（`readonly`）を使わない > 編集不可フィールドを使う場合の留意点"
+      ]
+    },
+    {
+      "document": "components/input-text",
+      "route": "machine",
+      "paths": [
+        "外観",
+        "外観 > コンポーネント要素"
+      ],
+      "checkers": [
+        "axe:label"
+      ]
+    },
+    {
+      "document": "components/input-text",
+      "route": "machine",
+      "paths": [
+        "外観 > サイズ"
+      ],
+      "checkers": [
+        "dom:control-height"
+      ]
+    },
+    {
+      "document": "components/input-text",
+      "route": "judgment",
+      "paths": [
+        "外観 > 横幅",
+        "メールアドレスの前半と後半を分割されたフィールドにしない",
+        "メールアドレスの前半と後半を分割されたフィールドにしない > 参考情報",
+        "値の変更で予測できない変化を引き起こさない",
+        "値の変更で予測できない変化を引き起こさない > 参考情報"
+      ]
+    },
+    {
+      "document": "components/input-text",
+      "route": "machine",
+      "paths": [
+        "外観 > 整列"
+      ],
+      "checkers": [
+        "dom:label-above"
+      ]
+    },
+    {
+      "document": "components/input-text",
+      "route": "machine",
+      "paths": [
+        "入力値の文字種を限定しない"
+      ],
+      "checkers": [
+        "dom:input-pattern"
+      ]
+    },
+    {
+      "document": "components/input-text",
+      "route": "machine",
       "paths": [
         "プレースホルダーテキストを使わない"
       ],
@@ -193,6 +786,7 @@
     },
     {
       "document": "components/input-text",
+      "route": "machine",
       "paths": [
         "無効フィールド（`disabled`）を使わない",
         "無効フィールド（`disabled`）を使わない > 参考情報"
@@ -203,6 +797,7 @@
     },
     {
       "document": "components/input-text",
+      "route": "machine",
       "paths": [
         "編集不可フィールド（`readonly`）を使わない"
       ],
@@ -212,6 +807,7 @@
     },
     {
       "document": "components/input-text",
+      "route": "machine",
       "paths": [
         "最大長の制限に`maxlength`属性を使用しない"
       ],
@@ -220,8 +816,59 @@
       ]
     },
     {
-      "document": "components/list",
+      "document": "components/input-text",
+      "route": "machine",
       "paths": [
+        "コピー＆ペーストを無効にしない",
+        "コピー＆ペーストを無効にしない > 参考情報"
+      ],
+      "checkers": [
+        "dom:paste-blocked"
+      ]
+    },
+    {
+      "document": "components/input-text",
+      "route": "machine",
+      "paths": [
+        "エラーテキストの読み上げに`aria-live`を使わない"
+      ],
+      "checkers": [
+        "dom:form-live-region"
+      ]
+    },
+    {
+      "document": "components/language-selector",
+      "route": "decision",
+      "paths": [
+        "使い方",
+        "使い方 > 配置",
+        "使い方 > 言語表示",
+        "使い方 > デザインスタイルのバリエーション",
+        "各種リソース"
+      ]
+    },
+    {
+      "document": "components/list",
+      "route": "decision",
+      "paths": [
+        "ユースケース",
+        "注意が必要なケース",
+        "関連コンポーネント",
+        "各種リソース",
+        "リストマークタイプ",
+        "リストマークタイプ > 階層と表示",
+        "項番タイプ",
+        "項番タイプ > 階層と表示",
+        "項番タイプ > 項番の記載",
+        "リストアイテム間の間隔"
+      ]
+    },
+    {
+      "document": "components/list",
+      "route": "machine",
+      "paths": [
+        "実装",
+        "実装 > `<ul>`要素および`<li>`要素を使って実装する",
         "`<ol>`要素は使わず、`<ul>`要素として実装する"
       ],
       "checkers": [
@@ -230,6 +877,17 @@
     },
     {
       "document": "components/list",
+      "route": "machine",
+      "paths": [
+        "箇条書きをテキストで表現せず、箇条書きリストを使う"
+      ],
+      "checkers": [
+        "dom:fake-list"
+      ]
+    },
+    {
+      "document": "components/list",
+      "route": "machine",
       "paths": [
         "適切な入れ子としてマークアップする"
       ],
@@ -238,8 +896,263 @@
       ]
     },
     {
-      "document": "components/table",
+      "document": "components/mega-menu",
+      "route": "decision",
       "paths": [
+        "ユースケース",
+        "注意が必要なケース",
+        "関連コンポーネント",
+        "各種リソース"
+      ]
+    },
+    {
+      "document": "components/menu-list-box",
+      "route": "decision",
+      "paths": [
+        "使い方",
+        "使い方 > 表示位置",
+        "使い方 > メニューリストボックスの開き方",
+        "各種リソース"
+      ]
+    },
+    {
+      "document": "components/menu-list",
+      "route": "decision",
+      "paths": [
+        "使い方",
+        "使い方 > リンクの強調",
+        "使い方 > CTA（Call‐to‐action）の挙動表示を明確に",
+        "使い方 > セクションの明確化",
+        "各種リソース"
+      ]
+    },
+    {
+      "document": "components/mobile-menu",
+      "route": "decision",
+      "paths": [
+        "仕様",
+        "仕様 > スタンダードタイプ",
+        "仕様 > アコーディオンタイプ",
+        "使い方",
+        "使い方 > メニューのユーザビリティ",
+        "使い方 > リンクの強調",
+        "使い方 > CTA（Call-to-action）の挙動表示を明確に",
+        "使い方 > セクションの明確化",
+        "各種リソース"
+      ]
+    },
+    {
+      "document": "components/modal-dialog",
+      "route": "decision",
+      "paths": [
+        "ユースケース",
+        "注意が必要なケース",
+        "関連コンポーネント",
+        "各種リソース"
+      ]
+    },
+    {
+      "document": "components/notice-block",
+      "route": "decision",
+      "paths": [
+        "ユースケース",
+        "注意が必要なケース",
+        "関連コンポーネント",
+        "各種リソース"
+      ]
+    },
+    {
+      "document": "components/notification-banner",
+      "route": "decision",
+      "paths": [
+        "ノティフィケーションバナータイプ",
+        "ノティフィケーションバナータイプ > サクセス",
+        "ノティフィケーションバナータイプ > エラー",
+        "ノティフィケーションバナータイプ > 警告",
+        "ノティフィケーションバナータイプ > 情報提示(Info)のタイプ",
+        "ノティフィケーションバナータイプ > デザインスタイル",
+        "使い方",
+        "使い方 > ノティフィケーションバナーの配置場所",
+        "使い方 > スタイルのバリエーション",
+        "各種リソース"
+      ]
+    },
+    {
+      "document": "components/notification-banner",
+      "route": "judgment",
+      "paths": [
+        "仕様",
+        "仕様 > ノティフィケーションバナーのパーツ",
+        "仕様 > ノティフィケーションバナーのリンクやアクション",
+        "仕様 > ノティフィケーションバナーにリンクがある場合"
+      ]
+    },
+    {
+      "document": "components/page-navigation",
+      "route": "decision",
+      "paths": [
+        "ユースケース",
+        "注意が必要なケース",
+        "関連コンポーネント",
+        "各種リソース"
+      ]
+    },
+    {
+      "document": "components/progress-indicator",
+      "route": "decision",
+      "paths": [
+        "ユースケース",
+        "注意が必要なケース",
+        "関連コンポーネント",
+        "各種リソース"
+      ]
+    },
+    {
+      "document": "components/radio",
+      "route": "machine",
+      "paths": [
+        "仕様",
+        "仕様 > パーツ"
+      ],
+      "checkers": [
+        "axe:label"
+      ]
+    },
+    {
+      "document": "components/radio",
+      "route": "decision",
+      "paths": [
+        "使い方",
+        "使い方 > 設計の原則",
+        "各種リソース"
+      ]
+    },
+    {
+      "document": "components/resource-list",
+      "route": "decision",
+      "paths": [
+        "ユースケース",
+        "注意が必要なケース",
+        "関連コンポーネント",
+        "各種リソース"
+      ]
+    },
+    {
+      "document": "components/scroll-top-button",
+      "route": "decision",
+      "paths": [
+        "\\[エラー]このコンポーネントの使用は非推奨です（deprecated）",
+        "本コンポーネントの非推奨理由",
+        "各種リソース"
+      ]
+    },
+    {
+      "document": "components/search-box",
+      "route": "decision",
+      "paths": [
+        "ユースケース",
+        "注意が必要なケース",
+        "関連コンポーネント",
+        "各種リソース"
+      ]
+    },
+    {
+      "document": "components/select",
+      "route": "machine",
+      "paths": [
+        "仕様",
+        "仕様 > パーツ"
+      ],
+      "checkers": [
+        "axe:label"
+      ]
+    },
+    {
+      "document": "components/select",
+      "route": "decision",
+      "paths": [
+        "仕様 > オプションリストの実装",
+        "使い方",
+        "使い方 > 設計の原則",
+        "各種リソース"
+      ]
+    },
+    {
+      "document": "components/step-navigation",
+      "route": "decision",
+      "paths": [
+        "ユースケース",
+        "注意が必要なケース",
+        "関連コンポーネント",
+        "各種リソース"
+      ]
+    },
+    {
+      "document": "components/switch",
+      "route": "decision",
+      "paths": [
+        "ユースケース",
+        "注意が必要なケース",
+        "関連コンポーネント",
+        "各種リソース"
+      ]
+    },
+    {
+      "document": "components/tab",
+      "route": "decision",
+      "paths": [
+        "ユースケース",
+        "注意が必要なケース",
+        "関連コンポーネント",
+        "各種リソース"
+      ]
+    },
+    {
+      "document": "components/table-control",
+      "route": "decision",
+      "paths": [
+        "ユースケース",
+        "注意が必要なケース",
+        "関連コンポーネント",
+        "各種リソース"
+      ]
+    },
+    {
+      "document": "components/table",
+      "route": "decision",
+      "paths": [
+        "ユースケース",
+        "注意が必要なケース",
+        "関連コンポーネント",
+        "各種リソース",
+        "コンポーネント要素",
+        "外観",
+        "外観 > サイズ",
+        "外観 > ストライプ表示",
+        "コンテンツ",
+        "コンテンツ > テキスト",
+        "コンテンツ > リンク",
+        "ふるまい",
+        "ふるまい > ホバーハイライト",
+        "ふるまい > 行の選択",
+        "ふるまい > アクションを持つテーブルヘッダー"
+      ]
+    },
+    {
+      "document": "components/table",
+      "route": "machine",
+      "paths": [
+        "外観 > テーブルヘッダー、ヘッダーセル"
+      ],
+      "checkers": [
+        "dom:table-headers"
+      ]
+    },
+    {
+      "document": "components/table",
+      "route": "machine",
+      "paths": [
+        "外観 > セルの結合",
         "シンプルな構造で作る",
         "シンプルな構造で作る > 例1（複雑なテーブル）",
         "シンプルな構造で作る > 例2（シンプルなテーブル）",
@@ -254,7 +1167,68 @@
       ]
     },
     {
+      "document": "components/table",
+      "route": "machine",
+      "paths": [
+        "外観 > テキストの配置"
+      ],
+      "checkers": [
+        "dom:table-align"
+      ]
+    },
+    {
+      "document": "components/table",
+      "route": "machine",
+      "paths": [
+        "外観 > テーブルの幅がコンテンツ幅よりも大きい場合"
+      ],
+      "checkers": [
+        "layout-overflow"
+      ]
+    },
+    {
+      "document": "components/textarea",
+      "route": "machine",
+      "paths": [
+        "仕様",
+        "仕様 > パーツ"
+      ],
+      "checkers": [
+        "axe:label"
+      ]
+    },
+    {
+      "document": "components/textarea",
+      "route": "decision",
+      "paths": [
+        "使い方",
+        "使い方 > 設計の原則",
+        "使い方 > 文字数に制限がある場合",
+        "各種リソース"
+      ]
+    },
+    {
+      "document": "components/toc",
+      "route": "decision",
+      "paths": [
+        "ユースケース",
+        "注意が必要なケース",
+        "各種リソース"
+      ]
+    },
+    {
+      "document": "components/utility-link",
+      "route": "decision",
+      "paths": [
+        "使い方",
+        "使い方 > 配置",
+        "使い方 > 参考例",
+        "各種リソース"
+      ]
+    },
+    {
       "document": "foundations/color",
+      "route": "machine",
       "paths": [
         "キーカラー",
         "キーカラー > プライマリーカラー",
@@ -289,6 +1263,44 @@
     },
     {
       "document": "foundations/color",
+      "route": "machine",
+      "paths": [
+        "機能カラー > リンクカラー"
+      ],
+      "checkers": [
+        "contrast",
+        "dom:link-distinct"
+      ]
+    },
+    {
+      "document": "foundations/color",
+      "route": "decision",
+      "paths": [
+        "機能カラー > フォーカスカラー",
+        "機能カラー > 検索ハイライトカラー",
+        "機能カラー > UIのステートカラーとスタイル",
+        "セマンティックカラー > サクセス（Success）",
+        "セマンティックカラー > エラー（Error）",
+        "セマンティックカラー > 警告（Warning）",
+        "コントラスト要件 > 1.4.6 コントラスト（高度）（レベルAAA） JIS2016 WCAG2.2",
+        "ブランドカラーがコントラスト要件を満たさない場合における、キーカラーの決定方法について"
+      ]
+    },
+    {
+      "document": "foundations/color",
+      "route": "machine",
+      "paths": [
+        "コントラスト要件",
+        "コントラスト要件 > 参考情報"
+      ],
+      "checkers": [
+        "contrast",
+        "contrast-nontext"
+      ]
+    },
+    {
+      "document": "foundations/color",
+      "route": "machine",
       "paths": [
         "コントラスト要件 > 1.4.3 コントラスト（最低限）（レベルAA） JIS2016 WCAG2.2"
       ],
@@ -297,7 +1309,37 @@
       ]
     },
     {
+      "document": "foundations/color",
+      "route": "machine",
+      "paths": [
+        "コントラスト要件 > 1.4.11 非テキストのコントラスト（レベルAA） WCAG2.2"
+      ],
+      "checkers": [
+        "contrast-nontext"
+      ]
+    },
+    {
+      "document": "foundations/color",
+      "route": "machine",
+      "paths": [
+        "前景色（テキストのカラー）と背景色の両方を指定する",
+        "前景色（テキストのカラー）と背景色の両方を指定する > 参考情報"
+      ],
+      "checkers": [
+        "dom:explicit-bg"
+      ]
+    },
+    {
+      "document": "foundations/color",
+      "route": "judgment",
+      "paths": [
+        "色覚多様性への配慮",
+        "色覚多様性への配慮 > 参考情報"
+      ]
+    },
+    {
       "document": "foundations/corner-shapes",
+      "route": "machine",
       "paths": [
         "角の形状とサイズ"
       ],
@@ -306,7 +1348,40 @@
       ]
     },
     {
+      "document": "foundations/corner-shapes",
+      "route": "decision",
+      "paths": [
+        "角の形状の違いによる強調表現",
+        "全体的な角丸と部分的な角丸"
+      ]
+    },
+    {
       "document": "foundations/elevation",
+      "route": "decision",
+      "paths": [
+        "エレベーションの表現",
+        "エレベーションの表現 > オーバーレイシェード",
+        "ドロップシャドウとエレベーション",
+        "高さレベルの高低差",
+        "高さレベルの高低差 > 高さレベルの高低差を広く取った場合",
+        "高さレベルの高低差 > 高さのレベルの高低差を狭くとった場合",
+        "固有の高さのレベル",
+        "固有の高さのレベル > 立体感のあるコンポーネントの場合",
+        "固有の高さのレベル > Hover時の高さのレベルを確保する場合",
+        "オーバーレイの高さレベル",
+        "オーバーレイの高さレベル > もともとオーバーレイ（浮いているように）表示されるコンポーネントの高さレベル",
+        "高さレベルの基準",
+        "高さレベルの基準 > 基準の可変性",
+        "オーバーレイシェードの高さレベル",
+        "オーバーレイシェードの高さレベル > オーバーレイシェードによる高さレベルのリセット",
+        "オーバーレイシェードの高さレベル > オーバーレイシェードの高さレベル",
+        "オーバーレイシェードに対する簡易非表示（Light Dismiss）の操作について",
+        "ダークモードのエレベーション"
+      ]
+    },
+    {
+      "document": "foundations/elevation",
+      "route": "machine",
       "paths": [
         "エレベーションの表現 > ドロップシャドウ",
         "高さレベルの基準 > 基準とドロップシャドウのスタイル"
@@ -316,7 +1391,101 @@
       ]
     },
     {
+      "document": "foundations/elevation",
+      "route": "machine",
+      "paths": [
+        "ドロップシャドウとエレベーション > \\[警告]ドロップシャドウでコントラスト比を確保することはできません"
+      ],
+      "checkers": [
+        "contrast-nontext"
+      ]
+    },
+    {
+      "document": "foundations/elevation",
+      "route": "machine",
+      "paths": [
+        "オーバーレイシェードの上に表示される要素であっても必ずボーダーをつける"
+      ],
+      "checkers": [
+        "dom:dialog-border"
+      ]
+    },
+    {
+      "document": "foundations/icon",
+      "route": "decision",
+      "paths": [
+        "種類の定義",
+        "種類の定義 > ブロックレベルボックスのアイコン",
+        "種類の定義 > 行ボックスのアイコン"
+      ]
+    },
+    {
+      "document": "foundations/icon",
+      "route": "machine",
+      "paths": [
+        "アイコンはラベルと組み合わせて使う"
+      ],
+      "checkers": [
+        "dom:icon-only"
+      ]
+    },
+    {
+      "document": "foundations/icon",
+      "route": "machine",
+      "paths": [
+        "アイコンはラベルと組み合わせて使う > ラベルと組み合わせたアイコンの代替テキスト"
+      ],
+      "checkers": [
+        "dom:icon-hidden"
+      ]
+    },
+    {
+      "document": "foundations/icon",
+      "route": "judgment",
+      "paths": [
+        "アイコンはラベルと組み合わせて使う > ラベルがリンクの場合のリンクの範囲"
+      ]
+    },
+    {
+      "document": "foundations/icon",
+      "route": "machine",
+      "paths": [
+        "アイコンはラベルと組み合わせて使う > 事情によりアイコン単体で使用しなければならない場合"
+      ],
+      "checkers": [
+        "axe:button-name",
+        "axe:link-name"
+      ]
+    },
+    {
+      "document": "foundations/icon",
+      "route": "machine",
+      "paths": [
+        "アイコンの色は、背景色に対してコントラスト比4.5:1以上を確保する"
+      ],
+      "checkers": [
+        "contrast-icon"
+      ]
+    },
+    {
       "document": "foundations/layout",
+      "route": "decision",
+      "paths": [
+        "グリッドシステム",
+        "グリッドシステム > 基本的なグリッドシステム",
+        "ブレークポイント",
+        "ブレークポイント > ブレークポイントの設定例",
+        "グリッドを基本としたレイアウト",
+        "グリッドを基本としたレイアウト > 1カラムレイアウト",
+        "グリッドを基本としたレイアウト > 2カラムレイアウト",
+        "グリッドを基本としたレイアウト > 3カラムレイアウト",
+        "グリッドを基本としたレイアウト > 4カラムレイアウト",
+        "グリッドを基本としたレイアウト > カラムオフセット"
+      ]
+    },
+    {
+      "document": "foundations/layout",
+      "route": "machine",
       "paths": [
         "リキッドレイアウトを採用する",
         "リキッドレイアウトを採用する > 参考情報"
@@ -326,7 +1495,57 @@
       ]
     },
     {
+      "document": "foundations/layout",
+      "route": "machine",
+      "paths": [
+        "視覚的な要素の配置と読み上げ順序をできるだけ一致させる",
+        "視覚的な要素の配置と読み上げ順序をできるだけ一致させる > 参考情報"
+      ],
+      "checkers": [
+        "dom:focus-order"
+      ]
+    },
+    {
       "document": "foundations/link-text",
+      "route": "decision",
+      "paths": [
+        "\\[インフォメーション]内部リンクと外部リンクの違い",
+        "リンクテキストの基本構造",
+        "リンクのステート"
+      ]
+    },
+    {
+      "document": "foundations/link-text",
+      "route": "machine",
+      "paths": [
+        "リンクカラー（リンクテキストの色）"
+      ],
+      "checkers": [
+        "contrast",
+        "dom:link-distinct"
+      ]
+    },
+    {
+      "document": "foundations/link-text",
+      "route": "machine",
+      "paths": [
+        "新規タブを開くリンク、ウェブページ以外へのリンク"
+      ],
+      "checkers": [
+        "dom:new-tab-indicator"
+      ]
+    },
+    {
+      "document": "foundations/link-text",
+      "route": "judgment",
+      "paths": [
+        "リンクの目的を明確にする",
+        "リンクの目的を明確にする > 参考情報"
+      ]
+    },
+    {
+      "document": "foundations/link-text",
+      "route": "machine",
       "paths": [
         "「ここ」や「こちら」をリンクテキストにしない",
         "「ここ」や「こちら」をリンクテキストにしない > 参考情報"
@@ -337,6 +1556,7 @@
     },
     {
       "document": "foundations/link-text",
+      "route": "machine",
       "paths": [
         "ターゲットサイズの確保",
         "ターゲットサイズの確保 > 参考情報"
@@ -347,6 +1567,16 @@
     },
     {
       "document": "foundations/spacing",
+      "route": "decision",
+      "paths": [
+        "余白の機能",
+        "余白の種類",
+        "余白の種類 > マージン"
+      ]
+    },
+    {
+      "document": "foundations/spacing",
+      "route": "machine",
       "paths": [
         "余白の種類 > パディング",
         "余白のルールの考え方",
@@ -358,7 +1588,28 @@
       ]
     },
     {
+      "document": "foundations/spacing",
+      "route": "judgment",
+      "paths": [
+        "余白ルールの例 > 余白による関係性の明示",
+        "余白ルールの例 > 余白による階層の明示"
+      ]
+    },
+    {
+      "document": "foundations/spacing",
+      "route": "machine",
+      "paths": [
+        "空白や両端揃えを使ってレイアウトを調整しない",
+        "空白や両端揃えを使ってレイアウトを調整しない > 参考情報"
+      ],
+      "checkers": [
+        "dom:text-justify",
+        "dom:space-alignment"
+      ]
+    },
+    {
       "document": "foundations/typography",
+      "route": "machine",
       "paths": [
         "フォントファミリー（`font-family`）",
         "フォントファミリー（`font-family`） > CSSの記述例",
@@ -370,6 +1621,7 @@
     },
     {
       "document": "foundations/typography",
+      "route": "machine",
       "paths": [
         "書体の太さ（`font-weight`）",
         "書体の太さ（`font-weight`） > 太さレベルについて"
@@ -380,11 +1632,135 @@
     },
     {
       "document": "foundations/typography",
+      "route": "machine",
       "paths": [
         "書体の大きさ（`font-size`）"
       ],
       "checkers": [
         "palette:fontSize"
+      ]
+    },
+    {
+      "document": "foundations/typography",
+      "route": "machine",
+      "paths": [
+        "行ボックスの高さ（`line-height`）"
+      ],
+      "checkers": [
+        "body-line-height"
+      ]
+    },
+    {
+      "document": "foundations/typography",
+      "route": "decision",
+      "paths": [
+        "行ボックスの高さ（`line-height`） > 行高の定義",
+        "テキストスタイル名の構成",
+        "テキストスタイルの種類",
+        "テキストスタイルの種類 > Display (Dsp)",
+        "テキストスタイルの種類 > Standard (Std)",
+        "テキストスタイルの種類 > Dense (Dns)",
+        "テキストスタイルの種類 > Oneline (Oln)",
+        "テキストスタイルの種類 > Mono",
+        "その他の書式スタイル",
+        "その他の書式スタイル > イタリック",
+        "その他の書式スタイル > ルビ",
+        "テキスト装飾",
+        "テキスト装飾 > テキスト装飾の種類（`text-decoration-line`）",
+        "テキスト装飾 > スタイル（`text-decoration-style`）",
+        "テキスト装飾 > 線の色（`text-decoration-color`）と太さ（`text-decoration-thickness`）",
+        "閲覧者による表示フォントの変更",
+        "閲覧者による表示フォントの変更 > 参考情報"
+      ]
+    },
+    {
+      "document": "foundations/typography",
+      "route": "machine",
+      "paths": [
+        "Display (Dsp)",
+        "Display (Dsp) > Bold",
+        "Display (Dsp) > Normal",
+        "Standard (Std)",
+        "Standard (Std) > Bold",
+        "Standard (Std) > Normal",
+        "Dense (Dns)",
+        "Dense (Dns) > Bold",
+        "Dense (Dns) > Normal",
+        "Oneline (Oln)",
+        "Oneline (Oln) > Bold",
+        "Oneline (Oln) > Normal",
+        "Mono",
+        "Mono > Bold",
+        "Mono > Normal"
+      ],
+      "checkers": [
+        "palette:fontSize",
+        "palette:fontWeight"
+      ]
+    },
+    {
+      "document": "foundations/typography",
+      "route": "machine",
+      "paths": [
+        "イタリック体を使用する場合の留意事項"
+      ],
+      "checkers": [
+        "dom:long-italic"
+      ]
+    },
+    {
+      "document": "foundations/typography",
+      "route": "machine",
+      "paths": [
+        "テキスト表示に関する留意事項",
+        "テキスト表示に関する留意事項 > 参考情報"
+      ],
+      "checkers": [
+        "line-length",
+        "body-line-height",
+        "dom:text-justify"
+      ]
+    },
+    {
+      "document": "supplements/logos",
+      "route": "decision",
+      "paths": [
+        "ロゴ"
+      ]
+    },
+    {
+      "document": "supplements/image-tone",
+      "route": "judgment",
+      "paths": [
+        "画像トーン"
+      ]
+    },
+    {
+      "document": "supplements/writing",
+      "route": "decision",
+      "paths": [
+        "ライティング"
+      ]
+    },
+    {
+      "document": "supplements/motion",
+      "route": "decision",
+      "paths": [
+        "モーション"
+      ]
+    },
+    {
+      "document": "supplements/media-profile",
+      "route": "decision",
+      "paths": [
+        "媒体プロファイル"
+      ]
+    },
+    {
+      "document": "supplements/asset-ledger",
+      "route": "decision",
+      "paths": [
+        "アセット台帳"
       ]
     }
   ]

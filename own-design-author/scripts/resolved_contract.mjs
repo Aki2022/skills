@@ -160,6 +160,7 @@ export function collectItemChecks(manifest) {
   }
   const want = new Set(spec.collect || []);
   const results = {};
+  for (const id of want) if (!id.startsWith('axe:')) results[id] = {checked:true, count:0, sample:[]};
   const describe = el => {
     const cls = String(el.getAttribute('class') || '').trim().split(/\s+/).filter(Boolean).slice(0, 2);
     return (el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (cls.length ? '.' + cls.join('.') : '')).slice(0, 80);
@@ -170,21 +171,182 @@ export function collectItemChecks(manifest) {
     row.count++;
     if (row.sample.length < 4) row.sample.push(detail ? describe(el) + ' ' + detail : describe(el));
   };
-  for (const id of want) if (id.startsWith('dom:') || id.startsWith('palette:')) results[id] = {checked:true, count:0, sample:[]};
+  const shown = el => {
+    for (let node = el; node; node = node.parentElement) {
+      const s = getComputedStyle(node);
+      if (s.display === 'none' || s.contentVisibility === 'hidden' || Number(s.opacity) === 0) return false;
+    }
+    return getComputedStyle(el).visibility === 'visible' && [...el.getClientRects()].some(r => r.width > 0 && r.height > 0);
+  };
   const q = selector => [...document.querySelectorAll(selector)];
-  q('input[placeholder]:not([placeholder=""]),textarea[placeholder]:not([placeholder=""])').forEach(el => add('dom:placeholder', el));
-  q('input[readonly],textarea[readonly]').forEach(el => add('dom:readonly-input', el));
-  q('input[disabled],textarea[disabled],select[disabled]').forEach(el => add('dom:disabled-input', el));
-  q('input[maxlength],textarea[maxlength]').forEach(el => add('dom:maxlength', el));
-  q('ol').forEach(el => add('dom:ol', el));
+  const qs = selector => q(selector).filter(shown);
+  const textOf = el => (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+  const directText = el => [...el.childNodes].some(node => {
+    if (node.nodeType !== Node.TEXT_NODE || !node.textContent.trim()) return false;
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    return [...range.getClientRects()].some(rect => rect.width > 0 && rect.height > 0);
+  });
+  // Colour helpers: computed colours are rgb()/rgba() or color(srgb ...) in Chromium.
+  const parse = value => {
+    let m = /^rgba?\(([^)]+)\)$/.exec(value);
+    if (m) { const p = m[1].split(/[\s,/]+/).filter(Boolean).map(Number); return [p[0], p[1], p[2], p.length > 3 ? p[3] : 1]; }
+    m = /^color\(srgb ([^)]+)\)$/.exec(value);
+    if (m) { const p = m[1].split(/[\s/]+/).filter(Boolean).map(Number); return [p[0] * 255, p[1] * 255, p[2] * 255, p.length > 3 ? p[3] : 1]; }
+    return null;
+  };
+  const over = (top, under) => top[3] >= 1 ? top : [0, 1, 2].map(i => top[i] * top[3] + under[i] * (1 - top[3])).concat([1]);
+  const luminance = c => { const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+    return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); };
+  const ratio = (a, b) => { const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05); };
+  const backdrop = el => {
+    const layers = [];
+    for (let node = el; node; node = node.parentElement) {
+      const c = parse(getComputedStyle(node).backgroundColor);
+      if (c && c[3] > 0) { layers.push(c); if (c[3] >= 1) break; }
+    }
+    return layers.reverse().reduce((under, top) => over(top, under), [255, 255, 255, 1]);
+  };
+  const behind = el => el.parentElement ? backdrop(el.parentElement) : [255, 255, 255, 1];
+  // dom: attribute and structure rules
+  qs('input[placeholder]:not([placeholder=""]),textarea[placeholder]:not([placeholder=""])').forEach(el => add('dom:placeholder', el));
+  qs('input[readonly],textarea[readonly]').forEach(el => add('dom:readonly-input', el));
+  qs('input[disabled],textarea[disabled],select[disabled]').forEach(el => add('dom:disabled-input', el));
+  qs('input[maxlength],textarea[maxlength]').forEach(el => add('dom:maxlength', el));
+  qs('input[pattern]').forEach(el => add('dom:input-pattern', el));
+  qs('ol').forEach(el => add('dom:ol', el));
   q('[tabindex]').filter(el => parseInt(el.getAttribute('tabindex'), 10) > 0).forEach(el => add('dom:positive-tabindex', el));
-  q('input[type="date"]').forEach(el => add('dom:date-input', el));
+  qs('input[type="date"]').forEach(el => add('dom:date-input', el));
+  qs('button[disabled],input[type="submit"][disabled],input[type="button"][disabled]').forEach(el => add('dom:disabled-button', el));
   q('td[colspan],td[rowspan],th[colspan],th[rowspan]').filter(el =>
     parseInt(el.getAttribute('colspan') || '1', 10) > 1 || parseInt(el.getAttribute('rowspan') || '1', 10) > 1)
     .forEach(el => add('dom:table-span', el));
+  qs('table').filter(t => !t.querySelector('th')).forEach(el => add('dom:table-headers', el));
+  qs('td').forEach(td => {
+    const s = getComputedStyle(td);
+    if (!['top', 'text-top'].includes(s.verticalAlign)) add('dom:table-align', td, 'vertical-align ' + s.verticalAlign);
+    else if (/^[-+]?[¥$€]?[\d,]+(\.\d+)?%?$/.test(textOf(td)) && !['right', 'end'].includes(s.textAlign))
+      add('dom:table-align', td, 'number aligned ' + s.textAlign);
+  });
+  q('[aria-expanded]').forEach(el => {
+    if (el.tagName === 'SUMMARY') return;
+    const role = el.getAttribute('role');
+    if (el.tagName !== 'BUTTON' && role !== 'button') add('dom:disclosure-semantics', el, 'aria-expanded on non-button');
+    else if (el.tagName !== 'BUTTON' && !el.hasAttribute('tabindex')) add('dom:disclosure-semantics', el, 'role=button not focusable');
+  });
   const vague = /^(ここ|こちら|こちらから|ここをクリック|こちらをクリック|詳しくはこちら|click here|here)$/i;
-  q('a[href]').filter(el => vague.test((el.textContent || '').replace(/\s+/g, ' ').trim()))
-    .forEach(el => add('dom:vague-link-text', el));
+  qs('a[href]').filter(el => vague.test(textOf(el))).forEach(el => add('dom:vague-link-text', el));
+  qs('a[href]').filter(el => getComputedStyle(el).cursor !== 'pointer').forEach(el => add('dom:link-cursor', el, getComputedStyle(el).cursor));
+  qs('button,[role="button"]').filter(el => el.scrollWidth > el.clientWidth + 1).forEach(el => add('dom:text-overflow', el));
+  const textInputs = 'input:not([type]),input[type="text"],input[type="email"],input[type="tel"],input[type="url"],input[type="number"],input[type="password"],input[type="search"]';
+  qs(textInputs + ',select').filter(el => el.getBoundingClientRect().height < 36).forEach(el =>
+    add('dom:control-height', el, Math.round(el.getBoundingClientRect().height) + 'px'));
+  qs(textInputs + ',textarea,select').forEach(el => {
+    const label = (el.id && document.querySelector('label[for="' + CSS.escape(el.id) + '"]')) || el.closest('label');
+    if (!label) return;
+    const lr = label.getBoundingClientRect(), ir = el.getBoundingClientRect();
+    if (label.contains(el)) { const text = [...label.childNodes].find(n => n.nodeType === Node.TEXT_NODE && n.textContent.trim());
+      if (!text) return; const r = document.createRange(); r.selectNodeContents(text); const tr = r.getBoundingClientRect();
+      if (tr.bottom > ir.top + 2) add('dom:label-above', el); return; }
+    if (lr.bottom > ir.top + 2) add('dom:label-above', el);
+  });
+  qs(textInputs + ',textarea').forEach(el => {
+    for (const type of ['paste', 'copy']) {
+      const event = new ClipboardEvent(type, {bubbles:true, cancelable:true});
+      el.dispatchEvent(event);
+      if (event.defaultPrevented) { add('dom:paste-blocked', el, type + ' prevented'); break; }
+    }
+  });
+  q('form [aria-live]:not([aria-live="off"]),form [role="alert"]').forEach(el => add('dom:form-live-region', el));
+  const bullet = /^\s*([・•●■◆]|\d+[.．)）]|[①-⑳])/;
+  qs('p,div,td,span').filter(el => !el.closest('li') && directText(el)).forEach(el => {
+    const lines = (el.innerText || '').split('\n').filter(line => line.trim());
+    if (lines.filter(line => bullet.test(line)).length >= 2) add('dom:fake-list', el);
+  });
+  const h1 = qs('h1');
+  if (want.has('dom:h1-title') && (h1.length !== 1 || !document.title.includes(textOf(h1[0]))))
+    add('dom:h1-title', h1[0] || document.documentElement, h1.length !== 1 ? h1.length + ' h1' : 'h1 not in title');
+  qs('a[href],button,[role="button"]').forEach(el => {
+    const graphic = el.querySelector('svg,img');
+    if (!graphic) return;
+    if (!textOf(el)) add('dom:icon-only', el);
+    else el.querySelectorAll('svg,img').forEach(g => {
+      const hidden = g.getAttribute('aria-hidden') === 'true' || g.getAttribute('role') === 'presentation'
+        || (g.tagName === 'IMG' && g.getAttribute('alt') === '');
+      if (!hidden) add('dom:icon-hidden', g);
+    });
+  });
+  const newTab = /新規タブ|新しいタブ|別ウィンドウ|新しいウィンドウ|別タブ|new tab|new window/i;
+  qs('a[target="_blank"]').forEach(el => {
+    const names = [textOf(el), el.getAttribute('aria-label') || '', el.getAttribute('title') || '',
+      ...[...el.querySelectorAll('img[alt],svg[aria-label],svg title')].map(n => n.getAttribute('alt') || n.getAttribute('aria-label') || n.textContent)];
+    if (!names.some(n => newTab.test(n || ''))) add('dom:new-tab-indicator', el);
+  });
+  qs('p a[href],li a[href],td a[href],dd a[href]').forEach(el => {
+    const block = el.parentElement;
+    if (textOf(block) === textOf(el)) return;
+    const s = getComputedStyle(el);
+    if (s.textDecorationLine.includes('underline')) return;
+    const a = parse(s.color), b = parse(getComputedStyle(block).color);
+    if (!a || !b || ratio(a, b) < 3) add('dom:link-distinct', el);
+  });
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const text = node.textContent.trim();
+    if (text && text.length <= 12 && /\S　+\S/.test(text) && node.parentElement && shown(node.parentElement))
+      add('dom:space-alignment', node.parentElement, JSON.stringify(text));
+  }
+  qs('p,div,span,li,td,blockquote').filter(el => directText(el) && getComputedStyle(el).fontStyle === 'italic'
+    && textOf(el).length > 100).forEach(el => add('dom:long-italic', el));
+  if (want.has('dom:explicit-bg')) {
+    const rootBg = [document.documentElement, document.body].map(el => parse(getComputedStyle(el).backgroundColor));
+    if (!rootBg.some(c => c && c[3] > 0)) add('dom:explicit-bg', document.body, 'page background not set');
+  }
+  qs('dialog,[role="dialog"],[aria-modal="true"]').forEach(el => {
+    const s = getComputedStyle(el);
+    const bordered = ['Top', 'Right', 'Bottom', 'Left'].some(side => parseFloat(s['border' + side + 'Width']) > 0
+      && !['none', 'hidden'].includes(s['border' + side + 'Style']) && (parse(s['border' + side + 'Color']) || [0, 0, 0, 0])[3] > 0);
+    if (!bordered) add('dom:dialog-border', el);
+  });
+  q('input[type="file"]').forEach(el => {
+    if (shown(el)) return;
+    const label = el.id && document.querySelector('label[for="' + CSS.escape(el.id) + '"]');
+    if (!(label && shown(label)) && !(el.closest('label') && shown(el.closest('label')))) add('dom:file-button', el);
+  });
+  qs('[aria-roledescription="carousel"]').forEach(el => {
+    const slides = el.querySelectorAll('[aria-roledescription="slide"]').length;
+    if (slides > 6) add('dom:carousel-slides', el, slides + ' slides');
+  });
+  const focusables = qs('a[href],button:not([disabled]),input:not([disabled]):not([type="hidden"]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])');
+  for (let i = 1; i < focusables.length; i++) {
+    const a = focusables[i - 1].getBoundingClientRect(), b = focusables[i].getBoundingClientRect();
+    if (getComputedStyle(focusables[i]).position === 'fixed' || getComputedStyle(focusables[i - 1]).position === 'fixed') continue;
+    const overlap = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+    // The next stop sits entirely above the previous one in the same column: focus jumps back up.
+    if (b.bottom <= a.top + 1 && b.top < a.top && overlap > 0) add('dom:focus-order', focusables[i], 'focus moves up after ' + describe(focusables[i - 1]));
+  }
+  // contrast of component boundaries (WCAG 1.4.11) and of icons
+  qs('button,[role="button"],input:not([type="hidden"]),select,textarea').forEach(el => {
+    const s = getComputedStyle(el);
+    const border = ['Top', 'Right', 'Bottom', 'Left'].map(side => parseFloat(s['border' + side + 'Width']) >= 1
+      && !['none', 'hidden'].includes(s['border' + side + 'Style']) ? parse(s['border' + side + 'Color']) : null).find(c => c && c[3] > 0);
+    const fill = parse(s.backgroundColor);
+    const around = behind(el);
+    const edge = border ? over(border, around) : fill && fill[3] > 0 ? over(fill, around) : null;
+    if (!edge) { if (el.tagName !== 'BUTTON' && el.getAttribute('role') !== 'button') add('contrast-nontext', el, 'no visible boundary'); return; }
+    const r = ratio(edge, around);
+    if (r < 3) add('contrast-nontext', el, r.toFixed(2) + ':1');
+  });
+  qs('svg').forEach(el => {
+    if (el.getAttribute('aria-hidden') === 'true' && !el.closest('a,button,[role="button"]')) return;
+    const s = getComputedStyle(el);
+    const paint = s.fill && s.fill !== 'none' && !s.fill.startsWith('url') ? s.fill : s.stroke;
+    const c = parse(paint || '');
+    if (!c || c[3] === 0) return;
+    const r = ratio(over(c, backdrop(el)), backdrop(el));
+    if (r < 4.5) add('contrast-icon', el, r.toFixed(2) + ':1');
+  });
+  // values outside the design tokens
   const probe = document.createElement('div');
   probe.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none';
   probe.style.setProperty('transition', 'none', 'important');
@@ -203,33 +365,21 @@ export function collectItemChecks(manifest) {
   const weights = set('fontWeight', manifest.palette?.fontWeight || []);
   const shadows = set('boxShadow', manifest.palette?.shadow || [], ['none']);
   probe.remove();
-  const directText = el => [...el.childNodes].some(node => {
-    if (node.nodeType !== Node.TEXT_NODE || !node.textContent.trim()) return false;
-    const range = document.createRange();
-    range.selectNodeContents(node);
-    return [...range.getClientRects()].some(rect => rect.width > 0 && rect.height > 0);
-  });
-  const shown = el => {
-    for (let node = el; node; node = node.parentElement) {
-      const s = getComputedStyle(node);
-      if (s.display === 'none' || s.contentVisibility === 'hidden' || Number(s.opacity) === 0) return false;
-    }
-    return getComputedStyle(el).visibility === 'visible' && [...el.getClientRects()].some(r => r.width > 0 && r.height > 0);
-  };
   for (const el of [...document.querySelectorAll('body *')]) {
-    if (['SCRIPT','STYLE','TEMPLATE','LINK','META','NOSCRIPT'].includes(el.tagName) || !shown(el)) continue;
+    if (['SCRIPT', 'STYLE', 'TEMPLATE', 'LINK', 'META', 'NOSCRIPT'].includes(el.tagName) || !shown(el)) continue;
     const style = getComputedStyle(el);
     if (directText(el)) {
       if (!sizes.has(style.fontSize)) add('palette:fontSize', el, 'font-size ' + style.fontSize);
       if (!weights.has(style.fontWeight)) add('palette:fontWeight', el, 'font-weight ' + style.fontWeight);
       if (style.textAlign === 'justify') add('dom:text-justify', el);
     }
-    for (const side of ['Top','Right','Bottom','Left'])
+    for (const side of ['Top', 'Right', 'Bottom', 'Left'])
       if (!spaces.has(style['padding' + side])) add('palette:spacing', el, 'padding-' + side.toLowerCase() + ' ' + style['padding' + side]);
     if (/(flex|grid)/.test(style.display))
-      for (const property of ['rowGap','columnGap'])
+      for (const property of ['rowGap', 'columnGap'])
         if (style[property] !== 'normal' && !spaces.has(style[property])) add('palette:spacing', el, property + ' ' + style[property]);
     if (!shadows.has(style.boxShadow)) add('palette:shadow', el, 'box-shadow');
   }
-  return {presence, results, uncovered:['margin (auto centering is indistinguishable after layout)', 'pseudo-elements', 'shadow-dom']};
+  return {presence, results, uncovered:['margin (auto centering is indistinguishable after layout)', 'pseudo-elements', 'shadow-dom',
+    'keyboard behaviour and state changes (no interaction is simulated)']};
 }

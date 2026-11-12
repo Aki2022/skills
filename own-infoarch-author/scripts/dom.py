@@ -54,9 +54,10 @@ def expected_copy(outline, ssot, output=None):
     for p in _section_pages(outline, output):
         for s in p['sections']:
             text = _copy_norm(check.PLACEHOLDER.sub(lambda m: values.get(m.group(1), m.group(0)), s['copy']))
-            key = ('problem', s['problem']) if 'problem' in s else ('msg', s['message']) if 'message' in s else None
-            if key:
-                out.setdefault(key, set()).add(text)
+            # Every anchor the section carries shows the same copy (skeleton puts both attributes on one element).
+            for kind, field in (('problem', 'problem'), ('msg', 'message')):
+                if field in s:
+                    out.setdefault((kind, s[field]), set()).add(text)
     return out
 
 

@@ -310,3 +310,29 @@ def test_real_browser_text_painted_from_a_zero_size_box_is_unanchored(tmp_path):
     report = json.loads(proc.stdout)
     assert 'IA_DOM_UNANCHORED_TEXT' in [f['code'] for f in report['findings']], report['findings']
     assert report['unanchored'] and all('業界No.1' in r['text'] for r in report['unanchored'])
+
+
+# --- a section may carry both a problem and a message (security review of #100) ---
+
+def _both():
+    outline = copy.deepcopy(OUTLINE)
+    outline['pages'][0]['sections'][0]['message'] = 'msg-0001'  # problem section that also carries the benefit
+    outline['pages'][0]['sections'].pop(1)
+    snap = green_snapshot()
+    snap['anchors'].pop(1)
+    # skeleton puts both attributes on one element, so the snapshot holds two anchors with the same text
+    snap['anchors'].insert(1, anchor('msg', 'msg-0001', 10, '既存システムの運用、重くありませんか'))
+    return outline, snap
+
+
+def test_section_with_problem_and_message_checks_both_anchors():
+    outline, snap = _both()
+    assert codes(run(snap, outline=outline)) == [], run(snap, outline=outline)
+    snap['anchors'][1]['text'] = '業界No.1'
+    assert 'IA_DOM_COPY_DRIFT' in codes(run(snap, outline=outline)), run(snap, outline=outline)
+
+
+def test_drifted_message_of_a_problem_section_is_sent_to_judgment():
+    outline, snap = _both()
+    snap['anchors'].insert(2, anchor('msg', 'msg-0001', 20, '業界No.1 の実績'))
+    assert '業界No.1 の実績' in dom.unjudged_text(outline, SSOT, snap)

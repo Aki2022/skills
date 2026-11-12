@@ -20,6 +20,7 @@ from jcs import media_hashes
 from judgment_ledger import candidate as judgment_candidate,evaluate as evaluate_judgments,read_policy as read_judgment_policy,POLICY as JUDGMENT_POLICY
 from reporting import empty_report,stage,skip
 from design_modules import resolve_ia
+import item_checks
 
 VERSION = '1.0.0'
 SKILL = Path(__file__).resolve().parents[1]
@@ -191,19 +192,7 @@ def _anchor_text(path, anchor):
     return '\n'.join(lines[start+1:end]).strip()
 
 
-MACHINE_TOKEN_TYPES = ('color', 'fontFamily')  # values L2 compares against the resolved palette
 AFM_RULE_CHARS, AFM_EVIDENCE_CHARS = 500, 400
-
-
-def item_check_route(evidence, tokens, rules):
-    """'machine' when L1/L2 measure the item's own evidence, otherwise 'afm' (judged against the artifact)."""
-    for ref in evidence:
-        kind, _, target = ref.partition(':')
-        if kind == 'rule' and target in rules:
-            return 'machine'
-        if kind == 'token' and target in tokens and tokens[target]['type'] in MACHINE_TOKEN_TYPES:
-            return 'machine'
-    return 'afm'
 
 
 def afm_candidate(ident, context, evidence_values):
@@ -211,7 +200,7 @@ def afm_candidate(ident, context, evidence_values):
     rule = (heading + ': ' + ' '.join(str(context.get('text', '')).split()))[:AFM_RULE_CHARS]
     prose = ' '.join(' '.join(v.split()) for k, v in sorted(evidence_values.items())
                      if k.startswith('doc:') and isinstance(v, str))
-    return {'id': ident, 'rule': rule, 'evidence': prose[:AFM_EVIDENCE_CHARS]}
+    return {'id': ident, 'document': item_checks.document_key(context), 'rule': rule, 'evidence': prose[:AFM_EVIDENCE_CHARS]}
 
 
 def _rules(design):
@@ -385,7 +374,7 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
         uncovered_rules = set(rules) - set(measured_rules)
         counts['uncovered'] = len(uncovered_rules)
         item_states, item_values, must_proposed, must_uncovered = {}, {}, [], []
-        item_routes = {}
+        item_routes, check_map, active = {}, item_checks.load_map(), item_checks.active_checkers(tokens)
         judgment_policy,judgment_policy_sha256=read_judgment_policy()
         classification_policy = load_policy()
         for ident, item in items.items():
@@ -464,8 +453,9 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
                 errors.append(f'blank/unknown item state: {ident}')
             item_values[ident] = evidence_values
             if status == 'defined':
-                item_routes[ident] = item_check_route(state.get('evidence',[]),tokens,rules)
-                if item_routes[ident] == 'afm':
+                way, checkers = item_checks.route(item, state.get('evidence',[]), tokens, rules, check_map, active)
+                item_routes[ident] = {'route':way, 'checkers':checkers, 'document':item_checks.document_key(item)}
+                if way == 'afm':
                     result['afm_candidates'].append(afm_candidate(ident,item_context,evidence_values))
         ledger=read_data(inside(design,'judgments.json')) if (design/'judgments.json').exists() else None
         judged=evaluate_judgments(result['judgment_candidates'],ledger,policy=judgment_policy)
@@ -548,11 +538,15 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
                 'minimums':profile['minimums'], 'tokens':resolved_by_media[medium][0], 'items':resolved_by_media[medium][1],
                 'css_variables':{t['css_name']:t['css'] for t in tokens.values()},
                 'tailwind_templates':tailwind_templates, 'artifacts':artifacts, 'rules':list(rules.values()), 'coverage':{'uncovered':sorted(uncovered_rules | {row['id'] for row in judged['uncovered']}),
-                    'items':{route:sorted(i for i,r in item_routes.items() if r==route) for route in ('machine','afm')}},
+                    'items':{way:sorted(i for i,r in item_routes.items() if r['route']==way) for way in ('machine','afm')},
+                    'item_routes':item_routes},
+                'item_checks':{'collect':sorted({c for r in item_routes.values() for c in r['checkers']} & item_checks.COLLECTED),
+                    'applicability':{d:check_map['applicability'][d] for d in sorted({r['document'] for r in item_routes.values()})
+                                     if d in check_map['applicability']}},
                 'modules':({'ia':{'version':config['modules']['ia'],'implementation_sha256':ia['_implementation_sha256'],
                     'resolved':ia['media'][medium]}} if ia else {}),
                 'palette':{kind: sorted({t['css'] for t in tokens.values() if t['type']==kind})
-                           for kind in ('color','fontFamily','dimension')}, 'assets':assets, 'asset_exports':asset_exports}
+                           for kind in ('color','fontFamily','dimension','fontWeight','shadow')}, 'assets':assets, 'asset_exports':asset_exports}
         for medium,manifest in result['manifest'].items():
             for kind,rows in [('item',manifest['items']),('token',manifest['tokens'])]:
                 for ident,row in rows.items():

@@ -23,7 +23,7 @@
 import { writeFileSync, existsSync, realpathSync, unlinkSync } from "node:fs";
 import {dirname} from "node:path";
 import {loadEnvironment,verifyRuntime,configureFonts,trackFonts,renderEvidence,compareRepeats,fixedLaunchOptions,describeRenderFailure} from "../../own-design-author/scripts/fixed_render.mjs";
-import { loadManifest, collectDesign } from "../../own-design-author/scripts/resolved_contract.mjs";
+import { loadManifest, collectDesign, collectItemChecks } from "../../own-design-author/scripts/resolved_contract.mjs";
 import { createRequire } from "node:module";
 
 const require = createRequire(`${process.cwd()}/`);
@@ -652,6 +652,7 @@ for (const scheme of schemes) {
     stage='collect';
     const data = await page.evaluate(collect, T);
     data.design = await page.evaluate(collectDesign, manifest);
+    data.item_checks = await page.evaluate(collectItemChecks, manifest);
     stage='axe';
     data.axe = {violations:[], incomplete:[], unavailable:false};
     if (axePath && existsSync(axePath)) {
@@ -661,6 +662,21 @@ for (const scheme of schemes) {
         return {violations:result.violations.map(v => ({id:v.id, count:v.nodes.length})),
           incomplete:result.incomplete.map(v => ({id:v.id, count:v.nodes.length})), unavailable:false};
       });
+      // Item-enforced axe rules: measured here, judged per adopted item by design-check, never an L2 failure.
+      const axeItems = {'axe:button-name':['button-name'], 'axe:list':['list','listitem']};
+      const wanted = Object.keys(axeItems).filter(id => (manifest.item_checks?.collect || []).includes(id));
+      if (wanted.length) {
+        const rules = wanted.flatMap(id => axeItems[id]);
+        const found = await page.evaluate(async rules => {
+          const result = await window.axe.run(document, {runOnly:{type:'rule', values:rules}});
+          return result.violations.map(v => ({id:v.id, targets:v.nodes.slice(0, 4).map(n => String(n.target).slice(0, 80)), count:v.nodes.length}));
+        }, rules);
+        for (const id of wanted) {
+          const hits = found.filter(v => axeItems[id].includes(v.id));
+          data.item_checks.results[id] = {checked:true, count:hits.reduce((n, v) => n + v.count, 0),
+            sample:hits.flatMap(v => v.targets).slice(0, 4)};
+        }
+      }
     } else data.axe.unavailable = true;
     // 404 等はテキストに URL が出ないので、favicon を除いた実リクエストで置き換える。
     data.consoleErrors = [

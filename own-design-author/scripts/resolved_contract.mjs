@@ -144,3 +144,92 @@ export function collectDesign(manifest) {
   return {targetCount, failures,
     uncovered:[...(manifest.coverage?.uncovered || []), 'pseudo-elements', 'shadow-dom', 'iframe-documents']};
 }
+
+// Serialized into the browser. Measures, without failing L2, the per-item code checks the manifest asks for
+// and which component selectors are present; item verification decides per adopted item afterwards.
+export function collectItemChecks(manifest) {
+  const spec = manifest.item_checks || {applicability:{}, collect:[]};
+  const presence = {};
+  for (const [doc, selectors] of Object.entries(spec.applicability || {})) {
+    let count = 0;
+    for (const selector of selectors) {
+      try { count += document.querySelectorAll(selector).length; }
+      catch { throw new Error('invalid applicability selector: ' + selector); }
+    }
+    presence[doc] = count;
+  }
+  const want = new Set(spec.collect || []);
+  const results = {};
+  const describe = el => {
+    const cls = String(el.getAttribute('class') || '').trim().split(/\s+/).filter(Boolean).slice(0, 2);
+    return (el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (cls.length ? '.' + cls.join('.') : '')).slice(0, 80);
+  };
+  const add = (id, el, detail) => {
+    if (!want.has(id)) return;
+    const row = results[id];
+    row.count++;
+    if (row.sample.length < 4) row.sample.push(detail ? describe(el) + ' ' + detail : describe(el));
+  };
+  for (const id of want) if (id.startsWith('dom:') || id.startsWith('palette:')) results[id] = {checked:true, count:0, sample:[]};
+  const q = selector => [...document.querySelectorAll(selector)];
+  q('input[placeholder]:not([placeholder=""]),textarea[placeholder]:not([placeholder=""])').forEach(el => add('dom:placeholder', el));
+  q('input[readonly],textarea[readonly]').forEach(el => add('dom:readonly-input', el));
+  q('input[disabled],textarea[disabled],select[disabled]').forEach(el => add('dom:disabled-input', el));
+  q('input[maxlength],textarea[maxlength]').forEach(el => add('dom:maxlength', el));
+  q('ol').forEach(el => add('dom:ol', el));
+  q('[tabindex]').filter(el => parseInt(el.getAttribute('tabindex'), 10) > 0).forEach(el => add('dom:positive-tabindex', el));
+  q('input[type="date"]').forEach(el => add('dom:date-input', el));
+  q('td[colspan],td[rowspan],th[colspan],th[rowspan]').filter(el =>
+    parseInt(el.getAttribute('colspan') || '1', 10) > 1 || parseInt(el.getAttribute('rowspan') || '1', 10) > 1)
+    .forEach(el => add('dom:table-span', el));
+  const vague = /^(ここ|こちら|こちらから|ここをクリック|こちらをクリック|詳しくはこちら|click here|here)$/i;
+  q('a[href]').filter(el => vague.test((el.textContent || '').replace(/\s+/g, ' ').trim()))
+    .forEach(el => add('dom:vague-link-text', el));
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none';
+  probe.style.setProperty('transition', 'none', 'important');
+  document.body.append(probe);
+  const normalize = (property, value) => {
+    probe.style[property] = '';
+    probe.style[property] = String(value);
+    if (!probe.style[property]) return null;
+    return getComputedStyle(probe)[property];
+  };
+  const set = (property, values, extra = []) =>
+    new Set([...extra, ...values.map(v => normalize(property, v)).filter(v => v !== null)]);
+  const dims = manifest.palette?.dimension || [];
+  const sizes = set('fontSize', dims);
+  const spaces = set('paddingTop', dims.filter(v => !String(v).trim().startsWith('-')), ['0px']);
+  const weights = set('fontWeight', manifest.palette?.fontWeight || []);
+  const shadows = set('boxShadow', manifest.palette?.shadow || [], ['none']);
+  probe.remove();
+  const directText = el => [...el.childNodes].some(node => {
+    if (node.nodeType !== Node.TEXT_NODE || !node.textContent.trim()) return false;
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    return [...range.getClientRects()].some(rect => rect.width > 0 && rect.height > 0);
+  });
+  const shown = el => {
+    for (let node = el; node; node = node.parentElement) {
+      const s = getComputedStyle(node);
+      if (s.display === 'none' || s.contentVisibility === 'hidden' || Number(s.opacity) === 0) return false;
+    }
+    return getComputedStyle(el).visibility === 'visible' && [...el.getClientRects()].some(r => r.width > 0 && r.height > 0);
+  };
+  for (const el of [...document.querySelectorAll('body *')]) {
+    if (['SCRIPT','STYLE','TEMPLATE','LINK','META','NOSCRIPT'].includes(el.tagName) || !shown(el)) continue;
+    const style = getComputedStyle(el);
+    if (directText(el)) {
+      if (!sizes.has(style.fontSize)) add('palette:fontSize', el, 'font-size ' + style.fontSize);
+      if (!weights.has(style.fontWeight)) add('palette:fontWeight', el, 'font-weight ' + style.fontWeight);
+      if (style.textAlign === 'justify') add('dom:text-justify', el);
+    }
+    for (const side of ['Top','Right','Bottom','Left'])
+      if (!spaces.has(style['padding' + side])) add('palette:spacing', el, 'padding-' + side.toLowerCase() + ' ' + style['padding' + side]);
+    if (/(flex|grid)/.test(style.display))
+      for (const property of ['rowGap','columnGap'])
+        if (style[property] !== 'normal' && !spaces.has(style[property])) add('palette:spacing', el, property + ' ' + style[property]);
+    if (!shadows.has(style.boxShadow)) add('palette:shadow', el, 'box-shadow');
+  }
+  return {presence, results, uncovered:['margin (auto centering is indistinguishable after layout)', 'pseudo-elements', 'shadow-dom']};
+}

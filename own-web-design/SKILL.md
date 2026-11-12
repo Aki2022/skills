@@ -29,7 +29,7 @@ repo の git toplevel の `design/` を正典として HTML / dashboard を生�
 7. 生成後の L1（`scripts/audit_html.py <html> --manifest design/.resolved/web.json`）は確認せず毎回実行する。
    描画の L2 は `references/validator.md` / `site-validation.md` に従い人間へ実施可否を確認する。
    ブラウザ利用時は `own-browser-route` と `playwright-cli` を使う。
-7b. アウトラインを使った場合、出力後に`infoarch-author dom --outline <id>`を必ず実行する。終了コード2ならアンカーの欠落・順序・固定値の表示を直す。直せない時や未実施は未解決として報告する。
+7b. アウトラインを使った場合、出力後に`infoarch-author evaluate --outline <id>`を必ず実行する（check → dom → judge を順に走らせ、終了コードを 1 つにまとめる）。終了コード2なら、文言の書き換え（IA_DOM_COPY_DRIFT）・アンカーの欠落・順序・固定値の表示を直す。終了コード1の警告（アンカーの外の文言・未カバーの判定・要確認）は報告に残す。直せない時や未実施は未解決として報告する。
 8. 決定論の失格は修正して再検査する。修正は最大2回。失格や未実施が残れば準拠を名乗らない。
 9. 出力にL0/L1/L2の結果・提案値数・主要制約・未カバー規則・通さなかった工程と理由を残す。
    フォールバック由来の値を発見したら欠陥として報告し、`design/` へ戻して修正する。

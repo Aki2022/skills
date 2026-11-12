@@ -1,7 +1,8 @@
 // Snapshot of a rendered page for the information-architecture DOM checks.
 // Usage: node dom_snapshot.mjs <html file> <viewports JSON>
 // Prints a JSON array, one snapshot per viewport: anchors (data-ia-msg / data-ia-problem / data-ia-fact) with
-// their rendered box, visibility and text, the total rendered text length, and the text visible in the first screen.
+// their rendered box, visibility and text, the total rendered text length, the text visible in the first screen,
+// and the visible text that belongs to no message / problem / fact anchor (`unanchored`).
 // Playwright is resolved from INFOARCH_PLAYWRIGHT_DIR, else from the current directory (the target repo).
 // It is never installed automatically; when it cannot be resolved this exits 2.
 import { createRequire } from "node:module";
@@ -69,17 +70,19 @@ try {
           });
         }
       }
-      const parts = [];
+      const parts = [], loose = [];
+      const ANCHORED = "[data-ia-msg],[data-ia-problem],[data-ia-fact]";
       const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
       for (let n = walker.nextNode(); n; n = walker.nextNode()) {
         const t = n.textContent.trim();
         if (!t || !n.parentElement || !visible(n.parentElement)) continue;
+        if (!n.parentElement.closest(ANCHORED)) loose.push(t);
         const range = document.createRange();
         range.selectNodeContents(n);
         const r = range.getBoundingClientRect();
         if (r.bottom > 0 && r.top < vh) parts.push(t);
       }
-      return { anchors, text_chars: document.body.innerText.trim().length, first_screen: parts.join(" ") };
+      return { anchors, text_chars: document.body.innerText.trim().length, first_screen: parts.join(" "), unanchored: loose.join(" ") };
     }, vp.height);
     out.push({ viewport: vp, ...snap });
     await context.close();

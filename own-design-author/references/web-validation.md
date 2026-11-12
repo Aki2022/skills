@@ -54,6 +54,32 @@ URLは実行時の環境変数で渡す。既存Nodeは `DESIGN_AUDIT_NODE`、Py
 reportはexecuted / skipped / missing / uncovered / screenedの5配列。実行したL1/L2はskippedから除き、L0のscreened・補助指摘・評価用ラベル有無を引き継ぐ。精度未測定をrecall 0や合格へ読み替えない。
 対象欠落・実行不能を成功にしない。未承認nice値だけのL0警告は集約後もexit 1に残す。
 
+## 画面の棚卸し（漏れ検出）
+
+`html` と `urls` に書いた画面だけが検査される。後から増えた画面が宣言から漏れても、
+それだけではゲートは緑のまま通る。これを防ぐため、`validation.json` に任意の `pages` を置く。
+
+```json
+"pages": {
+  "sources": ["apps/web/src/app/**/page.tsx", "apps/landing-page/**/*.html"],
+  "covered": {"apps/web/src/app/diagnosis/page.tsx": ["DESIGN_WEB_URL"],
+              "apps/landing-page/index.html": ["html", "DESIGN_LP_URL"]},
+  "excluded": {"apps/web/src/app/login/page.tsx": "認証画面。外部の認証基盤が描画する"}
+}
+```
+
+- `sources` は repo 相対の git pathspec glob。追跡済みと未追跡のファイルを `.gitignore` に従って列挙するため、依存やビルド出力は入らない。フレームワークごとの経路規則は持たず、画面のソースを見つける glob を repo が宣言する。
+- `covered` は画面のソースから検査の証拠への対応。`"html"` はそのパスが L1 の `html` にあること、それ以外は `urls` の環境変数名。1つの URL 環境変数は1画面だけを担う。全ての URL 環境変数をどれかの画面に対応させる。
+- `excluded` は対象外にする画面と、空でない理由。対象外の判断はオーナーが持つ。
+
+`design-check` は L1 の前に棚卸しを照合し、次を exit 2 で止める（ブラウザは起動しない）。
+宣言されていない画面、存在しない画面の宣言、何にも一致しない `sources`、理由のない対象外、
+covered と excluded の重複、宣言していない検査対象の参照、複数画面を担う URL、画面に対応しない URL。
+エラーは該当パスを名指しする。`pages` が無い repo は止めずに、`uncovered` へ `pages` を残して exit を 1 以上にする。
+
+限界: 対応が正しいか（その URL が本当にその画面を描くか）は宣言を信じる。
+動的な経路（`[id]` 等）や認証の後ろの画面は、描画用の状態を用意できるまで理由付きで対象外にする。
+
 ## L2と範囲
 
 色・フォント・角の許可集合をマニフェストからブラウザのcomputed表現へ正規化する。

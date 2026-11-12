@@ -9,6 +9,7 @@ import subprocess
 import sys
 from design_author import check_design, git_root, inside, read_data, CATALOG
 from reporting import empty_report,stage,skip
+from page_inventory import check_pages
 
 
 def validation_endpoint(row):
@@ -37,8 +38,16 @@ def main():
             report['errors']=l0['errors']
             print(json.dumps(report,ensure_ascii=False));return 2
         config=read_data(inside(root/'design','validation.json'))
-        if not isinstance(config,dict) or set(config)!={'schema_version','html','urls','viewports','schemes'} or config['schema_version']!=1:
+        if not isinstance(config,dict) or set(config)-{'pages'}!={'schema_version','html','urls','viewports','schemes'} or config['schema_version']!=1:
             raise ValueError('invalid validation configuration')
+        inventory=check_pages(root,config)
+        report['pages']=inventory['pages']
+        if inventory['errors']:
+            report['errors']=inventory['errors']
+            report['report']['missing'].append({'id':'pages','reason':'page inventory incomplete or invalid'})
+            print(json.dumps(report,ensure_ascii=False));return 2
+        for warning in inventory['warnings']:
+            report['report']['uncovered'].append({'id':'pages','reason':warning})
         html=config['html'];urls=config['urls']
         if not isinstance(html,list) or not html or not isinstance(urls,list) or not urls:
             raise ValueError('zero L1/L2 targets')
@@ -99,7 +108,7 @@ def main():
                         +str(reason.get('error'))+' ('+str(reason.get('detail',''))[:200]+')')
                 report['errors'].append('L2 failed; inspect the generated report or rerun the measurement command')
                 print(json.dumps(report,ensure_ascii=False));return report['exit_code']
-        report['exit_code']=l0['exit_code']
+        report['exit_code']=max(l0['exit_code'],1 if inventory['warnings'] else 0)
         report['uncovered']=sorted(uncovered)
     except (ValueError,OSError,KeyError,TypeError):
         report['errors'].append('validation input, runtime dependency or rendering endpoint unavailable')

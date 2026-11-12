@@ -4,7 +4,7 @@ ledger:
     aud: 3
     prb: 2
     msg: 5
-    prf: 2
+    prf: 3
     fct: 3
     ent: 2
     vce: 2
@@ -67,12 +67,20 @@ proofs:
     supports:
     - msg-0002
     as_of: '2026-10-01'
+  prf-0002:
+    state: proposed
+    provenance: owner
+    text: 導入前後の運用時間の比較
+    source: 導入事例の計測
+    supports:
+    - msg-0001
+    as_of: '2026-10-01'
 facts:
   fct-0001:
     state: proposed
     provenance: owner
-    label: 導入社数
-    value: 100社以上
+    label: 導入自治体数
+    value: 100自治体以上
     as_of: '2026-10-01'
   fct-0002:
     state: proposed

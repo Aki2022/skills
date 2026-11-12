@@ -613,7 +613,13 @@ def test_shipped_html_is_rendered_and_its_first_screens_are_judged(repo, tmp_pat
     code, out, _ = ship(repo, env=env)
     assert code == 0, out
     html = written[0]
-    html.write_text(html.read_text().replace('data-ia-msg', 'data-x'))
+    original = html.read_text()
+    # Below the first screen, so only the text outside every section changes (not the emphasis input).
+    html.write_text(original.replace('</body>', '<div style="height:4000px"></div><footer><p>業界No.1 の実績</p></footer></body>'))
+    commit(repo, 'a claim outside every section')
+    code, out, _ = ship(repo, env=env)
+    assert code == 2 and 'IA_SHIP_UNCOVERED' in codes(out), out  # the added text is judged before it ships
+    html.write_text(original.replace('data-ia-msg', 'data-x'))
     commit(repo, 'anchors lost')
     code, out, _ = ship(repo, env=env)
     assert code == 2 and [s['stage'] for s in out['stages']][-1] == 'dom', out

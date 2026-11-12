@@ -50,13 +50,30 @@ try {
         null, { timeout: ANIMATION_TIMEOUT_MS })
       .catch(() => {}); // endless animations: read anyway; the two-run stability check reports a moving page
     const snap = await page.evaluate((vh) => {
-      const visible = (el) => {
+      const shown = (el) => {
         for (let e = el; e && e.nodeType === 1; e = e.parentElement) {
           const cs = getComputedStyle(e);
           if (cs.display === "none" || cs.visibility === "hidden" || Number(cs.opacity) === 0) return false;
         }
-        const r = el.getBoundingClientRect();
+        return true;
+      };
+      const textPainted = (n) => {
+        const range = document.createRange();
+        range.selectNodeContents(n);
+        const r = range.getBoundingClientRect();
         return r.width > 0 && r.height > 0;
+      };
+      // An element is visible when it is shown and either has a box or paints text: a zero-size box with
+      // overflow: visible still paints its text, and must not escape the checks as "hidden".
+      const visible = (el) => {
+        if (!shown(el)) return false;
+        const r = el.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) return true;
+        const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+        for (let n = w.nextNode(); n; n = w.nextNode()) {
+          if (n.textContent.trim() && n.parentElement && shown(n.parentElement) && textPainted(n)) return true;
+        }
+        return false;
       };
       const anchors = [];
       for (const [attr, kind] of [["data-ia-msg", "msg"], ["data-ia-problem", "problem"], ["data-ia-fact", "fact"]]) {
@@ -75,7 +92,7 @@ try {
       const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
       for (let n = walker.nextNode(); n; n = walker.nextNode()) {
         const t = n.textContent.trim();
-        if (!t || !n.parentElement || !visible(n.parentElement)) continue;
+        if (!t || !n.parentElement || !shown(n.parentElement) || !textPainted(n)) continue;
         if (!n.parentElement.closest(ANCHORED)) loose.push(t);
         const range = document.createRange();
         range.selectNodeContents(n);

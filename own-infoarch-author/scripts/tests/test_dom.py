@@ -237,3 +237,76 @@ def test_real_browser_reads_copy_and_unanchored_text(tmp_path, page, expect, cod
     if code == 'IA_DOM_UNANCHORED_TEXT':
         assert {r['viewport'] for r in report['unanchored']} == {'mobile', 'desktop'}
         assert all('業界No.1' in r['text'] for r in report['unanchored'])
+
+
+# --- security review of #98 (2026-11-12) ---
+
+def test_fact_anchor_with_an_unknown_id_fails():
+    snap = green_snapshot()
+    snap['anchors'].append(anchor('fact', 'fct-0099', 2000, '業界No.1'))
+    assert 'IA_DOM_ANCHOR_UNKNOWN' in codes(run(snap)), run(snap)
+
+
+def test_fact_anchor_for_a_fact_this_page_does_not_use_must_show_its_value():
+    outline = copy.deepcopy(OUTLINE)
+    outline['pages'][0]['sections'][3]['copy'] = '資料請求はこちら'  # the page no longer refers to fct-0002
+    snap = green_snapshot()
+    snap['anchors'][4]['text'] = '資料請求はこちら'
+    snap['anchors'][5]['text'] = '業界No.1'  # a registered fact id wrapped around other text
+    assert 'IA_DOM_FACT_VALUE' in codes(run(snap, outline=outline)), run(snap, outline=outline)
+    snap['anchors'][5]['text'] = '03-1234-5678'  # showing the registered value is fine
+    assert codes(run(snap, outline=outline)) == []
+
+
+def test_drifted_repeats_are_sent_to_judgment(monkeypatch, tmp_path):
+    from test_check import write_repo
+    write_repo(tmp_path)
+    (tmp_path / 'site').mkdir()
+    (tmp_path / 'site/index.html').write_text('<p>x</p>', encoding='utf-8')
+
+    def snap(root, html, vps):
+        out = []
+        for v in vps:
+            s = green_snapshot()
+            s['viewport'] = v
+            s['anchors'].insert(2, anchor('msg', 'msg-0003', 300, '業界No.1 の資料を請求'))
+            out.append(s)
+        return out
+    monkeypatch.setattr(dom, 'snapshot', snap)
+    report = dom.run(tmp_path, 'lp-municipal', '2026-10-23')
+    assert report.unanchored and all('業界No.1 の資料を請求' in r['text'] for r in report.unanchored), report.unanchored
+
+
+ZERO_SIZE = HTML.replace('</body>', '<section data-ia-msg="msg-0001" style="height:0;min-height:0;overflow:visible">業界No.1 の実績</section></body>')
+
+
+@pytest.mark.skipif(not PW_DIR, reason='INFOARCH_TEST_PLAYWRIGHT_DIR is not set: real-browser integration not run (reported as skipped, not passed)')
+def test_real_browser_zero_size_anchor_that_paints_text_is_checked(tmp_path):
+    from test_check import write_repo
+    write_repo(tmp_path)
+    (tmp_path / 'site').mkdir(exist_ok=True)
+    (tmp_path / 'site/index.html').write_text(ZERO_SIZE.format(hidden=''), encoding='utf-8')
+    env = dict(os.environ, INFOARCH_PLAYWRIGHT_DIR=PW_DIR)
+    proc = subprocess.run([sys.executable, str(SCRIPTS / 'infoarch_author.py'), 'dom', '--root', str(tmp_path),
+                           '--outline', 'lp-municipal'], capture_output=True, text=True, env=env, check=False)
+    report = json.loads(proc.stdout)
+    # The second msg-0001 has no box but its text is painted: it is a repeat with other copy, and its text is judged.
+    assert 'IA_DOM_COPY_EXTRA' in [f['code'] for f in report['findings']], report['findings']
+    assert report['unanchored'] and all('業界No.1' in r['text'] for r in report['unanchored'])
+
+
+ZERO_SIZE_LOOSE = HTML.replace('</body>', '<div style="height:0;overflow:visible">業界No.1 の実績</div></body>')
+
+
+@pytest.mark.skipif(not PW_DIR, reason='INFOARCH_TEST_PLAYWRIGHT_DIR is not set: real-browser integration not run (reported as skipped, not passed)')
+def test_real_browser_text_painted_from_a_zero_size_box_is_unanchored(tmp_path):
+    from test_check import write_repo
+    write_repo(tmp_path)
+    (tmp_path / 'site').mkdir(exist_ok=True)
+    (tmp_path / 'site/index.html').write_text(ZERO_SIZE_LOOSE.format(hidden=''), encoding='utf-8')
+    env = dict(os.environ, INFOARCH_PLAYWRIGHT_DIR=PW_DIR)
+    proc = subprocess.run([sys.executable, str(SCRIPTS / 'infoarch_author.py'), 'dom', '--root', str(tmp_path),
+                           '--outline', 'lp-municipal'], capture_output=True, text=True, env=env, check=False)
+    report = json.loads(proc.stdout)
+    assert 'IA_DOM_UNANCHORED_TEXT' in [f['code'] for f in report['findings']], report['findings']
+    assert report['unanchored'] and all('業界No.1' in r['text'] for r in report['unanchored'])

@@ -47,9 +47,7 @@ def _stages(root, date, outlines, work):
     stages['dom'], paths = {}, []
     for oid in targets:
         rep = dom.run(root, oid, date)
-        data = rep.to_dict()
-        data['first_screens'] = getattr(rep, 'first_screens', [])
-        data['unanchored'] = getattr(rep, 'unanchored', [])
+        data = dom.report_dict(rep)
         stages['dom'][oid] = rep.exit_code
         _merge(findings, data['findings'], seen)
         if data['first_screens']:  # an outline with no HTML output has nothing for judge to read

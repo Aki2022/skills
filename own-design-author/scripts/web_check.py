@@ -10,6 +10,7 @@ import sys
 from design_author import check_design, git_root, inside, read_data, CATALOG
 from reporting import empty_report,stage,skip
 from page_inventory import check_pages
+from afm_judge import judge, AfmUnavailable
 
 
 def validation_endpoint(row):
@@ -19,6 +20,51 @@ def validation_endpoint(row):
     if profile not in ('lp','product-ui'):
         raise ValueError('invalid rendering profile')
     return row['env'],profile
+
+
+def afm_artifacts(root,config,endpoints,report):
+    """The widest viewport in the first scheme per URL (the stable L2 capture) plus each L1 HTML source."""
+    rows=[];scheme=config['schemes'][0];width=max(config['viewports'])
+    for index,(env,_profile) in enumerate(endpoints):
+        measured=read_data(inside(root/'design/.resolved','l2-'+str(index)+'.json'))
+        runs=[r for r in measured.get('runs',[]) if r.get('repeat',0)==0]
+        chosen=[r for r in runs if r.get('width')==width and r.get('scheme')==scheme]
+        if len(chosen)!=1:raise ValueError('L2 capture for AFM missing')
+        digest=chosen[0].get('render_evidence',{}).get('screenshot_sha256','')
+        path=inside(root/'design/.resolved','screens/'+digest+'.png')
+        if not path.is_file():raise ValueError('L2 screenshot for AFM missing')
+        rows.append({'id':f'L2:{env}:{width}:{scheme}','kind':'image','path':str(path)})
+        for run in runs:
+            if run is not chosen[0]:
+                report['report']['skipped'].append({'id':f"AFM:{env}:{run.get('width')}:{run.get('scheme')}",
+                    'reason':'AFM judges the widest viewport in the first scheme'})
+    for path in config['html']:
+        rows.append({'id':'html:'+path,'kind':'text','text':inside(root,path).read_text()})
+    return rows
+
+
+def run_afm(root,l0,config,endpoints,report):
+    candidates=l0.get('afm_candidates',[])
+    if not candidates:
+        skip(report['report'],'AFM','no adopted item needs AFM judgment')
+        return 0
+    artifacts=afm_artifacts(root,config,endpoints,report)
+    afm=judge(candidates,artifacts)
+    code=2 if afm['errors'] or afm['uncovered'] else (1 if afm['warnings'] else 0)
+    judged=len(afm['screened'])
+    report['stages'].append({'stage':'AFM','exit_code':code,'items':len(candidates),'artifacts':len(artifacts),
+                             'judged':judged,'calls':afm['calls'],'cached':afm['cached']})
+    stage(report['report'],'AFM',code,len(artifacts))
+    record=inside(root/'design/.resolved','afm.json')
+    record.write_text(json.dumps({'schema_version':1,'items':sorted(r['id'] for r in candidates),
+        'artifacts':[a['id'] for a in artifacts],'verdicts':afm['screened'],'uncovered':afm['uncovered']},ensure_ascii=False,indent=1))
+    report['report']['uncovered'].extend({'id':'AFM:'+r['id']+'@'+str(r['artifact']),'reason':r['reason']} for r in afm['uncovered'])
+    report['report']['screened'].append({'id':'AFM','judged':judged,'advisory_violations':len(afm['warnings'])})
+    report.setdefault('warnings',[]).extend(afm['warnings'])
+    if code==2:
+        report['exit_code']=2
+        report['errors'].extend(afm['errors'] or [f"AFM left {len(afm['uncovered'])} item/artifact pairs unjudged"])
+    return code
 
 
 def main():
@@ -78,11 +124,13 @@ def main():
                 raise ValueError('missing or invalid rendering URL: '+row['env'])
             output=inside(root/'design/.resolved','l2-'+str(index)+'.json')
             output.unlink(missing_ok=True)
+            screens=root/'design/.resolved/screens'
             l2=subprocess.run([os.environ.get('DESIGN_AUDIT_NODE','node'),
                 str(skills/'own-website-audit/scripts/measure_lp.mjs'),url,'--manifest',str(resolved),
                 '--environment',str(environment),'--profile',profile,
                 '--viewports',','.join(map(str,config['viewports'])),'--schemes',','.join(config['schemes']),
-                '--json',str(output)],cwd=root,capture_output=True,text=True)
+                '--json',str(output)],cwd=root,capture_output=True,text=True,
+                env={**os.environ,'DESIGN_SCREENSHOT_DIR':str(screens)})
             if not output.is_file():
                 report['report']['missing'].append({'id':'L2:'+row['env'],'reason':'no fresh fixed rendering report'})
                 raise ValueError('fresh fixed rendering report missing')
@@ -109,8 +157,15 @@ def main():
                         +str(reason.get('error'))+' ('+str(reason.get('detail',''))[:200]+')')
                 report['errors'].append('L2 failed; inspect the generated report or rerun the measurement command')
                 print(json.dumps(report,ensure_ascii=False));return report['exit_code']
-        report['exit_code']=max(l0['exit_code'],1 if inventory['warnings'] else 0)
+        afm_code=run_afm(root,l0,config,endpoints,report)
+        if afm_code==2:
+            print(json.dumps(report,ensure_ascii=False));return 2
+        report['exit_code']=max(l0['exit_code'],afm_code,1 if report.get('warnings') else 0)
         report['uncovered']=sorted(uncovered)
+    except AfmUnavailable as error:
+        report['exit_code']=2
+        report['errors'].append(str(error)+'; AFM judgment is required and was not run')
+        report['report']['missing'].append({'id':'AFM','reason':'on-device model unavailable'})
     except (ValueError,OSError,KeyError,TypeError):
         report['errors'].append('validation input, runtime dependency or rendering endpoint unavailable')
         report['report']['missing'].append({'id':'validation','reason':'input, runtime dependency or rendering endpoint unavailable'})

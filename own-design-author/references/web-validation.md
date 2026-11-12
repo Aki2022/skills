@@ -81,6 +81,31 @@ covered と excluded の重複、宣言していない検査対象の参照、�
 限界: 対応が正しいか（その URL が本当にその画面を描くか）は宣言を信じる。
 動的な経路（`[id]` 等）や認証の後ろの画面は、描画用の状態を用意できるまで理由付きで対象外にする。
 
+## 採用した項目の確かめ方とAFM段
+
+L0は`defined`の全項目に確かめ方を割り当てる。mustかどうかは関係ない。
+
+- `machine`: 証拠に宣言的rule、またはL2がパレットとして測るトークン（color・fontFamily）がある。ruleが未計測なら、must以外でも`--ship`で失格。
+- `afm`: それ以外（DESIGN.mdの記述だけ、dimension等のトークンだけ）。作った物に対してAFMで判定する。
+
+割り当ては`.resolved/web.json`の`coverage.items`、候補はL0結果の`afm_candidates`、件数は`counts.afm`。L0は成果物を見ないので、AFM待ちを警告にしない。
+
+`design-check`はL2の後にAFM段を実行する。端末内のApple Foundation Models（`fm` CLI、systemモデル、従量課金・外部送信なし）へ、
+各URLの最も広いviewport・最初のschemeの安定キャプチャ（L2が測った同じ画像）と、L1の各HTMLソースを渡す。他のviewport・schemeはskippedに理由付きで残す。
+項目は文字数上限でまとめ、`--greedy`と構造化出力で`applies`・`violates`・`reason`を受け取る。
+結果はモデル名・OS build・プロンプト版・項目・証拠・成果物のhashをキーに、repo外（`DESIGN_AFM_CACHE`、既定は利用者のcache）へ保存し、同じ入力は再判定しない。
+全判定は`.resolved/afm.json`に書く。
+
+- 違反（applies かつ violates）: 警告（exit 1）。精度を測るまで出荷は止めない。止めるかはbiz_ops `WS-20261112-afm-judgment-accuracy`が決める。
+- 判定の欠落・壊れた出力（1回だけ単独で再試行）: 未カバー。exit 2。
+- 成果物0件、`fm`不在、systemモデルが使えない: 停止。黙って通さない。`fm models`はPCC不可の時に終了コード1を返すので、✓の行で判定する。
+
+`design-ship`は、AFM対象があればAFM段の記録を必須にし、全項目×全成果物の判定数と記録の一致を検査する。
+コマンドは`DESIGN_AFM_COMMAND`で単一実行ファイルを指定できる（テスト用）。
+
+時間の目安（2026-11-12、パイロット実測）: AFM対象354項目で1成果物あたり約70回、1回約10秒。4成果物の初回は約50分、以後は変わった成果物だけ。
+限界: 精度は未測定（試行では見逃し・適用判断の誤りがある）。長いページは全体を1枚の画像として渡すので細部は読めない。macOSで`fm`がある端末でしか動かない。
+
 ## L2と範囲
 
 色・フォント・角の許可集合をマニフェストからブラウザのcomputed表現へ正規化する。

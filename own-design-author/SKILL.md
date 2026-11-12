@@ -43,8 +43,10 @@ design-author check --repo <repo> --ship
 
 L0 はモデルを使わず、対象項目数・充足率・未判定・提案値・未カバーを出す。整合が通った時だけ `design/.resolved/<media>.json` と CSS、`assets.json` を生成する。失格時は古いマニフェストを残さない。L1/L2 はマニフェストだけを読む。L0だけで成果物の準拠合格を名乗らない。
 
-`--ship` は未承認mustと未カバーmust規則を失格にする。hook/miseへの接続は `references/ship-gates.md`。既存hookを置き換えない。
-`design-author sync` はL0通過後に宣言したTailwindとassetコピーを配置する。`design-check` はL0/L1/L2を順に実行するためL2実施確認後に呼ぶ。
+`--ship` は未承認mustと未カバー規則を失格にする（規則の未カバーはmust以外も失格）。hook/miseへの接続は `references/ship-gates.md`。既存hookを置き換えない。
+`defined` の全項目は、機械の検査（宣言的rule・L2が測るトークン）か、作った物に対するAFM判定（端末内のApple Foundation Models）のどちらかで確かめる。どちらにも乗らない項目を残さない。AFMの違反は精度を測るまで警告。詳細は `references/web-validation.md`。
+push時の検査は、`design/design.yaml` を持つ全repoで pre-push の拡張が必ず回す。repoごとの有効化は要らない。
+`design-author sync` はL0通過後に宣言したTailwindとassetコピーを配置する。`design-check` はL0/L1/L2とAFM段を順に実行するためL2実施確認後に呼ぶ。
 L1/L2と生成Tailwindの使い方・制約は `references/web-validation.md` を読む。
 
 ## 判定台帳と共有runner

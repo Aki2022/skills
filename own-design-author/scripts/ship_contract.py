@@ -118,8 +118,16 @@ def validate_web_result(root,result,urls):
     if not expected or len(set(expected))!=len(expected) or set(expected)!=set(urls):
         raise ValueError('render servers must cover exactly all validation endpoints')
     stages=result.get('stages',[])
-    if [r.get('stage') for r in stages]!=['L0','L1']+['L2']*len(expected):
-        raise ValueError('incomplete L0/L1/L2 stage evidence')
+    manifest=read_json(root/'design/.resolved/web.json')
+    afm_items=manifest.get('coverage',{}).get('items',{}).get('afm')
+    if not isinstance(afm_items,list):raise ValueError('missing adopted item coverage')
+    if [r.get('stage') for r in stages]!=['L0','L1']+['L2']*len(expected)+(['AFM'] if afm_items else []):
+        raise ValueError('incomplete L0/L1/L2/AFM stage evidence')
+    if afm_items:
+        afm=stages[-1];record=read_json(root/'design/.resolved/afm.json')
+        if (afm.get('exit_code') not in (0,1) or sorted(record.get('items',[]))!=sorted(afm_items) or record.get('uncovered')
+                or afm.get('judged')!=len(afm_items)*len(record.get('artifacts',[])) or not record.get('artifacts')):
+            raise ValueError('partial or failed AFM stage')
     if stages[0].get('exit_code') not in (0,1) or stages[0].get('counts',{}).get('items',0)<=0:
         raise ValueError('zero or failed L0 stage')
     if stages[1].get('exit_code')!=0 or stages[1].get('targets')!=len(config['html']) or not config['html']:

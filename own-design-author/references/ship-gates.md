@@ -45,12 +45,13 @@ core.hooksPathを変更せず、対応しないdispatcherを自動で書き換�
 
 - PATHへskillのscriptsを供給し、既存依存を持つPythonをDESIGN_AUTHOR_PYTHONで選ぶ。端末固有のパスをrepoへ保存しない。
 - templates/mise.design.tomlのtaskを既存設定へ統合する。design:shipは検査だけを呼ぶ。
-- hooks/pre-push.d/60-design-shipを既存vibe-guardの拡張ディレクトリへ追加する。
-- 有効化するrepoだけ.vibe-guard/design-ship.enabledを文字列1にする。欠落コマンド・壊れたmarkerは停止する。
+- hooks/pre-push.d/60-design-shipを既存vibe-guardの拡張ディレクトリへ置く。端末に1つだけ置き、skillの正典を指すsymlinkにする。repoごとの複製は作らない。
+- 拡張は`design/design.yaml`を持つ全repoで動く。repoごとの有効化は要らない。skillを呼ばずに画面を直した変更も、push時に同じ検査を通す。
+- 旧来の.vibe-guard/design-ship.enabledは残してよいが、文字列1以外（壊れた・symlink）は停止する。markerで検査を無効にする経路はない。欠落コマンドも停止する。
 
 vibe-guardがscanner後に保持したpush refsファイルを拡張へ渡す。拡張は
 `design-ship --pre-push --refs-file <file>`を呼び、pushするcommitとチャネルの基準refを
-`git merge-tree --write-tree`で統合した木を、隔離checkoutで同じ3段階検査に通す。
+`git merge-tree --write-tree`で統合した木を、隔離checkoutで同じ検査（L0/L1/L2と、必要ならAFM段）に通す。
 元checkoutや別branchの承認・起動済み画面は代用しない。削除refだけのpushは出荷なしとして報告する。
 DESIGN_SHIP_COMMAND / DESIGN_AUTHOR_COMMAND / DESIGN_CHECK_COMMANDは、既存runtimeの単一実行ファイルを指定するための環境変数。
 任意のshell文字列を評価しない。

@@ -46,6 +46,7 @@ def main():
             report['errors']=inventory['errors']
             report['report']['missing'].append({'id':'pages','reason':'page inventory incomplete or invalid'})
             print(json.dumps(report,ensure_ascii=False));return 2
+        report['warnings']=list(inventory['warnings'])
         for warning in inventory['warnings']:
             report['report']['uncovered'].append({'id':'pages','reason':warning})
         html=config['html'];urls=config['urls']

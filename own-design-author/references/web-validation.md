@@ -75,7 +75,8 @@ reportはexecuted / skipped / missing / uncovered / screenedの5配列。実行�
 `design-check` は L1 の前に棚卸しを照合し、次を exit 2 で止める（ブラウザは起動しない）。
 宣言されていない画面、存在しない画面の宣言、何にも一致しない `sources`、理由のない対象外、
 covered と excluded の重複、宣言していない検査対象の参照、複数画面を担う URL、画面に対応しない URL。
-エラーは該当パスを名指しする。`pages` が無い repo は止めずに、`uncovered` へ `pages` を残して exit を 1 以上にする。
+エラーは該当パスを名指しする。`pages` が無い repo は止めずに、`uncovered` へ `pages` を残して exit を 1 以上にし、
+同じ文を `warnings` に出す。`design-ship` の記録（push 前検査・統合検査）も `warnings` にこの文を引き継ぐ。
 
 限界: 対応が正しいか（その URL が本当にその画面を描くか）は宣言を信じる。
 動的な経路（`[id]` 等）や認証の後ろの画面は、描画用の状態を用意できるまで理由付きで対象外にする。

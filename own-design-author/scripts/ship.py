@@ -135,7 +135,7 @@ def gate(root,name,channel,catalogs,*,deploy=False,source_commit=None,predicted=
     receipt={'schema_version':1,'exit_code':0,'channel':name,'commit':commit,'tree':tree,
         'source_commit':source_commit or commit,'predicted_merge':predicted,'artifacts':before,
         'design_input_hashes':inputs,'render_evidence':evidence,'stages':web['stages'],'report':web.get('report',{}),
-        'warnings':l0.get('warnings',[]),'deployment':'not-requested'}
+        'warnings':l0.get('warnings',[])+web.get('warnings',[]),'deployment':'not-requested'}
     if clean_commit(root)!=(commit,tree) or (not local and artifact_hashes(root,channel['artifacts'])!=before):
         raise ValueError('source or artifacts changed before shipment')
     if local:

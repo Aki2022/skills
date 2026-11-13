@@ -47,7 +47,7 @@ repo外・design内・隠しpath・symlink先への配置を拒否し、途中�
 `design-check --repo .` は実L0→L1→L2を順に呼ぶ。L0失格なら後段へ進まない。
 `design/validation.json` は `schema_version: 1`、非空の `html`（repo相対path）、
 `urls`（`{"env":"DESIGN_WEB_URL"}`等）、正の整数の `viewports`、`schemes`（light/dark）を持つ。
-各URLにprofile: lp|product-uiを任意指定でき、省略時はlp。product-uiでは広告LPの最初の画面のCTAだけを適用外としてskippedへ理由付きで残し、色・a11y・字体・固定描画の制約を維持する。関連付いたcheckbox/radioのlabelは、入力を包含する連続した矩形と実hit mapが有効な時だけ操作領域に含む。
+各URLにprofile: lp|product-uiを任意指定でき、省略時はlp。操作後の状態は任意の`states`で宣言する（「操作の後の状態」）。product-uiでは広告LPの最初の画面のCTAだけを適用外としてskippedへ理由付きで残し、色・a11y・字体・固定描画の制約を維持する。関連付いたcheckbox/radioのlabelは、入力を包含する連続した矩形と実hit mapが有効な時だけ操作領域に含む。
 URLは実行時の環境変数で渡す。既存Nodeは `DESIGN_AUDIT_NODE`、Pythonは
 `DESIGN_AUTHOR_PYTHON` で選ぶ。L2を含むため、人間の実施確認を得てから実行する。
 各L2はdesign/render-environment.jsonを必須とし、固定環境で2回実行する。JSONは `.resolved/l2-<index>.json` に保存し、未カバーを集約出力する。実行前に前回の同名レポートを削除し、環境不一致や新規レポート欠落を古い成功で埋めない。
@@ -85,6 +85,35 @@ L0 の `counts.pages` に、見つけた画面・検査する画面・対象外�
 
 限界: 経路の照合は、URL のパスが画面の経路の形に合うかまで。その URL が描いた中身が本当にその画面のコンポーネントかは見ない。
 Next.js 以外の経路規則は持たないので、`routes` の宣言を信じる。
+
+### 操作の後の状態（states）
+
+静的な描画には、クリックや送信の後にだけ現れる部品がない。その部品へのruleはどの画面にも合わず、何も確かめない。
+`urls`の行に`states`を置くと、そのURLを描いたあと、名前つきの状態ごとに手順を実行してから描き、画面と同じに測る。
+
+```json
+"urls": [{"env": "DESIGN_WEB_URL", "profile": "product-ui", "states": {
+  "dialog-open": [{"click": "#open-settings"}],
+  "email-error": [{"fill": "#email", "value": "not-an-email"}, {"submit": "#signup"}]
+}}]
+```
+
+- 手順は宣言だけで、任意のコードは書けない。`click`・`focus`・`submit`はselector、`fill`はselectorと`value`。1状態に1〜20手順。
+  `submit`はフォームか、フォームに属する要素（送信ボタンならそのボタンで送る）を指し、ブラウザの`requestSubmit`で送る。
+- 状態の名前は英小文字・数字・ハイフン。報告では`<env>#<state>`（例 `DESIGN_WEB_URL#dialog-open`）。
+- 状態ごとに、画面と同じviewport・scheme・固定環境で2回描き、L2・ITEMS・AFMを画面と同じに行う。`.resolved/l2-<n>.json`は画面、続けてその状態の順。
+  手順は描画の準備（字体・画像）が揃ってから実行し、最後の手順の後にも同じ準備を待つ。
+- 手順のselectorがちょうど1つの要素に合わない（0件・複数件・ブラウザが受け付けない）、または操作できない（隠れている・5秒で操作できない・`submit`の先にフォームがない）時は、
+  「状態に到達できない」として失格（exit 2）。エラーは`could not reach state <env>#<state>: step <n> <手順>`。何も確かめずに通ることはない。
+- 状態は同じURLの別の描画なので、画面の棚卸し（`pages.covered`）にはURLの環境変数だけを書く。状態のために描画サーバーを増やさない。
+- 出荷（`design-ship`）は、宣言した全ての状態の描画があり、その報告に記録された手順が宣言と同じことを確かめる。
+
+ruleがある状態でだけ合うことは、画面では対象外（n/a）・状態では合格か失格、として`items.json`に残る。
+どの画面・状態でも一度も合わないruleは、これまで通り警告する。その決定を指す項目を未カバーにしておくかはrepoが決める。
+未カバーを解くのは、状態を宣言して実際に描いた結果だけで、描かずに緑にする経路はない。
+
+限界: 手順が意図した状態を作ったか（例: 本当にそのダイアログが開いたか）は見ない。それはruleのselectorが合うことで確かめる。
+ホバー・ドラッグ・キーボード操作・時間経過の後の状態は扱わない。
 
 ### 画面を並べて描く
 
@@ -131,7 +160,8 @@ L0は採用した項目（`defined`）ごとに経路を決める。mustかど�
 - どの画面でも一度も合わなかった検査は警告する。selectorの書き間違いで何も確かめていない状態を、合格と見分けるため。
 - ブラウザが受け付けないselector・正規表現は、対象外ではなく「測れなかった」として失格にする。
 - `style`の`token:<path>`がトークンにないとL0で失格。
-- 画面の操作（開閉・入力・ホバー）を伴う決定は確かめられない。`state`はfocusだけ。
+- ruleの`state`はfocusだけ。開閉・入力・送信の後にだけ現れる部品（ダイアログ・メニュー・ドロワー・送信後のエラー文・通知）は、
+  `validation.json`のURLに操作後の状態（上の「操作の後の状態」）を宣言すると、その状態の描画で確かめる。ホバーは扱わない。
 L2に渡す検査と部品のselectorは`item_checks`に入る。
 
 ### 検査の種類

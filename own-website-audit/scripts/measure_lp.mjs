@@ -15,14 +15,14 @@
  * 反映されず「実際にどう見えているか」を測れない（v1 でこの誤りを踏んだ）。
  *
  * 使い方:
- *   node measure_lp.mjs <url> --manifest design/.resolved/web.json [--viewports 375,1280] [--schemes dark,light] [--json out.json]
+ *   node measure_lp.mjs <url> --manifest design/.resolved/web.json [--viewports 375,1280] [--schemes dark,light] [--json out.json] [--state '{"name":"open","steps":[{"click":"#open"}]}']
  *
  * 終了コード: 0 = 失格なし / 1 = 失格あり / 2 = 実行不能
  */
 
 import { writeFileSync, existsSync, realpathSync, unlinkSync } from "node:fs";
 import {dirname} from "node:path";
-import {loadEnvironment,verifyRuntime,configureFonts,trackFonts,renderEvidence,compareRepeats,fixedLaunchOptions,describeRenderFailure} from "../../own-design-author/scripts/fixed_render.mjs";
+import {loadEnvironment,verifyRuntime,configureFonts,trackFonts,renderEvidence,compareRepeats,fixedLaunchOptions,describeRenderFailure,parseState,applyState} from "../../own-design-author/scripts/fixed_render.mjs";
 import { loadManifest, collectDesign, collectItemChecks } from "../../own-design-author/scripts/resolved_contract.mjs";
 import { createRequire } from "node:module";
 
@@ -54,6 +54,9 @@ const profile = flag('profile', 'lp');
 if (!['lp', 'product-ui'].includes(profile)) {
   console.error('invalid measurement profile; expected lp or product-ui');process.exit(2);
 }
+let state;
+try { state = parseState(flag('state', null)); }
+catch { console.error('invalid --state; expected {"name":..., "steps":[...]} with click/focus/fill/submit steps'); process.exit(2); }
 const viewports = flag("viewports", "375,1280")
   .split(",")
   .map((v) => Number(v.trim()))
@@ -573,6 +576,19 @@ async function measureRegion(page, region) {
   }, b64);
 }
 
+async function assetsReady(page) {
+  await page.evaluate(() =>
+    document.querySelectorAll("img").forEach((i) => (i.loading = "eager")),
+  );
+  await page.evaluate(async () => {
+    await Promise.race([
+      Promise.all([document.fonts.ready, ...[...document.images].map(image => image.decode())]),
+      new Promise((_, reject) => setTimeout(() => reject(Error('visible assets did not become ready')), 10000)),
+    ]);
+  });
+  await page.waitForTimeout(700);
+}
+
 const { chromium } = loadPlaywright();
 let fixed=null,environment=null;
 try {
@@ -590,6 +606,7 @@ catch{await browser.close();console.error('fixed runtime mismatch');process.exit
 const report = {
   url,
   profile,
+  state,
   skipped: profile === 'product-ui' ? [{id:'fold-cta',reason:'marketing first-fold CTA is not applicable to product-ui'}] : [],
   measuredAt: fixed?fixed.config.clock:new Date().toISOString(),
   environment,
@@ -638,16 +655,14 @@ for (const scheme of schemes) {
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
     // 遅延読み込みを確定させる（未読込を「壊れている」と誤判定しないため）
     stage='assets';
-    await page.evaluate(() =>
-      document.querySelectorAll("img").forEach((i) => (i.loading = "eager")),
-    );
-    await page.evaluate(async () => {
-      await Promise.race([
-        Promise.all([document.fonts.ready, ...[...document.images].map(image => image.decode())]),
-        new Promise((_, reject) => setTimeout(() => reject(Error('visible assets did not become ready')), 10000)),
-      ]);
-    });
-    await page.waitForTimeout(700);
+    await assetsReady(page);
+    // A declared state renders the page after its steps; the same readiness wait follows the last step.
+    if (state) {
+      stage='state';
+      await applyState(page, state);
+      stage='assets';
+      await assetsReady(page);
+    }
 
     stage='collect';
     const data = await page.evaluate(collect, T);
@@ -765,7 +780,7 @@ if(fixed){
   report.execution_error=failure.code;
   report.environment={...(report.environment||{}),repeat_equal:false};
   report.failures.push({id:'render-execution-failed',stage,error:failure.code,detail:failure.message,
-    at:report.runs.length+' completed runs'});
+    at:report.runs.length+' completed runs',...(Number.isInteger(error?.stateStep)?{state_step:error.stateStep}:{})});
   if(!report.uncovered.includes('render-execution-failed'))report.uncovered.push('render-execution-failed');
   // A failed render still leaves a fresh diagnostic report; the gate reads its reason.
   if(jsonOut)writeFileSync(jsonOut,JSON.stringify(report,null,2));

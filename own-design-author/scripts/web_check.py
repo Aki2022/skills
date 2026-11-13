@@ -4,6 +4,7 @@ import argparse
 import copy
 import json
 import os
+import re
 from pathlib import Path
 import signal
 import subprocess
@@ -16,18 +17,54 @@ from item_checks import L2_GATED
 
 
 def validation_endpoint(row):
-    if not isinstance(row,dict) or set(row) not in ({'env'},{'env','profile'}) or not isinstance(row.get('env'),str):
-        raise ValueError('rendering URL must name an environment variable and an optional profile')
+    if not isinstance(row,dict) or not {'env'}<=set(row)<={'env','profile','states'} or not isinstance(row.get('env'),str):
+        raise ValueError('rendering URL must name an environment variable, an optional profile and optional states')
     profile=row.get('profile','lp')
     if profile not in ('lp','product-ui'):
         raise ValueError('invalid rendering profile')
     return row['env'],profile
 
 
-def page_evidence(root,endpoints,spec):
-    """Per rendered page: which components are present and what each collected checker found (all runs)."""
+STATE_NAME=re.compile(r'[a-z0-9][a-z0-9-]{0,39}')
+STEP_ACTIONS=('click','focus','fill','submit')
+MAX_STEPS=20
+
+
+def state_steps(steps):
+    """Declarative steps only: one action naming a CSS selector, plus `value` for fill. No code."""
+    if not isinstance(steps,list) or not 0<len(steps)<=MAX_STEPS:
+        raise ValueError(f'a state needs 1 to {MAX_STEPS} steps')
+    for step in steps:
+        actions=[k for k in STEP_ACTIONS if isinstance(step,dict) and k in step]
+        allowed={actions[0],'value'} if actions==['fill'] else set(actions)
+        if (len(actions)!=1 or set(step)!=allowed or not isinstance(step[actions[0]],str) or not step[actions[0]].strip()
+                or (actions==['fill'] and not isinstance(step.get('value'),str))):
+            raise ValueError('a state step is one of click/focus/submit: <selector> or fill: <selector> with value')
+    return steps
+
+
+def render_targets(config):
+    """Every render the gate runs: each URL as declared, then each of its named states as `<env>#<state>`."""
+    targets=[]
+    for row in config['urls']:
+        env,profile=validation_endpoint(row)
+        targets.append({'label':env,'env':env,'profile':profile,'state':None})
+        states=row.get('states')
+        if states is None:continue
+        if not isinstance(states,dict) or not states:
+            raise ValueError('states must name at least one state')
+        for name,steps in states.items():
+            if not isinstance(name,str) or not STATE_NAME.fullmatch(name):
+                raise ValueError('state names use lowercase letters, digits and hyphens')
+            targets.append({'label':env+'#'+name,'env':env,'profile':profile,'state':{'name':name,'steps':state_steps(steps)}})
+    return targets
+
+
+def page_evidence(root,targets,spec):
+    """Per rendered page or state: which components are present and what each collected checker found (all runs)."""
     pages=[]
-    for index,(env,_profile) in enumerate(endpoints):
+    for index,target in enumerate(targets):
+        env=target['label']
         measured=read_data(inside(root/'design/.resolved','l2-'+str(index)+'.json'))
         runs=[r for r in measured.get('runs',[]) if r.get('repeat',0)==0]
         if not runs or any(not isinstance(r.get('item_checks'),dict) for r in runs):
@@ -46,14 +83,14 @@ def page_evidence(root,endpoints,spec):
     return pages
 
 
-def verify_items(root,l0,endpoints,report,final=True):
+def verify_items(root,l0,targets,report,final=True):
     """Machine items are checked by code on every page where they apply; AFM gets only applicable leftovers.
 
     Called after each rendered page with the pages so far (final=False): a failure is recorded and stops the
     run before the next page renders; a pass records nothing until the last page (final=True).
     """
     manifest=l0['manifest']['web'];routes=manifest['coverage']['item_routes'];spec=manifest['item_checks']
-    pages=page_evidence(root,endpoints,spec)
+    pages=page_evidence(root,targets,spec)
     machine,afm_pairs,failures,not_applicable,causes={},[],[],0,{}
     for ident,row in sorted(routes.items()):
         if row['route'] not in ('machine','afm'):continue  # uncovered items already stop ship in L0
@@ -177,7 +214,7 @@ def main():
         html=config['html'];urls=config['urls']
         if not isinstance(html,list) or not html or not isinstance(urls,list) or not urls:
             raise ValueError('zero L1/L2 targets')
-        endpoints=[validation_endpoint(row) for row in urls]
+        targets=render_targets(config)
         files=[inside(root,path) for path in html]
         resolved=root/'design/.resolved/web.json'
         skills=Path(__file__).resolve().parents[2]
@@ -197,25 +234,27 @@ def main():
         if not environment.is_file():raise ValueError('fixed rendering environment missing')
         uncovered=set(l0['manifest']['web']['coverage']['uncovered'])
         screens=root/'design/.resolved/screens'
-        for target_env,_profile in endpoints:
-            if not os.environ.get(target_env,'').startswith(('http://','https://')):
-                raise ValueError('missing or invalid rendering URL: '+target_env)
+        for target in targets:
+            if not os.environ.get(target['env'],'').startswith(('http://','https://')):
+                raise ValueError('missing or invalid rendering URL: '+target['env'])
 
         def launch(index):
-            target_env,profile=endpoints[index]
+            target=targets[index]
             output=inside(root/'design/.resolved','l2-'+str(index)+'.json')
             output.unlink(missing_ok=True)
+            state=['--state',json.dumps(target['state'],ensure_ascii=False)] if target['state'] else []
             return subprocess.Popen([os.environ.get('DESIGN_AUDIT_NODE','node'),
-                str(skills/'own-website-audit/scripts/measure_lp.mjs'),os.environ[target_env],'--manifest',str(resolved),
-                '--environment',str(environment),'--profile',profile,
+                str(skills/'own-website-audit/scripts/measure_lp.mjs'),os.environ[target['env']],'--manifest',str(resolved),
+                '--environment',str(environment),'--profile',target['profile'],*state,
                 '--viewports',','.join(map(str,config['viewports'])),'--schemes',','.join(config['schemes']),
                 '--json',str(output)],cwd=root,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,
                 env={**os.environ,'DESIGN_SCREENSHOT_DIR':str(screens)},start_new_session=True)
         # Up to `parallel` pages render at once; results are judged in declared order, and a failure stops the rest.
         running={}
         try:
-          for index,(target_env,profile) in enumerate(endpoints):
-            for ahead in range(index,min(index+parallel,len(endpoints))):
+          for index,target in enumerate(targets):
+            target_env,profile=target['label'],target['profile']
+            for ahead in range(index,min(index+parallel,len(targets))):
                 if ahead not in running:running[ahead]=launch(ahead)
             row={'env':target_env}
             output=inside(root/'design/.resolved','l2-'+str(index)+'.json')
@@ -225,6 +264,7 @@ def main():
                 raise ValueError('fresh fixed rendering report missing')
             measured=read_data(output)
             if measured.get('profile')!=profile:raise ValueError('rendering profile evidence mismatch')
+            if measured.get('state')!=target['state']:raise ValueError('rendering state evidence mismatch')
             for skipped in measured.get('skipped',[]):
                 report['report']['skipped'].append({'id':'L2:'+target_env+':'+skipped['id'],'reason':skipped['reason']})
             fixed=measured.get('environment')
@@ -241,13 +281,19 @@ def main():
             if l2.returncode:
                 report['exit_code']=l2.returncode
                 reason=next((f for f in measured.get('failures',[]) if isinstance(f,dict) and f.get('id')=='render-execution-failed'),None)
+                if reason and reason.get('stage')=='state':
+                    # The report carries only the step number; the step itself comes from the repo's own declaration.
+                    step=reason.get('state_step')
+                    steps=target['state']['steps'] if target['state'] else []
+                    shown=json.dumps(steps[step-1],ensure_ascii=False) if type(step) is int and 0<step<=len(steps) else 'unknown step'
+                    report['errors'].append(f"could not reach state {row['env']}: step {step} {shown} matched no unique element or could not run")
                 if reason:
                     report['errors'].append('L2 '+row['env']+' failed at '+str(reason.get('stage'))+': '
                         +str(reason.get('error'))+' ('+str(reason.get('detail',''))[:200]+')')
                 report['errors'].append('L2 failed; inspect the generated report or rerun the measurement command')
                 print(json.dumps(report,ensure_ascii=False));return report['exit_code']
             # Code checks for this page run now: a failure stops before the next page is rendered.
-            pages,afm_pairs,items_code=verify_items(root,l0,endpoints[:index+1],report,final=index==len(endpoints)-1)
+            pages,afm_pairs,items_code=verify_items(root,l0,targets[:index+1],report,final=index==len(targets)-1)
             if items_code:break
         finally:
             # Pages rendered ahead of a failure are stopped with their browsers (own process group).

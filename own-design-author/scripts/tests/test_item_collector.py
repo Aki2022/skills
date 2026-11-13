@@ -114,6 +114,8 @@ SR_ONLY = 'position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inse
     ('<button disabled aria-describedby="r">送信</button><p id="r" style="' + SR_ONLY + '">本人確認後に送信できます</p>', True),
     ('<button disabled aria-describedby="missing">送信</button>', True),
     ('<button disabled aria-describedby="r">送信</button><p id="r"> </p>', True),
+    ('<input type="image" disabled alt="注文" src="data:," width="40" height="40">', True),
+    ('<button disabled aria-describedby="r">送信</button><p id="r" style="position:absolute;left:-10000px">配送先が未登録です</p>', True),
     ('<button disabled aria-describedby="r">送信</button><p id="r">本人確認が完了すると送信できます</p>', False),
     ('<fieldset disabled><p id="r">送信中です</p><button aria-describedby="r">申請する</button></fieldset>', False),
     ('<button aria-disabled="true" aria-describedby="r">送信</button><p id="r">送信中です</p>', False),

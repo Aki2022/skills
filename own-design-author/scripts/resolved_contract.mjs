@@ -411,6 +411,10 @@ export function collectItemChecks(manifest) {
         const property = rule.property;
         const probeEl = document.createElement('div');
         probeEl.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none';
+        // Page-wide reduced-motion CSS shortens transitions instead of removing them; a transitioning probe would
+        // report the previous allowlist value, so only the first value would ever be recognised.
+        probeEl.style.setProperty('transition', 'none', 'important');
+        probeEl.style.setProperty('animation', 'none', 'important');
         document.body.append(probeEl);
         const allowed = new Set((rule.resolved_allowlist || rule.allowlist).map(value => {
           probeEl.style.removeProperty(property);

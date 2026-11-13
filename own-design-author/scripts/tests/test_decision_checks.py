@@ -179,6 +179,16 @@ def test_style_rule_reads_the_focused_state_against_a_token(rendered, project):
     assert status == 'fail', result
 
 
+def test_style_rule_recognises_every_allowed_value_under_page_wide_transitions(rendered, project):
+    # Reduced-motion stylesheets shorten transitions on every element instead of removing them. The allowlist is
+    # normalised by assigning each value to one probe in turn, so a probe that transitions reports the previous
+    # value and only the first allowed value is ever recognised.
+    rule = {'id': 'two-opacities', 'kind': 'style', 'targets': ['p'], 'property': 'opacity', 'allowlist': ['0.5', '1']}
+    body = '<style>*{transition:opacity 1s linear !important}</style><p>text</p>'
+    code, result, status = run_rule(rendered, project, rule, body)
+    assert status == 'pass', (result['errors'], result['stages'])
+
+
 def test_pattern_the_browser_rejects_fails_the_item_instead_of_passing(rendered, project):
     rule = {'id': 'py-only', 'kind': 'text', 'targets': ['main'], 'pattern': '(?i)click'}  # Python-only inline flag
     code, result, status = run_rule(rendered, project, rule, '<p>Apply now.</p>')

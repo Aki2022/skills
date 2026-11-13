@@ -99,3 +99,27 @@ def test_no_dom_check_fires_on_a_clean_page(tmp_path):
     results = collect(GOOD, tmp_path)
     noisy = {c: results[c] for c in DOM_CHECKS if results[c]['count']}
     assert not noisy, noisy
+
+
+SR_ONLY = 'position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap'
+
+
+@pytest.mark.parametrize('body,fires', [
+    # The catalog asks for no disabled control at all, or one with readable text right by it saying why.
+    ('<button disabled>送信する</button>', True),
+    ('<input type="submit" disabled value="送信する">', True),
+    ('<button aria-disabled="true">送信する</button>', True),
+    ('<fieldset disabled><button>申請する</button></fieldset>', True),             # disabled by its fieldset
+    ('<button disabled aria-describedby="r">送信</button><p id="r" hidden>本人確認後に送信できます</p>', True),
+    ('<button disabled aria-describedby="r">送信</button><p id="r" style="' + SR_ONLY + '">本人確認後に送信できます</p>', True),
+    ('<button disabled aria-describedby="missing">送信</button>', True),
+    ('<button disabled aria-describedby="r">送信</button><p id="r"> </p>', True),
+    ('<button disabled aria-describedby="r">送信</button><p id="r">本人確認が完了すると送信できます</p>', False),
+    ('<fieldset disabled><p id="r">送信中です</p><button aria-describedby="r">申請する</button></fieldset>', False),
+    ('<button aria-disabled="true" aria-describedby="r">送信</button><p id="r">送信中です</p>', False),
+    ('<button aria-disabled="false">確認する</button>', False),
+    ('<button>確認する</button>', False),
+])
+def test_disabled_button_needs_a_readable_reason_tied_to_it(tmp_path, body, fires):
+    page = '<!doctype html><html lang="ja"><head><title>t</title></head><body>' + body + '</body></html>'
+    assert (collect(page, tmp_path)['dom:disabled-button']['count'] > 0) is fires

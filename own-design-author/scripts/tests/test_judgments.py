@@ -75,10 +75,15 @@ def test_migration_requires_same_labeled_holdout_and_records_recall_delta(tmp_pa
 
 
 def define_doc(project):
-    root,_=project
+    # A prose-evidenced item must be one the skill map routes; a design decision also needs the repository's own check.
+    from test_item_coverage import catalog_item
+    root,catalogs=project
+    write(catalogs/'test-v1.json',{'schema_version':1,'version':'test-v1','items':[catalog_item('components/accordion','ユースケース')]})
     config=json.loads((root/'design/design.yaml').read_text())
-    config['items']['dads-000001']={'state':'defined','evidence':['doc:DESIGN.md#dads-000001']}
+    config['items']['dads-000001']={'state':'defined','evidence':['doc:DESIGN.md#dads-000001','rule:one-summary']}
     write(root/'design/design.yaml',config)
+    write(root/'design/checks/web.yaml',{'rules':[{'id':'one-summary','kind':'count','scope':['details'],
+        'targets':['summary'],'minimum':1,'maximum':1}]})
     (root/'design/DESIGN.md').write_text('# Brand\n## dads-000001\nUse token:color.primary consistently.\n')
 
 

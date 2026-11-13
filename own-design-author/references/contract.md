@@ -14,7 +14,7 @@ Python 3.10以上と、既存環境に導入済みの PyYAML / jsonschema（refe
 - `tokens/*.tokens.json`: 値を持つ正典。名前はlower-case kebab-case、参照パスはdot区切り、aliasは `{group.name}`。`$type` はグループから継承できる。CSS名は `--group-name`、衝突は失格。同じパスの多重定義も失格。
 - `DESIGN.md`: 散文とトークン参照。doc証拠は `doc:DESIGN.md#dads-000001` のような実見出しを指す。空の節・コードブロック内の偽見出しは証拠にならない。
 - `profiles/web.json`: `media: web` と `minimums`。skillの `minimums.json` より厳しい数値だけ上書き可。media不明・下限の緩和・未知キーは失格。
-- `checks/*.yaml`: `rules` 配列。id / kind / targetsまたはpaths / allowlist / minimum / pattern の宣言だけ。任意コマンドやコードを実行しない。実際のL1/L2実行を持たない規則は未カバー。
+- `checks/*.yaml`: `rules` 配列。宣言だけで、任意コマンドやコードを実行しない。画面の検査（count / text / style / judgment）はL2が画面ごとに測る。書き方は `web-validation.md` の「repoが決定ごとに宣言する検査」。それ以外の規則（id / kind / targetsまたはpaths / allowlist / minimum / pattern）で、実際のL1/L2実行を持たない規則は未カバー。
 - `assets/`: ファイルのsha256から `assets.json` を生成する。別の手書き台帳を正典にしない。
 - `approvals.yaml`: 人間確認を根拠にした行の配列。
 - `judgments.json`: 任意。doc証拠とn-a理由への保存済み確率判定、pinされたpolicy、評価用ラベルの有無。schema2は完全なcandidateとscoreを持ち、人間ラベルが無い時は明示的に精度未測定とする。高scoreは補助指摘、未登録・古い入力・不正台帳は出荷停止。

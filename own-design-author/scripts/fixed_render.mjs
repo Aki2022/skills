@@ -1,5 +1,5 @@
 /** Fixed Chromium environment. Uses existing runtime and repo fonts; installs nothing. */
-import {readFileSync, realpathSync} from 'node:fs';
+import {readFileSync, realpathSync, writeFileSync, mkdirSync} from 'node:fs';
 import {resolve, relative, sep} from 'node:path';
 import {createHash} from 'node:crypto';
 import os from 'node:os';
@@ -167,7 +167,14 @@ export async function renderEvidence(page,context,environment,requests) {
   if(!glyphs||!requests.used.size)fallback.add('no pinned font glyphs');
   return {font_glyphs:glyphs,fonts:[...used].sort(),font_sources:[...new Map(sources.map(s=>[digest(s),s])).values()].sort((a,b)=>digest(a).localeCompare(digest(b))),fallbacks:[...fallback].sort(),
     rejected_font_requests:requests.rejected.length,...actual,
-    stable_capture:true,screenshot_sha256:sha(await stableScreenshot(page))};
+    stable_capture:true,screenshot_sha256:keepScreenshot(await stableScreenshot(page))};
+}
+
+// The AFM stage judges the same stable capture L2 measured; it is stored by content hash only.
+function keepScreenshot(png) {
+  const digest=sha(png);const dir=process.env.DESIGN_SCREENSHOT_DIR;
+  if(dir){mkdirSync(dir,{recursive:true});writeFileSync(resolve(dir,digest+'.png'),png);}
+  return digest;
 }
 
 export function compareRepeats(report) {

@@ -20,6 +20,7 @@ from jcs import media_hashes
 from judgment_ledger import candidate as judgment_candidate,evaluate as evaluate_judgments,read_policy as read_judgment_policy,POLICY as JUDGMENT_POLICY
 from reporting import empty_report,stage,skip
 from design_modules import resolve_ia
+import item_checks
 
 VERSION = '1.0.0'
 SKILL = Path(__file__).resolve().parents[1]
@@ -191,6 +192,62 @@ def _anchor_text(path, anchor):
     return '\n'.join(lines[start+1:end]).strip()
 
 
+AFM_RULE_CHARS, AFM_EVIDENCE_CHARS = 500, 400
+
+
+def afm_candidate(ident, context, evidence_values, statements=()):
+    """A repository's judgment statement replaces the catalog text: AFM judges the decision the repository made."""
+    heading = ' > '.join(context.get('headings') or [context.get('title', '')])
+    text = ' '.join(statements) if statements else str(context.get('text', ''))
+    rule = (heading + ': ' + ' '.join(text.split()))[:AFM_RULE_CHARS]
+    prose = ' '.join(' '.join(v.split()) for k, v in sorted(evidence_values.items())
+                     if k.startswith('doc:') and isinstance(v, str))
+    return {'id': ident, 'document': item_checks.document_key(context), 'rule': rule, 'evidence': prose[:AFM_EVIDENCE_CHARS]}
+
+
+PAGE_RULE_FIELDS = {'count': ({'targets'}, {'scope', 'minimum', 'maximum'}),
+                    'text': ({'targets', 'pattern'}, {'minimum', 'maximum'}),
+                    'style': ({'targets', 'property', 'allowlist'}, {'scope', 'state'}),
+                    'judgment': ({'targets', 'statement'}, set())}
+
+
+def _selectors(value, name):
+    if not isinstance(value, list) or not value or any(not isinstance(s, str) or not s.strip() for s in value):
+        raise ValueError(f'page rule {name} must be a non-empty selector list')
+
+
+def _page_rule(rule):
+    """Validate a rule the repository declares for its own decisions; it runs on every rendered page."""
+    required, optional = PAGE_RULE_FIELDS[rule['kind']]
+    fields = set(rule) - {'id', 'kind'}
+    if required - fields or fields - required - optional:
+        raise ValueError(f"page rule {rule['id']}: {rule['kind']} needs {sorted(required)} and allows {sorted(optional)}")
+    _selectors(rule['targets'], 'targets')
+    if 'scope' in rule:
+        _selectors(rule['scope'], 'scope')
+    for bound in ('minimum', 'maximum'):
+        if bound in rule and (isinstance(rule[bound], bool) or not isinstance(rule[bound], int) or rule[bound] < 0):
+            raise ValueError(f"page rule {rule['id']}: {bound} must be a non-negative integer")
+    if rule['kind'] == 'count' and not {'minimum', 'maximum'} & fields:
+        raise ValueError(f"page rule {rule['id']}: count needs minimum or maximum")
+    if rule['kind'] == 'text':
+        if not isinstance(rule['pattern'], str) or not rule['pattern']:
+            raise ValueError(f"page rule {rule['id']}: text needs a pattern")
+        try:
+            re.compile(rule['pattern'])
+        except re.error as exc:
+            raise ValueError(f"page rule {rule['id']}: invalid pattern ({exc})") from None
+    if rule['kind'] == 'style':
+        if not isinstance(rule['property'], str) or not re.fullmatch(r'[a-z][a-z-]*', rule['property']):
+            raise ValueError(f"page rule {rule['id']}: style property must be a CSS property name")
+        if not isinstance(rule['allowlist'], list) or not rule['allowlist'] or any(not isinstance(v, str) or not v.strip() for v in rule['allowlist']):
+            raise ValueError(f"page rule {rule['id']}: style needs a non-empty allowlist")
+        if rule.get('state', 'focus') != 'focus':
+            raise ValueError(f"page rule {rule['id']}: style state can only be focus")
+    if rule['kind'] == 'judgment' and (not isinstance(rule['statement'], str) or not rule['statement'].strip()):
+        raise ValueError(f"page rule {rule['id']}: judgment needs a statement")
+
+
 def _rules(design):
     rules = {}
     allowed = {'id', 'kind', 'targets', 'allowlist', 'minimum', 'paths', 'pattern'}
@@ -201,16 +258,39 @@ def _rules(design):
         if not isinstance(data, dict) or set(data) != {'rules'} or not isinstance(data['rules'], list):
             raise ValueError('checks must contain a declarative rules list')
         for rule in data['rules']:
-            if not isinstance(rule, dict) or set(rule) - allowed or rule.get('kind') not in kinds:
-                raise ValueError('unknown rule kind/field; arbitrary code is forbidden')
+            if not isinstance(rule, dict) or rule.get('kind') not in kinds | item_checks.PAGE_KINDS:
+                raise ValueError('unknown rule kind; arbitrary code is forbidden')
             ident = rule.get('id')
             if not isinstance(ident, str) or not ident or ident in rules:
                 raise ValueError('duplicate or invalid rule id')
+            if rule['kind'] in item_checks.PAGE_KINDS:
+                _page_rule(rule)
+                rules[ident] = rule
+                continue
+            if set(rule) - allowed:
+                raise ValueError('unknown rule field; arbitrary code is forbidden')
             targets = rule.get('targets', rule.get('paths'))
             if not isinstance(targets, list) or not targets or any(not isinstance(t, str) or not t.strip() for t in targets):
                 raise ValueError('zero rule targets')
             rules[ident] = rule
     return rules
+
+
+def _resolve_style_tokens(rules, tokens, errors):
+    """A style rule may allow token:<path>; the manifest carries the token's CSS value for the page to compare."""
+    for ident, rule in rules.items():
+        if rule['kind'] != 'style':
+            continue
+        values = []
+        for value in rule['allowlist']:
+            if value.startswith('token:'):
+                if value[6:] not in tokens:
+                    errors.append(f'style rule token missing: {ident} {value}')
+                    continue
+                values.append(tokens[value[6:]]['css'])
+            else:
+                values.append(value)
+        rule['resolved_allowlist'] = values
 
 
 def _asset_rule_evidence(root, rules, errors):
@@ -240,6 +320,46 @@ def _asset_rule_evidence(root, rules, errors):
     return measured
 
 
+def _render_paths(config, errors):
+    """The path each URL env renders, from the declared gate and channels; None when none are declared."""
+    rows = [config['integration_gate']] if isinstance(config.get('integration_gate'), dict) else []
+    rows += [row for row in (config.get('channels') or {}).values() if isinstance(row, dict)]
+    paths = {}
+    for row in rows:
+        for env, server in (row.get('render_servers') or {}).items():
+            path = server.get('path') if isinstance(server, dict) else None
+            if env in paths and paths[env] != path:
+                errors.append(f'render server {env} renders different paths in different gates')
+            paths[env] = path
+    return paths or None
+
+
+def _page_inventory(root, design, config, approvals, counts, errors, warnings, ship):
+    """Every page is checked or excluded; an exclusion is the owner's decision, bound to its reason by hash."""
+    if not (design / 'validation.json').exists():
+        return {}
+    from page_inventory import check_pages
+    validation = read_data(inside(design, 'validation.json'))
+    pages = validation.get('pages') if isinstance(validation, dict) else None
+    if pages is None:
+        if ship:
+            errors.append('ship gate: page inventory required; declare validation.json pages so every page is checked or excluded')
+        return {}
+    inventory = check_pages(root, validation, paths=_render_paths(config, errors))
+    errors.extend(inventory['errors'])
+    excluded = pages.get('excluded') if isinstance(pages, dict) and isinstance(pages.get('excluded'), dict) else {}
+    covered = pages.get('covered') if isinstance(pages, dict) and isinstance(pages.get('covered'), dict) else {}
+    keys = {f'ds:web:page:{page}': value_hash({'page': page, 'reason': reason})
+            for page, reason in excluded.items() if isinstance(reason, str)}
+    counts['pages'] = {'found': inventory['pages'], 'covered': len(covered), 'excluded': len(excluded)}
+    unapproved = sorted(key for key, digest in keys.items() if approvals.get(key) != digest)
+    if unapproved and ship:
+        errors.append(f'ship gate: unapproved page exclusions {len(unapproved)}')
+    elif unapproved:
+        warnings.append(f'page exclusions awaiting owner approval: {len(unapproved)}')
+    return keys
+
+
 def _approvals(design):
     return verify_rows(read_data(design/'approvals.yaml'),design.parent)
 
@@ -249,7 +369,7 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
     result = {'evaluated_at':datetime.now(timezone.utc).isoformat(),
         'environment':{'python':sys.version.split()[0],
             'jcs_sha256':hashlib.sha256((SKILL/'scripts/jcs.cjs').read_bytes()).hexdigest()},
-        'report':empty_report(), 'judgment_candidates':[], 'approval_targets':{}, 'approval_required':[],
+        'report':empty_report(), 'judgment_candidates':[], 'afm_candidates':[], 'approval_targets':{}, 'approval_required':[],
         'exit_code': 2, 'errors': [], 'warnings': [], 'counts': {
         'items': 0, 'defined': 0, 'na': 0, 'deferred': 0, 'unclassified': 0,
         'proposed': 0, 'uncovered': 0, 'tokens': 0, 'fulfillment': 0.0}, 'manifest': {}}
@@ -350,6 +470,8 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
                 if key in approvals and approvals[key]!=digest:errors.append('approval hash mismatch: '+key)
         valid_targets = {f'ds:{m}:token:{path}' for m in media for path in tokens} | {f'ds:{m}:item:{ident}' for m in media for ident in items}
         if ia:valid_targets.update(ia['approval_hashes'])
+        page_keys = _page_inventory(root, design, config, approvals, counts, errors, warnings, ship)
+        valid_targets.update(page_keys)
         if set(approvals) - valid_targets:
             raise ValueError('approval target absent from catalog/tokens')
         for path, token in tokens.items():
@@ -358,10 +480,13 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
                 errors.append(f'missing origin/NOTICE for token: {path}')
             token['state'] = 'proposed'
         rules = _rules(design)
+        _resolve_style_tokens(rules,tokens,errors)
         measured_rules = _asset_rule_evidence(root,rules,errors)
-        uncovered_rules = set(rules) - set(measured_rules)
+        # Page rules are measured by L2 on every rendered page and enforced per item after rendering.
+        uncovered_rules = {i for i,r in rules.items() if r['kind'] not in item_checks.PAGE_KINDS} - set(measured_rules)
         counts['uncovered'] = len(uncovered_rules)
         item_states, item_values, must_proposed, must_uncovered = {}, {}, [], []
+        item_routes, check_map, active = {}, item_checks.load_map(), item_checks.active_checkers(tokens)
         judgment_policy,judgment_policy_sha256=read_judgment_policy()
         classification_policy = load_policy()
         for ident, item in items.items():
@@ -433,12 +558,23 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
                             errors.append(f'missing rule evidence: {ident}')
                         else:
                             evidence_values[ref] = measured_rules.get(target,rules[target])
-                            if must:
-                                if target in uncovered_rules:
-                                    must_uncovered.append(ident)
+                            # Adopted means verified: a non-must item with an unmeasured rule fails ship too.
+                            if target in uncovered_rules:
+                                must_uncovered.append(ident)
             else:
                 errors.append(f'blank/unknown item state: {ident}')
             item_values[ident] = evidence_values
+            if status == 'defined':
+                cited = state.get('evidence',[])
+                way, checkers, why = item_checks.route(item, cited, tokens, rules, check_map, active)
+                judged = [ref for ref in cited if ref.startswith('rule:') and rules.get(ref[5:],{}).get('kind') == 'judgment']
+                item_routes[ident] = {'route':way, 'checkers':checkers, 'document':item_checks.document_key(item),
+                                      **({'reason':why} if why else {}),
+                                      **({'presence':judged} if way == 'afm' and judged else {}),
+                                      **({'decision':True} if item_checks.mapped_route(item,check_map) == 'decision' else {})}
+                if way == 'afm':
+                    statements = [rules[ref[5:]]['statement'] for ref in judged]
+                    result['afm_candidates'].append(afm_candidate(ident,item_context,evidence_values,statements))
         ledger=read_data(inside(design,'judgments.json')) if (design/'judgments.json').exists() else None
         judged=evaluate_judgments(result['judgment_candidates'],ledger,policy=judgment_policy)
         errors.extend(judged['errors'])
@@ -491,10 +627,29 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
             warnings.append(f'proposed must items: {len(set(must_proposed))}')
         if counts['proposed']:
             warnings.append(f'proposed values: {counts["proposed"]}')
+        # Not a warning: L0 cannot judge artifacts, and a permanent yellow would hide real warnings.
+        counts['afm'] = len(result['afm_candidates'])
+        counts['machine'] = sum(1 for r in item_routes.values() if r['route']=='machine')
+        counts['decision'] = sum(1 for r in item_routes.values() if r.get('decision'))
+        # A design decision is checked by the rule the repository declared for it; the owner also approves the item,
+        # and the approval hash covers the cited rule, so changing the rule needs a new approval.
+        decision_unapproved = sorted(i for i,r in item_routes.items() if r.get('decision') and r['route']!='uncovered' and any(
+            resolved_by_media[m][1][i].get('approval_state')!='approved' for m in resolved_by_media))
+        route_uncovered = sorted(i for i,r in item_routes.items() if r['route']=='uncovered')
+        report['uncovered'].extend({'id':i,'reason':item_routes[i]['reason']} for i in route_uncovered)
+        report['uncovered'].extend({'id':i,'reason':'design decision not approved'} for i in decision_unapproved)
+        counts['uncovered']=len(report['uncovered'])
+        if route_uncovered:
+            warnings.append(f'adopted items with no way to verify them: {len(route_uncovered)}')
+        if decision_unapproved:
+            warnings.append(f'design decisions awaiting owner approval: {len(decision_unapproved)}')
         if counts['uncovered']:
             warnings.append(f'uncovered rules/spans: {counts["uncovered"]}; recorded or measured evidence required')
         if ship and (must_proposed or must_uncovered):
             errors.append(f'ship gate: proposed must {len(set(must_proposed))}, uncovered required evidence {len(set(must_uncovered))}')
+        if ship and (route_uncovered or decision_unapproved):
+            errors.append(f'ship gate: adopted items without a verification route {len(route_uncovered)}, '
+                          f'unapproved design decisions {len(decision_unapproved)}')
         assets = []
         for path in sorted((design/'assets').rglob('*')):
             if path.is_file():
@@ -517,11 +672,18 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
                 'input_hashes':input_hashes, 'media':medium, 'profile':profile,
                 'minimums':profile['minimums'], 'tokens':resolved_by_media[medium][0], 'items':resolved_by_media[medium][1],
                 'css_variables':{t['css_name']:t['css'] for t in tokens.values()},
-                'tailwind_templates':tailwind_templates, 'artifacts':artifacts, 'rules':list(rules.values()), 'coverage':{'uncovered':sorted(uncovered_rules | {row['id'] for row in judged['uncovered']})},
+                'tailwind_templates':tailwind_templates, 'artifacts':artifacts, 'rules':list(rules.values()), 'coverage':{'uncovered':sorted(uncovered_rules | {row['id'] for row in judged['uncovered']}),
+                    'items':{way:sorted(i for i,r in item_routes.items() if r['route']==way) for way in ('machine','afm','uncovered')},
+                    'decisions':sorted(i for i,r in item_routes.items() if r.get('decision')),
+                    'item_routes':item_routes},
+                'item_checks':{'collect':sorted({c for r in item_routes.values() for c in r['checkers']+r.get('presence',[])}
+                    & (item_checks.COLLECTED | {'rule:'+i for i,r in rules.items() if r['kind'] in item_checks.PAGE_KINDS})),
+                    'applicability':{d:check_map['applicability'][d] for d in sorted({r['document'] for r in item_routes.values()})
+                                     if d in check_map['applicability']}},
                 'modules':({'ia':{'version':config['modules']['ia'],'implementation_sha256':ia['_implementation_sha256'],
                     'resolved':ia['media'][medium]}} if ia else {}),
                 'palette':{kind: sorted({t['css'] for t in tokens.values() if t['type']==kind})
-                           for kind in ('color','fontFamily','dimension')}, 'assets':assets, 'asset_exports':asset_exports}
+                           for kind in ('color','fontFamily','dimension','fontWeight','shadow')}, 'assets':assets, 'asset_exports':asset_exports}
         for medium,manifest in result['manifest'].items():
             for kind,rows in [('item',manifest['items']),('token',manifest['tokens'])]:
                 for ident,row in rows.items():
@@ -529,6 +691,7 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
                     key=f'ds:{medium}:{kind}:{ident}'
                     result['approval_targets'][key]=row['value_hash']
                     if kind=='item' and row['must']:result['approval_required'].append(key)
+        result['approval_targets'].update(page_keys)
         if ia:
             result['approval_targets'].update(ia['approval_hashes'])
             result['approval_required'].extend(ia['must_approval_keys'])

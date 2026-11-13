@@ -29,9 +29,15 @@ def _merge_base(value):
 def _render_servers(servers):
     if not isinstance(servers,dict) or not servers:raise ValueError('gate requires bound render servers')
     for env,server in servers.items():
-        if not isinstance(env,str) or not re.fullmatch(r'[A-Z][A-Z0-9_]*',env) or not isinstance(server,dict) or set(server)!={'command','path'}:
+        # A row either starts its own server or renders another path of a server another row starts.
+        if not isinstance(env,str) or not re.fullmatch(r'[A-Z][A-Z0-9_]*',env) or not isinstance(server,dict) or set(server) not in ({'command','path'},{'same_as','path'}):
             raise ValueError('invalid render server')
-        _argv(server['command'],port=True)
+        if 'same_as' in server:
+            owner=servers.get(server['same_as'])
+            if not isinstance(owner,dict) or 'command' not in owner:
+                raise ValueError('render server same_as must name a row that starts its own server')
+        else:
+            _argv(server['command'],port=True)
         path=server['path']
         if not isinstance(path,str) or not path.startswith('/') or path.startswith('//') or any(c in path for c in ('#','\\','\0','\n','\r')):
             raise ValueError('render server path must be local to the assigned origin')
@@ -118,8 +124,20 @@ def validate_web_result(root,result,urls):
     if not expected or len(set(expected))!=len(expected) or set(expected)!=set(urls):
         raise ValueError('render servers must cover exactly all validation endpoints')
     stages=result.get('stages',[])
-    if [r.get('stage') for r in stages]!=['L0','L1']+['L2']*len(expected):
-        raise ValueError('incomplete L0/L1/L2 stage evidence')
+    items=read_json(root/'design/.resolved/items.json')
+    pairs=items.get('afm_pairs')
+    if not isinstance(pairs,list) or items.get('failures') or items.get('pages')!=expected:
+        raise ValueError('missing or failed adopted item verification')
+    if [r.get('stage') for r in stages]!=['L0','L1']+['L2']*len(expected)+['ITEMS']+(['AFM'] if pairs else []):
+        raise ValueError('incomplete L0/L1/L2/ITEMS/AFM stage evidence')
+    checked=stages[len(expected)+2]
+    if checked.get('exit_code')!=0 or checked.get('afm_pairs')!=len(pairs) or checked.get('failures'):
+        raise ValueError('partial or failed adopted item verification')
+    if pairs:
+        afm=stages[-1];record=read_json(root/'design/.resolved/afm.json')
+        if (afm.get('exit_code') not in (0,1) or record.get('pairs')!=pairs or record.get('uncovered')
+                or afm.get('judged')!=len(pairs) or len(record.get('verdicts',[]))!=len(pairs)):
+            raise ValueError('partial or failed AFM stage')
     if stages[0].get('exit_code') not in (0,1) or stages[0].get('counts',{}).get('items',0)<=0:
         raise ValueError('zero or failed L0 stage')
     if stages[1].get('exit_code')!=0 or stages[1].get('targets')!=len(config['html']) or not config['html']:

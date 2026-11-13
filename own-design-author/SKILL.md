@@ -43,8 +43,12 @@ design-author check --repo <repo> --ship
 
 L0 はモデルを使わず、対象項目数・充足率・未判定・提案値・未カバーを出す。整合が通った時だけ `design/.resolved/<media>.json` と CSS、`assets.json` を生成する。失格時は古いマニフェストを残さない。L1/L2 はマニフェストだけを読む。L0だけで成果物の準拠合格を名乗らない。
 
-`--ship` は未承認mustと未カバーmust規則を失格にする。hook/miseへの接続は `references/ship-gates.md`。既存hookを置き換えない。
-`design-author sync` はL0通過後に宣言したTailwindとassetコピーを配置する。`design-check` はL0/L1/L2を順に実行するためL2実施確認後に呼ぶ。
+`--ship` は未承認mustと未カバー規則を失格にする（規則の未カバーはmust以外も失格）。hook/miseへの接続は `references/ship-gates.md`。既存hookを置き換えない。
+`defined` の全項目は、skillの対応表 `references/item-checks.json` で3つの確かめ方のどれかに乗る。値・構造で言えるものはコードで画面ごとに確かめる。repoごとに決めること（どの型をいつ使うか、文章の方針など）は、repoが `checks/*.yaml` に宣言した検査（数・文・計算済みスタイル）で画面ごとに確かめ、オーナーの承認も要る。DESIGN.mdに書いて承認しただけでは合格しない。画面を見ないと判断できないものだけを、部品がある画面に限って端末内のApple Foundation Models（AFM）で判定する。どれにも乗らない項目は出荷で止まる。AFMの違反は精度を測るまで警告。詳細は `references/web-validation.md`。
+push時の検査は、`design/design.yaml` を持つ全repoで pre-push の拡張が必ず回す。repoごとの有効化は要らない。
+出荷には `validation.json` の `pages`（画面の棚卸し）が必須。repo の画面はすべて、検査するか、オーナーの承認つきで対象外にする。URL で検査する画面は、URL のパスが画面ファイルの経路に合うことを L0 で照らし合わせる。詳細は `references/web-validation.md` の「画面の棚卸し」。
+
+`design-author sync` はL0通過後に宣言したTailwindとassetコピーを配置する。`design-check` はL0/L1を通ったら画面ごとにL2とITEMSを実行し、全画面が通ってからAFM段を実行するためL2実施確認後に呼ぶ。
 L1/L2と生成Tailwindの使い方・制約は `references/web-validation.md` を読む。
 
 ## 判定台帳と共有runner

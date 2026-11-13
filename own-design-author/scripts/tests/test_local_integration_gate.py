@@ -66,7 +66,7 @@ def test_real_local_gate_binds_predicted_tree_and_rejects_source_endpoint_and_pr
     assert receipt['commit']==source and receipt['tree']==run_git(root,env,'rev-parse','HEAD^{tree}').stdout.strip()
     assert len(receipt['render_evidence'])==1 and not (root/'.shipment.json').exists()
     from page_inventory import MISSING
-    assert MISSING in receipt['warnings']
+    assert MISSING not in receipt['warnings']  # shipping requires the inventory, so it is never missing here
     refs=tmp_path/'refs'
     def push():
         sha=run_git(root,env,'rev-parse','HEAD').stdout.strip()

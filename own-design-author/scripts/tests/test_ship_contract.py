@@ -63,8 +63,11 @@ def result_fixture(tmp_path):
     write(tmp_path/'design/.resolved/l2-0.json',{'url':'http://127.0.0.1:12345/',
         'environment':{'runtime':env['runtime'],'config_sha256':digest,'repeat_equal':True},
         'runs':[{**row,'repeat':0},{**row,'repeat':1}], 'failures':[], 'uncovered':[]})
+    write(tmp_path/'design/.resolved/items.json',{'schema_version':1,'pages':['DESIGN_WEB_URL'],
+        'machine':{'dads-000001':{'DESIGN_WEB_URL':'pass'}},'afm_pairs':[],'failures':[]})
     result={'exit_code':0,'errors':[],'stages':[{'stage':'L0','exit_code':0,'counts':{'items':1}},
-        {'stage':'L1','exit_code':0,'targets':1},{'stage':'L2','exit_code':0,'target_env':'DESIGN_WEB_URL'}]}
+        {'stage':'L1','exit_code':0,'targets':1},{'stage':'L2','exit_code':0,'target_env':'DESIGN_WEB_URL'},
+        {'stage':'ITEMS','exit_code':0,'afm_pairs':0,'failures':0}]}
     return result
 
 
@@ -78,6 +81,32 @@ def test_full_check_requires_every_stage_and_exact_render_evidence(tmp_path):
     evidence=tmp_path/'design/.resolved/l2-0.json';data=json.loads(evidence.read_text())
     data['runs'][1]['render_evidence']['screenshot_sha256']='b'*64;write(evidence,data)
     with pytest.raises(ValueError):validate_web_result(tmp_path,result,{'DESIGN_WEB_URL':'http://127.0.0.1:12345/'})
+
+
+def test_item_and_afm_evidence_is_required(tmp_path):
+    result=result_fixture(tmp_path)
+    urls={'DESIGN_WEB_URL':'http://127.0.0.1:12345/'}
+    for broken in ({'failures':1},{'exit_code':2}):
+        bad=copy.deepcopy(result);bad['stages'][-1].update(broken)
+        with pytest.raises(ValueError):validate_web_result(tmp_path,bad,urls)
+    items=json.loads((tmp_path/'design/.resolved/items.json').read_text())
+    write(tmp_path/'design/.resolved/items.json',{**items,'afm_pairs':[['dads-000002','DESIGN_WEB_URL']]})
+    result['stages'][-1]['afm_pairs']=1
+    with pytest.raises(ValueError,match='AFM'):validate_web_result(tmp_path,result,urls)
+    record={'schema_version':1,'pairs':[['dads-000002','DESIGN_WEB_URL']],'artifacts':['L2:DESIGN_WEB_URL:375:light'],
+            'verdicts':[{'id':'dads-000002'}],'uncovered':[]}
+    write(tmp_path/'design/.resolved/afm.json',record)
+    result['stages'].append({'stage':'AFM','exit_code':1,'judged':1})
+    assert validate_web_result(tmp_path,result,urls)
+    for broken in ({'judged':0},{'exit_code':2}):
+        bad=copy.deepcopy(result);bad['stages'][-1].update(broken)
+        with pytest.raises(ValueError):validate_web_result(tmp_path,bad,urls)
+    write(tmp_path/'design/.resolved/afm.json',{**record,'uncovered':[{'id':'dads-000002'}]})
+    with pytest.raises(ValueError):validate_web_result(tmp_path,result,urls)
+    write(tmp_path/'design/.resolved/afm.json',record)
+    assert validate_web_result(tmp_path,result,urls)
+    write(tmp_path/'design/.resolved/items.json',{**items,'afm_pairs':record['pairs'],'failures':['dads-000001 on DESIGN_WEB_URL: x']})
+    with pytest.raises(ValueError,match='adopted item'):validate_web_result(tmp_path,result,urls)
 
 
 def test_ship_stops_l0_before_server_or_deploy(project):

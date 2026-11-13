@@ -15,7 +15,7 @@ design.yamlの任意の`channels`は、名前をキーにした辞書。`ship: t
 - `artifacts`: 出荷するファイルまたはディレクトリのrepo相対パス配列。ディレクトリは全ファイルへ展開する。空・symlink・repo外は失格。
 - `merge_base`: 予測マージの基準ref。例は`origin/main`。欠落・競合を成功扱いにしない。
 - `build_command`: 必要な場合だけ、対象checkoutで成果物を構築するargv配列。
-- `render_servers`: validation.jsonの全URL環境変数をキーにした辞書。各値は`command`（argv配列）と`path`（同一origin内のパス）。commandは割り当てた`{port}`を使う。起動場所は検査対象のcheckout。
+- `render_servers`: validation.jsonの全URL環境変数をキーにした辞書。各値は`command`（argv配列）と`path`（同一origin内のパス）、または`same_as`（`command`を持つ別の行の環境変数）と`path`。`same_as`の行はサーバーを起動せず、その行のサーバーの別のパスを描く。commandは割り当てた`{port}`を使う。起動場所は検査対象のcheckout。
 
 既存のbuild/deploy経路を調べ、実際に出荷するファイル集合を指定する。検査中に変わるcacheを出荷物へ混ぜない。
 必要な成果物を省いて検査を通すこともしない。コマンドを自動生成したり、新しい依存・認証・CIを導入したりしない。
@@ -45,12 +45,13 @@ core.hooksPathを変更せず、対応しないdispatcherを自動で書き換�
 
 - PATHへskillのscriptsを供給し、既存依存を持つPythonをDESIGN_AUTHOR_PYTHONで選ぶ。端末固有のパスをrepoへ保存しない。
 - templates/mise.design.tomlのtaskを既存設定へ統合する。design:shipは検査だけを呼ぶ。
-- hooks/pre-push.d/60-design-shipを既存vibe-guardの拡張ディレクトリへ追加する。
-- 有効化するrepoだけ.vibe-guard/design-ship.enabledを文字列1にする。欠落コマンド・壊れたmarkerは停止する。
+- hooks/pre-push.d/60-design-shipを既存vibe-guardの拡張ディレクトリへ置く。端末に1つだけ置き、skillの正典を指すsymlinkにする。repoごとの複製は作らない。
+- 拡張は`design/design.yaml`を持つ全repoで動く。repoごとの有効化は要らない。skillを呼ばずに画面を直した変更も、push時に同じ検査を通す。
+- 旧来の.vibe-guard/design-ship.enabledは残してよいが、文字列1以外（壊れた・symlink）は停止する。markerで検査を無効にする経路はない。欠落コマンドも停止する。
 
 vibe-guardがscanner後に保持したpush refsファイルを拡張へ渡す。拡張は
 `design-ship --pre-push --refs-file <file>`を呼び、pushするcommitとチャネルの基準refを
-`git merge-tree --write-tree`で統合した木を、隔離checkoutで同じ3段階検査に通す。
+`git merge-tree --write-tree`で統合した木を、隔離checkoutで同じ検査（L0/L1/L2と、必要ならAFM段）に通す。
 元checkoutや別branchの承認・起動済み画面は代用しない。削除refだけのpushは出荷なしとして報告する。
 DESIGN_SHIP_COMMAND / DESIGN_AUTHOR_COMMAND / DESIGN_CHECK_COMMANDは、既存runtimeの単一実行ファイルを指定するための環境変数。
 任意のshell文字列を評価しない。
@@ -92,9 +93,10 @@ DESIGN_SHIP_COMMAND / DESIGN_AUTHOR_COMMAND / DESIGN_CHECK_COMMANDは、既存ru
 `ship_command`・`artifacts`・`ship`は受理しない。各URLの書式・網羅性は出荷チャネルと同じ規約を使う。
 
 `design-ship --integration --repo .`は現在のclean commitを検査する。
-`--pre-push`は同じ予測マージ木の隔離checkoutで準備コマンドを実行し、commit/treeが変わらず、
+`--pre-push`は同じ予測マージ木の隔離checkoutで、まずL0 `--ship`を実行する。L0はcommitされたdesign/だけを読むので、
+L0で止まる時は時間のかかる準備コマンドを実行しない。L0を通ったら準備コマンドを実行し、commit/treeが変わらず、
 trackedまたは未追跡のソース変更がないことを確認する。依存・build cacheは既存ignoreの範囲に置く。
-その後、同じL0 `--ship`、L1、固定描画L2を対象0・欠落・不一致を拒否して実行する。
+その後、L1、固定描画L2を対象0・欠落・不一致を拒否して実行する。
 serverはそのcheckoutで起動し、外から渡されたURLは利用しない。変更された承認・不正なソース・描画差異は停止する。
 
 結果の`scope`は`local-integration`、`production_protected`は`false`、`deployment`は`not-applicable`。

@@ -57,29 +57,128 @@ reportはexecuted / skipped / missing / uncovered / screenedの5配列。実行�
 ## 画面の棚卸し（漏れ検出）
 
 `html` と `urls` に書いた画面だけが検査される。後から増えた画面が宣言から漏れても、
-それだけではゲートは緑のまま通る。これを防ぐため、`validation.json` に任意の `pages` を置く。
+それだけではゲートは緑のまま通る。これを防ぐため、`validation.json` に `pages` を置く。出荷（`--ship`）には必須。
 
 ```json
 "pages": {
   "sources": ["apps/web/src/app/**/page.tsx", "apps/landing-page/**/*.html"],
   "covered": {"apps/web/src/app/diagnosis/page.tsx": ["DESIGN_WEB_URL"],
               "apps/landing-page/index.html": ["html", "DESIGN_LP_URL"]},
-  "excluded": {"apps/web/src/app/login/page.tsx": "認証画面。外部の認証基盤が描画する"}
+  "excluded": {"apps/web/src/app/login/page.tsx": "認証画面。外部の認証基盤が描画する"},
+  "routes": {"apps/landing-page/index.html": "/"}
 }
 ```
 
 - `sources` は repo 相対の git pathspec glob。追跡済みと未追跡のファイルを `.gitignore` に従って列挙するため、依存やビルド出力は入らない。フレームワークごとの経路規則は持たず、画面のソースを見つける glob を repo が宣言する。
 - `covered` は画面のソースから検査の証拠への対応。`"html"` はそのパスが L1 の `html` にあること、それ以外は `urls` の環境変数名。1つの URL 環境変数は1画面だけを担う。全ての URL 環境変数をどれかの画面に対応させる。
-- `excluded` は対象外にする画面と、空でない理由。対象外の判断はオーナーが持つ。
+- `excluded` は対象外にする画面と、空でない理由。対象外はオーナーの決定で、承認台帳に `ds:web:page:<画面のパス>` として記録する。ハッシュは画面のパスと理由に結びつくので、理由を変えると承認し直し。承認のない対象外は `--ship` で止まる。
+- `routes`（任意）は、ファイルの場所から経路を決められない画面（素の HTML など）の経路。Next.js の `app/`（route group の `(x)` と並列 route の `@x` は経路に出ない）と `pages/` の画面は、ファイルの場所から経路を決める。
+- URL で検査する画面は、その URL のパス（`render_servers` の `path`）が画面の経路に合うことを L0 で照らし合わせる。`[id]` は 1 区切り、`[...x]` は 1 区切り以上、`[[...x]]` は 0 区切り以上に合う。`/users/[id]` なら `/users/sample` のような見本の値で描く。経路に合わない URL・経路を決められない画面・パスのない URL は止まる。
+- 画面を増やしても起動するサーバーを増やさないよう、`render_servers` の行は `{"same_as": "<別の行の環境変数>", "path": "/x"}` で、別の行が起動したサーバーの別のパスを描ける。
+- ログインの後の画面は、repo の準備コマンドや描画サーバーのコマンドが、その repo の開発環境のテスト用ログイン状態を用意して描く。本番のアカウントは使わない。用意できない画面だけを、承認つきの対象外にする。
 
-`design-check` は L1 の前に棚卸しを照合し、次を exit 2 で止める（ブラウザは起動しない）。
+L0 と `design-check`（L1 の前）は棚卸しを照合し、次を exit 2 で止める（ブラウザは起動しない）。
 宣言されていない画面、存在しない画面の宣言、何にも一致しない `sources`、理由のない対象外、
 covered と excluded の重複、宣言していない検査対象の参照、複数画面を担う URL、画面に対応しない URL。
-エラーは該当パスを名指しする。`pages` が無い repo は止めずに、`uncovered` へ `pages` を残して exit を 1 以上にし、
-同じ文を `warnings` に出す。`design-ship` の記録（push 前検査・統合検査）も `warnings` にこの文を引き継ぐ。
+エラーは該当パスを名指しする。`pages` が無い repo は、`design-check` では止めずに警告し、`--ship` の L0 で止める。
+L0 の `counts.pages` に、見つけた画面・検査する画面・対象外の数が入る。
 
-限界: 対応が正しいか（その URL が本当にその画面を描くか）は宣言を信じる。
-動的な経路（`[id]` 等）や認証の後ろの画面は、描画用の状態を用意できるまで理由付きで対象外にする。
+限界: 経路の照合は、URL のパスが画面の経路の形に合うかまで。その URL が描いた中身が本当にその画面のコンポーネントかは見ない。
+Next.js 以外の経路規則は持たないので、`routes` の宣言を信じる。
+
+### 画面を並べて描く
+
+`validation.json` の任意の `parallel`（正の整数、既定 1）で、同時に描く画面の数を決める。
+判定は宣言の順に行い、ある画面の L2 か ITEMS で外れたら、先に描き始めた画面も止める。
+
+## 採用した項目の確かめ方（skillのコード・repoが宣言する検査・AFM）
+
+カタログの全項目は、skillが持つ対応表`references/item-checks.json`で、次のどれか1つに割り当て済み。
+割り当ては見出しの完全な経路（小見出しまで）で指す。repoごとには書かない。全repoが同じカタログを使うので、skillで一度だけ見直す。
+カタログを更新して割り当てのない項目が出たら、その項目は`uncovered`になる。
+
+| 経路 | 対象 | 確かめ方 |
+|---|---|---|
+| `machine` | 値・構造・属性で言える規則（色・文字・余白・影・コントラスト・押せる大きさ・見出し・ラベル・属性の禁止など） | L2が測った結果で、画面ごとにコードで確かめる |
+| `decision` | repoごとに決めること（どの型を使うか、いつ部品を使うか、文章の方針、階層の体系、ロゴやライティングの方針など） | skillは検査を持てないので、repoが`checks/*.yaml`に検査を宣言し、項目から`rule:<id>`で指す。宣言した検査は画面ごとにコードで確かめる。DESIGN.mdに書いて承認しただけでは合格しない |
+| `judgment` | 画面を見ないと判断できないもの（色だけで区別していないか、余白で関係性を示しているか、カードの見た目など） | 部品がある画面だけ、AFMで判定する |
+
+L0は採用した項目（`defined`）ごとに経路を決める。mustかどうかは関係ない。
+
+1. 証拠に画面の検査（count・text・style）を指す`rule:`がある → `machine`（その検査で確かめる）。
+2. 証拠にそれ以外の宣言的ruleがある → `machine`（L0・L1で測れないruleは未カバーとして出荷で止まる）。
+3. 証拠に`judgment`のruleがある → `afm`。AFMにはカタログの文ではなく、repoが書いた判定文を渡す。
+4. それ以外は対応表の経路に従う。`decision`は`uncovered`（検査の宣言がない）。`machine`でも、比べる種類のトークン（dimension・fontWeight・shadow等）がなければ`uncovered`（理由つき）。
+5. 対応表にない項目 → color・fontFamilyのトークンを証拠に持てば`machine`（palette）、なければ`uncovered`。
+   対応表にある項目では、トークンを挙げただけでは確かめたことにならない（値があることしか言えないため）。
+
+`decision`の項目は、宣言した検査に加えてオーナーの承認も要る。承認のハッシュは指したruleの中身を含むので、ruleを変えると承認し直しになる。
+`--ship`では、`uncovered`の項目と、承認されていない`decision`の項目があれば停止する。
+割り当ては`.resolved/web.json`の`coverage.items`（machine・afm・uncovered）と`coverage.item_routes`に入る。`coverage.decisions`はそのうちrepoの決定の項目。
+
+### repoが決定ごとに宣言する検査
+
+`checks/*.yaml`の`rules`に書く。任意のコードは書けない。ひな形は`references/decision-rule-examples.json`（どのカタログ項目向けかも書いてある）。
+
+| kind | 書くこと | 失格になる条件 |
+|---|---|---|
+| `count` | `targets`（数える要素のselector）、`minimum`か`maximum`、任意で`scope`（この中ごとに数える） | `scope`の要素ごとに、中の`targets`の数が範囲外 |
+| `text` | `targets`（文を読む要素）、`pattern`（正規表現）、任意で`minimum`・`maximum`（既定は0件まで） | 要素ごとの一致数が範囲外 |
+| `style` | `targets`、`property`（CSSのプロパティ名）、`allowlist`（値か`token:<path>`）、任意で`state: focus`、`scope` | 要素の計算済みの値が許可した値と違う。`state: focus`ならフォーカスしてから読む |
+| `judgment` | `targets`（あれば判定する要素）、`statement`（判定させる決定の文） | AFMが沿っていないと判定する（精度を測るまで警告） |
+
+- 検査は、そのselectorに合う要素がある画面だけに効く。合う要素がなければその画面では対象外（n/a）。
+- どの画面でも一度も合わなかった検査は警告する。selectorの書き間違いで何も確かめていない状態を、合格と見分けるため。
+- ブラウザが受け付けないselector・正規表現は、対象外ではなく「測れなかった」として失格にする。
+- `style`の`token:<path>`がトークンにないとL0で失格。
+- 画面の操作（開閉・入力・ホバー）を伴う決定は確かめられない。`state`はfocusだけ。
+L2に渡す検査と部品のselectorは`item_checks`に入る。
+
+### 検査の種類
+
+- L2で止まる検査: palette:color / fontFamily / radius、contrast、tap-target、heading-order、layout-overflow、body-line-height、line-length。
+  これらが失格ならL2で止まるので、項目の検証まで来た時点で合格している。
+- L2が測り、採用した項目にだけ効かせる検査（L2自体は止めない）:
+  - トークンの値: palette:fontSize / fontWeight / shadow / spacing（padding・gap。marginは自動の中央寄せと区別できないので測らない）
+  - コントラスト: contrast-nontext（入力欄・ボタン等の境界と背景が3:1以上）、contrast-icon（アイコンと背景が4.5:1以上）
+  - 属性・構造: placeholder・readonly・disabled・maxlength・pattern・ol・正のtabindex・`input type=date`・disabledのボタン・結合セル・thのない表・セルの配置（上寄せ、数値の右寄せ）・aria-expandedを持つ非ボタン・「ここ」リンク・リンクのカーソル・ボタンの文字のはみ出し・入力欄の高さ（36px以上）・ラベルが入力欄の上にあるか・貼り付け／コピーの禁止・フォーム内のaria-live・文字で作った箇条書き・h1が1つでtitleに含まれるか・アイコンだけのリンク／ボタン・ラベル付きの装飾アイコンの隠し忘れ・新規タブの予告・文中リンクの区別・全角空白での位置合わせ・長いイタリック・ページ背景の指定・ダイアログの枠線・見えないファイル選択・7枚以上のスライド・フォーカス順が上へ戻る
+  - axe: button-name、list、label、link-name
+
+各検査には、壊したページで必ず検出し、きれいなページでは何も出さないテストがある（`tests/test_item_collector.py`）。
+
+### 部品の有無
+
+対応表の`applicability`は、部品が画面にあることを示すselector。L2が描画した画面で数を数える。
+数が0の画面では、その部品の項目は対象外になり、コードの検査もAFMもしない。`applicability`に無い文書は常に対象。
+
+### 段の順番
+
+`design-check`は画面を1つずつL2で描き、その直後にその画面の`ITEMS`を判定する。全画面が通ったら、必要なら`AFM`段を実行する。
+コードの検査はすべてAFMより先に終わる。
+
+- ITEMS: `machine`の各項目を、対象の各画面で確かめる。その画面のL2の全viewport・全schemeの結果を合わせ、1件でも外れたら項目idと画面と見本を名指しして停止する。
+  次の画面は描画しないので、1回で見えるのは最初に外れた画面の分だけ。
+  測るはずの検査が測られていなければ、それも停止。結果は`.resolved/items.json`。
+- AFM: 対象の画面に残った`afm`の項目だけを判定する。端末内のApple Foundation Models（`fm` CLI、systemモデル、従量課金・外部送信なし）へ、
+  その画面の最も広いviewport・最初のschemeの安定キャプチャ（L2が測った同じ画像）を渡す。HTMLソースは渡さない。他のviewport・schemeはskippedに理由付きで残す。
+  項目は文字数上限でまとめ、`--greedy`と構造化出力で`applies`・`violates`・`reason`を受け取る。
+  結果はモデル名・OS build・プロンプト版・項目・証拠・画像のhashをキーに、repo外（`DESIGN_AFM_CACHE`、既定は利用者のcache）へ保存し、同じ入力は再判定しない。
+  全判定は`.resolved/afm.json`。
+
+AFMの結果の扱い:
+
+- 違反（applies かつ violates）: 警告（exit 1）。精度を測るまで出荷は止めない。止めるかはbiz_ops `WS-20261112-afm-judgment-accuracy`が決める。
+- 判定の欠落・壊れた出力（1回だけ単独で再試行）: 未カバー。exit 2。
+- `fm`がない、systemモデルが使えない: 停止。`fm models`はPCC不可の時に終了コード1を返すので、✓の行で判定する。
+
+`design-ship`は、ITEMS段（失格0件・ページの一致・AFM対象の組の数）と、AFM対象があればAFM段（組と判定の数の一致）を必須にする。
+`DESIGN_AFM_COMMAND`で`fm`の代わりの単一実行ファイルを指定できる（テスト用）。
+
+限界:
+
+- 対応表は「その検査がその項目の測れる部分を確かめる」と判断したもの。項目の文章のうち、測れない言い回しの部分は確かめない。
+- dimensionトークンに役割の区別がないので、文字の大きさと余白は、どちらもdimensionトークン全体と比べる。
+- AFMの精度は未測定。長いページは1枚の画像として渡すので、細部は読めない。macOSで`fm`がある端末でしか動かない。
 
 ## L2と範囲
 

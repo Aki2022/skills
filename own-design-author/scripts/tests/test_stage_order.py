@@ -52,3 +52,19 @@ def test_item_failure_on_the_first_page_stops_before_rendering_the_next(rendered
     assert stages(result) == ['L0', 'L1', 'L2', 'ITEMS'], stages(result)  # the second page was never rendered
     assert any('palette:spacing' in e and 'dads-000001' in e for e in result['errors']), result['errors']
     assert not (root / 'design/.resolved/l2-1.json').exists()
+
+
+def test_pages_render_in_parallel_but_are_judged_in_declared_order(rendered, project):
+    run, root, tmp_path = rendered
+    use_catalog_item(project, catalog_item('foundations/spacing', '余白ルールの例', grade='nice-to-have'))
+    validation = json.loads((root / 'design/validation.json').read_text())
+    validation.update(urls=[{'env': 'DESIGN_FIXTURE_URL'}, {'env': 'DESIGN_FIXTURE_URL_2'}], parallel=2)
+    write(root / 'design/validation.json', validation)
+    code, result = run('<p style="padding:16px">ok</p>')
+    assert code in (0, 1), result
+    assert [(s['stage'], s.get('target_env')) for s in result['stages']][2:] == [
+        ('L2', 'DESIGN_FIXTURE_URL'), ('L2', 'DESIGN_FIXTURE_URL_2'), ('ITEMS', None)]
+    items = json.loads((root / 'design/.resolved/items.json').read_text())
+    assert items['machine'] == {'dads-000001': {'DESIGN_FIXTURE_URL': 'pass', 'DESIGN_FIXTURE_URL_2': 'pass'}}
+    code, result = run('<p style="padding:13px">off scale</p>')
+    assert code == 2 and stages(result) == ['L0', 'L1', 'L2', 'ITEMS'], stages(result)

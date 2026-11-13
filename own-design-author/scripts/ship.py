@@ -59,27 +59,39 @@ def command(argv,root,env,*,purpose="ship"):
     if result.returncode:raise ValueError('configured '+purpose+' command failed')
 
 
+def wait_ready(url,process):
+    deadline=time.monotonic()+30
+    while True:
+        if process is not None and process.poll() is not None:raise ValueError('bound render server exited before validation')
+        try:
+            with urlopen(url,timeout=0.5) as response:
+                if response.status<400:return
+        except (OSError,ValueError):pass
+        if time.monotonic()>=deadline:raise ValueError('bound render server did not become ready')
+        time.sleep(0.1)
+
+
 @contextmanager
 def render_servers(root,servers,env):
     """Own each endpoint's process and ephemeral origin; ignore inherited URLs."""
     processes=[];urls={};child_env={key:value for key,value in env.items() if key not in servers}
     try:
-        for name,row in servers.items():
+        origins={}
+        # Rows that start a server first, then rows that render another path of one of them.
+        for name,row in sorted(servers.items(),key=lambda item:'same_as' in item[1]):
+            if 'same_as' in row:
+                url=origins[row['same_as']]+row['path']
+                wait_ready(url,None)
+                urls[name]=url;child_env[name]=url
+                continue
             with socket.socket() as listener:
                 listener.bind(('127.0.0.1',0));port=listener.getsockname()[1]
             argv=[value.replace('{port}',str(port)) for value in row['command']]
             process=subprocess.Popen(argv,cwd=root,env=child_env,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,start_new_session=True)
             processes.append(process)
-            url='http://127.0.0.1:'+str(port)+row['path']
-            deadline=time.monotonic()+30
-            while True:
-                if process.poll() is not None:raise ValueError('bound render server exited before validation')
-                try:
-                    with urlopen(url,timeout=0.5) as response:
-                        if response.status<400:break
-                except (OSError,ValueError):pass
-                if time.monotonic()>=deadline:raise ValueError('bound render server did not become ready')
-                time.sleep(0.1)
+            origins[name]='http://127.0.0.1:'+str(port)
+            url=origins[name]+row['path']
+            wait_ready(url,process)
             urls[name]=url;child_env[name]=url
         yield child_env,urls,processes
     finally:

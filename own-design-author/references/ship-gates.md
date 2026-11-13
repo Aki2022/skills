@@ -15,7 +15,7 @@ design.yamlの任意の`channels`は、名前をキーにした辞書。`ship: t
 - `artifacts`: 出荷するファイルまたはディレクトリのrepo相対パス配列。ディレクトリは全ファイルへ展開する。空・symlink・repo外は失格。
 - `merge_base`: 予測マージの基準ref。例は`origin/main`。欠落・競合を成功扱いにしない。
 - `build_command`: 必要な場合だけ、対象checkoutで成果物を構築するargv配列。
-- `render_servers`: validation.jsonの全URL環境変数をキーにした辞書。各値は`command`（argv配列）と`path`（同一origin内のパス）。commandは割り当てた`{port}`を使う。起動場所は検査対象のcheckout。
+- `render_servers`: validation.jsonの全URL環境変数をキーにした辞書。各値は`command`（argv配列）と`path`（同一origin内のパス）、または`same_as`（`command`を持つ別の行の環境変数）と`path`。`same_as`の行はサーバーを起動せず、その行のサーバーの別のパスを描く。commandは割り当てた`{port}`を使う。起動場所は検査対象のcheckout。
 
 既存のbuild/deploy経路を調べ、実際に出荷するファイル集合を指定する。検査中に変わるcacheを出荷物へ混ぜない。
 必要な成果物を省いて検査を通すこともしない。コマンドを自動生成したり、新しい依存・認証・CIを導入したりしない。

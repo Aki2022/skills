@@ -320,6 +320,46 @@ def _asset_rule_evidence(root, rules, errors):
     return measured
 
 
+def _render_paths(config, errors):
+    """The path each URL env renders, from the declared gate and channels; None when none are declared."""
+    rows = [config['integration_gate']] if isinstance(config.get('integration_gate'), dict) else []
+    rows += [row for row in (config.get('channels') or {}).values() if isinstance(row, dict)]
+    paths = {}
+    for row in rows:
+        for env, server in (row.get('render_servers') or {}).items():
+            path = server.get('path') if isinstance(server, dict) else None
+            if env in paths and paths[env] != path:
+                errors.append(f'render server {env} renders different paths in different gates')
+            paths[env] = path
+    return paths or None
+
+
+def _page_inventory(root, design, config, approvals, counts, errors, warnings, ship):
+    """Every page is checked or excluded; an exclusion is the owner's decision, bound to its reason by hash."""
+    if not (design / 'validation.json').exists():
+        return {}
+    from page_inventory import check_pages
+    validation = read_data(inside(design, 'validation.json'))
+    pages = validation.get('pages') if isinstance(validation, dict) else None
+    if pages is None:
+        if ship:
+            errors.append('ship gate: page inventory required; declare validation.json pages so every page is checked or excluded')
+        return {}
+    inventory = check_pages(root, validation, paths=_render_paths(config, errors))
+    errors.extend(inventory['errors'])
+    excluded = pages.get('excluded') if isinstance(pages, dict) and isinstance(pages.get('excluded'), dict) else {}
+    covered = pages.get('covered') if isinstance(pages, dict) and isinstance(pages.get('covered'), dict) else {}
+    keys = {f'ds:web:page:{page}': value_hash({'page': page, 'reason': reason})
+            for page, reason in excluded.items() if isinstance(reason, str)}
+    counts['pages'] = {'found': inventory['pages'], 'covered': len(covered), 'excluded': len(excluded)}
+    unapproved = sorted(key for key, digest in keys.items() if approvals.get(key) != digest)
+    if unapproved and ship:
+        errors.append(f'ship gate: unapproved page exclusions {len(unapproved)}')
+    elif unapproved:
+        warnings.append(f'page exclusions awaiting owner approval: {len(unapproved)}')
+    return keys
+
+
 def _approvals(design):
     return verify_rows(read_data(design/'approvals.yaml'),design.parent)
 
@@ -430,6 +470,8 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
                 if key in approvals and approvals[key]!=digest:errors.append('approval hash mismatch: '+key)
         valid_targets = {f'ds:{m}:token:{path}' for m in media for path in tokens} | {f'ds:{m}:item:{ident}' for m in media for ident in items}
         if ia:valid_targets.update(ia['approval_hashes'])
+        page_keys = _page_inventory(root, design, config, approvals, counts, errors, warnings, ship)
+        valid_targets.update(page_keys)
         if set(approvals) - valid_targets:
             raise ValueError('approval target absent from catalog/tokens')
         for path, token in tokens.items():
@@ -649,6 +691,7 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
                     key=f'ds:{medium}:{kind}:{ident}'
                     result['approval_targets'][key]=row['value_hash']
                     if kind=='item' and row['must']:result['approval_required'].append(key)
+        result['approval_targets'].update(page_keys)
         if ia:
             result['approval_targets'].update(ia['approval_hashes'])
             result['approval_required'].extend(ia['must_approval_keys'])

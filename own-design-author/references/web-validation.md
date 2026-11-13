@@ -57,29 +57,39 @@ reportはexecuted / skipped / missing / uncovered / screenedの5配列。実行�
 ## 画面の棚卸し（漏れ検出）
 
 `html` と `urls` に書いた画面だけが検査される。後から増えた画面が宣言から漏れても、
-それだけではゲートは緑のまま通る。これを防ぐため、`validation.json` に任意の `pages` を置く。
+それだけではゲートは緑のまま通る。これを防ぐため、`validation.json` に `pages` を置く。出荷（`--ship`）には必須。
 
 ```json
 "pages": {
   "sources": ["apps/web/src/app/**/page.tsx", "apps/landing-page/**/*.html"],
   "covered": {"apps/web/src/app/diagnosis/page.tsx": ["DESIGN_WEB_URL"],
               "apps/landing-page/index.html": ["html", "DESIGN_LP_URL"]},
-  "excluded": {"apps/web/src/app/login/page.tsx": "認証画面。外部の認証基盤が描画する"}
+  "excluded": {"apps/web/src/app/login/page.tsx": "認証画面。外部の認証基盤が描画する"},
+  "routes": {"apps/landing-page/index.html": "/"}
 }
 ```
 
 - `sources` は repo 相対の git pathspec glob。追跡済みと未追跡のファイルを `.gitignore` に従って列挙するため、依存やビルド出力は入らない。フレームワークごとの経路規則は持たず、画面のソースを見つける glob を repo が宣言する。
 - `covered` は画面のソースから検査の証拠への対応。`"html"` はそのパスが L1 の `html` にあること、それ以外は `urls` の環境変数名。1つの URL 環境変数は1画面だけを担う。全ての URL 環境変数をどれかの画面に対応させる。
-- `excluded` は対象外にする画面と、空でない理由。対象外の判断はオーナーが持つ。
+- `excluded` は対象外にする画面と、空でない理由。対象外はオーナーの決定で、承認台帳に `ds:web:page:<画面のパス>` として記録する。ハッシュは画面のパスと理由に結びつくので、理由を変えると承認し直し。承認のない対象外は `--ship` で止まる。
+- `routes`（任意）は、ファイルの場所から経路を決められない画面（素の HTML など）の経路。Next.js の `app/`（route group の `(x)` と並列 route の `@x` は経路に出ない）と `pages/` の画面は、ファイルの場所から経路を決める。
+- URL で検査する画面は、その URL のパス（`render_servers` の `path`）が画面の経路に合うことを L0 で照らし合わせる。`[id]` は 1 区切り、`[...x]` は 1 区切り以上、`[[...x]]` は 0 区切り以上に合う。`/users/[id]` なら `/users/sample` のような見本の値で描く。経路に合わない URL・経路を決められない画面・パスのない URL は止まる。
+- 画面を増やしても起動するサーバーを増やさないよう、`render_servers` の行は `{"same_as": "<別の行の環境変数>", "path": "/x"}` で、別の行が起動したサーバーの別のパスを描ける。
+- ログインの後の画面は、repo の準備コマンドや描画サーバーのコマンドが、その repo の開発環境のテスト用ログイン状態を用意して描く。本番のアカウントは使わない。用意できない画面だけを、承認つきの対象外にする。
 
-`design-check` は L1 の前に棚卸しを照合し、次を exit 2 で止める（ブラウザは起動しない）。
+L0 と `design-check`（L1 の前）は棚卸しを照合し、次を exit 2 で止める（ブラウザは起動しない）。
 宣言されていない画面、存在しない画面の宣言、何にも一致しない `sources`、理由のない対象外、
 covered と excluded の重複、宣言していない検査対象の参照、複数画面を担う URL、画面に対応しない URL。
-エラーは該当パスを名指しする。`pages` が無い repo は止めずに、`uncovered` へ `pages` を残して exit を 1 以上にし、
-同じ文を `warnings` に出す。`design-ship` の記録（push 前検査・統合検査）も `warnings` にこの文を引き継ぐ。
+エラーは該当パスを名指しする。`pages` が無い repo は、`design-check` では止めずに警告し、`--ship` の L0 で止める。
+L0 の `counts.pages` に、見つけた画面・検査する画面・対象外の数が入る。
 
-限界: 対応が正しいか（その URL が本当にその画面を描くか）は宣言を信じる。
-動的な経路（`[id]` 等）や認証の後ろの画面は、描画用の状態を用意できるまで理由付きで対象外にする。
+限界: 経路の照合は、URL のパスが画面の経路の形に合うかまで。その URL が描いた中身が本当にその画面のコンポーネントかは見ない。
+Next.js 以外の経路規則は持たないので、`routes` の宣言を信じる。
+
+### 画面を並べて描く
+
+`validation.json` の任意の `parallel`（正の整数、既定 1）で、同時に描く画面の数を決める。
+判定は宣言の順に行い、ある画面の L2 か ITEMS で外れたら、先に描き始めた画面も止める。
 
 ## 採用した項目の確かめ方（skillのコード・repoが宣言する検査・AFM）
 

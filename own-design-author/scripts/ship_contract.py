@@ -29,9 +29,15 @@ def _merge_base(value):
 def _render_servers(servers):
     if not isinstance(servers,dict) or not servers:raise ValueError('gate requires bound render servers')
     for env,server in servers.items():
-        if not isinstance(env,str) or not re.fullmatch(r'[A-Z][A-Z0-9_]*',env) or not isinstance(server,dict) or set(server)!={'command','path'}:
+        # A row either starts its own server or renders another path of a server another row starts.
+        if not isinstance(env,str) or not re.fullmatch(r'[A-Z][A-Z0-9_]*',env) or not isinstance(server,dict) or set(server) not in ({'command','path'},{'same_as','path'}):
             raise ValueError('invalid render server')
-        _argv(server['command'],port=True)
+        if 'same_as' in server:
+            owner=servers.get(server['same_as'])
+            if not isinstance(owner,dict) or 'command' not in owner:
+                raise ValueError('render server same_as must name a row that starts its own server')
+        else:
+            _argv(server['command'],port=True)
         path=server['path']
         if not isinstance(path,str) or not path.startswith('/') or path.startswith('//') or any(c in path for c in ('#','\\','\0','\n','\r')):
             raise ValueError('render server path must be local to the assigned origin')

@@ -186,6 +186,7 @@ def rendered(project, tmp_path):
     server = ThreadingHTTPServer(('127.0.0.1', 0), partial(Handler, directory=str(root)))
     Thread(target=server.serve_forever, daemon=True).start()
     env['DESIGN_FIXTURE_URL'] = 'http://127.0.0.1:' + str(server.server_port)
+    env['DESIGN_FIXTURE_URL_2'] = env['DESIGN_FIXTURE_URL'] + '/?second'  # a second endpoint on the same page
     argv = [sys.executable, str(SKILL / 'scripts/web_check.py'), '--repo', str(root), '--catalog-dir', str(catalogs)]
 
     def run(body='', **extra):

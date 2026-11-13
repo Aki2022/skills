@@ -77,8 +77,11 @@ def browser_project(project,env):
     cfg=json.loads((root/'design/design.yaml').read_text());row=channel()
     row['build_command']=['python3','build.py'];row['ship_command']=['python3','deploy.py']
     cfg['channels']={'web':row};write(root/'design/design.yaml',cfg)
+    # Shipping needs a page inventory: the one page is the L1 target and the rendered URL at its route.
     write(root/'design/validation.json',{'schema_version':1,'html':['index.html'],
-        'urls':[{'env':'DESIGN_WEB_URL'}],'viewports':[375],'schemes':['light']})
+        'urls':[{'env':'DESIGN_WEB_URL'}],'viewports':[375],'schemes':['light'],
+        'pages':{'sources':['index.html'],'covered':{'index.html':['html','DESIGN_WEB_URL']},'excluded':{},
+                 'routes':{'index.html':'/'}}})
     return root
 
 

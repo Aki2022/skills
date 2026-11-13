@@ -3,11 +3,16 @@
 validation.json may declare `pages`:
   sources  - repo-relative git pathspec globs that find every page source (e.g. app/**/page.tsx)
   covered  - {page path: [evidence]}; evidence is "html" (the path is an L1 target) or a URL env of `urls`
-  excluded - {page path: reason}
+  excluded - {page path: reason}; shipping also needs the owner's approval of each exclusion (L0)
+  routes   - optional {page path: route pattern} for page files whose route cannot be derived
+When the caller passes the rendered path of each URL env, every page covered by a URL must be rendered at its
+own route: Next.js app/ and pages/ files derive it from the file path; other files declare it in routes.
 Files are listed from git (tracked plus untracked, honoring .gitignore), so dependencies and build output
 stay out. Without `pages` the gate keeps working but reports that new pages cannot be detected.
 """
+import re
 import subprocess
+from urllib.parse import urlsplit
 
 MISSING = 'page inventory not declared; pages outside validation.json are not detected'
 
@@ -18,12 +23,55 @@ def _files(root, pattern):
     return {name for name in out.split('\0') if name}
 
 
-def check_pages(root, config):
+PAGE_FILE = re.compile(r'\.(tsx|jsx|ts|js|mdx)$')
+
+
+def derive_route(page):
+    """The URL route a Next.js page file serves, as a pattern with [param] segments; None when not derivable."""
+    parts = page.split('/')
+    if 'app' in parts and re.fullmatch(r'page\.(tsx|jsx|ts|js|mdx)', parts[-1]):
+        segments = parts[len(parts) - parts[::-1].index('app'):-1]
+        segments = [x for x in segments if not (x.startswith('(') and x.endswith(')')) and not x.startswith('@')]
+        return '/' + '/'.join(segments)
+    if 'pages' in parts and PAGE_FILE.search(parts[-1]) and not parts[-1].startswith('_'):
+        segments = parts[len(parts) - parts[::-1].index('pages'):]
+        segments[-1] = PAGE_FILE.sub('', segments[-1])
+        if segments[-1] == 'index':
+            segments = segments[:-1]
+        return '/' + '/'.join(segments)
+    return None
+
+
+def route_matches(pattern, path):
+    """Whether a concrete rendered path is an instance of a route pattern ([x], [...x], [[...x]])."""
+    want = [x for x in pattern.split('/') if x]
+    have = [x for x in urlsplit(path).path.split('/') if x]
+
+    def walk(i, j):
+        if i == len(want):
+            return j == len(have)
+        part = want[i]
+        if part.startswith('[[...') and part.endswith(']]'):
+            return any(walk(i + 1, k) for k in range(j, len(have) + 1))
+        if part.startswith('[...') and part.endswith(']'):
+            return any(walk(i + 1, k) for k in range(j + 1, len(have) + 1))
+        if j == len(have):
+            return False
+        if part.startswith('[') and part.endswith(']'):
+            return walk(i + 1, j + 1)
+        return part == have[j] and walk(i + 1, j + 1)
+    return walk(0, 0)
+
+
+def check_pages(root, config, paths=None):
     pages = config.get('pages')
     if pages is None:
         return {'errors': [], 'warnings': [MISSING], 'pages': 0}
-    if not isinstance(pages, dict) or set(pages) != {'sources', 'covered', 'excluded'}:
-        return {'errors': ['page inventory must declare exactly sources, covered and excluded'], 'warnings': [], 'pages': 0}
+    if not isinstance(pages, dict) or not {'sources', 'covered', 'excluded'} <= set(pages) <= {'sources', 'covered', 'excluded', 'routes'}:
+        return {'errors': ['page inventory must declare sources, covered and excluded (and optionally routes)'], 'warnings': [], 'pages': 0}
+    routes = pages.get('routes', {})
+    if not isinstance(routes, dict) or any(not isinstance(v, str) or not v.startswith('/') for v in routes.values()):
+        return {'errors': ['pages.routes must map page paths to routes starting with /'], 'warnings': [], 'pages': 0}
     sources, covered, excluded = pages['sources'], pages['covered'], pages['excluded']
     errors = []
     if not isinstance(sources, list) or not sources or not all(isinstance(s, str) and s.strip() for s in sources):
@@ -67,4 +115,18 @@ def check_pages(root, config):
         errors.append('validation target is not attributed to a page: ' + env)
     for page in sorted(found - set(covered) - set(excluded)):
         errors.append('page not validated or excluded: ' + page)
+    for page in sorted(set(routes) - set(covered)):
+        errors.append('route declared for a page no URL covers: ' + page)
+    if paths is not None:
+        for env, owners in sorted(claimed.items()):
+            if len(owners) != 1:
+                continue
+            page = owners[0]
+            route = routes.get(page) or derive_route(page)
+            if route is None:
+                errors.append(f'cannot derive the route of {page}; declare it in pages.routes')
+            elif env not in paths:
+                errors.append(f'{env} has no rendered path to compare with {page}')
+            elif not route_matches(route, paths[env]):
+                errors.append(f'{env} renders {paths[env]}, which is not the route {route} of {page}')
     return {'errors': errors, 'warnings': [], 'pages': len(found)}

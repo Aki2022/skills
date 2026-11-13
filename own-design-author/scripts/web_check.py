@@ -5,6 +5,7 @@ import copy
 import json
 import os
 from pathlib import Path
+import signal
 import subprocess
 import sys
 from design_author import check_design, git_root, inside, read_data, CATALOG
@@ -160,8 +161,10 @@ def main():
             report['errors']=l0['errors']
             print(json.dumps(report,ensure_ascii=False));return 2
         config=read_data(inside(root/'design','validation.json'))
-        if not isinstance(config,dict) or set(config)-{'pages'}!={'schema_version','html','urls','viewports','schemes'} or config['schema_version']!=1:
+        if not isinstance(config,dict) or set(config)-{'pages','parallel'}!={'schema_version','html','urls','viewports','schemes'} or config['schema_version']!=1:
             raise ValueError('invalid validation configuration')
+        parallel=config.get('parallel',1)
+        if type(parallel) is not int or parallel<1:raise ValueError('validation parallel must be a positive integer')
         inventory=check_pages(root,config)
         report['pages']=inventory['pages']
         if inventory['errors']:
@@ -193,20 +196,30 @@ def main():
         environment=inside(root/'design','render-environment.json')
         if not environment.is_file():raise ValueError('fixed rendering environment missing')
         uncovered=set(l0['manifest']['web']['coverage']['uncovered'])
-        for index,(target_env,profile) in enumerate(endpoints):
-            row={'env':target_env}
-            url=os.environ.get(row['env'],'')
-            if not url.startswith(('http://','https://')):
-                raise ValueError('missing or invalid rendering URL: '+row['env'])
+        screens=root/'design/.resolved/screens'
+        for target_env,_profile in endpoints:
+            if not os.environ.get(target_env,'').startswith(('http://','https://')):
+                raise ValueError('missing or invalid rendering URL: '+target_env)
+
+        def launch(index):
+            target_env,profile=endpoints[index]
             output=inside(root/'design/.resolved','l2-'+str(index)+'.json')
             output.unlink(missing_ok=True)
-            screens=root/'design/.resolved/screens'
-            l2=subprocess.run([os.environ.get('DESIGN_AUDIT_NODE','node'),
-                str(skills/'own-website-audit/scripts/measure_lp.mjs'),url,'--manifest',str(resolved),
+            return subprocess.Popen([os.environ.get('DESIGN_AUDIT_NODE','node'),
+                str(skills/'own-website-audit/scripts/measure_lp.mjs'),os.environ[target_env],'--manifest',str(resolved),
                 '--environment',str(environment),'--profile',profile,
                 '--viewports',','.join(map(str,config['viewports'])),'--schemes',','.join(config['schemes']),
-                '--json',str(output)],cwd=root,capture_output=True,text=True,
-                env={**os.environ,'DESIGN_SCREENSHOT_DIR':str(screens)})
+                '--json',str(output)],cwd=root,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,
+                env={**os.environ,'DESIGN_SCREENSHOT_DIR':str(screens)},start_new_session=True)
+        # Up to `parallel` pages render at once; results are judged in declared order, and a failure stops the rest.
+        running={}
+        try:
+          for index,(target_env,profile) in enumerate(endpoints):
+            for ahead in range(index,min(index+parallel,len(endpoints))):
+                if ahead not in running:running[ahead]=launch(ahead)
+            row={'env':target_env}
+            output=inside(root/'design/.resolved','l2-'+str(index)+'.json')
+            l2=running.pop(index);l2.wait()
             if not output.is_file():
                 report['report']['missing'].append({'id':'L2:'+row['env'],'reason':'no fresh fixed rendering report'})
                 raise ValueError('fresh fixed rendering report missing')
@@ -236,6 +249,12 @@ def main():
             # Code checks for this page run now: a failure stops before the next page is rendered.
             pages,afm_pairs,items_code=verify_items(root,l0,endpoints[:index+1],report,final=index==len(endpoints)-1)
             if items_code:break
+        finally:
+            # Pages rendered ahead of a failure are stopped with their browsers (own process group).
+            for process in running.values():
+                try:os.killpg(process.pid,signal.SIGKILL)
+                except ProcessLookupError:pass
+                process.wait()
         if items_code==2:
             print(json.dumps(report,ensure_ascii=False));return 2
         afm_code=run_afm(root,l0,config,pages,afm_pairs,report)

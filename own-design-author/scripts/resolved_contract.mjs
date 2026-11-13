@@ -217,7 +217,18 @@ export function collectItemChecks(manifest) {
   qs('ol').forEach(el => add('dom:ol', el));
   q('[tabindex]').filter(el => parseInt(el.getAttribute('tabindex'), 10) > 0).forEach(el => add('dom:positive-tabindex', el));
   qs('input[type="date"]').forEach(el => add('dom:date-input', el));
-  qs('button[disabled],input[type="submit"][disabled],input[type="button"][disabled]').forEach(el => add('dom:disabled-button', el));
+  // The catalog permits a disabled button only with readable text right by it saying why. "Right by it" is
+  // checked as the programmatic tie (aria-describedby) to text a sighted reader can see: a hidden, clipped
+  // (1px screen-reader-only), pushed off the page or empty description does not count.
+  // :disabled includes a disabled fieldset.
+  const onPage = rect => rect.right > 0 && rect.bottom > 0
+    && rect.left < document.documentElement.scrollWidth && rect.top < document.documentElement.scrollHeight;
+  const readableReason = el => (el.getAttribute('aria-describedby') || '').split(/\s+/).filter(Boolean)
+    .map(id => document.getElementById(id)).some(r => r && shown(r) && textOf(r)
+      && [...r.getClientRects()].some(rect => rect.width > 1 && rect.height > 1 && onPage(rect)));
+  qs('button:disabled,input[type="submit"]:disabled,input[type="button"]:disabled,input[type="image"]:disabled,'
+    + 'button[aria-disabled="true"],[role="button"][aria-disabled="true"]')
+    .filter(el => !readableReason(el)).forEach(el => add('dom:disabled-button', el));
   q('td[colspan],td[rowspan],th[colspan],th[rowspan]').filter(el =>
     parseInt(el.getAttribute('colspan') || '1', 10) > 1 || parseInt(el.getAttribute('rowspan') || '1', 10) > 1)
     .forEach(el => add('dom:table-span', el));

@@ -141,7 +141,7 @@ L2に渡す検査と部品のselectorは`item_checks`に入る。
 - L2が測り、採用した項目にだけ効かせる検査（L2自体は止めない）:
   - トークンの値: palette:fontSize / fontWeight / shadow / spacing（padding・gap。marginは自動の中央寄せと区別できないので測らない）
   - コントラスト: contrast-nontext（入力欄・ボタン等の境界と背景が3:1以上）、contrast-icon（アイコンと背景が4.5:1以上）
-  - 属性・構造: placeholder・readonly・disabled・maxlength・pattern・ol・正のtabindex・`input type=date`・disabledのボタン・結合セル・thのない表・セルの配置（上寄せ、数値の右寄せ）・aria-expandedを持つ非ボタン・「ここ」リンク・リンクのカーソル・ボタンの文字のはみ出し・入力欄の高さ（36px以上）・ラベルが入力欄の上にあるか・貼り付け／コピーの禁止・フォーム内のaria-live・文字で作った箇条書き・h1が1つでtitleに含まれるか・アイコンだけのリンク／ボタン・ラベル付きの装飾アイコンの隠し忘れ・新規タブの予告・文中リンクの区別・全角空白での位置合わせ・長いイタリック・ページ背景の指定・ダイアログの枠線・見えないファイル選択・7枚以上のスライド・フォーカス順が上へ戻る
+  - 属性・構造: placeholder・readonly・disabled・maxlength・pattern・ol・正のtabindex・`input type=date`・見える理由を aria-describedby で結び付けていない無効ボタン（disabled・fieldset による無効・aria-disabled）・結合セル・thのない表・セルの配置（上寄せ、数値の右寄せ）・aria-expandedを持つ非ボタン・「ここ」リンク・リンクのカーソル・ボタンの文字のはみ出し・入力欄の高さ（36px以上）・ラベルが入力欄の上にあるか・貼り付け／コピーの禁止・フォーム内のaria-live・文字で作った箇条書き・h1が1つでtitleに含まれるか・アイコンだけのリンク／ボタン・ラベル付きの装飾アイコンの隠し忘れ・新規タブの予告・文中リンクの区別・全角空白での位置合わせ・長いイタリック・ページ背景の指定・ダイアログの枠線・見えないファイル選択・7枚以上のスライド・フォーカス順が上へ戻る
   - axe: button-name、list、label、link-name
 
 各検査には、壊したページで必ず検出し、きれいなページでは何も出さないテストがある（`tests/test_item_collector.py`）。

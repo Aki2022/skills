@@ -27,13 +27,15 @@ export const FIXED_LAUNCH_ARGS=Object.freeze(['--disable-gpu-rasterization']);
 // Reports and gate errors persist only fixed codes and allow-listed details. Raw
 // error text can carry URLs with tokens or local paths that no pattern reliably masks.
 const FAILURE_STAGES={navigate:'navigation',assets:'asset-decode',collect:'collect',axe:'axe',
-  contrast:'contrast-sampling',images:'image-sampling',evidence:'render-evidence',recheck:'fixed-inputs-changed'};
+  contrast:'contrast-sampling',images:'image-sampling',evidence:'render-evidence',recheck:'fixed-inputs-changed',
+  state:'state-unreachable'};
 const FAILURE_DETAILS=[
   [/render did not stabilize within three captures/,'render did not stabilize within three captures','render-unstable'],
   [/visible assets did not become ready/,'visible assets did not become ready within 10 seconds',null],
   [/EncodingError|cannot be decoded/,'a visible image could not be decoded',null],
   [/environment changed/,'fixed rendering environment changed during measurement',null],
   [/fixed runtime mismatch/,'fixed runtime changed during measurement',null],
+  [/^state step/,'a declared state step matched no unique element or could not run','state-unreachable'],
 ];
 export function describeRenderFailure(error,stage) {
   const text=String(error&&error.message||error||'');
@@ -41,6 +43,49 @@ export function describeRenderFailure(error,stage) {
   return {code:(known&&known[2])||FAILURE_STAGES[stage]||'render-'+String(stage).replace(/[^a-z-]/g,''),
     message:known?known[1]:'unlisted error; rerun the measurement locally to read it'};
 }
+// Interaction states: declarative steps only (click/focus/fill/submit on one CSS selector). No code runs from
+// the declaration. Each step must match exactly one element; otherwise the state is unreachable, never skipped.
+const STATE_ACTIONS=['click','focus','fill','submit'];
+export function parseState(text) {
+  if(text==null)return null;
+  const state=JSON.parse(text);
+  const valid=step=>{
+    if(!step||typeof step!=='object'||Array.isArray(step))return false;
+    const actions=STATE_ACTIONS.filter(a=>a in step);
+    if(actions.length!==1||typeof step[actions[0]]!=='string'||!step[actions[0]].trim())return false;
+    const keys=Object.keys(step).sort().join(',');
+    return actions[0]==='fill'?keys==='fill,value'&&typeof step.value==='string':keys===actions[0];
+  };
+  if(!exact(state,'name,steps')||typeof state.name!=='string'||!/^[a-z0-9][a-z0-9-]{0,39}$/.test(state.name)||
+    !Array.isArray(state.steps)||!state.steps.length||state.steps.length>20||!state.steps.every(valid))throw Error('invalid state');
+  return state;
+}
+
+export async function applyState(page,state) {
+  for(const [index,step] of state.steps.entries()){
+    const action=STATE_ACTIONS.find(a=>a in step);
+    const unreachable=()=>Object.assign(Error('state step '+(index+1)+' cannot run'),{stateStep:index+1});
+    let target,count;
+    try{target=page.locator(step[action]);count=await target.count();}catch{throw unreachable();}
+    if(count!==1)throw unreachable();
+    try{
+      if(action==='click')await target.click({timeout:5000});
+      else if(action==='focus')await target.focus({timeout:5000});
+      else if(action==='fill')await target.fill(step.value,{timeout:5000});
+      else {
+        const submitted=await target.evaluate(el=>{
+          const form=el instanceof HTMLFormElement?el:el.form;
+          if(!form)return false;
+          const submitter=el!==form&&el.type==='submit'?el:undefined;
+          form.requestSubmit(submitter);return true;
+        });
+        if(!submitted)throw Error('no form');
+      }
+      await page.waitForLoadState('domcontentloaded');
+    }catch{throw unreachable();}
+  }
+}
+
 export function fixedLaunchOptions(chromium) {
   return {executablePath:chromium.executablePath(),args:[...FIXED_LAUNCH_ARGS]};
 }

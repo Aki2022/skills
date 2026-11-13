@@ -120,8 +120,11 @@ def validate_web_result(root,result,urls):
     if result.get('exit_code') not in (0,1) or result.get('errors'):
         raise ValueError('L0/L1/L2 result failed')
     config=read_json(root/'design/validation.json')
-    expected=[row['env'] for row in config['urls']]
-    if not expected or len(set(expected))!=len(expected) or set(expected)!=set(urls):
+    from web_check import render_targets  # deferred: web_check imports the L0 checker
+    targets=render_targets(config)
+    expected=[t['label'] for t in targets]
+    servers=[row['env'] for row in config['urls']]
+    if not servers or len(set(servers))!=len(servers) or set(servers)!=set(urls):
         raise ValueError('render servers must cover exactly all validation endpoints')
     stages=result.get('stages',[])
     items=read_json(root/'design/.resolved/items.json')
@@ -145,12 +148,14 @@ def validate_web_result(root,result,urls):
     environment=root/'design/render-environment.json';fixed=read_json(environment)
     environment_hash=hashlib.sha256(environment.read_bytes()).hexdigest()
     evidence={}
-    for i,env in enumerate(expected):
-        stage=stages[i+2]
-        if stage.get('exit_code')!=0 or stage.get('target_env')!=env:
+    for i,target in enumerate(targets):
+        stage=stages[i+2];env=target['env']
+        if stage.get('exit_code')!=0 or stage.get('target_env')!=target['label']:
             raise ValueError('partial or failed L2 stage')
         path=safe_path(root,'design/.resolved/l2-'+str(i)+'.json');measured=read_json(path)
-        profile=config['urls'][i].get('profile','lp')
+        if measured.get('state')!=target['state']:
+            raise ValueError('interaction state evidence does not match the declared steps')
+        profile=target['profile']
         if profile not in ('lp','product-ui') or stage.get('profile','lp')!=profile or measured.get('profile','lp')!=profile:
             raise ValueError('rendering profile evidence mismatch')
         actual=measured.get('environment',{})

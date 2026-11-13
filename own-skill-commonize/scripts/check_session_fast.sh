@@ -1,7 +1,8 @@
 #!/bin/bash
-# セッション開始時に走る高速検査の入口。中身は 3 つで、合わせて 0.1 秒ほど。
+# セッション開始時に走る高速検査の入口。中身は 4 つで、合わせて 0.1 秒ほど。
 #
 #   check_wiring_fast.sh   配線先に正典から切り離された実体が無いか
+#   check_canon_branch.sh  正典のチェックアウトが main で、origin/main に追いついているか
 #   check_mirrors.py       plugin の導入版と正典の第三者 skill がずれていないか（--only-drift）
 #   check_hook_parity.py   hook の参照が実在し、席どうしで揃っているか
 #
@@ -17,6 +18,9 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 rc=0
 
 bash "$HERE/check_wiring_fast.sh" || rc=1
+
+# 正典のチェックアウトが main 以外・遅れていると、古い skill が黙って読まれる。
+bash "$HERE/check_canon_branch.sh" || rc=1
 
 # 第三者 skill の plugin 導入版と正典のずれ（plugin の自動更新後に起きる）。ずれた時だけ 1 行ずつ出す。
 plugin_args=()

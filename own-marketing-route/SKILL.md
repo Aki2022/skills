@@ -33,7 +33,12 @@ core の CLI と catalog は、core の正典の checkout から読む。どこ�
    `$MARKETING_CORE_DIR/packages/marketing-core/capabilities/catalog.json`、
    `$MARKETING_CORE_DIR/packages/marketing-core/capabilities/adoption-menu.json` がすべてあることを確かめる。
    無ければ止まって人に伝える。
-4. catalog の `sharedVersion` を人に見せる。入れるのはこの版になる。
+4. 手元の checkout は古いことがある。`git -C "$MARKETING_CORE_DIR" fetch origin` のあと、
+   `HEAD` が `origin/main` と同じかを確かめる。違うときは checkout を書き換えず、
+   `git -C "$MARKETING_CORE_DIR" worktree add --detach <一時ディレクトリ> origin/main` で読み、
+   以下の `$MARKETING_CORE_DIR` はその一時ディレクトリに読み替える。使い終わったら worktree を外す。
+   `gh api` で CLI や catalog を 1 ファイルずつ取り出したり、別の clone を作ったりしない。
+5. catalog の `sharedVersion` を人に見せる。入れるのはこの版になる。
 
 ## 2. 採用メニューを見せて、目的を聞く
 
@@ -69,8 +74,11 @@ node "$MARKETING_CORE_DIR/packages/marketing-core/bin/capabilities.cjs" start --
   repo の `AGENTS.md` や docs の決まりがあれば先に読み、それに従う。
 - `setup.*` を選びそうなら、先に `package.json` を手で作らない。`consumer-init` が scaffold として
   作り、既にあると全体を断るので、provision skill の順番に従う。
-- token（`NODE_AUTH_TOKEN`）の値は表示しない・書かない。用意の仕方はこの repo の秘密の
-  扱い（例: own-secret-resolve）に任せる。診断は token が設定されているかだけを見る。
+- token（`NODE_AUTH_TOKEN`）の値は表示しない・書かない。渡し方は `start` の `next` に従い、
+  そのコマンドにだけ渡す（export しない）。診断は token が設定されているかだけを見る。
+- 秘密が要る item（メニューの `secrets`）は、人に新しい秘密を頼む前にメニューの `secretsRule` に従う。
+  owner が複数の repo で共有している秘密（例: Slack の bot token）が既にあれば、own-secret-resolve の
+  手順でそれをこの repo に写して使う。鍵名だけを調べ、値は見ない。新しい秘密は、無いと確かめてから頼む。
 - `@aki2022/*` の pin が古い・catalog 外だと warning に出る。新しい機能を足す前に、その repo が
   使っている capability を全部挙げて `upgrade`（core の checkout の CLI）で上げる。`upgrade` の後は
   `npm ci` と `skills` をやり直し、配布 skill の差分は人と確かめる。

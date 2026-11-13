@@ -222,8 +222,7 @@ def _evaluate(root, commit, tree, date, source, predicted):
                 skipped.append({'outline': oid, 'reason': 'no HTML output; the rendered DOM check covers HTML only'})
                 continue
             rep = dom.run(root, oid, date)
-            data = rep.to_dict()
-            data['first_screens'] = getattr(rep, 'first_screens', [])
+            data = dom.report_dict(rep)  # first_screens and unanchored: the gate judges what evaluate judges
             path = Path(temporary) / f'dom-{oid}.json'
             path.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
             dom_paths.append(str(path))

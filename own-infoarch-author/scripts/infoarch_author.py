@@ -1,4 +1,4 @@
-"""own-infoarch-author CLI: check (deterministic), dom, judge (judgment ledger reader), ship (gate), maintain, skeleton, impact. Never writes approvals."""
+"""own-infoarch-author CLI: check (deterministic), dom, judge (judgment ledger reader), evaluate (all three), ship (gate), maintain, skeleton, impact. Never writes approvals."""
 from __future__ import annotations
 
 import argparse
@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import check  # noqa: E402
 import dom  # noqa: E402
+import evaluate  # noqa: E402
 import ia_ship  # noqa: E402
 import judge  # noqa: E402
 import skeleton  # noqa: E402
@@ -35,6 +36,7 @@ def cmd_dom(args):
     report = dom.run(args.root, args.outline, date)
     out = report.to_dict()
     out['first_screens'] = getattr(report, 'first_screens', [])
+    out['unanchored'] = getattr(report, 'unanchored', [])
     _print(out)
     return report.exit_code
 
@@ -54,6 +56,23 @@ def cmd_judge(args):
         out['replacement'] = summary
     _print(out)
     return report.exit_code
+
+
+def cmd_evaluate(args):
+    """check -> dom -> judge in one report; --acquire fetches missing Jev judgments (preview unless --execute)."""
+    date = args.date or dt.date.today().isoformat()
+    dt.date.fromisoformat(date)
+    acquire = None
+    if args.acquire:
+        if not args.answers_dir or not args.limit:
+            raise ValueError('--acquire には --answers-dir と --limit が要る')
+        acquire = {'limit': args.limit, 'answers_dir': args.answers_dir, 'execute': args.execute}
+    elif args.execute:
+        raise ValueError('--execute は --acquire と一緒に使う')
+    result = evaluate.run(args.root, date, args.outline, acquire=acquire)
+    result.pop('candidates', None)  # candidate rows carry unpublished copy; judge --include-candidates prints them on purpose
+    _print(result)
+    return result['exit_code']
 
 
 def _line(obj):
@@ -146,6 +165,15 @@ def main(argv=None):
     j.add_argument('--answers', help='judgment-answers.json from judgment_run.py')
     j.add_argument('--replacement-out', help='write the shared-ledger replacement here (never overwrites)')
     j.set_defaults(fn=cmd_judge)
+    e = sub.add_parser('evaluate', help='evaluate generated creatives: check, then dom, then judge, one report and one exit code')
+    e.add_argument('--root', default='.')
+    e.add_argument('--date', help='evaluation date YYYY-MM-DD (default: today)')
+    e.add_argument('--outline', action='append', help='outline id to evaluate (repeatable; default: every outline)')
+    e.add_argument('--acquire', action='store_true', help='also fetch missing Jev judgments (preview only unless --execute)')
+    e.add_argument('--answers-dir', help='directory that keeps judgment-answers.json between runs (outside the repo)')
+    e.add_argument('--limit', type=int, help='most judgments to request in this run')
+    e.add_argument('--execute', action='store_true', help='with --acquire: call Jev (metered) and record design/judgments.json')
+    e.set_defaults(fn=cmd_evaluate)
     s = sub.add_parser('ship', help='ship gate on the committed SHA: check, dom of shipped HTML, judge; --channel runs ship_command only when green')
     s.add_argument('--root', default='.')
     s.add_argument('--date', help='evaluation date YYYY-MM-DD (default: today)')

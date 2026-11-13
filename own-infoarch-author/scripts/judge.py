@@ -3,7 +3,8 @@
 Four kinds share own-design-author's judgment policy and `design/judgments.json`
 (ADR-20261111-ia-judgments-share-design-policy-and-ledger, biz_ops):
 - ia-name-variant: a section's copy writes an official name in another notation.
-- ia-unregistered-claim: a section's copy claims something its message / proofs / facts do not support.
+- ia-unregistered-claim: a section's copy claims something its message / proofs / facts do not support. Rendered text
+  outside every anchor (`dom`'s `unanchored`) is judged the same way, with nothing on the page supporting it.
 - ia-audience-fit: the outline's order and emphasis do not suit its audience and brief.
 - ia-emphasis: a rendered first screen does not carry the audience's top-priority message.
 
@@ -91,11 +92,51 @@ def emphasis_candidates(oid, outline, ssot, screens, policy, jl):
             for s in screens]
 
 
+def unanchored_candidates(oid, rows, policy, jl):
+    """Text the page shows outside every section: a claim with no message, proof or fact behind it."""
+    return [jl.candidate('ia-unregistered-claim', f"{oid}/{r['file']}@{r['viewport']}#unanchored", r['text'],
+                         {'outline': oid, 'role': 'unanchored', 'message': None, 'problem': None, 'proofs': [], 'facts': []},
+                         policy=policy)
+            for r in rows]
+
+
 def expected_screens(outline, channels):
     """(file, viewport) pairs `dom` renders for an outline: its HTML outputs times the channel's viewports."""
     ch = channels.get(outline['channel'])
     viewports = (ch[1].get('viewports') if ch else None) or dom.DEFAULT_VIEWPORTS
     return [(o, v['name']) for o in outline['outputs'] if Path(o).suffix.lower() in dom.HTML_SUFFIXES for v in viewports]
+
+
+def _rows(path, field, rows, expected, report, seen):
+    """Validated rows of one dom report field; a bad row fails without echoing its text."""
+    good = []
+    for i, s in enumerate(rows):
+        ok = (isinstance(s, dict) and all(isinstance(s.get(k), str) and s[k].strip() for k in ('outline', 'file', 'viewport', 'text'))
+              and (s['file'], s['viewport']) in expected.get(s['outline'], ()))
+        key = (field, s['outline'], s['file'], s['viewport']) if ok else None
+        if not ok or key in seen:
+            report.add('fail', 'IA_JUDGE_DOM_REPORT',
+                       f'{path}: {field}[{i}] が読めない（型・未知のアウトライン/成果物/画面幅・重複のどれか）')
+            continue
+        seen.add(key)
+        good.append(s)
+    return good
+
+
+def read_unanchored(paths, expected, report):
+    """-> {outline id: [unanchored rows]} from passing dom reports; the field is optional (empty means none)."""
+    out, seen = {}, set()
+    for path in paths:
+        data = json.loads(Path(path).read_text(encoding='utf-8'))
+        rows = data.get('unanchored', [])
+        if data.get('exit_code') not in (0, 1) or not rows:
+            continue
+        if not isinstance(rows, list):
+            report.add('fail', 'IA_JUDGE_DOM_REPORT', f'{path}: unanchored が一覧でない')
+            continue
+        for s in _rows(path, 'unanchored', rows, expected, report, seen):
+            out.setdefault(s['outline'], []).append(s)
+    return out
 
 
 def read_dom_reports(paths, expected, report):
@@ -106,22 +147,16 @@ def read_dom_reports(paths, expected, report):
     screens, seen = {}, set()
     for path in paths:
         data = json.loads(Path(path).read_text(encoding='utf-8'))
-        if data.get('exit_code') != 0:
-            report.add('fail', 'IA_JUDGE_DOM_FAILED', f'{path}: dom が合格していない描画物は判定しない（exit {data.get("exit_code")}）')
+        # A warning (text outside the anchors, a non-HTML output, a repeat with other copy) still renders the page as
+        # designed; only a failure (or an unknown code) makes the render unfit to judge.
+        if data.get('exit_code') not in (0, 1):
+            report.add('fail', 'IA_JUDGE_DOM_FAILED', f'{path}: dom が失格した描画物は判定しない（exit {data.get("exit_code")}）')
             continue
         rows = data.get('first_screens')
         if not isinstance(rows, list) or not rows:
             report.add('fail', 'IA_JUDGE_DOM_REPORT', f'{path}: first_screens が空（対象 0 件を合格にしない）')
             continue
-        for i, s in enumerate(rows):
-            ok = (isinstance(s, dict) and all(isinstance(s.get(k), str) and s[k].strip() for k in ('outline', 'file', 'viewport', 'text'))
-                  and (s['file'], s['viewport']) in expected.get(s['outline'], ()))
-            key = (s['outline'], s['file'], s['viewport']) if ok else None
-            if not ok or key in seen:
-                report.add('fail', 'IA_JUDGE_DOM_REPORT',
-                           f'{path}: first_screens[{i}] が読めない（型・未知のアウトライン/成果物/画面幅・重複のどれか）')
-                continue
-            seen.add(key)
+        for s in _rows(path, 'first_screens', rows, expected, report, seen):
             screens.setdefault(s['outline'], []).append(s)
     return screens
 
@@ -218,9 +253,11 @@ def run(root, date, dom_reports=(), answers=None, replacement_out=None):
     pre = Report(level='judge', evaluated_on=date)
     expected = {oid: expected_screens(outline, m.channels) for oid, (_, outline) in m.outlines.items()}
     screens = read_dom_reports(dom_reports, expected, pre)
+    loose = read_unanchored(dom_reports, expected, pre)
     rows, missing = [], []
     for oid, (_, outline) in sorted(m.outlines.items()):
         rows += outline_candidates(oid, outline, m.ssot, policy, jl)
+        rows += unanchored_candidates(oid, loose.get(oid, []), policy, jl)
         ch = m.channels.get(outline['channel'])
         shipped = bool(ch and ch[1].get('ship'))
         if oid in screens:

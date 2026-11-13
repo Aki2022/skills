@@ -1,7 +1,8 @@
 // Snapshot of a rendered page for the information-architecture DOM checks.
 // Usage: node dom_snapshot.mjs <html file> <viewports JSON>
 // Prints a JSON array, one snapshot per viewport: anchors (data-ia-msg / data-ia-problem / data-ia-fact) with
-// their rendered box, visibility and text, the total rendered text length, and the text visible in the first screen.
+// their rendered box, visibility and text, the total rendered text length, the text visible in the first screen,
+// and the visible text that belongs to no message / problem / fact anchor (`unanchored`).
 // Playwright is resolved from INFOARCH_PLAYWRIGHT_DIR, else from the current directory (the target repo).
 // It is never installed automatically; when it cannot be resolved this exits 2.
 import { createRequire } from "node:module";
@@ -49,13 +50,30 @@ try {
         null, { timeout: ANIMATION_TIMEOUT_MS })
       .catch(() => {}); // endless animations: read anyway; the two-run stability check reports a moving page
     const snap = await page.evaluate((vh) => {
-      const visible = (el) => {
+      const shown = (el) => {
         for (let e = el; e && e.nodeType === 1; e = e.parentElement) {
           const cs = getComputedStyle(e);
           if (cs.display === "none" || cs.visibility === "hidden" || Number(cs.opacity) === 0) return false;
         }
-        const r = el.getBoundingClientRect();
+        return true;
+      };
+      const textPainted = (n) => {
+        const range = document.createRange();
+        range.selectNodeContents(n);
+        const r = range.getBoundingClientRect();
         return r.width > 0 && r.height > 0;
+      };
+      // An element is visible when it is shown and either has a box or paints text: a zero-size box with
+      // overflow: visible still paints its text, and must not escape the checks as "hidden".
+      const visible = (el) => {
+        if (!shown(el)) return false;
+        const r = el.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) return true;
+        const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+        for (let n = w.nextNode(); n; n = w.nextNode()) {
+          if (n.textContent.trim() && n.parentElement && shown(n.parentElement) && textPainted(n)) return true;
+        }
+        return false;
       };
       const anchors = [];
       for (const [attr, kind] of [["data-ia-msg", "msg"], ["data-ia-problem", "problem"], ["data-ia-fact", "fact"]]) {
@@ -69,17 +87,19 @@ try {
           });
         }
       }
-      const parts = [];
+      const parts = [], loose = [];
+      const ANCHORED = "[data-ia-msg],[data-ia-problem],[data-ia-fact]";
       const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
       for (let n = walker.nextNode(); n; n = walker.nextNode()) {
         const t = n.textContent.trim();
-        if (!t || !n.parentElement || !visible(n.parentElement)) continue;
+        if (!t || !n.parentElement || !shown(n.parentElement) || !textPainted(n)) continue;
+        if (!n.parentElement.closest(ANCHORED)) loose.push(t);
         const range = document.createRange();
         range.selectNodeContents(n);
         const r = range.getBoundingClientRect();
         if (r.bottom > 0 && r.top < vh) parts.push(t);
       }
-      return { anchors, text_chars: document.body.innerText.trim().length, first_screen: parts.join(" ") };
+      return { anchors, text_chars: document.body.innerText.trim().length, first_screen: parts.join(" "), unanchored: loose.join(" ") };
     }, vp.height);
     out.push({ viewport: vp, ...snap });
     await context.close();

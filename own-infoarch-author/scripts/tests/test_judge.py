@@ -29,11 +29,14 @@ def cli(*args):
     return proc.returncode, json.loads(proc.stdout)
 
 
-def dom_report(path, outline='lp-municipal', exit_code=0, screens=None):
+def dom_report(path, outline='lp-municipal', exit_code=0, screens=None, unanchored=None):
     screens = screens if screens is not None else [
         {'outline': outline, 'file': 'site/index.html', 'viewport': 'mobile', 'text': '既存システムの運用、重くありませんか 運用の手間が半分になります'},
         {'outline': outline, 'file': 'site/index.html', 'viewport': 'desktop', 'text': '既存システムの運用、重くありませんか 運用の手間が半分になります 導入は100社以上'}]
-    path.write_text(json.dumps({'level': 'dom', 'exit_code': exit_code, 'first_screens': screens}, ensure_ascii=False), encoding='utf-8')
+    data = {'level': 'dom', 'exit_code': exit_code, 'first_screens': screens}
+    if unanchored is not None:
+        data['unanchored'] = unanchored
+    path.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
     return path
 
 
@@ -341,3 +344,45 @@ def test_replacement_out_is_created_exclusively(repo, tmp_path, monkeypatch):
         judge.run(repo, DATE, [], answers, target)
     monkeypatch.undo()
     assert target.read_text(encoding='utf-8') == 'someone else'
+
+
+# --- rendered text outside every anchor is judged as a claim (2026-11-12) ---
+
+UNANCHORED = [{'outline': 'lp-municipal', 'file': 'site/index.html', 'viewport': 'mobile', 'text': '業界No.1 の実績'},
+              {'outline': 'lp-municipal', 'file': 'site/index.html', 'viewport': 'desktop', 'text': '業界No.1 の実績'}]
+
+
+def test_unanchored_text_becomes_an_unregistered_claim_candidate_per_screen(repo, tmp_path):
+    code, out, rows = candidates(repo, '--dom-report', str(dom_report(tmp_path / 'dom.json', unanchored=UNANCHORED)))
+    extra = [r for r in rows if r['input']['catalog_id'].endswith('#unanchored')]
+    assert [r['input']['catalog_id'] for r in extra] == ['lp-municipal/site/index.html@mobile#unanchored',
+                                                         'lp-municipal/site/index.html@desktop#unanchored'], extra
+    assert all(r['input']['kind'] == 'ia-unregistered-claim' and r['input']['text'] == '業界No.1 の実績' for r in extra)
+    # Nothing on the page supports it: the context carries no message, proof or fact.
+    assert all(r['input']['context']['message'] is None and r['input']['context']['proofs'] == [] for r in extra)
+    assert code == 1 and any(u['id'].endswith('#unanchored') for u in out['uncovered'])
+
+
+def test_unanchored_rows_for_unknown_screens_are_rejected_without_echo(repo, tmp_path):
+    bad = [dict(UNANCHORED[0], file='other.html', text='秘密の文案')]
+    code, out, _ = candidates(repo, '--dom-report', str(dom_report(tmp_path / 'dom.json', unanchored=bad)))
+    assert code == 2 and 'IA_JUDGE_DOM_REPORT' in [f['code'] for f in out['findings']], out
+    assert '秘密' not in json.dumps(out['findings'], ensure_ascii=False)
+
+
+def test_empty_unanchored_list_adds_no_candidate(repo, tmp_path):
+    code, out, rows = candidates(repo, '--dom-report', str(dom_report(tmp_path / 'dom.json', unanchored=[])))
+    assert not [r for r in rows if r['input']['catalog_id'].endswith('#unanchored')]
+
+
+def test_dom_report_that_only_warns_is_still_judged(repo, tmp_path):
+    code, out, rows = candidates(repo, '--dom-report', str(dom_report(tmp_path / 'dom.json', exit_code=1, unanchored=UNANCHORED)))
+    assert 'IA_JUDGE_DOM_FAILED' not in [f['code'] for f in out['findings']], out['findings']
+    assert any(r['input']['kind'] == 'ia-emphasis' for r in rows) and any(r['input']['catalog_id'].endswith('#unanchored') for r in rows)
+
+
+@pytest.mark.parametrize('bad', [2, None, 'x'])
+def test_dom_report_that_failed_or_has_no_code_is_not_judged(repo, tmp_path, bad):
+    code, out, rows = candidates(repo, '--dom-report', str(dom_report(tmp_path / 'dom.json', exit_code=bad, unanchored=UNANCHORED)))
+    assert code == 2 and 'IA_JUDGE_DOM_FAILED' in [f['code'] for f in out['findings']]
+    assert not any(r['input']['catalog_id'].endswith('#unanchored') for r in rows)

@@ -93,9 +93,10 @@ DESIGN_SHIP_COMMAND / DESIGN_AUTHOR_COMMAND / DESIGN_CHECK_COMMANDは、既存ru
 `ship_command`・`artifacts`・`ship`は受理しない。各URLの書式・網羅性は出荷チャネルと同じ規約を使う。
 
 `design-ship --integration --repo .`は現在のclean commitを検査する。
-`--pre-push`は同じ予測マージ木の隔離checkoutで準備コマンドを実行し、commit/treeが変わらず、
+`--pre-push`は同じ予測マージ木の隔離checkoutで、まずL0 `--ship`を実行する。L0はcommitされたdesign/だけを読むので、
+L0で止まる時は時間のかかる準備コマンドを実行しない。L0を通ったら準備コマンドを実行し、commit/treeが変わらず、
 trackedまたは未追跡のソース変更がないことを確認する。依存・build cacheは既存ignoreの範囲に置く。
-その後、同じL0 `--ship`、L1、固定描画L2を対象0・欠落・不一致を拒否して実行する。
+その後、L1、固定描画L2を対象0・欠落・不一致を拒否して実行する。
 serverはそのcheckoutで起動し、外から渡されたURLは利用しない。変更された承認・不正なソース・描画差異は停止する。
 
 結果の`scope`は`local-integration`、`production_protected`は`false`、`deployment`は`not-applicable`。

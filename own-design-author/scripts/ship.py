@@ -98,13 +98,15 @@ def gate(root,name,channel,catalogs,*,deploy=False,source_commit=None,predicted=
     root=Path(root).resolve()
     commit,tree=clean_commit(root)
     env=hook_free_env()
-    if local:
-        if deploy:raise ValueError('local integration cannot deploy')
-        if 'prepare_command' in channel:command(channel['prepare_command'],root,env,purpose='prepare')
-        if clean_commit(root)!=(commit,tree):raise ValueError('preparation changed the committed source')
+    if local and deploy:raise ValueError('local integration cannot deploy')
+    # L0 reads only committed design/ inputs, so it runs before the (slow) preparation: a design system that
+    # cannot ship never pays for installing or building the app.
     l0_command=env.get('DESIGN_AUTHOR_COMMAND') or str(SCRIPT/'design-author')
     l0=json_command([l0_command,'check','--ship','--repo',str(root),'--catalog-dir',str(catalogs),'--include-manifest'],root,env)
     if l0['exit_code']==2:return {'exit_code':2,'errors':l0.get('errors',[]) or ['ship L0 failed'],'l0':l0}
+    if local:
+        if 'prepare_command' in channel:command(channel['prepare_command'],root,env,purpose='prepare')
+        if clean_commit(root)!=(commit,tree):raise ValueError('preparation changed the committed source')
     if l0.get('counts',{}).get('items',0)<=0:raise ValueError('zero L0 ship targets')
     inputs=l0['manifest']['web']['input_hashes']
     tracked=set(git(root,'ls-files').splitlines())

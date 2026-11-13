@@ -143,9 +143,11 @@ L2に渡す検査と部品のselectorは`item_checks`に入る。
 
 ### 段の順番
 
-`design-check`はL2の後に`ITEMS`段、必要なら`AFM`段を実行する。
+`design-check`は画面を1つずつL2で描き、その直後にその画面の`ITEMS`を判定する。全画面が通ったら、必要なら`AFM`段を実行する。
+コードの検査はすべてAFMより先に終わる。
 
-- ITEMS: `machine`の各項目を、対象の各画面で確かめる。L2の全viewport・全schemeの結果を合わせ、1件でも外れたら項目idと画面と見本を名指しして停止する。
+- ITEMS: `machine`の各項目を、対象の各画面で確かめる。その画面のL2の全viewport・全schemeの結果を合わせ、1件でも外れたら項目idと画面と見本を名指しして停止する。
+  次の画面は描画しないので、1回で見えるのは最初に外れた画面の分だけ。
   測るはずの検査が測られていなければ、それも停止。結果は`.resolved/items.json`。
 - AFM: 対象の画面に残った`afm`の項目だけを判定する。端末内のApple Foundation Models（`fm` CLI、systemモデル、従量課金・外部送信なし）へ、
   その画面の最も広いviewport・最初のschemeの安定キャプチャ（L2が測った同じ画像）を渡す。HTMLソースは渡さない。他のviewport・schemeはskippedに理由付きで残す。

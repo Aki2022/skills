@@ -45,8 +45,12 @@ def page_evidence(root,endpoints,spec):
     return pages
 
 
-def verify_items(root,l0,endpoints,report):
-    """Machine items are checked by code on every page where they apply; AFM gets only applicable leftovers."""
+def verify_items(root,l0,endpoints,report,final=True):
+    """Machine items are checked by code on every page where they apply; AFM gets only applicable leftovers.
+
+    Called after each rendered page with the pages so far (final=False): a failure is recorded and stops the
+    run before the next page renders; a pass records nothing until the last page (final=True).
+    """
     manifest=l0['manifest']['web'];routes=manifest['coverage']['item_routes'];spec=manifest['item_checks']
     pages=page_evidence(root,endpoints,spec)
     machine,afm_pairs,failures,not_applicable,causes={},[],[],0,{}
@@ -78,9 +82,11 @@ def verify_items(root,l0,endpoints,report):
                 else:continue
                 status='fail';failures.append(f"{ident} on {cause}");causes.setdefault(cause,[]).append(ident)
             machine.setdefault(ident,{})[page['env']]=status
+    if not final and not failures:
+        return pages,afm_pairs,0
     machine={k:{e:v for e,v in pages_.items() if v} for k,pages_ in machine.items()}
     # A declared rule whose selectors match nothing on any page checked nothing: often a typo, never a pass.
-    for checker in sorted(c for c in spec['collect'] if c.startswith('rule:')):
+    for checker in sorted(c for c in spec['collect'] if c.startswith('rule:')) if final else ():
         if all(page['presence'][checker]==0 for page in pages):
             report.setdefault('warnings',[]).append(f"rule {checker[5:]} never applied on any rendered page; check its selectors")
     record=inside(root/'design/.resolved','items.json')
@@ -227,7 +233,9 @@ def main():
                         +str(reason.get('error'))+' ('+str(reason.get('detail',''))[:200]+')')
                 report['errors'].append('L2 failed; inspect the generated report or rerun the measurement command')
                 print(json.dumps(report,ensure_ascii=False));return report['exit_code']
-        pages,afm_pairs,items_code=verify_items(root,l0,endpoints,report)
+            # Code checks for this page run now: a failure stops before the next page is rendered.
+            pages,afm_pairs,items_code=verify_items(root,l0,endpoints[:index+1],report,final=index==len(endpoints)-1)
+            if items_code:break
         if items_code==2:
             print(json.dumps(report,ensure_ascii=False));return 2
         afm_code=run_afm(root,l0,config,pages,afm_pairs,report)

@@ -145,6 +145,18 @@ def cmd_impact(args):
     return 0
 
 
+def cmd_mapping(args):
+    report = check.Report('mapping', dt.date.today().isoformat())
+    m = check.load(args.root, report)
+    if m.ssot is None or report.exit_code == 2 or args.outline not in m.outlines:
+        if m.ssot is not None and args.outline not in m.outlines:
+            report.add('fail', 'IA_MAPPING_UNKNOWN_OUTLINE', f'アウトライン {args.outline} が無い')
+        _print(report.to_dict())
+        return 2
+    _print(check.mapping(m, args.outline))
+    return 0
+
+
 def cmd_targets(args):
     """Owner-confirmation targets for own-design-author: every strategy atom's hash and the keys shipping needs."""
     report = check.Report('targets', dt.date.today().isoformat())
@@ -209,6 +221,10 @@ def main(argv=None):
     i.add_argument('--root', default='.')
     i.add_argument('--id', required=True)
     i.set_defaults(fn=cmd_impact)
+    mp = sub.add_parser('mapping', help='mapping table of one deliverable: version hash, frame instances, atoms and their content hashes')
+    mp.add_argument('--root', default='.')
+    mp.add_argument('--outline', required=True)
+    mp.set_defaults(fn=cmd_mapping)
     t = sub.add_parser('targets', help='owner-confirmation targets (ia:strategy keys and hashes) for own-design-author approvals')
     t.add_argument('--root', default='.')
     t.set_defaults(fn=cmd_targets)

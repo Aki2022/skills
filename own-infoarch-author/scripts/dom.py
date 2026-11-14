@@ -28,6 +28,27 @@ def expected_for(outline, output):
     return expected({'pages': pages})
 
 
+def _frame_findings(outline, output, anchors):
+    """Element frame instances of the rendered page: each declared one present once, none undeclared."""
+    decl = outline.get('frames')
+    found = [a['id'] for a in anchors if a['kind'] == 'frame']
+    if not decl:
+        return [('IA_DOM_FRAME_UNDECLARED', f'枠の印 {sorted(set(found))} があるが、アウトラインに frames が無い')] if found else []
+    pages = _section_pages(outline, output)
+    want = {s['frame'] for p in pages for s in p['sections'] if 'frame' in s}
+    declared = {i['id'] for i in decl['instances']}
+    out = []
+    for fid in sorted(want):
+        n = found.count(fid)
+        if n == 0:
+            out.append(('IA_DOM_FRAME_MISSING', f'枠の実体 {fid} の印（data-ia-frame）が描画物に無い'))
+        elif n > 1:
+            out.append(('IA_DOM_FRAME_DUPLICATE', f'枠の実体 {fid} の印が {n} 個ある（1 つだけ）'))
+    for fid in sorted(set(found) - declared):
+        out.append(('IA_DOM_FRAME_UNDECLARED', f'枠の印 {fid} はアウトラインで宣言されていない'))
+    return out
+
+
 def expected(outline):
     seq, facts = [], []
     for p in outline['pages']:
@@ -84,6 +105,8 @@ def compare(outline, ssot, snap, output=None):
     seq, facts = expected_for(outline, output) if output else expected(outline)
     anchors = snap['anchors']
     wanted = set(seq)
+    for code, msg in _frame_findings(outline, output, anchors):
+        out.append((code, 'fail', f'{vp}: {msg}'))
     legacy = sorted({a['id'] for a in anchors if a['kind'] == 'legacy-problem'})
     if legacy:
         out.append(('IA_DOM_LEGACY_ATTRIBUTE', 'fail', f'{vp}: 旧属性 data-ia-problem が残っている {legacy}（v5 では data-ia-pain）'))

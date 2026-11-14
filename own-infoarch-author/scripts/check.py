@@ -357,6 +357,83 @@ def check_strategy(m, report, oid, rel, o, shipped, hashes=None, confirmed=None)
                    '（design-author approve --prepare で束を作り、オーナーが記録する）', rel, atoms=sorted(missing))
 
 
+# ---- frames (requirement 16) ------------------------------------------------------------
+
+def frame_types(media):
+    return (load_ref('media/frames.json')['media']).get(media)
+
+
+def check_frames(m, report, oid, rel, o):
+    """Declared frame instances: known media and type, unique ids, multiplicity, and element frames anchored once."""
+    used = [(f'{oid}.{p["id"]}[{i}]', s['frame']) for p in o['pages'] for i, s in enumerate(p['sections']) if 'frame' in s]
+    decl = o.get('frames')
+    if decl is None:
+        for w, fid in used:
+            report.add('fail', 'IA_FRAME_UNDECLARED', f'{w}: 枠 {fid} を使っているが、アウトラインに frames が無い', rel)
+        return
+    types = frame_types(decl['media'])
+    if types is None:
+        report.add('fail', 'IA_FRAME_UNKNOWN_MEDIA', f'{oid}: 枠の媒体 {decl["media"]!r} はノウハウ（media/frames.json）に無い', rel)
+        return
+    kinds, seen = {}, set()
+    for inst in decl['instances']:
+        if inst['id'] in seen:
+            report.add('fail', 'IA_FRAME_DUPLICATE_ID', f'{oid}: 枠の実体 id {inst["id"]} が重複している', rel)
+            continue
+        seen.add(inst['id'])
+        if inst['type'] not in types:
+            report.add('fail', 'IA_FRAME_UNKNOWN_TYPE', f'{oid}: 枠の種類 {inst["type"]!r} は {decl["media"]} のノウハウに無い', rel)
+            continue
+        kinds[inst['id']] = inst['type']
+    for t, rule in types.items():
+        n = sum(1 for v in kinds.values() if v == t)
+        if n < rule['min'] or (rule['max'] is not None and n > rule['max']):
+            want = f'{rule["min"]}〜{rule["max"] if rule["max"] is not None else ""}'
+            report.add('fail', 'IA_FRAME_MULTIPLICITY', f'{oid}: 枠の種類 {t} の実体が {n} 個（{want} 個）', rel)
+    counts = {}
+    for w, fid in used:
+        if fid not in kinds:
+            report.add('fail', 'IA_FRAME_UNDECLARED', f'{w}: 枠 {fid} は frames.instances で宣言されていない', rel)
+        elif types[kinds[fid]]['target'] == 'sequence':
+            report.add('fail', 'IA_FRAME_SEQUENCE_ANCHORED', f'{w}: 並びの枠 {fid} はセクションに付けない（アウトラインの上だけで持つ）', rel)
+        else:
+            counts[fid] = counts.get(fid, 0) + 1
+    for fid, t in kinds.items():
+        if types[t]['target'] != 'element':
+            continue
+        if counts.get(fid, 0) > 1:
+            report.add('fail', 'IA_FRAME_DUPLICATE_USE', f'{oid}: 枠の実体 {fid} を {counts[fid]} つのセクションに付けている（1 つだけ）', rel)
+        elif not counts.get(fid):
+            report.add('fail', 'IA_FRAME_UNUSED', f'{oid}: 宣言した枠の実体 {fid} がどのセクションにも付いていない', rel)
+
+
+def mapping(m, oid):
+    """The table an external experiment tool points at (requirement 17): version, frame instances, atoms and hashes."""
+    rel, o = m.outlines[oid]
+    def h(value):
+        return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+    def atoms_of(s):
+        ids = [s[k] for k in ('pain', 'message') if k in s] + list(s.get('proofs', [])) + PLACEHOLDER.findall(s['copy'])
+        return {aid: h([aid, m.atom(aid)]) for aid in ids}
+    sections = [s for p in o['pages'] for s in p['sections']]
+    decl = o.get('frames') or {'instances': []}
+    rows = []
+    for inst in decl['instances']:
+        target = ((frame_types(decl.get('media')) or {}).get(inst['type']) or {}).get('target')
+        if target == 'sequence':
+            rows.append({'id': inst['id'], 'type': inst['type'],
+                         'atoms': [s[k] for s in sections for k in ('pain', 'message') if k in s]})
+        else:
+            hit = [s for s in sections if s.get('frame') == inst['id']]
+            rows.append({'id': inst['id'], 'type': inst['type'], 'atoms': atoms_of(hit[0]) if hit else {}})
+    outputs = {}
+    for out in o['outputs']:
+        f = m.root / out
+        outputs[out] = hashlib.sha256(f.read_bytes()).hexdigest() if f.is_file() else None
+    version = h({'outline': o, 'atoms': {aid: m.atom(aid) for s in sections for aid in atoms_of(s)}, 'outputs': outputs})
+    return {'deliverable': oid, 'version_hash': version, 'outputs': outputs, 'frames': rows}
+
+
 # ---- outlines ----------------------------------------------------------------------------
 
 def _glob_re(pattern):
@@ -473,6 +550,7 @@ def check(root, date):
     confirmed = read_confirmations(root, report)
     for oid, (rel, o) in sorted(m.outlines.items()):
         check_outline(m, report, oid, rel, o)
+        check_frames(m, report, oid, rel, o)
         ch = m.channels.get(o['channel'])
         check_strategy(m, report, oid, rel, o, shipped=bool(ch and ch[1]['ship']), hashes=hashes, confirmed=confirmed)
     check_expiry(m, report, date)

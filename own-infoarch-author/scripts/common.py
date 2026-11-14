@@ -9,7 +9,7 @@ from pathlib import Path
 
 SKILL = Path(__file__).resolve().parents[1]
 REFS = SKILL / 'references'
-VERSION = '0.2.0'
+VERSION = '0.3.0'
 INFO_ARCH_DIR = Path('design/info_arch')
 LEVELS = {'fail': 2, 'warn': 1, 'info': 0}
 

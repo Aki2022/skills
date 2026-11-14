@@ -688,3 +688,14 @@ def test_wrapper_runs_through_absolute_and_relative_symlinks(tmp_path):
                               capture_output=True, text=True, env=dict(os.environ, DESIGN_AUTHOR_PYTHON=sys.executable))
         assert proc.returncode == 0, proc.stdout + proc.stderr
         assert json.loads(proc.stdout)['status'] == 'skipped'
+
+
+def test_ship_report_separates_adoption_semantic_fit_and_customer_validation(repo):
+    """Requirement 15: 'confirmed and passed' is never one word; customer validation is stated as not judged."""
+    code, out, _ = ship(repo)
+    assert out['strategy'] == {'owner_adopted': 'confirmed', 'semantic_fit': 'not-judged',
+                               'customer_validation': 'not-judged-by-ia'}, out
+    (repo / 'design/approvals.yaml').write_text('[]\n', encoding='utf-8')
+    commit(repo, 'withdraw every confirmation')
+    code, out, _ = ship(repo)
+    assert code == 2 and out['strategy']['owner_adopted'] == 'unconfirmed', out

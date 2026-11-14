@@ -196,6 +196,10 @@ def _evaluate(root, commit, tree, date, source, predicted):
         return finish('IA ship inputs are not committed files')
     report, m = check.check(root, date)
     result['stages'].append(_stage('check', report))
+    # Requirement 15: adoption, semantic fit and customer validation are reported apart, never as one word.
+    adopted = not any(f.code == 'IA_STRATEGY_UNCONFIRMED' and f.level == 'fail' for f in report.findings)
+    result['strategy'] = {'owner_adopted': 'confirmed' if adopted else 'unconfirmed',
+                          'semantic_fit': 'not-judged', 'customer_validation': 'not-judged-by-ia'}
     if report.exit_code == 2:
         return finish('IA check failed')
     channels = sorted(name for name, (_, row) in m.channels.items() if row['ship'])

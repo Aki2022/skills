@@ -145,6 +145,18 @@ def cmd_impact(args):
     return 0
 
 
+def cmd_targets(args):
+    """Owner-confirmation targets for own-design-author: every strategy atom's hash and the keys shipping needs."""
+    report = check.Report('targets', dt.date.today().isoformat())
+    m = check.load(args.root, report)
+    if m.ssot is None or report.exit_code == 2:
+        _print(report.to_dict())
+        return 2
+    hashes, must = check.strategy_targets(m)
+    _print({'approval_hashes': hashes, 'must_approval_keys': must})
+    return 0
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog='infoarch-author')
     sub = ap.add_subparsers(dest='cmd', required=True)
@@ -197,6 +209,9 @@ def main(argv=None):
     i.add_argument('--root', default='.')
     i.add_argument('--id', required=True)
     i.set_defaults(fn=cmd_impact)
+    t = sub.add_parser('targets', help='owner-confirmation targets (ia:strategy keys and hashes) for own-design-author approvals')
+    t.add_argument('--root', default='.')
+    t.set_defaults(fn=cmd_targets)
     args = ap.parse_args(argv)
     try:
         return args.fn(args)

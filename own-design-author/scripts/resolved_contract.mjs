@@ -43,7 +43,7 @@ export function loadManifest(path) {
   if (Object.keys(modules).some(key => key !== 'ia')) throw new Error('unsupported resolved module');
   if (modules.ia) {
     const file = fileURLToPath(new URL('../../own-infoarch-author/scripts/ia_module.py', import.meta.url));
-    if (realpathSync(file) !== file || iaDigest(file, modules.ia.resolved?.governance?.contract === 'ia-git-history-v2') !== modules.ia.implementation_sha256)
+    if (realpathSync(file) !== file || iaDigest(file, modules.ia.resolved?.governance?.contract === 'ia-git-history-v3') !== modules.ia.implementation_sha256)
       throw new Error('IA resolver changed; rerun L0');
   }
   const actual = {};

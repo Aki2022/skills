@@ -96,9 +96,24 @@ def dump(path, data):
     path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding='utf-8')
 
 
-def write_repo(root, ssot=SSOT, channels=(CHANNEL, DRAFT), outlines=(OUTLINE, DECK)):
+def confirm(root, ssot, skip=()):
+    """Record the owner's confirmation of every proposed strategy atom (as the owner would with design-author approve)."""
+    sys.path.insert(0, str(SCRIPTS))
+    import check as ia_check
+    m = ia_check.Model(root=root, ssot=ssot)
+    rows = [{'key': key, 'value_hash': digest, 'approver': 'fixture-owner', 'date': '2026-11-14'}
+            for key, digest in sorted(ia_check.strategy_targets(m)[0].items()) if key.split(':')[-1] not in skip]
+    path = root / 'design/approvals.yaml'
+    kept = yaml.safe_load(path.read_text(encoding='utf-8')) if path.is_file() else []
+    kept = [r for r in (kept or []) if not str(r.get('key', '')).startswith(ia_check.CONFIRM_PREFIX)]
+    dump(path, kept + rows)  # keep the design rows (ds:*) the owner already recorded
+
+
+def write_repo(root, ssot=SSOT, channels=(CHANNEL, DRAFT), outlines=(OUTLINE, DECK), confirmed=True):
     base = root / 'design/info_arch'
     dump(base / 'info_arch.yaml', ssot)
+    if confirmed:
+        confirm(root, ssot)
     for ch in channels:
         dump(base / 'channels' / f'{ch["media"]}.yaml', ch)
     for o in outlines:

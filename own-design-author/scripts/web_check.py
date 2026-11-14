@@ -64,7 +64,7 @@ def page_evidence(root,targets,spec):
     """Per rendered page or state: which components are present and what each collected checker found (all runs)."""
     pages=[]
     for index,target in enumerate(targets):
-        env=target['label']
+        env=target['label'];index=target.get('l2_index',index)  # report-all skips unrendered targets
         measured=read_data(inside(root/'design/.resolved','l2-'+str(index)+'.json'))
         runs=[r for r in measured.get('runs',[]) if r.get('repeat',0)==0]
         if not runs or any(not isinstance(r.get('item_checks'),dict) for r in runs):
@@ -83,7 +83,7 @@ def page_evidence(root,targets,spec):
     return pages
 
 
-def verify_items(root,l0,targets,report,final=True):
+def verify_items(root,l0,targets,report,final=True,mode=None,unrendered=()):
     """Machine items are checked by code on every page where they apply; AFM gets only applicable leftovers.
 
     Called after each rendered page with the pages so far (final=False): a failure is recorded and stops the
@@ -128,8 +128,9 @@ def verify_items(root,l0,targets,report,final=True):
         if all(page['presence'][checker]==0 for page in pages):
             report.setdefault('warnings',[]).append(f"rule {checker[5:]} never applied on any rendered page; check its selectors")
     record=inside(root/'design/.resolved','items.json')
-    record.write_text(json.dumps({'schema_version':1,'pages':[p['env'] for p in pages],'machine':machine,
-        'afm_pairs':afm_pairs,'failures':failures},ensure_ascii=False,indent=1))
+    row={'schema_version':1,'pages':[p['env'] for p in pages],'machine':machine,'afm_pairs':afm_pairs,'failures':failures}
+    if mode:row.update(mode=mode,unrendered=list(unrendered))  # a diagnostic record, never ship evidence
+    record.write_text(json.dumps(row,ensure_ascii=False,indent=1))
     code=2 if failures else 0
     report['stages'].append({'stage':'ITEMS','exit_code':code,'machine_items':sum(1 for r in routes.values() if r['route']=='machine'),
         'afm_pairs':len(afm_pairs),'not_applicable':not_applicable,'failures':len(failures)})
@@ -185,8 +186,12 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--repo',default='.')
     parser.add_argument('--catalog-dir',type=Path,default=CATALOG)
+    parser.add_argument('--report-all',action='store_true',
+        help='render and judge every page and state, listing every failure; still exits 2 on any failure; never ship evidence')
     args=parser.parse_args()
     report={'exit_code':2,'stages':[],'errors':[],'report':empty_report()}
+    if args.report_all:report['mode']='report-all'
+    unrendered=[]
     try:
         root=git_root(args.repo)
         l0=check_design(root,catalog_dir=args.catalog_dir)
@@ -279,7 +284,7 @@ def main():
             stage(report['report'],'L2',l2.returncode,index+1)
             report['stages'].append({'stage':'L2','exit_code':l2.returncode,'target_env':row['env'],'profile':profile})
             if l2.returncode:
-                report['exit_code']=l2.returncode
+                report['exit_code']=max(report['exit_code'],l2.returncode) if args.report_all else l2.returncode
                 reason=next((f for f in measured.get('failures',[]) if isinstance(f,dict) and f.get('id')=='render-execution-failed'),None)
                 if reason and reason.get('stage')=='state':
                     # The report carries only the step number; the step itself comes from the repo's own declaration.
@@ -290,23 +295,41 @@ def main():
                 if reason:
                     report['errors'].append('L2 '+row['env']+' failed at '+str(reason.get('stage'))+': '
                         +str(reason.get('error'))+' ('+str(reason.get('detail',''))[:200]+')')
-                report['errors'].append('L2 failed; inspect the generated report or rerun the measurement command')
-                print(json.dumps(report,ensure_ascii=False));return report['exit_code']
+                if not args.report_all:
+                    report['errors'].append('L2 failed; inspect the generated report or rerun the measurement command')
+                    print(json.dumps(report,ensure_ascii=False));return report['exit_code']
+                if reason or l2.returncode!=1:
+                    # Report-all judges every page that rendered; one that could not render is never judged.
+                    report['errors'].append('L2 '+row['env']+' could not render; inspect l2-'+str(index)+'.json')
+                    unrendered.append(row['env']);continue
+                # The page rendered and L2 found problems: name them (fixed check ids) and still judge its items.
+                found={}
+                for failure in measured.get('failures',[]):
+                    if isinstance(failure,dict) and isinstance(failure.get('id'),str):found[failure['id']]=found.get(failure['id'],0)+1
+                report['errors'].append('L2 '+row['env']+' found: '+', '.join(f'{k} {v}' for k,v in sorted(found.items())))
+            if args.report_all:continue  # every page renders first; ITEMS judges them all at the end
             # Code checks for this page run now: a failure stops before the next page is rendered.
             pages,afm_pairs,items_code=verify_items(root,l0,targets[:index+1],report,final=index==len(targets)-1)
             if items_code:break
+          if args.report_all:
+            # Judge every page that rendered; an unrendered page is never judged or recorded as passing.
+            rendered=[{**t,'l2_index':i} for i,t in enumerate(targets) if t['label'] not in unrendered]
+            pages,afm_pairs,items_code=(verify_items(root,l0,rendered,report,final=True,mode='report-all',unrendered=unrendered)
+                                        if rendered else ([],[],0))
         finally:
             # Pages rendered ahead of a failure are stopped with their browsers (own process group).
             for process in running.values():
                 try:os.killpg(process.pid,signal.SIGKILL)
                 except ProcessLookupError:pass
                 process.wait()
-        if items_code==2:
+        if items_code==2 and not args.report_all:
             print(json.dumps(report,ensure_ascii=False));return 2
+        # Report-all still runs AFM on what rendered, so the judgment stage is seen on a site that is not clean yet.
         afm_code=run_afm(root,l0,config,pages,afm_pairs,report)
-        if afm_code==2:
+        if afm_code==2 and not args.report_all:
             print(json.dumps(report,ensure_ascii=False));return 2
-        report['exit_code']=max(l0['exit_code'],afm_code,1 if report.get('warnings') else 0)
+        failed=2 if (unrendered or items_code==2 or afm_code==2) else 0
+        report['exit_code']=max(l0['exit_code'],afm_code,failed,1 if report.get('warnings') else 0)
         report['uncovered']=sorted(uncovered)
     except AfmUnavailable as error:
         report['exit_code']=2

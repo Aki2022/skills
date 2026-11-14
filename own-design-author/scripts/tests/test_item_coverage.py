@@ -189,10 +189,10 @@ def rendered(project, tmp_path):
     env['DESIGN_FIXTURE_URL_2'] = env['DESIGN_FIXTURE_URL'] + '/?second'  # a second endpoint on the same page
     argv = [sys.executable, str(SKILL / 'scripts/web_check.py'), '--repo', str(root), '--catalog-dir', str(catalogs)]
 
-    def run(body='', **extra):
+    def run(body='', report_all=False, **extra):
         (root / 'index.html').write_text(PAGE.replace('BODY', body))
         approve(project)
-        done = subprocess.run(argv, env={**env, **extra}, capture_output=True, text=True)
+        done = subprocess.run(argv + (['--report-all'] if report_all else []), env={**env, **extra}, capture_output=True, text=True)
         return done.returncode, json.loads(done.stdout)
     yield run, root, tmp_path
     server.shutdown()

@@ -100,7 +100,9 @@ export function loadEnvironment(path,root,widths,schemes) {
   path=resolve(path);root=realpathSync(root);
   if(path!==resolve(root,'design/render-environment.json') || realpathSync(path)!==path)throw Error('invalid environment location');
   const bytes=readFileSync(path);const config=JSON.parse(bytes);
-  if(!exact(config,'schema_version,runtime,clock,locale,timezone,device_scale_factor,reduced_motion,viewports,schemes,fonts') ||
+  const keys='schema_version,runtime,clock,locale,timezone,device_scale_factor,reduced_motion,viewports,schemes,fonts';
+  const remote=config&&config.remote_fonts!==undefined?remoteFonts(config.remote_fonts):null;
+  if(!(exact(config,keys)||(remote&&exact(config,keys+',remote_fonts'))) ||
     config.schema_version!==1 || !exact(config.runtime,'browser_version,browser_sha256,playwright_version,node_version,platform,arch,os_release,launch_args') ||
     Object.values(config.runtime).some(v=>typeof v!=='string'||!v) || !/^[a-f0-9]{64}$/.test(config.runtime.browser_sha256) ||
     typeof config.clock!=='string' || new Date(config.clock).toISOString()!==config.clock ||
@@ -111,7 +113,7 @@ export function loadEnvironment(path,root,widths,schemes) {
     config.viewports.map(v=>v.width).join(',')!==widths.join(',') || new Set(widths).size!==widths.length ||
     !Array.isArray(config.schemes)||config.schemes.join(',')!==schemes.join(',') ||
     !schemes.length||schemes.some(s=>!['light','dark'].includes(s))||new Set(schemes).size!==schemes.length ||
-    !Array.isArray(config.fonts)||!config.fonts.length)throw Error('invalid fixed environment');
+    !Array.isArray(config.fonts)||!(config.fonts.length||remote))throw Error('invalid fixed environment');
   const fonts=config.fonts.map(font=>{
     if(!exact(font,'path,url_path,family,sha256') || typeof font.path!=='string'||!font.path ||
       font.path.startsWith('/')||font.path.split('/').some(p=>!p||p==='.'||p==='..') ||
@@ -124,7 +126,22 @@ export function loadEnvironment(path,root,widths,schemes) {
     return {...font,bytes};
   });
   if(new Set(fonts.map(f=>f.url_path)).size!==fonts.length)throw Error('duplicate fixed font URL');
-  return {config,fonts,config_sha256:sha(bytes),root,path};
+  return {config,fonts,remote,config_sha256:sha(bytes),root,path};
+}
+
+// Fonts a CDN serves (e.g. Google Fonts) are pinned by exact URL and SHA-256, fetched at render time and
+// accepted only when the bytes match. Families name the platform font families those files may draw.
+function remoteFonts(value) {
+  const origin=/^https?:\/\/[^/?#\s]+$/;
+  if(!exact(value,'origins,families,files')||!Array.isArray(value.origins)||!value.origins.length||
+    value.origins.some(o=>typeof o!=='string'||!origin.test(o))||new Set(value.origins).size!==value.origins.length||
+    !Array.isArray(value.families)||!value.families.length||value.families.some(f=>typeof f!=='string'||!f)||
+    !value.files||typeof value.files!=='object'||Array.isArray(value.files)||!Object.keys(value.files).length)throw Error('invalid remote fonts');
+  for(const [url,digest] of Object.entries(value.files)){
+    let parsed;try{parsed=new URL(url);}catch{throw Error('invalid remote font URL');}
+    if(!value.origins.includes(parsed.origin)||parsed.href!==url||!/^[a-f0-9]{64}$/.test(digest))throw Error('invalid remote font pin');
+  }
+  return {origins:value.origins,families:value.families,files:value.files};
 }
 
 export async function verifyRuntime(environment,chromium,playwrightVersion,browser) {
@@ -142,7 +159,15 @@ export async function configureFonts(context,environment,url) {
   await context.route('**/*',async route=>{
     const request=route.request();const target=new URL(request.url());
     const font=environment.fonts.find(f=>target.origin===origin&&target.pathname===f.url_path);
+    const remote=environment.remote;
     if(font) {used.add(font.url_path);await route.fulfill({status:200,body:font.bytes,contentType:'font/'+(font.path.endsWith('woff2')?'woff2':'woff')});}
+    else if(remote&&remote.origins.includes(target.origin)){
+      // Everything from a pinned font origin must match its pin; nothing from it reaches the page unverified.
+      const pinned=remote.files[request.url()];let response,body;
+      try{if(pinned){response=await route.fetch();body=await response.body();}}catch{response=null;}
+      if(pinned&&response&&response.ok()&&sha(body)===pinned){used.add(request.url());await route.fulfill({response,body});}
+      else{rejected.push(pinned?'remote font changed or unavailable':'remote font not pinned');await route.abort();}
+    }
     else if(request.resourceType()==='font'){rejected.push('unlisted font request');await route.abort();}
     else await route.continue();
   });
@@ -184,7 +209,8 @@ export async function renderEvidence(page,context,environment,requests) {
       for(const font of fonts){
         if(font.glyphCount<=0)continue;
         glyphs+=font.glyphCount;used.add(font.familyName);
-        if(!font.isCustomFont || !environment.fonts.some(f=>f.family===font.familyName))fallback.add(font.familyName);
+        if(!font.isCustomFont || !(environment.fonts.some(f=>f.family===font.familyName)||
+          (environment.remote&&environment.remote.families.includes(font.familyName))))fallback.add(font.familyName);
       }
     }
   } finally {await client.detach();}
@@ -201,7 +227,8 @@ export async function renderEvidence(page,context,environment,requests) {
       const urls=/^https?:\/\/[^\s]+$/.test(src)?[src]:[...src.matchAll(/url\(\s*(['"]?)(.*?)\1\s*\)/g)].map(m=>m[2]);
       const registered=urls.map(u=>{try{
         const url=new URL(u,requests.origin);
-        return environment.fonts.find(f=>url.origin===requests.origin&&url.pathname===f.url_path);
+        const pinned=environment.remote&&environment.remote.files[url.href];
+        return environment.fonts.find(f=>url.origin===requests.origin&&url.pathname===f.url_path)||(pinned?{sha256:pinned}:null);
       }catch{return null;}});
       if(urls.length&&!/local\(/i.test(font.src)&&registered.every(Boolean)){
         bound=true;sources.push({family,sha256s:[...new Set(registered.map(f=>f.sha256))].sort()});

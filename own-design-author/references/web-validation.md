@@ -115,6 +115,18 @@ ruleがある状態でだけ合うことは、画面では対象外（n/a）・�
 限界: 手順が意図した状態を作ったか（例: 本当にそのダイアログが開いたか）は見ない。それはruleのselectorが合うことで確かめる。
 ホバー・ドラッグ・キーボード操作・時間経過の後の状態は扱わない。
 
+### 全件報告（--report-all）
+
+ゲートは最初に外れた画面で止まる（壊れた画面を出さないため）。そのため一度に見えるのは1画面分の外れだけで、
+サイトを直さないと残りの画面・状態や AFM 段が確かめられない。`design-check --report-all` は止まらずに全部見る。
+
+- 宣言した全ての画面と状態を描き、ITEMS を最後にまとめて判定し、外れを全部 errors に並べる。
+- L2 が問題を見つけた画面（exit 1、描画はできている）も ITEMS で判定し、L2 が見つけた検査の id と件数を `L2 <env> found: ...` として errors に並べる。
+- 描けなかった画面・状態（描画の失敗、状態に到達できない等）は判定せず、`items.json` の `unrendered` に残す。合格にはしない。
+- ITEMS が外れても、描けた画面の AFM 段を実行する。
+- 終了コードはゲートと同じ規則で、外れが1つでもあれば exit 2。結果と `items.json` は `mode: report-all` を持つ。
+- 診断のための実行で、出荷の証拠にはならない。`design-ship` は `mode` を持つ結果・`items.json` を拒む。
+
 ### 画面を並べて描く
 
 `validation.json` の任意の `parallel`（正の整数、既定 1）で、同時に描く画面の数を決める。
@@ -258,11 +270,29 @@ chromium.executablePath()から解決し、実際のlaunchにも明示指定す�
 これはブラウザ同梱の全資源やOS全体の完全性証明ではない。OS版・arch・Node版・Playwright版も照合する。
 個別端末の実行ファイルの絶対パスは保存しない。
 
-fontsのpathはrepo相対の通常ファイル。SHA256を実測し、同一originのurl_pathへの要求へそのバイトを配信する。
+fontsのpathはrepo相対の通常ファイル（`remote_fonts` を使う時は空でもよい）。SHA256を実測し、同一originのurl_pathへの要求へそのバイトを配信する。
 未登録のfontリクエストを拒否し、可視要素の実glyphにOSフォントや未登録familyが使われたら失格。
 フォントを1つも読み込まない、glyphを1つも検査しない場合も失格。ページを別の字体へ強制置換して合格させない。
 shadow DOM・iframe内のglyphは未カバーのまま。読み込み前からCDPのfontsUpdatedも記録し、実familyのsrcが登録URLに結び付かない場合は失格。同名のdata URI・local()・インライン生成FontFaceでpinを迂回しない。
 フォントのライセンス・配布可否はプロジェクトが確認し、必要なNOTICEを同梱する。
+
+CDN（Google Fonts など）から読むフォントは、`remote_fonts` で URL と SHA-256 を固定して受け入れる。
+
+```json
+"remote_fonts": {"origins": ["https://fonts.googleapis.com", "https://fonts.gstatic.com"],
+  "families": ["Noto Sans JP"],
+  "files": {"https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap": "<sha256>",
+            "https://fonts.gstatic.com/s/notosansjp/v53/<subset>.woff2": "<sha256>"}}
+```
+
+- `origins` からの要求はすべて固定の対象。描画時に CDN から取り、`files` の URL と完全に一致し、バイトの SHA-256 が一致した時だけページに渡す。
+  一致しない・固定されていない・取れない要求は拒否し、`font-fallback` の失格になる（`rejected_requests` に数える）。
+- `families` は、それらのファイルが描いてよい実フォントの family 名。字形の検査は、ここか `fonts` の family で、かつ固定したファイルに結び付いた字体だけを認める。
+- 描画のたびに CDN へ接続する。CDN が中身を変えたら失格になるので、固定を作り直す。CDN の CSS は UA で中身が変わるが、UA は固定したブラウザの版で決まる。
+- 日本語の字体は文字の範囲ごとの小さなファイル（subset）に分かれている。ページの文字が変わると新しい subset を要求し、固定し直すまで失格になる。
+- 固定は `node scripts/pin_remote_fonts.mjs <url>... --environment design/render-environment.json --origins <origin,...>` で作る。
+  固定環境と同じブラウザで各 viewport・scheme を描き、宣言した origin から読んだ全ファイルの URL と SHA-256、描いた family を表示する（ファイルは書かない）。
+  CDN に接続するので、作り直す時だけ人が実行し、表示された固定を確かめて `render-environment.json` に入れる。
 
 固定環境のChromiumは `fixedLaunchOptions`（`--disable-gpu-rasterization`）で起動し、probeと測定で同じ描画経路を使う。起動引数はruntimeの`launch_args`としてpinし、別の描画方式で測ったpinは一致しない（作り直す）。
 GPUラスタでは同じ全画面撮影が1段階ずつ揺れることがある（2026-11-11 macOS 27.2で20枚中2種類、ソフトウェアラスタで1種類）。

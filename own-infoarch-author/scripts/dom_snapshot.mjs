@@ -76,7 +76,7 @@ try {
         return false;
       };
       const anchors = [];
-      for (const [attr, kind] of [["data-ia-msg", "msg"], ["data-ia-pain", "pain"], ["data-ia-fact", "fact"], ["data-ia-problem", "legacy-problem"]]) {
+      for (const [attr, kind] of [["data-ia-msg", "msg"], ["data-ia-pain", "pain"], ["data-ia-fact", "fact"], ["data-ia-problem", "legacy-problem"], ["data-ia-frame", "frame"]]) {
         for (const el of document.querySelectorAll(`[${attr}]`)) {
           const r = el.getBoundingClientRect();
           anchors.push({

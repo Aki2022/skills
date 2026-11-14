@@ -38,6 +38,8 @@ def _section(s, facts):
         attrs.append(f'data-ia-pain="{s["pain"]}"')
     if 'message' in s:
         attrs.append(f'data-ia-msg="{s["message"]}"')
+    if 'frame' in s:  # element frames only; check refuses a sequence frame on a section
+        attrs.append(f'data-ia-frame="{s["frame"]}"')
     tag = ROLE_TAG.get(s['role'], 'p')
     return f'  <section {" ".join(attrs)}>\n    <{tag}>{_copy(s["copy"], facts)}</{tag}>\n  </section>'
 

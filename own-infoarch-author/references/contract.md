@@ -44,6 +44,10 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 
 アウトラインのメッセージ（と痛みのセクション）ごとに、対象者のセグメントへ向かう枝だけを参照からたどる。ジョブはそのセグメントのもの、痛み・得たいものはそのジョブのもの、提供価値はそれらを和らげるか生むもの、約束はその提供価値を言い切るもの。経路上の提供価値を生む強みはすべて経路に入り、その強みが比べる同じセグメントの代替も入る（成果物の側で外せない）。経路の原子の中身を正規化した JSON の SHA-256 を経路のハッシュとし、確定と判定の入力に使う。
 
+### 対応表（`infoarch-author mapping --outline <id>`）
+
+外部の実験の道具が「どの版の、どこを、何に変えたか」を指すための表。成果物 id・版のハッシュ（アウトライン・使う原子の中身・成果物のファイルから作る）・成果物ごとのファイルのハッシュ・枠の実体ごとの種類と、使う原子の id と中身のハッシュ（並びの枠は原子の並び）を出す。比べる案の管理・割り付け・実験の記録・配信・計測は持たない。
+
 ### オーナーの確定（`ia:strategy:<id>`）
 
 戦略の原子の確定は、own-design-author と同じ `design/approvals.yaml` に、オーナーが記録する（AI は `design-author approve --prepare` で束を作るまで）。確定のハッシュ（`check.confirmation_hash`）は、原子の中身そのもの（媒体の解決を経ない）と、その原子が依存する原子の中身を束縛する。依存は、参照をセグメントまでたどったものと、提供価値を生む強み（とその代替）。原子か依存先のどちらが変わっても確定は外れる。確定かどうかは台帳のハッシュの一致だけで決まり、`state` には持たない。確定はオーナーの採用の判断だけを表し、顧客での検証を意味しない。
@@ -56,7 +60,8 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 - `brief`：purpose（目的）・action（取ってほしい行動）・medium・constraints・cut（この成果物では言わないメッセージ）。cut も参照として検査し、墓標をたどって改名先と比べる。
 - `audience`：対象者 id。
 - `outputs`：成果物のファイル（チャネルの outputs の glob に一致すること）。
-- `pages[].sections[]`：role（v1 の problem は pain）・message・pain・proofs・copy（文案）。固定値は copy の中で `{{fct-NNNN}}` として参照する（括弧の中に空白や改行を入れない。入れたものは形の崩れた参照として失格）。
+- `frames`（任意）：差し替えできる枠の実体。`media`（例 lp）と `instances`（`id`・`type`）。種類と多重度は `references/media/frames.json`。実体 id は成果物の中で一意。要素の枠はセクションの `frame` で 1 つのセクションに付け、並びの枠（節の順序）はアウトラインの上だけで持つ。
+- `pages[].sections[]`：role（v1 の problem は pain）・message・pain・proofs・frame・copy（文案）。固定値は copy の中で `{{fct-NNNN}}` として参照する（括弧の中に空白や改行を入れない。入れたものは形の崩れた参照として失格）。
 
 ## 終了コード
 
@@ -74,6 +79,9 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 | IA_STRATEGY_SEGMENT_MISMATCH | メッセージ・痛みの戦略が、対象者のセグメントにたどり着かない（出荷チャネルは失格、ほかは警告） |
 | IA_STRATEGY_UNCONFIRMED | 経路の原子に、オーナーの確定が無いか外れたものがある（`detail.atoms`。出荷チャネルは失格、ほかは警告） |
 | IA_APPROVALS_INVALID | `design/approvals.yaml` が読めない・形が違う |
+| IA_FRAME_UNKNOWN_MEDIA / IA_FRAME_UNKNOWN_TYPE | 枠の媒体・種類がノウハウに無い |
+| IA_FRAME_DUPLICATE_ID / IA_FRAME_MULTIPLICITY | 枠の実体 id の重複・種類ごとの実体の数が多重度に反する |
+| IA_FRAME_UNDECLARED / IA_FRAME_SEQUENCE_ANCHORED / IA_FRAME_DUPLICATE_USE / IA_FRAME_UNUSED | 宣言していない枠を使う・並びの枠をセクションに付ける・要素の枠を 2 つ以上のセクションに付ける・宣言した要素の枠をどこにも付けない |
 | IA_NO_CHANNELS / IA_NO_OUTLINES / IA_CHANNEL_NAME / IA_CHANNEL_FILE / IA_OUTLINE_FILE / IA_OUTLINE_ID | 対象 0 件・名前の不一致・読まれないファイル |
 | IA_OUTLINE_CHANNEL / IA_OUTLINE_OUTPUT_UNDECLARED | 宣言の無いチャネル・チャネルの outputs に一致しない成果物 |
 | IA_OUTLINE_REF_BROKEN / IA_OUTLINE_REF_EMPTY | アウトラインの参照切れ（墓標なら先を案内）・空欄の原子を参照（参照の表は `check.outline_refs` の 1 か所） |
@@ -92,7 +100,7 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 ## 工場への受け渡し（`skeleton`）
 
 `infoarch-author skeleton --outline <id>` は、check が緑のアウトラインから骨組みの HTML を出す（失格していれば出さない）。
-セクションごとに `data-ia-role`・`data-ia-msg`／`data-ia-pain` を付け、文案の `{{fct-NNNN}}` を SSOT の値の
+セクションごとに `data-ia-role`・`data-ia-msg`／`data-ia-pain`（要素の枠があれば `data-ia-frame`）を付け、文案の `{{fct-NNNN}}` を SSOT の値の
 `<span data-ia-fact>` に展開し、文案は HTML エスケープする。pages と outputs の数が同じなら 1 ページずつ対応するファイルに、
 違えば全ページを各ファイルに入れる（`dom` も同じ対応で比べる）。`--out` を付けるとファイルに書き、既にあるファイルは上書きしない。
 工場（own-web-design）は、文言・順序・`data-ia-*` を変えずにスタイリングし、描画後に `dom` を走らせる。
@@ -102,7 +110,7 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 `infoarch-author dom --root . --outline <id>` は、アウトラインの outputs のうち HTML を、チャネルの viewports（無ければ 375×812 と 1280×800）でブラウザに描画し、DOM を確かめる。
 
 - 解析と描画はブラウザ（Playwright の Chromium）が行う。成果物のソースを自前のパーサで読まない。
-- 工場はアンカーを埋める：メッセージは `data-ia-msg`、痛みは `data-ia-pain`、固定値の表示は `data-ia-fact`。v4 の `data-ia-problem` が残っていれば IA_DOM_LEGACY_ATTRIBUTE で失格（互換は持たない）。
+- 工場はアンカーを埋める：メッセージは `data-ia-msg`、痛みは `data-ia-pain`、固定値の表示は `data-ia-fact`。v4 の `data-ia-problem` が残っていれば IA_DOM_LEGACY_ATTRIBUTE で失格（互換は持たない）。要素の枠は `data-ia-frame`（既存の `data-ia-msg` 等には相乗りしない）。宣言した実体の印が無い・2 つ以上ある・宣言していない印がある、は IA_DOM_FRAME_MISSING / IA_DOM_FRAME_DUPLICATE / IA_DOM_FRAME_UNDECLARED で失格。
 - Playwright は `INFOARCH_PLAYWRIGHT_DIR`、無ければ対象 repo（実行ディレクトリ）から解決する。自動では入れない。解決できなければ IA_DOM_PLAYWRIGHT で失格。
 - 読み取る前に、ページが落ち着くのを待つ：network idle の後に 1 秒（表示を始めるタイマーのため）、さらに実行中のアニメーションとトランジションが終わるまで最大 5 秒。終わらないアニメーションがあっても読み取り、2 回の描画の比較で揺れを報告する。
 - 同じ入力を 2 回描画し、結果が違えば IA_DOM_UNSTABLE（判定に使わない）。

@@ -99,3 +99,38 @@ def test_no_dom_check_fires_on_a_clean_page(tmp_path):
     results = collect(GOOD, tmp_path)
     noisy = {c: results[c] for c in DOM_CHECKS if results[c]['count']}
     assert not noisy, noisy
+
+
+def collect_shadow(html, token, tmp_path):
+    if os.environ.get('DESIGN_BROWSER_TEST') != '1':
+        pytest.skip('explicit browser fixture run required')
+    script = tmp_path / 'run_shadow.mjs'
+    script.write_text(RUNNER % json.dumps((SCRIPTS / 'resolved_contract.mjs').as_uri()))
+    manifest = {'item_checks': {'collect': ['palette:shadow'], 'applicability': {}},
+                'palette': {'dimension': ['0px'], 'fontWeight': ['400'], 'shadow': [token]}}
+    env = dict(os.environ)
+    if os.environ.get('DESIGN_TEST_NODE_MODULES'):
+        env['NODE_PATH'] = os.environ['DESIGN_TEST_NODE_MODULES']
+    run = subprocess.run([os.environ.get('DESIGN_TEST_NODE', 'node'), str(script), json.dumps([html, manifest])],
+                         cwd=Path(os.environ['DESIGN_TEST_NODE_MODULES']).parent if os.environ.get('DESIGN_TEST_NODE_MODULES') else tmp_path,
+                         env=env, capture_output=True, text=True)
+    assert run.returncode == 0, run.stderr
+    return json.loads(run.stdout)['results']['palette:shadow']
+
+
+def test_tailwind3_ring_layers_do_not_mask_a_token_shadow(tmp_path):
+    """Tailwind 3's shadow-* utilities compute a multi-layer box-shadow: two transparent,
+    zero-size ring layers (ring offset + ring) plus the real shadow layer. A page that uses
+    the token-matching shadow correctly must not fail palette:shadow just because the
+    browser also renders the invisible ring layers alongside it."""
+    token = '0 1px 2px 0 rgba(0, 0, 0, 0.05)'
+    html = ('<div style="box-shadow: 0 0 #0000, 0 0 #0000, ' + token + '">tailwind3 shadow-sm</div>')
+    result = collect_shadow(html, token, tmp_path)
+    assert result['count'] == 0, result
+
+
+def test_off_token_shadow_still_fails_palette_shadow(tmp_path):
+    token = '0 1px 2px 0 rgba(0, 0, 0, 0.05)'
+    html = ('<div style="box-shadow: 0 0 #0000, 0 0 #0000, 0 4px 10px 0 rgba(255, 0, 0, 0.5)">off token</div>')
+    result = collect_shadow(html, token, tmp_path)
+    assert result['count'] == 1, result

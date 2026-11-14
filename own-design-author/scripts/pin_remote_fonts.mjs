@@ -31,13 +31,21 @@ try{
   for(const scheme of config.schemes)for(const viewport of config.viewports)for(const url of urls){
     const context=await browser.newContext({viewport,colorScheme:scheme,deviceScaleFactor:config.device_scale_factor,
       reducedMotion:config.reduced_motion,locale:config.locale,timezoneId:config.timezone,serviceWorkers:'block'});
-    await context.route('**/*',async route=>{
+    // Every CDN request is awaited before the context closes: closing first disposes responses mid-read.
+    const pending=new Set();
+    await context.route('**/*',route=>{
       const request=route.request();
       if(!origins.includes(new URL(request.url()).origin))return route.continue();
-      const response=await route.fetch();const body=await response.body();
-      if(!response.ok()){console.error('the CDN answered '+response.status()+' for '+request.url()+'; not pinned');process.exitCode=2;return route.abort();}
-      files[request.url()]=sha(body);
-      await route.fulfill({response,body});
+      const job=(async()=>{
+        try{
+          const response=await route.fetch();const body=await response.body();
+          if(!response.ok()){console.error('the CDN answered '+response.status()+' for '+request.url()+'; not pinned');process.exitCode=2;return route.abort();}
+          files[request.url()]=sha(body);
+          await route.fulfill({response,body});
+        }catch{console.error('could not read '+request.url()+' from the CDN; rerun');process.exitCode=2;}
+      })();
+      pending.add(job);job.finally(()=>pending.delete(job));
+      return job;
     });
     const page=await context.newPage();
     const client=await context.newCDPSession(page);const loaded=[];
@@ -52,6 +60,7 @@ try{
       const sources=[...src.matchAll(/url\(\s*(['"]?)(.*?)\1\s*\)/g)].map(m=>m[2]).concat(/^https?:\/\//.test(src)?[src]:[]);
       if(sources.some(u=>{try{return origins.includes(new URL(u).origin);}catch{return false;}}))families.add(font.platformFontFamily);
     }
+    while(pending.size)await Promise.allSettled([...pending]);
     await context.close();
   }
 } finally {await browser.close();}

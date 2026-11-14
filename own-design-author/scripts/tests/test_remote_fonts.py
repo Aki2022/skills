@@ -156,6 +156,10 @@ def test_cdn_font_whose_bytes_changed_is_rejected(cdn_site):
     run, data = measure(remote)
     assert run.returncode != 0 and font_failure(data), run.stdout
     assert data['runs'][0]['render_evidence']['rejected_font_requests'] >= 1
+    # The report names the rejected CDN URL, so a real site's missing pin can be found and re-pinned.
+    font_url = next(u for u in remote['files'] if u.endswith('.woff2'))
+    assert data['runs'][0]['render_evidence']['rejected_fonts'] == [{'reason': 'remote font changed or unavailable', 'url': font_url}]
+    assert font_failure(data)['rejected_fonts'] == [{'reason': 'remote font changed or unavailable', 'url': font_url}]
 
 
 @BROWSER
@@ -165,6 +169,17 @@ def test_cdn_font_url_that_is_not_pinned_is_rejected(cdn_site):
     files[next(iter(remote['files'])) + '?unused'] = 'c' * 64  # keep the pin non-empty, but not for the font used
     run, data = measure({**remote, 'files': files})
     assert run.returncode != 0 and font_failure(data), run.stdout
+    font_url = next(u for u in remote['files'] if u.endswith('.woff2'))
+    assert data['runs'][0]['render_evidence']['rejected_fonts'] == [{'reason': 'remote font not pinned', 'url': font_url}]
+
+
+@BROWSER
+def test_a_rejected_font_from_an_undeclared_origin_is_counted_without_its_url(cdn_site):
+    # Only declared CDN origins are public pins; any other origin may be private, so its URL is never stored.
+    measure, remote, *_ = cdn_site
+    run, data = measure(None)
+    rows = data['runs'][0]['render_evidence']['rejected_fonts']
+    assert rows and all(set(row) == {'reason'} for row in rows), rows
 
 
 @BROWSER

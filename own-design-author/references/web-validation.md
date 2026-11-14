@@ -287,6 +287,7 @@ CDN（Google Fonts など）から読むフォントは、`remote_fonts` で URL
 
 - `origins` からの要求はすべて固定の対象。描画時に CDN から取り、`files` の URL と完全に一致し、バイトの SHA-256 が一致した時だけページに渡す。
   一致しない・固定されていない・取れない要求は拒否し、`font-fallback` の失格になる（`rejected_requests` に数える）。
+  拒否した要求は `render_evidence.rejected_fonts` と `font-fallback` の失格に理由つきで残る。宣言した CDN の origin の要求だけ URL も残すので、固定し直す対象がわかる。それ以外の origin の URL は、private な場所を含みうるので残さない。
 - `families` は、それらのファイルが描いてよい実フォントの family 名。字形の検査は、ここか `fonts` の family で、かつ固定したファイルに結び付いた字体だけを認める。
 - 描画のたびに CDN へ接続する。CDN が中身を変えたら失格になるので、固定を作り直す。CDN の CSS は UA で中身が変わるが、UA は固定したブラウザの版で決まる。
 - 日本語の字体は文字の範囲ごとの小さなファイル（subset）に分かれている。ページの文字が変わると新しい subset を要求し、固定し直すまで失格になる。

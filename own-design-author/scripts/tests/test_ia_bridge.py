@@ -158,3 +158,22 @@ def test_absent_fixed_adapter_is_red(project, tmp_path):
     with pytest.raises(ValueError, match='IA module is unavailable'):
         module.resolve_ia(project[0], {'modules': {'ia': '0.3.0'}}, {}, {'web': {}}, report)
     assert report['missing'][0]['id'] == 'ia'
+
+
+def test_unconfirmed_strategy_can_be_prepared_and_recorded_by_the_owner(project):
+    """An unconfirmed strategy is an approval gap, not a structural error: preparing the bundle must not be blocked
+    by the very confirmation it prepares (WS-20261114 I6, biz_ops)."""
+    from owner_approval import approve_request, prepare
+    approve(project)
+    root = attach(project)
+    import yaml
+    ledger = root / 'design/approvals.yaml'
+    rows = [r for r in yaml.safe_load(ledger.read_text()) if not r['key'].startswith('ia:strategy:')]
+    ledger.write_text(yaml.safe_dump(rows, allow_unicode=True, sort_keys=False))  # the owner has confirmed nothing yet
+    blocked = check(project, ship=True)
+    assert any(e.startswith('IA_STRATEGY_UNCONFIRMED') for e in blocked['errors']), blocked['errors']
+    request = prepare(root, project[1], all_must=True)
+    keys = {r['key'] for r in request['rows']}
+    assert 'ia:strategy:val-0001' in keys and 'ia:strategy:str-0001' in keys
+    approve_request(root, project[1], request, 'fixture-owner')
+    assert not any(e.startswith('IA_STRATEGY_UNCONFIRMED') for e in check(project, ship=True)['errors'])

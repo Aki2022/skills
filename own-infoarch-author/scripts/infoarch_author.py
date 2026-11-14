@@ -145,6 +145,13 @@ def cmd_impact(args):
     return 0
 
 
+def cmd_migrate(args):
+    import migrate
+    report, code = migrate.run(args.root, write=args.write)
+    _print(report)
+    return code
+
+
 def cmd_compose(args):
     report = check.Report('compose', dt.date.today().isoformat())
     m = check.load(args.root, report)
@@ -234,6 +241,10 @@ def main(argv=None):
     i.add_argument('--root', default='.')
     i.add_argument('--id', required=True)
     i.set_defaults(fn=cmd_impact)
+    mg = sub.add_parser('migrate', help='one atomic v2 -> v3 migration of design/info_arch/ (preview unless --write)')
+    mg.add_argument('--root', default='.')
+    mg.add_argument('--write', action='store_true')
+    mg.set_defaults(fn=cmd_migrate)
     cp = sub.add_parser('compose', help='step 3: messages that stand on the chosen strategy atoms for an audience, in priority order')
     cp.add_argument('--root', default='.')
     cp.add_argument('--audience', required=True)

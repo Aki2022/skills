@@ -29,7 +29,7 @@ def anchor(kind, aid, top, text='x', visible=True, left=0, height=40):
 
 def green_snapshot():
     return {'viewport': VP, 'text_chars': 400, 'first_screen': '既存システムの運用、重くありませんか 運用の手間が半分になります', 'anchors': [
-        anchor('problem', 'prb-0001', 10, '既存システムの運用、重くありませんか'),
+        anchor('pain', 'pan-0001', 10, '既存システムの運用、重くありませんか'),
         anchor('msg', 'msg-0001', 120, '運用の手間が半分になります'),
         anchor('msg', 'msg-0002', 900, '導入は100社以上'),
         anchor('fact', 'fct-0001', 905, '100社以上', height=20),
@@ -58,6 +58,8 @@ def test_green_snapshot_passes():
     (lambda s: s['anchors'].pop(3), 'IA_DOM_FACT_MISSING'),
     (lambda s: s.update(text_chars=0, anchors=[], first_screen=''), 'IA_DOM_NO_TARGETS'),
     (lambda s: s['anchors'].append(anchor('msg', 'msg-0099', 2000)), 'IA_DOM_ANCHOR_UNKNOWN'),
+    # v5 renamed the pain anchor; a leftover v4 attribute must not pass silently (acceptance (h))
+    (lambda s: s['anchors'].append(anchor('legacy-problem', 'prb-0001', 5)), 'IA_DOM_LEGACY_ATTRIBUTE'),
 ])
 def test_red_snapshots_fail(mutation, code):
     snap = green_snapshot()
@@ -133,7 +135,7 @@ def test_two_runs_must_be_identical():
 PW_DIR = os.environ.get('INFOARCH_TEST_PLAYWRIGHT_DIR')
 
 HTML = '''<!doctype html><html><head><meta charset="utf-8"><style>body{{font:16px sans-serif;margin:0}} section{{min-height:200px}}</style></head><body>
-<section data-ia-problem="prb-0001"><h1>既存システムの運用、重くありませんか</h1></section>
+<section data-ia-pain="pan-0001"><h1>既存システムの運用、重くありませんか</h1></section>
 <section data-ia-msg="msg-0001"><h2>運用の手間が半分になります</h2></section>
 <section data-ia-msg="msg-0002" style="margin-top:600px"><p>導入は<span data-ia-fact="fct-0001">100社以上</span></p></section>
 <section data-ia-msg="msg-0003"{hidden}><a href="#">資料請求はこちら（<span data-ia-fact="fct-0002">03-1234-5678</span>）</a></section>
@@ -141,7 +143,7 @@ HTML = '''<!doctype html><html><head><meta charset="utf-8"><style>body{{font:16p
 
 
 @pytest.mark.skipif(not PW_DIR, reason='INFOARCH_TEST_PLAYWRIGHT_DIR is not set: real-browser integration not run (reported as skipped, not passed)')
-@pytest.mark.parametrize('hidden,expect', [('', 0), (' style="opacity:0"', 2)])
+@pytest.mark.parametrize('hidden,expect', [('', 0), (' style="opacity:0"', 2), (' data-ia-problem="prb-0001"', 2)])
 def test_real_browser_end_to_end(tmp_path, hidden, expect):
     from test_check import write_repo
     write_repo(tmp_path)
@@ -176,7 +178,7 @@ ANIMATED = '''<!doctype html><html><head><meta charset="utf-8"><style>
 body{{margin:0;font:16px sans-serif}} section{{min-height:200px}}
 @keyframes up{{from{{opacity:0}}to{{opacity:1}}}} .anim{{animation:up .6s ease-out forwards}}
 </style></head><body>
-<section data-ia-problem="prb-0001" class="hero" style="opacity:0">既存システムの運用、重くありませんか</section>
+<section data-ia-pain="pan-0001" class="hero" style="opacity:0">既存システムの運用、重くありませんか</section>
 <section data-ia-msg="msg-0001" class="anim">運用の手間が半分になります</section>
 <section data-ia-msg="msg-0002" class="anim">導入は<span data-ia-fact="fct-0001">100社以上</span></section>
 <section data-ia-msg="msg-0003" class="anim">資料請求はこちら（<span data-ia-fact="fct-0002">03-1234-5678</span>）</section>
@@ -312,11 +314,11 @@ def test_real_browser_text_painted_from_a_zero_size_box_is_unanchored(tmp_path):
     assert report['unanchored'] and all('業界No.1' in r['text'] for r in report['unanchored'])
 
 
-# --- a section may carry both a problem and a message (security review of #100) ---
+# --- a section may carry both a pain and a message (security review of #100) ---
 
 def _both():
     outline = copy.deepcopy(OUTLINE)
-    outline['pages'][0]['sections'][0]['message'] = 'msg-0001'  # problem section that also carries the benefit
+    outline['pages'][0]['sections'][0]['message'] = 'msg-0001'  # pain section that also carries the benefit
     outline['pages'][0]['sections'].pop(1)
     snap = green_snapshot()
     snap['anchors'].pop(1)
@@ -325,14 +327,14 @@ def _both():
     return outline, snap
 
 
-def test_section_with_problem_and_message_checks_both_anchors():
+def test_section_with_pain_and_message_checks_both_anchors():
     outline, snap = _both()
     assert codes(run(snap, outline=outline)) == [], run(snap, outline=outline)
     snap['anchors'][1]['text'] = '業界No.1'
     assert 'IA_DOM_COPY_DRIFT' in codes(run(snap, outline=outline)), run(snap, outline=outline)
 
 
-def test_drifted_message_of_a_problem_section_is_sent_to_judgment():
+def test_drifted_message_of_a_pain_section_is_sent_to_judgment():
     outline, snap = _both()
     snap['anchors'].insert(2, anchor('msg', 'msg-0001', 20, '業界No.1 の実績'))
     assert '業界No.1 の実績' in dom.unjudged_text(outline, SSOT, snap)

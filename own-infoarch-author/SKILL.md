@@ -1,6 +1,6 @@
 ---
 name: own-infoarch-author
-description: "repo 直下 design/info_arch/ の「伝え方の SSOT」（対象者・課題・メッセージ・証拠・固定値・正式名称・声）を読み書きし、Web サイト・LP・チラシ・ポスター・資料を作るときに、誰に・何を・どの順で・どう話すかをそろえる。「情報設計を作って」「伝え方をそろえて」「SSOT から LP の構成を作って」「メッセージを整理して」「info_arch を検査して」で使う。見た目は own-design-author と工場 skill（own-web-design 等）。"
+description: "repo 直下 design/info_arch/ の「伝え方の SSOT」（戦略の層：セグメント・ジョブ・痛み・提供価値・代替・強み・約束など、と伝え方：対象者・メッセージ・証拠・固定値・正式名称・声）を読み書きし、Web サイト・LP・チラシ・ポスター・資料を作るときに、誰に・何を・どの順で・どう話すかをそろえる。「情報設計を作って」「伝え方をそろえて」「SSOT から LP の構成を作って」「メッセージを整理して」「info_arch を検査して」で使う。見た目は own-design-author と工場 skill（own-web-design 等）。"
 ---
 
 # own-infoarch-author — 伝え方の SSOT と構造化アウトライン

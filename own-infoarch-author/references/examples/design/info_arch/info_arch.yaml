@@ -1,13 +1,21 @@
-schema_version: 2
+schema_version: 3
 ledger:
   next:
     aud: 3
-    prb: 2
     msg: 5
     prf: 3
     fct: 3
     ent: 2
     vce: 2
+    seg: 3
+    job: 3
+    pan: 3
+    gan: 2
+    val: 3
+    alt: 2
+    str: 2
+    cpt: 2
+    prm: 3
   tombstones:
     msg-0004: msg-0003
 audiences:
@@ -24,6 +32,7 @@ audiences:
     - msg-0001
     - msg-0002
     - msg-0003
+    segment: seg-0001
   aud-0002:
     state: proposed
     provenance: owner
@@ -34,12 +43,99 @@ audiences:
     - msg-0002
     - msg-0001
     - msg-0003
-problems:
-  prb-0001:
+    segment: seg-0002
+segments:
+  seg-0001:
+    state: proposed
+    provenance: owner
+    qualifier: 自治体の情報部門
+    situation: 既存システムの運用が重い
+  seg-0002:
+    state: proposed
+    provenance: owner
+    qualifier: 中小企業の経営者
+    situation: 人手が足りない
+jobs:
+  job-0001:
+    state: proposed
+    provenance: owner
+    text: 既存システムを無理なく運用する
+    segment: seg-0001
+    push:
+    - 保守の手間が増え続ける
+    anxiety:
+    - 移行で止まるのが怖い
+  job-0002:
+    state: proposed
+    provenance: owner
+    text: 少ない人数で業務を回す
+    segment: seg-0002
+pains:
+  pan-0001:
     state: proposed
     provenance: owner
     text: 運用が重い
-    audience: aud-0001
+    job: job-0001
+  pan-0002:
+    state: proposed
+    provenance: owner
+    text: 人手が足りない
+    job: job-0002
+gains:
+  gan-0001:
+    state: proposed
+    provenance: owner
+    text: 職員が本来の業務に時間を使える
+    job: job-0001
+values:
+  val-0001:
+    state: proposed
+    provenance: owner
+    text: 運用の手間が減る
+    relieves:
+    - pan-0001
+    creates:
+    - gan-0001
+  val-0002:
+    state: proposed
+    provenance: owner
+    text: 少人数でも回る
+    relieves:
+    - pan-0002
+alternatives:
+  alt-0001:
+    state: proposed
+    provenance: owner
+    text: 今のシステムを使い続ける
+    segment: seg-0001
+strengths:
+  str-0001:
+    state: proposed
+    provenance: owner
+    text: 自動更新で保守が要らない
+    versus:
+    - alt-0001
+    produces:
+    - val-0001
+concepts:
+  cpt-0001:
+    state: proposed
+    provenance: owner
+    category: 自治体向け Web サーバー
+    concept: 保守のいらない Web サーバー
+promises:
+  prm-0001:
+    state: proposed
+    provenance: owner
+    text: 運用の手間を半分にする
+    values:
+    - val-0001
+  prm-0002:
+    state: proposed
+    provenance: owner
+    text: 少人数でも止まらない
+    values:
+    - val-0002
 messages:
   msg-0001:
     state: proposed
@@ -47,17 +143,26 @@ messages:
     text: 運用の手間が半分になる
     role: benefit
     addresses:
-    - prb-0001
+    - pan-0001
+    serves:
+    - val-0001
+    - prm-0001
   msg-0002:
     state: proposed
     provenance: owner
     text: 多くの自治体で使われている
     role: proof
+    serves:
+    - val-0001
+    - val-0002
   msg-0003:
     state: proposed
     provenance: owner
     text: 資料を請求する
     role: cta
+    serves:
+    - prm-0001
+    - prm-0002
 proofs:
   prf-0001:
     state: proposed

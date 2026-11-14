@@ -11,28 +11,45 @@
 
 それ以外のファイルやサブディレクトリが `channels/` `outlines/` にあると失格にする（黙って無視しない）。`.` で始まるファイル（`.DS_Store`・`.gitkeep`）だけは読まずに飛ばす。`.` で始まるサブディレクトリは失格にする。
 
-## 原子（7 種）
+## 原子（スキーマ版 3）
 
 id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不可）か、10000 以上なら先頭を 0 にしない。`msg-00001` や末尾に改行の付いたキーのような、同じ番号の別表記は失格（id は常に全体一致で判定する）。`ledger.next` 未満でなければ「台帳が発行していない」。改名・削除は `ledger.tombstones`（旧 → 新、削除は null）。
 
 | 種別 | 接頭辞 | proposed で必須 | 参照 |
 | --- | --- | --- | --- |
-| 対象者 | `aud` | label・situation・desired_action・priorities（メッセージを優先順に。先頭が 1 位） | priorities → msg |
-| 課題 | `prb` | text・audience | audience → aud |
-| メッセージ | `msg` | text・role（benefit / proof / how / objection / cta / vision） | addresses → prb |
+| 対象者 | `aud` | label・situation・desired_action・priorities（メッセージを優先順に。先頭が 1 位）・segment | priorities → msg、segment → seg |
+| メッセージ | `msg` | text・role（benefit / proof / how / objection / cta / vision） | addresses → pan、serves → val・prm・job・pan・gan（担う戦略の原子） |
 | 証拠 | `prf` | text・source・supports・as_of か expires | supports → msg |
 | 固定値 | `fct` | label・value・as_of か expires か evergreen: true（evergreen と日付は併存させない） | ― |
 | 正式名称 | `ent` | type・name | ― |
 | 声 | `vce` | traits（3〜4 個。trait・is・is_not） | proposed はプロジェクトに 1 つ |
 
+戦略の層（SPEC-information-architecture-standardization v5）。確定はオーナーが承認台帳に記録し、`state` には持たない。
+
+| 種別 | 接頭辞 | proposed で必須 | 参照 |
+| --- | --- | --- | --- |
+| セグメント | `seg` | qualifier・situation | ― |
+| ジョブ | `job` | text・segment（push・pull・anxiety・habit は任意） | segment → seg |
+| 痛み | `pan` | text・job（v2 の課題） | job → job |
+| 得たいもの | `gan` | text・job | job → job |
+| 提供価値 | `val` | text・relieves か creates の少なくとも 1 つ | relieves → pan、creates → gan |
+| 代替 | `alt` | text・segment | segment → seg |
+| 強み | `str` | text・versus・produces | versus → alt、produces → val |
+| カテゴリーとコンセプト | `cpt` | category・concept | ― |
+| 約束 | `prm` | text・values | values → val |
+
 メッセージの優先順は、対象者ごとに `priorities` で持つ（同じメッセージでも、対象者によって 1 位が違ってよい）。
 
-## 構造化アウトライン（版 1）
+### 戦略の依存経路（`check.strategy_path`）
+
+アウトラインのメッセージ（と痛みのセクション）ごとに、対象者のセグメントへ向かう枝だけを参照からたどる。ジョブはそのセグメントのもの、痛み・得たいものはそのジョブのもの、提供価値はそれらを和らげるか生むもの、約束はその提供価値を言い切るもの。経路上の提供価値を生む強みはすべて経路に入り、その強みが比べる同じセグメントの代替も入る（成果物の側で外せない）。経路の原子の中身を正規化した JSON の SHA-256 を経路のハッシュとし、確定と判定の入力に使う。
+
+## 構造化アウトライン（版 2）
 
 - `brief`：purpose（目的）・action（取ってほしい行動）・medium・constraints・cut（この成果物では言わないメッセージ）。cut も参照として検査し、墓標をたどって改名先と比べる。
 - `audience`：対象者 id。
 - `outputs`：成果物のファイル（チャネルの outputs の glob に一致すること）。
-- `pages[].sections[]`：role・message・problem・proofs・copy（文案）。固定値は copy の中で `{{fct-NNNN}}` として参照する（括弧の中に空白や改行を入れない。入れたものは形の崩れた参照として失格）。
+- `pages[].sections[]`：role（v1 の problem は pain）・message・pain・proofs・copy（文案）。固定値は copy の中で `{{fct-NNNN}}` として参照する（括弧の中に空白や改行を入れない。入れたものは形の崩れた参照として失格）。
 
 ## 終了コード
 
@@ -46,6 +63,8 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 | IA_ID_NOT_ISSUED / IA_ID_TOMBSTONED / IA_TOMBSTONE_TARGET | 台帳と墓標 |
 | IA_REF_BROKEN / IA_EMPTY_REFERENCED | SSOT 内の参照切れ・proposed の原子が空欄を参照（参照の表は `check.ssot_refs` の 1 か所） |
 | IA_VOICE_MULTIPLE | proposed の声が 2 つ以上 |
+| IA_STRATEGY_UNTRACED | アウトラインのメッセージが、どの戦略の原子も担っていない（出荷チャネルは失格、ほかは警告） |
+| IA_STRATEGY_SEGMENT_MISMATCH | メッセージ・痛みの戦略が、対象者のセグメントにたどり着かない（出荷チャネルは失格、ほかは警告） |
 | IA_NO_CHANNELS / IA_NO_OUTLINES / IA_CHANNEL_NAME / IA_CHANNEL_FILE / IA_OUTLINE_FILE / IA_OUTLINE_ID | 対象 0 件・名前の不一致・読まれないファイル |
 | IA_OUTLINE_CHANNEL / IA_OUTLINE_OUTPUT_UNDECLARED | 宣言の無いチャネル・チャネルの outputs に一致しない成果物 |
 | IA_OUTLINE_REF_BROKEN / IA_OUTLINE_REF_EMPTY | アウトラインの参照切れ（墓標なら先を案内）・空欄の原子を参照（参照の表は `check.outline_refs` の 1 か所） |
@@ -64,7 +83,7 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 ## 工場への受け渡し（`skeleton`）
 
 `infoarch-author skeleton --outline <id>` は、check が緑のアウトラインから骨組みの HTML を出す（失格していれば出さない）。
-セクションごとに `data-ia-role`・`data-ia-msg`／`data-ia-problem` を付け、文案の `{{fct-NNNN}}` を SSOT の値の
+セクションごとに `data-ia-role`・`data-ia-msg`／`data-ia-pain` を付け、文案の `{{fct-NNNN}}` を SSOT の値の
 `<span data-ia-fact>` に展開し、文案は HTML エスケープする。pages と outputs の数が同じなら 1 ページずつ対応するファイルに、
 違えば全ページを各ファイルに入れる（`dom` も同じ対応で比べる）。`--out` を付けるとファイルに書き、既にあるファイルは上書きしない。
 工場（own-web-design）は、文言・順序・`data-ia-*` を変えずにスタイリングし、描画後に `dom` を走らせる。
@@ -74,13 +93,13 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 `infoarch-author dom --root . --outline <id>` は、アウトラインの outputs のうち HTML を、チャネルの viewports（無ければ 375×812 と 1280×800）でブラウザに描画し、DOM を確かめる。
 
 - 解析と描画はブラウザ（Playwright の Chromium）が行う。成果物のソースを自前のパーサで読まない。
-- 工場はアンカーを埋める：メッセージは `data-ia-msg`、課題は `data-ia-problem`、固定値の表示は `data-ia-fact`。
+- 工場はアンカーを埋める：メッセージは `data-ia-msg`、痛みは `data-ia-pain`、固定値の表示は `data-ia-fact`。v4 の `data-ia-problem` が残っていれば IA_DOM_LEGACY_ATTRIBUTE で失格（互換は持たない）。
 - Playwright は `INFOARCH_PLAYWRIGHT_DIR`、無ければ対象 repo（実行ディレクトリ）から解決する。自動では入れない。解決できなければ IA_DOM_PLAYWRIGHT で失格。
 - 読み取る前に、ページが落ち着くのを待つ：network idle の後に 1 秒（表示を始めるタイマーのため）、さらに実行中のアニメーションとトランジションが終わるまで最大 5 秒。終わらないアニメーションがあっても読み取り、2 回の描画の比較で揺れを報告する。
 - 同じ入力を 2 回描画し、結果が違えば IA_DOM_UNSTABLE（判定に使わない）。
 - 最初の画面の文言（各画面幅）を報告の `first_screens` に出す。強調の判定（Jev の判定台帳）の入力になる。
 - 各アンカーの表示の文言（`innerText`）を、アウトラインの文案（固定値を SSOT の値に展開）と比べる。NFKC で幅をそろえ、空白と改行をすべて除いてから比べる（改行は見た目で、文言ではない）。同じアンカーが繰り返されるときは、見えているうちの 1 つが文案と一致すればよい。報告に表示の文言は出さない。
-- どのアンカー（メッセージ・課題・固定値）にも属さない、見えている文言を報告の `unanchored`（成果物 × 画面幅）に出す。文案と違う繰り返しのアンカーの文言も、ここに足す。判定台帳では、支える根拠の無い主張として `ia-unregistered-claim` で判定する。
+- どのアンカー（メッセージ・痛み・固定値）にも属さない、見えている文言を報告の `unanchored`（成果物 × 画面幅）に出す。文案と違う繰り返しのアンカーの文言も、ここに足す。判定台帳では、支える根拠の無い主張として `ia-unregistered-claim` で判定する。
 - このページの文案が参照しない固定値のアンカーは、SSOT にある id で、その値を表示している時だけ認める（任意の文言を固定値のアンカーで包んで、検査を逃がさない）。
 - 文言が見えているかは、文字そのものが描かれているか（テキストの範囲の大きさ）で判定する。大きさ 0 の箱でも、はみ出して文字を描いていれば見えているとみなす。
 - 限界：CSS の `::before`・`::after` の `content` で描く文言は読まない。`judge` の判定は Jev の助言で、score が θ 未満でも IA_DOM_UNANCHORED_TEXT の警告は消えない（アンカーの外の文言は、必ず人の目に届く）。
@@ -88,8 +107,8 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 | code | 内容 |
 | --- | --- |
 | IA_DOM_NO_TARGETS | 描画されたテキストが 0 件 |
-| IA_DOM_ANCHOR_MISSING / IA_DOM_ANCHOR_HIDDEN | アウトラインのメッセージ・課題のアンカーが無い・見えていない（display / visibility / opacity / 大きさ 0） |
-| IA_DOM_ANCHOR_UNKNOWN | アウトラインに無いメッセージ・課題のアンカー・SSOT に無い固定値のアンカー |
+| IA_DOM_ANCHOR_MISSING / IA_DOM_ANCHOR_HIDDEN | アウトラインのメッセージ・痛みのアンカーが無い・見えていない（display / visibility / opacity / 大きさ 0） |
+| IA_DOM_ANCHOR_UNKNOWN | アウトラインに無いメッセージ・痛みのアンカー・SSOT に無い固定値のアンカー |
 | IA_DOM_ORDER | 見えているアンカーの描画順（上から）に、アウトラインの順が部分列として現れない（行動喚起の繰り返しは可） |
 | IA_DOM_FACT_MISSING / IA_DOM_FACT_VALUE | 文案が参照する固定値の表示が無い・固定値のアンカーの表示が SSOT の値と違う（空白は正規化して比べる。文案が参照しない固定値のアンカーも対象） |
 | IA_DOM_UNSTABLE | 2 回の描画で結果が違う |

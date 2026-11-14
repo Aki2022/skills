@@ -1,4 +1,4 @@
-schema_version: 1
+schema_version: 2
 id: lp-municipal
 channel: web
 brief:
@@ -14,8 +14,8 @@ pages:
 - id: top
   label: トップ
   sections:
-  - role: problem
-    problem: prb-0001
+  - role: pain
+    pain: pan-0001
     copy: 既存システムの運用、重くありませんか
   - role: benefit
     message: msg-0001

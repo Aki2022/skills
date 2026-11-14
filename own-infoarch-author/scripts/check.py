@@ -357,6 +357,46 @@ def check_strategy(m, report, oid, rel, o, shipped, hashes=None, confirmed=None)
                    '（design-author approve --prepare で束を作り、オーナーが記録する）', rel, atoms=sorted(missing))
 
 
+# ---- composition (steps 2-4; requirements 12 and 15) -------------------------------------
+
+def compose(m, audience, chosen):
+    """Messages that stand on the chosen strategy atoms for the audience's segment, in the audience's priority order
+    (then the rest, by id). The deterministic half of step 3; choosing and cutting stays with the author."""
+    aud = m.atom(audience) or {}
+    segment = aud.get('segment')
+    chosen = set(chosen)
+    picked = [mid for mid, a in sorted((m.ssot.get('messages') or {}).items())
+              if a['state'] == 'proposed' and set(strategy_path(m, _roots(m, mid), segment)[0]) & chosen]
+    order = {mid: i for i, mid in enumerate(aud.get('priorities') or [])}
+    return sorted(picked, key=lambda mid: (order.get(mid, len(order)), mid))
+
+
+def check_composition(m, report, oid, rel, o):
+    """The recorded strategy choice must stand on the audience's segment; messages should stand on it; dropping the
+    audience's top message needs a recorded reason."""
+    segment = (m.atom(o['audience']) or {}).get('segment')
+    st = o['strategy']
+    bad = [x for x in st['choose'] if m.atom(x) is None or not strategy_path(m, [x], segment)[0]]
+    if bad:
+        report.add('fail', 'IA_COMPOSITION_STRATEGY_INVALID',
+                   f'{oid}: 選んだ戦略 {bad} が無いか、対象者のセグメント {segment} の原子でない', rel)
+        return
+    chosen = set(st['choose'])
+    for p in o['pages']:
+        for i, s in enumerate(p['sections']):
+            mid = s.get('message')
+            if mid and m.atom(mid) is not None and _roots(m, mid):
+                if not set(strategy_path(m, _roots(m, mid), segment)[0]) & chosen:
+                    report.add('warn', 'IA_COMPOSITION_OFF_STRATEGY',
+                               f'{oid}.{p["id"]}[{i}]: {mid} は選んだ戦略 {sorted(chosen)} に立っていない', rel, id=mid)
+    top = ((m.atom(o['audience']) or {}).get('priorities') or [None])[0]
+    used = {s.get('message') for p in o['pages'] for s in p['sections']}
+    cut = {m.resolve(x) for x in o['brief'].get('cut', [])} - {None}
+    if top and top not in used and top not in cut and not st.get('deviation'):
+        report.add('warn', 'IA_COMPOSITION_DEVIATION_UNEXPLAINED',
+                   f'{oid}: 対象者の 1 位のメッセージ {top} を使っていない（理由を strategy.deviation に書くか、brief.cut で削ると決める）', rel)
+
+
 # ---- frames (requirement 16) ------------------------------------------------------------
 
 def frame_types(media):
@@ -431,7 +471,7 @@ def mapping(m, oid):
         f = m.root / out
         outputs[out] = hashlib.sha256(f.read_bytes()).hexdigest() if f.is_file() else None
     version = h({'outline': o, 'atoms': {aid: m.atom(aid) for s in sections for aid in atoms_of(s)}, 'outputs': outputs})
-    return {'deliverable': oid, 'version_hash': version, 'outputs': outputs, 'frames': rows}
+    return {'deliverable': oid, 'version_hash': version, 'outputs': outputs, 'strategy': o['strategy'], 'frames': rows}
 
 
 # ---- outlines ----------------------------------------------------------------------------
@@ -551,6 +591,7 @@ def check(root, date):
     for oid, (rel, o) in sorted(m.outlines.items()):
         check_outline(m, report, oid, rel, o)
         check_frames(m, report, oid, rel, o)
+        check_composition(m, report, oid, rel, o)
         ch = m.channels.get(o['channel'])
         check_strategy(m, report, oid, rel, o, shipped=bool(ch and ch[1]['ship']), hashes=hashes, confirmed=confirmed)
     check_expiry(m, report, date)

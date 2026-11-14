@@ -10,6 +10,10 @@ brief:
 audience: aud-0002
 outputs:
 - decks/smb.pptx
+strategy:
+  choose:
+  - val-0002
+  rationale: 人手不足の経営者には、少人数でも回る価値を導入実績で支える
 pages:
 - id: s1
   sections:

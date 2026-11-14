@@ -145,6 +145,19 @@ def cmd_impact(args):
     return 0
 
 
+def cmd_compose(args):
+    report = check.Report('compose', dt.date.today().isoformat())
+    m = check.load(args.root, report)
+    if m.ssot is None or report.exit_code == 2:
+        _print(report.to_dict())
+        return 2
+    chosen = [x for x in args.strategy.split(',') if x]
+    aud = m.atom(args.audience) or {}
+    _print({'audience': args.audience, 'segment': aud.get('segment'), 'strategy': chosen,
+            'messages': check.compose(m, args.audience, chosen)})
+    return 0
+
+
 def cmd_mapping(args):
     report = check.Report('mapping', dt.date.today().isoformat())
     m = check.load(args.root, report)
@@ -221,6 +234,11 @@ def main(argv=None):
     i.add_argument('--root', default='.')
     i.add_argument('--id', required=True)
     i.set_defaults(fn=cmd_impact)
+    cp = sub.add_parser('compose', help='step 3: messages that stand on the chosen strategy atoms for an audience, in priority order')
+    cp.add_argument('--root', default='.')
+    cp.add_argument('--audience', required=True)
+    cp.add_argument('--strategy', required=True, help='comma-separated strategy atom ids (job, pan, gan, val, prm)')
+    cp.set_defaults(fn=cmd_compose)
     mp = sub.add_parser('mapping', help='mapping table of one deliverable: version hash, frame instances, atoms and their content hashes')
     mp.add_argument('--root', default='.')
     mp.add_argument('--outline', required=True)

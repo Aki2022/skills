@@ -693,9 +693,19 @@ def test_wrapper_runs_through_absolute_and_relative_symlinks(tmp_path):
 def test_ship_report_separates_adoption_semantic_fit_and_customer_validation(repo):
     """Requirement 15: 'confirmed and passed' is never one word; customer validation is stated as not judged."""
     code, out, _ = ship(repo)
-    assert out['strategy'] == {'owner_adopted': 'confirmed', 'semantic_fit': 'not-judged',
+    assert out['strategy'] == {'owner_adopted': 'confirmed', 'semantic_fit': 'judged',
                                'customer_validation': 'not-judged-by-ia'}, out
     (repo / 'design/approvals.yaml').write_text('[]\n', encoding='utf-8')
     commit(repo, 'withdraw every confirmation')
     code, out, _ = ship(repo)
     assert code == 2 and out['strategy']['owner_adopted'] == 'unconfirmed', out
+
+
+@pytest.mark.parametrize('score,state', [(0.0, 'judged'), (0.9, 'needs-review')])
+def test_ship_report_states_the_semantic_fit(repo, score, state):  # Q12 / D8: advisory, never blocking by itself
+    cover_ledger(repo, score=score)
+    run_git(repo, 'add', '-A')
+    run_git(repo, 'commit', '-qm', 'judged', '--allow-empty')
+    code, out, _ = ship(repo)
+    assert out['strategy']['semantic_fit'] == state, out
+    assert code != 2 or out['errors'], out

@@ -6,16 +6,21 @@ sentence is a claim) belongs to the Jev judgement ledger; rendered artifacts bel
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
+import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from common import INFO_ARCH_DIR, Report, YamlError, load_ref, load_yaml, validator_for
 
-BLOCKS = {'audiences': 'aud', 'problems': 'prb', 'messages': 'msg', 'proofs': 'prf', 'facts': 'fct',
-          'entities': 'ent', 'voices': 'vce'}
+# Strategy layer (v5): segment, job, pain, gain, value, alternative, strength, concept, promise.
+STRATEGY = {'segments': 'seg', 'jobs': 'job', 'pains': 'pan', 'gains': 'gan', 'values': 'val',
+            'alternatives': 'alt', 'strengths': 'str', 'concepts': 'cpt', 'promises': 'prm'}
+BLOCKS = {'audiences': 'aud', 'messages': 'msg', 'proofs': 'prf', 'facts': 'fct',
+          'entities': 'ent', 'voices': 'vce', **STRATEGY}
 PREFIX_BLOCK = {v: k for k, v in BLOCKS.items()}
-ID_RE = re.compile(r'(aud|prb|msg|prf|fct|ent|vce)-((?!0000)[0-9]{4}|[1-9][0-9]{4,})')  # always fullmatch: $ would accept a trailing newline
+ID_RE = re.compile(r'(' + '|'.join(BLOCKS.values()) + r')-((?!0000)[0-9]{4}|[1-9][0-9]{4,})')  # always fullmatch: $ would accept a trailing newline
 PLACEHOLDER = re.compile(r'\{\{(fct-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,}))\}\}')  # exactly {{fct-NNNN}}, no padding
 ANY_BRACES = re.compile(r'\{\{.*?\}\}', re.S)
 SSOT_PATH = INFO_ARCH_DIR / 'info_arch.yaml'
@@ -67,14 +72,14 @@ def load(root, report):
     data, ok = _load(root / SSOT_PATH, SSOT_PATH, report)
     if not ok:
         return m
-    errs = _errors(validator_for('info_arch.v2.schema.json'), data)
+    errs = _errors(validator_for('info_arch.v3.schema.json'), data)
     for e in errs:
         report.add('fail', 'IA_SCHEMA', e.message, SSOT_PATH, pointer='/' + '/'.join(map(str, e.absolute_path)))
     if errs:
         return m
     m.ssot = data
     for kind, sub, schema, store in (('channel', 'channels', 'channel.v2.schema.json', m.channels),
-                                     ('outline', 'outlines', 'outline.v1.schema.json', m.outlines)):
+                                     ('outline', 'outlines', 'outline.v2.schema.json', m.outlines)):
         d = base / sub
         validator = validator_for(schema)
         for f in sorted(d.iterdir()) if d.is_dir() else []:
@@ -106,14 +111,15 @@ def load(root, report):
 def ssot_refs(block, atom):
     """Every id an SSOT atom references, as (field, id). One table, so no field is forgotten."""
     out = []
-    if block == 'audiences':
-        out += [('priorities', x) for x in atom.get('priorities', [])]
-    if block == 'problems' and 'audience' in atom:
-        out.append(('audience', atom['audience']))
-    if block == 'messages':
-        out += [('addresses', x) for x in atom.get('addresses', [])]
-    if block == 'proofs':
-        out += [('supports', x) for x in atom.get('supports', [])]
+    single = {'audiences': ('segment',), 'jobs': ('segment',), 'pains': ('job',), 'gains': ('job',),
+              'alternatives': ('segment',)}
+    many = {'audiences': ('priorities',), 'messages': ('addresses', 'serves'), 'proofs': ('supports',),
+            'values': ('relieves', 'creates'), 'strengths': ('versus', 'produces'), 'promises': ('values',)}
+    for fld in single.get(block, ()):
+        if fld in atom:
+            out.append((fld, atom[fld]))
+    for fld in many.get(block, ()):
+        out += [(fld, x) for x in atom.get(fld, [])]
     return out
 
 
@@ -183,6 +189,93 @@ def check_lead_support(m, report):
                    str(SSOT_PATH), id=lead)
 
 
+# ---- strategy path (requirements 13 and 15) ----------------------------------------------
+
+def _live(m, block, aid):
+    atom = (m.ssot.get(block) or {}).get(aid)
+    return atom if atom and atom['state'] == 'proposed' else None
+
+
+def strategy_path(m, root_ids, segment):
+    """The strategy atoms a message (or pain) stands on for one segment, and their hash.
+
+    Derived from references only, so a deliverable cannot leave anything out: a job is on the path when it
+    belongs to the segment; a pain or gain when its job is; a value when it relieves or creates one of those;
+    a promise when it states such a value; every strength that produces such a value, with the alternatives of
+    the same segment it is compared against. Branches that lead to another segment are not followed.
+    -> (sorted ids, sha256 of the canonical JSON of those atoms). An empty path hashes to None.
+    """
+    if isinstance(root_ids, str):
+        root_ids = _roots(m, root_ids)
+    d = m.ssot
+    jobs = {j for j, a in (d.get('jobs') or {}).items() if a['state'] == 'proposed' and a.get('segment') == segment}
+    needs = {b: {k for k, a in (d.get(b) or {}).items() if a['state'] == 'proposed' and a.get('job') in jobs}
+             for b in ('pains', 'gains')}
+    values = {v for v, a in (d.get('values') or {}).items() if a['state'] == 'proposed'
+              and (set(a.get('relieves', [])) & needs['pains'] or set(a.get('creates', [])) & needs['gains'])}
+    promises = {p for p, a in (d.get('promises') or {}).items() if a['state'] == 'proposed' and set(a.get('values', [])) & values}
+    reachable = jobs | needs['pains'] | needs['gains'] | values | promises
+    roots = [r for r in root_ids if r in reachable]
+    if not roots:
+        return [], None
+    on = set()
+    for r in roots:
+        prefix = r.split('-')[0]
+        if prefix == 'prm':
+            vals = set(d['promises'][r].get('values', [])) & values
+            on |= {r} | vals
+        elif prefix == 'val':
+            vals = {r}
+            on |= vals
+        else:
+            vals = set()
+            on.add(r)
+        for v in vals:
+            a = d['values'][v]
+            on |= (set(a.get('relieves', [])) & needs['pains']) | (set(a.get('creates', [])) & needs['gains'])
+    for k in [x for x in on if x.split('-')[0] in ('pan', 'gan')]:
+        on.add(d['pains' if k.startswith('pan') else 'gains'][k]['job'])
+    on_values = {x for x in on if x.startswith('val-')}
+    for sid, a in (d.get('strengths') or {}).items():
+        if a['state'] == 'proposed' and set(a.get('produces', [])) & on_values:
+            on.add(sid)
+            on |= {x for x in a.get('versus', []) if (_live(m, 'alternatives', x) or {}).get('segment') == segment}
+    on.add(segment)
+    ids = sorted(on)
+    body = [[aid, m.atom(aid)] for aid in ids]
+    digest = hashlib.sha256(json.dumps(body, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+    return ids, digest
+
+
+def _roots(m, aid):
+    atom = m.atom(aid) or {}
+    if aid.startswith('msg-'):
+        return list(atom.get('serves', [])) + list(atom.get('addresses', []))
+    return [aid]
+
+
+def check_strategy(m, report, oid, rel, o, shipped):
+    """Every message and pain an outline uses must stand on the audience's segment (requirement 15)."""
+    level = 'fail' if shipped else 'warn'
+    segment = (m.atom(o['audience']) or {}).get('segment')
+    for p in o['pages']:
+        for i, s in enumerate(p['sections']):
+            w = f'{oid}.{p["id"]}[{i}]'
+            for key in ('message', 'pain'):
+                aid = s.get(key)
+                if not aid or m.atom(aid) is None:
+                    continue
+                roots = _roots(m, aid)
+                if not roots:
+                    report.add(level, 'IA_STRATEGY_UNTRACED',
+                               f'{w}: {aid} はどの戦略の原子も担っていない（serves で提供価値・約束・ジョブ・痛み・得たいものを結ぶ）', rel, id=aid)
+                    continue
+                ids, _ = strategy_path(m, roots, segment)
+                if not ids:
+                    report.add(level, 'IA_STRATEGY_SEGMENT_MISMATCH',
+                               f'{w}: {aid} の戦略は対象者 {o["audience"]} のセグメント {segment} にたどり着かない', rel, id=aid)
+
+
 # ---- outlines ----------------------------------------------------------------------------
 
 def _glob_re(pattern):
@@ -208,7 +301,7 @@ def outline_refs(o):
     for p in o['pages']:
         for i, s in enumerate(p['sections']):
             w = f'{p["id"]}[{i}]'
-            for key in ('message', 'problem'):
+            for key in ('message', 'pain'):
                 if key in s:
                     out.append((f'{w}.{key}', s[key]))
             out += [(f'{w}.proofs', x) for x in s.get('proofs', [])]
@@ -297,6 +390,8 @@ def check(root, date):
         report.add('fail', 'IA_NO_OUTLINES', 'outlines/*.yaml が 0 件（対象 0 件を合格にしない）', INFO_ARCH_DIR / 'outlines')
     for oid, (rel, o) in sorted(m.outlines.items()):
         check_outline(m, report, oid, rel, o)
+        ch = m.channels.get(o['channel'])
+        check_strategy(m, report, oid, rel, o, shipped=bool(ch and ch[1]['ship']))
     check_expiry(m, report, date)
     report.targets = {'channels': len(m.channels), 'outlines': len(m.outlines),
                       'sections': sum(len(p['sections']) for _, o in m.outlines.values() for p in o['pages'])}

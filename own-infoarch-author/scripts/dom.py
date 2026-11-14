@@ -1,7 +1,7 @@
 """Rendered DOM vs structured outline (ISSUE-03).
 
 The browser does the parsing and rendering; this module only compares its snapshot with the outline:
-every message / problem the outline uses has a visible anchor, the anchors appear in the outline's order
+every message / pain the outline uses has a visible anchor, the anchors appear in the outline's order
 (as a subsequence of the rendered order, so a repeated call to action is fine), each section's visible text is
 the outline's copy (facts expanded), every fact the copy refers to is shown with the SSOT value, and two runs give
 the same snapshot. Visible text outside every anchor is reported, and passed on to the judgement ledger as a claim. The first-screen text is passed on to
@@ -32,8 +32,8 @@ def expected(outline):
     seq, facts = [], []
     for p in outline['pages']:
         for s in p['sections']:
-            if 'problem' in s:
-                seq.append(('problem', s['problem']))
+            if 'pain' in s:
+                seq.append(('pain', s['pain']))
             if 'message' in s:
                 seq.append(('msg', s['message']))
             facts += [f for f in check.PLACEHOLDER.findall(s['copy']) if f not in facts]
@@ -55,7 +55,7 @@ def expected_copy(outline, ssot, output=None):
         for s in p['sections']:
             text = _copy_norm(check.PLACEHOLDER.sub(lambda m: values.get(m.group(1), m.group(0)), s['copy']))
             # Every anchor the section carries shows the same copy (skeleton puts both attributes on one element).
-            for kind, field in (('problem', 'problem'), ('msg', 'message')):
+            for kind, field in (('pain', 'pain'), ('msg', 'message')):
                 if field in s:
                     out.setdefault((kind, s[field]), set()).add(text)
     return out
@@ -84,11 +84,14 @@ def compare(outline, ssot, snap, output=None):
     seq, facts = expected_for(outline, output) if output else expected(outline)
     anchors = snap['anchors']
     wanted = set(seq)
+    legacy = sorted({a['id'] for a in anchors if a['kind'] == 'legacy-problem'})
+    if legacy:
+        out.append(('IA_DOM_LEGACY_ATTRIBUTE', 'fail', f'{vp}: 旧属性 data-ia-problem が残っている {legacy}（v5 では data-ia-pain）'))
     for a in anchors:
-        if a['kind'] in ('msg', 'problem') and (a['kind'], a['id']) not in wanted:
+        if a['kind'] in ('msg', 'pain') and (a['kind'], a['id']) not in wanted:
             out.append(('IA_DOM_ANCHOR_UNKNOWN', 'fail', f'{vp}: アンカー {a["id"]} はアウトラインに無い'))
     rendered = [(a['kind'], a['id']) for a in sorted(anchors, key=lambda a: (a['top'], a['left']))
-                if a['visible'] and a['kind'] in ('msg', 'problem')]
+                if a['visible'] and a['kind'] in ('msg', 'pain')]
     for key in dict.fromkeys(seq):
         found = [a for a in anchors if (a['kind'], a['id']) == key]
         if not found:

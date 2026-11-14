@@ -14,21 +14,45 @@ DATE = '2026-10-23'
 RED = json.loads((SKILL / 'fixtures/red-cases.json').read_text(encoding='utf-8'))['cases']
 
 SSOT = {
-    'schema_version': 2,
-    'ledger': {'next': {'aud': 3, 'prb': 2, 'msg': 5, 'prf': 3, 'fct': 3, 'ent': 2, 'vce': 2},
+    'schema_version': 3,
+    'ledger': {'next': {'aud': 3, 'msg': 5, 'prf': 3, 'fct': 3, 'ent': 2, 'vce': 2,
+                        'seg': 3, 'job': 3, 'pan': 3, 'gan': 2, 'val': 3, 'alt': 2, 'str': 2, 'cpt': 2, 'prm': 3},
                'tombstones': {'msg-0004': 'msg-0003'}},
     'audiences': {
         'aud-0001': {'state': 'proposed', 'provenance': 'owner', 'label': '自治体の情報部門', 'situation': '既存システムの運用が重い',
                      'pains': ['運用負荷'], 'desired_action': '資料請求', 'tone': '丁寧で落ち着いた調子',
-                     'priorities': ['msg-0001', 'msg-0002', 'msg-0003']},
+                     'priorities': ['msg-0001', 'msg-0002', 'msg-0003'], 'segment': 'seg-0001'},
         'aud-0002': {'state': 'proposed', 'provenance': 'owner', 'label': '中小企業の経営者', 'situation': '人手が足りない',
-                     'desired_action': '問い合わせ', 'priorities': ['msg-0002', 'msg-0001', 'msg-0003']},
+                     'desired_action': '問い合わせ', 'priorities': ['msg-0002', 'msg-0001', 'msg-0003'], 'segment': 'seg-0002'},
     },
-    'problems': {'prb-0001': {'state': 'proposed', 'provenance': 'owner', 'text': '運用が重い', 'audience': 'aud-0001'}},
+    'segments': {
+        'seg-0001': {'state': 'proposed', 'provenance': 'owner', 'qualifier': '自治体の情報部門', 'situation': '既存システムの運用が重い'},
+        'seg-0002': {'state': 'proposed', 'provenance': 'owner', 'qualifier': '中小企業の経営者', 'situation': '人手が足りない'}},
+    'jobs': {
+        'job-0001': {'state': 'proposed', 'provenance': 'owner', 'text': '既存システムを無理なく運用する', 'segment': 'seg-0001',
+                     'push': ['保守の手間が増え続ける'], 'anxiety': ['移行で止まるのが怖い']},
+        'job-0002': {'state': 'proposed', 'provenance': 'owner', 'text': '少ない人数で業務を回す', 'segment': 'seg-0002'}},
+    'pains': {
+        'pan-0001': {'state': 'proposed', 'provenance': 'owner', 'text': '運用が重い', 'job': 'job-0001'},
+        'pan-0002': {'state': 'proposed', 'provenance': 'owner', 'text': '人手が足りない', 'job': 'job-0002'}},
+    'gains': {'gan-0001': {'state': 'proposed', 'provenance': 'owner', 'text': '職員が本来の業務に時間を使える', 'job': 'job-0001'}},
+    'values': {
+        'val-0001': {'state': 'proposed', 'provenance': 'owner', 'text': '運用の手間が減る', 'relieves': ['pan-0001'], 'creates': ['gan-0001']},
+        'val-0002': {'state': 'proposed', 'provenance': 'owner', 'text': '少人数でも回る', 'relieves': ['pan-0002']}},
+    'alternatives': {'alt-0001': {'state': 'proposed', 'provenance': 'owner', 'text': '今のシステムを使い続ける', 'segment': 'seg-0001'}},
+    'strengths': {'str-0001': {'state': 'proposed', 'provenance': 'owner', 'text': '自動更新で保守が要らない',
+                               'versus': ['alt-0001'], 'produces': ['val-0001']}},
+    'concepts': {'cpt-0001': {'state': 'proposed', 'provenance': 'owner', 'category': '自治体向け Web サーバー', 'concept': '保守のいらない Web サーバー'}},
+    'promises': {
+        'prm-0001': {'state': 'proposed', 'provenance': 'owner', 'text': '運用の手間を半分にする', 'values': ['val-0001']},
+        'prm-0002': {'state': 'proposed', 'provenance': 'owner', 'text': '少人数でも止まらない', 'values': ['val-0002']}},
     'messages': {
-        'msg-0001': {'state': 'proposed', 'provenance': 'owner', 'text': '運用の手間が半分になる', 'role': 'benefit', 'addresses': ['prb-0001']},
-        'msg-0002': {'state': 'proposed', 'provenance': 'owner', 'text': '多くの自治体で使われている', 'role': 'proof'},
-        'msg-0003': {'state': 'proposed', 'provenance': 'owner', 'text': '資料を請求する', 'role': 'cta'},
+        'msg-0001': {'state': 'proposed', 'provenance': 'owner', 'text': '運用の手間が半分になる', 'role': 'benefit', 'addresses': ['pan-0001'],
+                     'serves': ['val-0001', 'prm-0001']},
+        'msg-0002': {'state': 'proposed', 'provenance': 'owner', 'text': '多くの自治体で使われている', 'role': 'proof',
+                     'serves': ['val-0001', 'val-0002']},
+        'msg-0003': {'state': 'proposed', 'provenance': 'owner', 'text': '資料を請求する', 'role': 'cta',
+                     'serves': ['prm-0001', 'prm-0002']},
     },
     'proofs': {'prf-0001': {'state': 'proposed', 'provenance': 'owner', 'text': '導入自治体の数', 'source': '導入台帳',
                             'supports': ['msg-0002'], 'as_of': '2026-10-01'},
@@ -47,18 +71,18 @@ SSOT = {
 CHANNEL = {'schema_version': 2, 'media': 'web', 'outputs': ['site/**/*.html'], 'ship': True, 'ship_command': 'mise run deploy'}
 DRAFT = {'schema_version': 2, 'media': 'deck', 'outputs': ['decks/*.pptx'], 'ship': False}
 OUTLINE = {
-    'schema_version': 1, 'id': 'lp-municipal', 'channel': 'web',
+    'schema_version': 2, 'id': 'lp-municipal', 'channel': 'web',
     'brief': {'purpose': '自治体の情報部門からの資料請求を増やす', 'action': '資料請求', 'medium': 'LP', 'constraints': ['1 ページ']},
     'audience': 'aud-0001', 'outputs': ['site/index.html'],
     'pages': [{'id': 'top', 'label': 'トップ', 'sections': [
-        {'role': 'problem', 'problem': 'prb-0001', 'copy': '既存システムの運用、重くありませんか'},
+        {'role': 'pain', 'pain': 'pan-0001', 'copy': '既存システムの運用、重くありませんか'},
         {'role': 'benefit', 'message': 'msg-0001', 'copy': '運用の手間が半分になります'},
         {'role': 'proof', 'message': 'msg-0002', 'proofs': ['prf-0001'], 'copy': '導入は{{fct-0001}}'},
         {'role': 'cta', 'message': 'msg-0003', 'copy': '資料請求はこちら（{{fct-0002}}）'},
     ]}],
 }
 DECK = {
-    'schema_version': 1, 'id': 'deck-smb', 'channel': 'deck',
+    'schema_version': 2, 'id': 'deck-smb', 'channel': 'deck',
     'brief': {'purpose': '中小企業向けの説明', 'action': '問い合わせ', 'medium': '資料', 'cut': ['msg-0001']},
     'audience': 'aud-0002', 'outputs': ['decks/smb.pptx'],
     'pages': [{'id': 's1', 'sections': [
@@ -350,7 +374,7 @@ def test_empty_proof_does_not_count_as_support(tmp_path):
 def test_empty_audience_is_not_checked(tmp_path):
     ssot = _without_proof_for_msg_0001()
     ssot['audiences']['aud-0001'] = {'state': 'empty', 'provenance': 'proposal', 'priorities': ['msg-0001']}
-    ssot['problems']['prb-0001']['audience'] = 'aud-0002'
+    ssot['audiences']['aud-0002']['segment'] = 'seg-0001'  # the LP's pain and messages trace to seg-0001
     outline = copy.deepcopy(OUTLINE)
     outline['audience'] = 'aud-0002'
     write_repo(tmp_path, ssot, outlines=(outline, DECK))

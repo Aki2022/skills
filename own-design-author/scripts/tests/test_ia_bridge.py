@@ -108,7 +108,7 @@ def test_python_and_javascript_reject_changed_checker_and_schema(project, tmp_pa
     for consumer in (python, node):
         good = subprocess.run(consumer, capture_output=True, text=True)
         assert good.returncode == 0, good.stdout + good.stderr
-    for relative in ('scripts/check.py', 'references/schema/info_arch.v2.schema.json'):
+    for relative in ('scripts/check.py', 'references/schema/info_arch.v3.schema.json'):
         path = installed / IA.name / relative
         saved = path.read_bytes()
         path.write_bytes(saved + b'\n')

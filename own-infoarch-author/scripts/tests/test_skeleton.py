@@ -25,7 +25,7 @@ class Anchors(HTMLParser):
 
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
-        for k in ('data-ia-msg', 'data-ia-problem'):
+        for k in ('data-ia-msg', 'data-ia-pain'):
             if k in a:
                 self.seq.append(a[k])
         if 'data-ia-fact' in a:
@@ -51,7 +51,7 @@ def test_skeleton_keeps_outline_order_anchors_and_fact_values():
     pages = skeleton.render(OUTLINE, SSOT)
     assert list(pages) == ['site/index.html']
     p = parse(pages['site/index.html'])
-    assert p.seq == ['prb-0001', 'msg-0001', 'msg-0002', 'msg-0003']
+    assert p.seq == ['pan-0001', 'msg-0001', 'msg-0002', 'msg-0003']
     assert p.facts == {'fct-0001': '100社以上', 'fct-0002': '03-1234-5678'}
     assert '{{' not in pages['site/index.html']
 
@@ -69,7 +69,7 @@ def test_multi_page_outline_maps_pages_to_outputs_in_order():
     o['pages'] = [{'id': 'top', 'sections': first}, {'id': 'detail', 'sections': rest}]
     o['outputs'] = ['site/index.html', 'site/detail.html']
     pages = skeleton.render(o, SSOT)
-    assert parse(pages['site/index.html']).seq == ['prb-0001', 'msg-0001']
+    assert parse(pages['site/index.html']).seq == ['pan-0001', 'msg-0001']
     assert parse(pages['site/detail.html']).seq == ['msg-0002', 'msg-0003']
     # dom compares each file with its own page only
     assert dom.expected_for(o, 'site/detail.html')[0] == [('msg', 'msg-0002'), ('msg', 'msg-0003')]
@@ -80,7 +80,7 @@ def test_mismatched_pages_and_outputs_put_all_pages_in_each_output():
     o = copy.deepcopy(OUTLINE)
     o['outputs'] = ['site/index.html', 'site/print.html', 'site/extra.html']
     pages = skeleton.render(o, SSOT)
-    assert all(parse(h).seq == ['prb-0001', 'msg-0001', 'msg-0002', 'msg-0003'] for h in pages.values())
+    assert all(parse(h).seq == ['pan-0001', 'msg-0001', 'msg-0002', 'msg-0003'] for h in pages.values())
 
 
 def test_cli_writes_skeleton_only_with_write_and_never_overwrites(tmp_path):

@@ -67,7 +67,7 @@ def outline_candidates(oid, outline, ssot, policy, jl):
             msg = ssot.get('messages', {}).get(s.get('message'), {})
             ctx = {'outline': oid, 'role': s['role'],
                    'message': {'id': s['message'], 'text': msg.get('text', '')} if 'message' in s else None,
-                   'problem': ssot.get('problems', {}).get(s.get('problem'), {}).get('text') if 'problem' in s else None,
+                   'pain': ssot.get('pains', {}).get(s.get('pain'), {}).get('text') if 'pain' in s else None,
                    'proofs': [{'id': p, 'text': ssot.get('proofs', {}).get(p, {}).get('text', '')} for p in s.get('proofs', [])],
                    'facts': [{'id': f, 'label': facts.get(f, {}).get('label', ''), 'value': facts.get(f, {}).get('value', '')}
                              for f in dict.fromkeys(check.PLACEHOLDER.findall(s.get('copy', '')))]}
@@ -95,7 +95,7 @@ def emphasis_candidates(oid, outline, ssot, screens, policy, jl):
 def unanchored_candidates(oid, rows, policy, jl):
     """Text the page shows outside every section: a claim with no message, proof or fact behind it."""
     return [jl.candidate('ia-unregistered-claim', f"{oid}/{r['file']}@{r['viewport']}#unanchored", r['text'],
-                         {'outline': oid, 'role': 'unanchored', 'message': None, 'problem': None, 'proofs': [], 'facts': []},
+                         {'outline': oid, 'role': 'unanchored', 'message': None, 'pain': None, 'proofs': [], 'facts': []},
                          policy=policy)
             for r in rows]
 

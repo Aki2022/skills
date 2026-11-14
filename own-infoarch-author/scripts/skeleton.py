@@ -34,8 +34,8 @@ def _copy(text, facts):
 
 def _section(s, facts):
     attrs = [f'data-ia-role="{s["role"]}"']
-    if 'problem' in s:
-        attrs.append(f'data-ia-problem="{s["problem"]}"')
+    if 'pain' in s:
+        attrs.append(f'data-ia-pain="{s["pain"]}"')
     if 'message' in s:
         attrs.append(f'data-ia-msg="{s["message"]}"')
     tag = ROLE_TAG.get(s['role'], 'p')

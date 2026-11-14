@@ -294,6 +294,9 @@ CDN（Google Fonts など）から読むフォントは、`remote_fonts` で URL
 - 固定は `node scripts/pin_remote_fonts.mjs <url>... --environment design/render-environment.json --origins <origin,...>` で作る。
   固定環境と同じブラウザで各 viewport・scheme を描き、宣言した origin から読んだ全ファイルの URL と SHA-256、描いた family を表示する（ファイルは書かない）。
   CDN に接続するので、作り直す時だけ人が実行し、表示された固定を確かめて `render-environment.json` に入れる。
+- 道具の描き方は測定の流れと同じではないので、測定のときだけ要求される subset を取り逃すことがある（実サイトで 1 件あった）。
+  その時は `node scripts/pin_remote_fonts.mjs --extend <L2 の JSON>... --environment design/render-environment.json` を使う。測定が「remote font not pinned」で拒否した、宣言済み origin の URL を取得して固定に足し、`remote_fonts` 全体を表示する。
+  固定を変えたら L0 を回し直す（マニフェストが古くなるため）。
 
 固定環境のChromiumは `fixedLaunchOptions`（`--disable-gpu-rasterization`）で起動し、probeと測定で同じ描画経路を使う。起動引数はruntimeの`launch_args`としてpinし、別の描画方式で測ったpinは一致しない（作り直す）。
 GPUラスタでは同じ全画面撮影が1段階ずつ揺れることがある（2026-11-11 macOS 27.2で20枚中2種類、ソフトウェアラスタで1種類）。

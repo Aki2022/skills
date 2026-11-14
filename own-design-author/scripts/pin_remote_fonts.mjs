@@ -9,6 +9,11 @@
  * the SHA-256 of its bytes and families are the platform font families those files drew. It contacts the CDN
  * (run it only when you mean to), writes nothing, and the printed pin is what the owner reviews and commits.
  * Pages that draw other characters can request other subsets later: those are rejected until pinned again.
+ *
+ *   node pin_remote_fonts.mjs --extend <measurement.json>... --environment design/render-environment.json
+ *
+ * Extends the existing pin with every URL a measurement rejected as 'remote font not pinned' on a declared origin
+ * (the measurement's own flow can request subsets this tool's render does not), and prints the whole remote_fonts.
  */
 import {readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
@@ -17,6 +22,25 @@ import {sha,fixedLaunchOptions} from './fixed_render.mjs';
 const args=process.argv.slice(2);
 const flag=name=>{const i=args.indexOf('--'+name);return i===-1?null:args[i+1];};
 const urls=args.filter((a,i)=>!a.startsWith('--')&&!(i>0&&args[i-1].startsWith('--')));
+if(args.includes('--extend')){
+  const reports=args.filter((a,i)=>!a.startsWith('--')&&!(i>0&&args[i-1]==='--environment'));
+  if(!reports.length||!flag('environment')){console.error('usage: pin_remote_fonts.mjs --extend <measurement.json>... --environment <render-environment.json>');process.exit(2);}
+  const remote=JSON.parse(readFileSync(flag('environment'),'utf8')).remote_fonts;
+  if(!remote||!Array.isArray(remote.origins)){console.error('the environment has no remote_fonts to extend');process.exit(2);}
+  const files={...remote.files};const wanted=new Set();
+  for(const path of reports)for(const run of JSON.parse(readFileSync(path,'utf8')).runs||[])
+    for(const row of (run.render_evidence||{}).rejected_fonts||[])
+      if(row.reason==='remote font not pinned'&&typeof row.url==='string'&&remote.origins.includes(new URL(row.url).origin))wanted.add(row.url);
+  if(!wanted.size){console.error('the measurements rejected no unpinned font from the declared origins');process.exit(2);}
+  for(const url of wanted){
+    const response=await fetch(url);
+    if(!response.ok){console.error('the CDN answered '+response.status+' for '+url+'; not pinned');process.exit(2);}
+    files[url]=sha(Buffer.from(await response.arrayBuffer()));
+  }
+  const sorted=Object.fromEntries(Object.keys(files).sort().map(k=>[k,files[k]]));
+  console.log(JSON.stringify({origins:remote.origins,families:remote.families,files:sorted},null,2));
+  process.exit(0);
+}
 const origins=(flag('origins')||'').split(',').filter(Boolean);
 if(!urls.length||!origins.length||!flag('environment')){
   console.error('usage: pin_remote_fonts.mjs <url>... --environment <render-environment.json> --origins <origin,...>');process.exit(2);
@@ -65,6 +89,6 @@ try{
   }
 } finally {await browser.close();}
 if(process.exitCode===2)process.exit(2);
-if(!Object.keys(files).length||!families.size){console.error('the pages loaded no font from the declared origins');process.exit(2);}
+if(!Object.keys(files).length||!families.size){console.error('the pages loaded no font from the declared origins ('+Object.keys(files).length+' files, '+families.size+' families)');process.exit(2);}
 const sorted=Object.fromEntries(Object.keys(files).sort().map(k=>[k,files[k]]));
 console.log(JSON.stringify({origins,families:[...families].sort(),files:sorted},null,2));

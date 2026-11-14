@@ -192,3 +192,22 @@ def test_pin_tool_records_what_the_page_loads_from_the_declared_origins(cdn_site
                           '--origins', remote['origins'][0]], cwd=root, env=env, capture_output=True, text=True)
     assert run.returncode == 0, run.stderr
     assert json.loads(run.stdout) == remote
+
+
+@BROWSER
+def test_pin_tool_extends_the_pin_from_what_a_measurement_rejected(cdn_site):
+    # The pin tool's own render can miss a subset the measurement requests (a real site needed a subset only the
+    # measurement's flow loaded). The measurement's rejected URLs are the ground truth: extend the pin from them.
+    measure, remote, cdn, root, env, site = cdn_site
+    font_url = next(u for u in remote['files'] if u.endswith('.woff2'))
+    partial = {**remote, 'files': {u: h for u, h in remote['files'].items() if u != font_url}}
+    run, data = measure(partial)
+    assert run.returncode != 0 and font_failure(data), run.stdout
+    report = root / 'design/.resolved/remote-test.json'
+    extended = subprocess.run([NODE, str(SKILL / 'scripts/pin_remote_fonts.mjs'), '--extend', str(report),
+                               '--environment', str(root / 'design/render-environment.json')],
+                              cwd=root, env=env, capture_output=True, text=True)
+    assert extended.returncode == 0, extended.stderr
+    assert json.loads(extended.stdout) == remote
+    run, data = measure(json.loads(extended.stdout))
+    assert run.returncode == 0, run.stdout

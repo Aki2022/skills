@@ -74,6 +74,8 @@ OUTLINE = {
     'schema_version': 2, 'id': 'lp-municipal', 'channel': 'web',
     'brief': {'purpose': '自治体の情報部門からの資料請求を増やす', 'action': '資料請求', 'medium': 'LP', 'constraints': ['1 ページ']},
     'audience': 'aud-0001', 'outputs': ['site/index.html'],
+    'strategy': {'choose': ['val-0001', 'prm-0001'],
+                 'rationale': '運用の重さを感じている情報部門に、手間が減る価値と半分にする約束を先に示す'},
     'pages': [{'id': 'top', 'label': 'トップ', 'sections': [
         {'role': 'pain', 'pain': 'pan-0001', 'copy': '既存システムの運用、重くありませんか'},
         {'role': 'benefit', 'message': 'msg-0001', 'copy': '運用の手間が半分になります'},
@@ -85,6 +87,7 @@ DECK = {
     'schema_version': 2, 'id': 'deck-smb', 'channel': 'deck',
     'brief': {'purpose': '中小企業向けの説明', 'action': '問い合わせ', 'medium': '資料', 'cut': ['msg-0001']},
     'audience': 'aud-0002', 'outputs': ['decks/smb.pptx'],
+    'strategy': {'choose': ['val-0002'], 'rationale': '人手不足の経営者には、少人数でも回る価値を導入実績で支える'},
     'pages': [{'id': 's1', 'sections': [
         {'role': 'proof', 'message': 'msg-0002', 'proofs': ['prf-0001'], 'copy': '{{fct-0001}}が導入'},
         {'role': 'cta', 'message': 'msg-0003', 'copy': 'お問い合わせ {{fct-0002}}'}]}],
@@ -392,6 +395,8 @@ def test_empty_audience_is_not_checked(tmp_path):
     ssot['audiences']['aud-0002']['segment'] = 'seg-0001'  # the LP's pain and messages trace to seg-0001
     outline = copy.deepcopy(OUTLINE)
     outline['audience'] = 'aud-0002'
-    write_repo(tmp_path, ssot, outlines=(outline, DECK))
+    deck = copy.deepcopy(DECK)
+    deck['strategy']['choose'] = ['val-0001']  # aud-0002 now stands on seg-0001
+    write_repo(tmp_path, ssot, outlines=(outline, deck))
     rc, report = check(tmp_path)
     assert rc == 0 and 'IA_PRIORITY_UNSUPPORTED' not in codes(report, 'warn'), report['findings']

@@ -60,6 +60,7 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 - `brief`：purpose（目的）・action（取ってほしい行動）・medium・constraints・cut（この成果物では言わないメッセージ）。cut も参照として検査し、墓標をたどって改名先と比べる。
 - `audience`：対象者 id。
 - `outputs`：成果物のファイル（チャネルの outputs の glob に一致すること）。
+- `strategy`（必須）：段 2〜4 で選んだ戦略の原子（`choose`：job・pan・gan・val・prm）と構成の理由（`rationale`）。既定の優先順から外れる理由は `deviation`。`infoarch-author compose --audience <aud> --strategy <ids>` が、選んだ戦略に立つメッセージを対象者の優先順に並べて出す。
 - `frames`（任意）：差し替えできる枠の実体。`media`（例 lp）と `instances`（`id`・`type`）。種類と多重度は `references/media/frames.json`。実体 id は成果物の中で一意。要素の枠はセクションの `frame` で 1 つのセクションに付け、並びの枠（節の順序）はアウトラインの上だけで持つ。
 - `pages[].sections[]`：role（v1 の problem は pain）・message・pain・proofs・frame・copy（文案）。固定値は copy の中で `{{fct-NNNN}}` として参照する（括弧の中に空白や改行を入れない。入れたものは形の崩れた参照として失格）。
 
@@ -79,6 +80,9 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 | IA_STRATEGY_SEGMENT_MISMATCH | メッセージ・痛みの戦略が、対象者のセグメントにたどり着かない（出荷チャネルは失格、ほかは警告） |
 | IA_STRATEGY_UNCONFIRMED | 経路の原子に、オーナーの確定が無いか外れたものがある（`detail.atoms`。出荷チャネルは失格、ほかは警告） |
 | IA_APPROVALS_INVALID | `design/approvals.yaml` が読めない・形が違う |
+| IA_COMPOSITION_STRATEGY_INVALID | `strategy.choose` の原子が無いか、対象者のセグメントにたどり着かない |
+| IA_COMPOSITION_OFF_STRATEGY（警告） | セクションのメッセージが、選んだ戦略に立っていない |
+| IA_COMPOSITION_DEVIATION_UNEXPLAINED（警告） | 対象者の 1 位のメッセージを使わず、`brief.cut` にも `strategy.deviation` にも理由が無い |
 | IA_FRAME_UNKNOWN_MEDIA / IA_FRAME_UNKNOWN_TYPE | 枠の媒体・種類がノウハウに無い |
 | IA_FRAME_DUPLICATE_ID / IA_FRAME_MULTIPLICITY | 枠の実体 id の重複・種類ごとの実体の数が多重度に反する |
 | IA_FRAME_UNDECLARED / IA_FRAME_SEQUENCE_ANCHORED / IA_FRAME_DUPLICATE_USE / IA_FRAME_UNUSED | 宣言していない枠を使う・並びの枠をセクションに付ける・要素の枠を 2 つ以上のセクションに付ける・宣言した要素の枠をどこにも付けない |
@@ -147,6 +151,7 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 | --- | --- | --- | --- |
 | `ia-name-variant` | セクション（正式名称が 1 つ以上ある時） | 固定値を展開した文案 | 正式名称の一覧 |
 | `ia-unregistered-claim` | セクション。加えて、成果物 × 画面幅ごとのアンカーの外の文言（id の末尾が `#unanchored`） | 固定値を展開した文案。アンカーの外は `dom` の `unanchored` | メッセージ・課題・証拠・使った固定値。アンカーの外は、すべて空（支える根拠が無い） |
+| `ia-strategy-fit` | セクション（メッセージがあるもの） | 固定値を展開した文案 | メッセージと、対象者のセグメントへの戦略の経路（原子の id と文）と経路のハッシュ。戦略が変わると判定のキーが変わる。θ 以上は要確認で、出荷は止めない（最初の 50 件で精度を測るまで。D8）。`ship` の `strategy.semantic_fit` は judged / needs-review / not-judged |
 | `ia-audience-fit` | アウトライン | 全セクションの役割と文案（順に） | 対象者（label・situation・desired_action・優先順位のメッセージを順に）と brief。優先順位を入れ替えると判定のキーが変わる |
 | `ia-emphasis` | 成果物 × 画面幅 | `dom` が切り出した最初の画面の文言 | 対象者と、その 1 位のメッセージ |
 

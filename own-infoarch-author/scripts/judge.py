@@ -7,6 +7,8 @@ Four kinds share own-design-author's judgment policy and `design/judgments.json`
   outside every anchor (`dom`'s `unanchored`) is judged the same way, with nothing on the page supporting it.
 - ia-audience-fit: the outline's order and emphasis do not suit its audience and brief.
 - ia-emphasis: a rendered first screen does not carry the audience's top-priority message.
+- ia-strategy-fit: a section's message does not actually serve the strategy atoms it stands on (v5). The input
+  carries the strategy path hash, so a changed strategy never reuses an old judgment.
 
 The gate only reads the ledger. It never calls a model: missing judgments are "uncovered", stored ones are
 "screened" (never "clean"), and a score at or above theta goes to a human as IA_JUDGE_REVIEW.
@@ -72,6 +74,15 @@ def outline_candidates(oid, outline, ssot, policy, jl):
                    'facts': [{'id': f, 'label': facts.get(f, {}).get('label', ''), 'value': facts.get(f, {}).get('value', '')}
                              for f in dict.fromkeys(check.PLACEHOLDER.findall(s.get('copy', '')))]}
             rows.append(jl.candidate('ia-unregistered-claim', ident, text, ctx, policy=policy))
+            if 'message' in s and msg:
+                m = check.Model(root=Path('.'), ssot=ssot)
+                segment = ssot.get('audiences', {}).get(outline['audience'], {}).get('segment')
+                ids, path_hash = check.strategy_path(m, check._roots(m, s['message']), segment)
+                if ids:
+                    fit = {'outline': oid, 'segment': segment, 'path_hash': path_hash,
+                           'message': {'id': s['message'], 'text': msg.get('text', '')},
+                           'strategy': [{'id': a, 'text': _atom_text(m.atom(a))} for a in ids]}
+                    rows.append(jl.candidate('ia-strategy-fit', ident, text, fit, policy=policy))
     aud = ssot.get('audiences', {}).get(outline['audience'], {})
     # The priority order is what the fit is judged against, so reordering it must invalidate the judgment.
     priorities = [{'id': p, 'text': ssot.get('messages', {}).get(p, {}).get('text', '')} for p in aud.get('priorities') or []]
@@ -80,6 +91,11 @@ def outline_candidates(oid, outline, ssot, policy, jl):
                'brief': outline.get('brief', {})}
     rows.append(jl.candidate('ia-audience-fit', oid, '\n'.join(lines), fit_ctx, policy=policy))
     return rows
+
+
+def _atom_text(atom):
+    atom = atom or {}
+    return atom.get('text') or ' / '.join(str(atom[k]) for k in ('qualifier', 'situation', 'category', 'concept') if atom.get(k))
 
 
 def emphasis_candidates(oid, outline, ssot, screens, policy, jl):

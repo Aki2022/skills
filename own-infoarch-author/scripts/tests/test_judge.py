@@ -162,9 +162,10 @@ def test_changed_copy_invalidates_only_its_own_judgments(repo, tmp_path):
     dump(repo / 'design/info_arch/outlines/lp-municipal.yaml', changed)
     code, out = cli('judge', '--root', str(repo), '--date', DATE, '--dom-report', str(report))
     assert code == 1
-    # The section itself, plus the outline-level fit that reads every section.
+    # The section itself (its name, claim and strategy fit), plus the outline-level fit that reads every section.
     assert sorted(u['id'] for u in out['uncovered']) == ['ia-audience-fit:lp-municipal',
                                                           'ia-name-variant:lp-municipal/top/1',
+                                                          'ia-strategy-fit:lp-municipal/top/1',
                                                           'ia-unregistered-claim:lp-municipal/top/1']
 
 

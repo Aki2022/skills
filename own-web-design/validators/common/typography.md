@@ -17,4 +17,4 @@ method: self-check
 
 ## 不合格時
 
-指定のタイプスケールに揃える。CJK 可読性は `validators/common/*` と DESIGN.md の Content Tone を参照。
+指定のタイプスケールに揃える。CJK 可読性は `validators/common/*` を参照。文体は `design/info_arch/` の「声」に従う。

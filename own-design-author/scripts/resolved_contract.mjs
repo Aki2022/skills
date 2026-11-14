@@ -365,6 +365,25 @@ export function collectItemChecks(manifest) {
   const weights = set('fontWeight', manifest.palette?.fontWeight || []);
   const shadows = set('boxShadow', manifest.palette?.shadow || [], ['none']);
   probe.remove();
+  // Split a computed box-shadow into its comma-separated layers, respecting parens in color functions.
+  const shadowLayers = (value) => {
+    const layers = [];
+    let depth = 0, start = 0;
+    for (let i = 0; i < value.length; i++) {
+      if (value[i] === '(') depth++;
+      else if (value[i] === ')') depth--;
+      else if (value[i] === ',' && depth === 0) { layers.push(value.slice(start, i).trim()); start = i + 1; }
+    }
+    layers.push(value.slice(start).trim());
+    return layers;
+  };
+  // A layer whose color has zero alpha paints nothing, whatever its offsets or size (e.g. the ring
+  // layers Tailwind's multi-layer box-shadow carries alongside a real, token-matching shadow).
+  const visibleShadow = (value) => {
+    if (value === 'none') return value;
+    const visible = shadowLayers(value).filter(layer => !/rgba\([^)]*,\s*0\s*\)/.test(layer));
+    return visible.length ? visible.join(', ') : 'none';
+  };
   for (const el of [...document.querySelectorAll('body *')]) {
     if (['SCRIPT', 'STYLE', 'TEMPLATE', 'LINK', 'META', 'NOSCRIPT'].includes(el.tagName) || !shown(el)) continue;
     const style = getComputedStyle(el);
@@ -378,7 +397,7 @@ export function collectItemChecks(manifest) {
     if (/(flex|grid)/.test(style.display))
       for (const property of ['rowGap', 'columnGap'])
         if (style[property] !== 'normal' && !spaces.has(style[property])) add('palette:spacing', el, property + ' ' + style[property]);
-    if (!shadows.has(style.boxShadow)) add('palette:shadow', el, 'box-shadow');
+    if (!shadows.has(style.boxShadow) && !shadows.has(visibleShadow(style.boxShadow))) add('palette:shadow', el, 'box-shadow');
   }
   // rules the repository declared for its own design decisions (design/checks), run on every rendered page
   const declared = Object.fromEntries((manifest.rules || []).map(rule => [rule.id, rule]));

@@ -15,9 +15,10 @@ title: 参照 DESIGN.md の正規化マッピング
 | Components | 角・影を proposed トークンに | 固有コンポーネントの意匠 |
 | Iconography | 一般化したテイストを散文に | アイコンの実ファイル |
 | Motion / Accessibility | 一般化した方針を散文に | 媒体最低値を緩める変更 |
-| Content Tone / Do-Don't | 一般化した文体・原則を散文に | 固有のコピー文言 |
+| Content Tone / Do-Don't | 一般化した文体・原則を、`design/info_arch/` の「声」の下書き（proposed）の材料として own-infoarch-author に渡す | 固有のコピー文言、repo の DESIGN.md への節 |
 | Examples | 方向性の言語化 | スクリーンショット・実装 |
 
 数値は `tokens/*.tokens.json` だけに置き、散文は `token:<path>` で参照する。
 全ての参照値は `reference:<id>` と対応する `NOTICE` 行を伴う。参照値を採っただけでは承認されない。
 本家の typography は空のまま未決定と報告し、別の既定値で埋めない。
+文体（Content Tone）の正典は情報設計の「声」の原子で、DESIGN.md には書かない。渡すのは材料までで、声を確定するのはオーナーと own-infoarch-author の手順。

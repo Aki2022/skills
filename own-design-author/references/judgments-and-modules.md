@@ -51,7 +51,7 @@ checkが未承認mustでexit 2でも候補は取得できる。候補以外のch
 出力名はjudgment-answers.jsonに限定する。全candidate・Noulのraw回答・scoreをstatus: model-answers-unlabeledとして保存し、
 公開可能な入力かを送信前に確認する。使用量台帳には本文・認証情報を残さず、request hashと件数・token数・時間を残す。
 この出力はjudgments.jsonとは別で、holdout・人間ラベル・承認を生成しない。L0は直接読まない。
-現在のcandidateに対応する実回答のcandidate/scoreだけをschema2へ写し、評価用ラベルが無ければunmeasuredとして下記recordへ渡す。実ラベルが無いことは失格ではない。
+現在のcandidateに対応する実回答のcandidate/scoreだけをschema3へ写し、評価用ラベルが無ければunmeasuredとして下記recordへ渡す。実ラベルが無いことは失格ではない。
 
 台帳なし・現在のjudgment_hashなしは未カバー。全current candidateの未カバーはship失格。入力・版不一致や壊れた台帳も停止する。
 保存済み判定は全件screened。scoreがtheta以上ならflagged_advisoryとして対象id・hash・scoreを報告し、原文照合用の警告にする。scoreだけで出荷を止めない。
@@ -70,14 +70,14 @@ python3 <skill>/scripts/judgment_ledger.py record --repo . --replacement answers
 
 ## 同じ判定条件で文章を更新する
 
-変更した入力だけの新しい実回答を取得し、現在の候補集合のschema2 replacementを用意する。
+変更した入力だけの新しい実回答を取得し、現在の候補集合のschema3 replacementを用意する。
 
 ```sh
 python3 <skill>/scripts/judgment_ledger.py refresh --repo . --replacement current-answers.json
 python3 <skill>/scripts/judgment_ledger.py refresh --repo . --replacement current-answers.json --write
 ```
 
-refreshは同一policyのschema2だけで、旧行と追加・削除・保持したhashを証拠として保存する。
+refreshは同一policyで同じschema（2か3）の台帳だけで、旧行と追加・削除・保持したhashを証拠として保存する。
 保持した入力のscoreと既存holdoutは変更できない。追加/削除と証拠の改ざんも照合する。
 同一policyのmigrateでもscoreやholdoutを変更できず、通る回答を選ぶ抜け道にしない。
 旧schema1の元の移行記録は、その当時のholdout比較の保証範囲で読み込み、改ざんを拒否する。
@@ -127,10 +127,10 @@ resolver実装のdigestが変わればconsumerも拒否する。解決中の実�
 IA入力があるのに版がない、宣言したのに実装がない、版や契約が違う場合は失格で古いmanifestを削除する。
 IAそのものの原子・抽出・検査はこの接続口だけでは実装済みにならない。
 
-## IA v4との接続
+## IA v5との接続
 
 上記の承認対象を持つ旧resolver契約と、IA v4の承認状態を持たないSSOTは区別する。
-modules.ia: 0.2.0は、固定のia_module.pyから既存IAのcheckを同じPythonで呼ぶ。ia-git-history-v2契約に限定してIAのapproval_hashesを空にでき、DS承認の必要条件は変えない。
+modules.ia: 0.3.0は、固定のia_module.pyから既存IAのcheckを同じPythonで呼ぶ。ia-git-history-v3契約では、IAの戦略の層の原子（ia:strategy:<id>）がapproval_hashesとして返り、出荷される経路の原子がmust_approval_keysになる。確定のハッシュは原子の中身と、その原子が依存する原子の中身を束縛する（媒体の解決は経ない）。記録はオーナーがapprove --prepare/--requestで行い、DS承認の必要条件は変えない。v2契約（0.2.0）は読まない。
 入力hashと実際のチャネル・アウトライン・セクション件数を持ち、対象0件・壊れた参照・期限違反は失格。IA入力や実装のsymlink/逸脱は拒否する。
 マニフェストのIA実装digestは橋渡しファイルだけでなく、固定のscripts/references/schema全体を束縛し、Python/JS両consumerが古い結果を拒否する。
 このL0接続はIAのDOM検査や未実装の意味判定を実行済みにはしない。後段のDOMは別に実行し、意味判定の欠落も報告する。

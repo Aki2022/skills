@@ -1,4 +1,4 @@
-"""Actual schema-2 IA checker bridge: git history, no IA approval rows, stale consumers."""
+"""Actual schema-3 IA checker bridge: git history, IA strategy confirmations as approval targets, stale consumers."""
 import copy
 import importlib.util
 import json
@@ -27,7 +27,7 @@ def attach(project):
     ssot['facts']['fct-0001']['as_of'] = '2099-01-01'
     FIXTURE['write_repo'](root, ssot)
     config = json.loads((root / 'design/design.yaml').read_text())
-    config['modules'] = {'ia': '0.2.0'}
+    config['modules'] = {'ia': '0.3.0'}
     write(root / 'design/design.yaml', config)
     return root
 
@@ -38,10 +38,15 @@ def test_schema2_actual_check_has_counts_and_preserves_ds_approvals(project):
     root = attach(project)
     result = check(project, ship=True)
     assert result['exit_code'] == 0, result['errors']
-    assert result['approval_targets'] == before['approval_targets']
-    assert result['approval_required'] == before['approval_required']
+    # v5: the design targets stay exactly as they were; the IA strategy atoms are added beside them.
+    ds = {k: v for k, v in result['approval_targets'].items() if k.startswith('ds:')}
+    assert ds == before['approval_targets']
+    ia = {k for k in result['approval_targets'] if k.startswith('ia:strategy:')}
+    assert {'ia:strategy:val-0001', 'ia:strategy:seg-0001', 'ia:strategy:str-0001'} <= ia
+    assert [k for k in result['approval_required'] if k.startswith('ds:')] == before['approval_required']
+    assert 'ia:strategy:val-0001' in result['approval_required']
     resolved = result['manifest']['web']['modules']['ia']
-    assert resolved['version'] == '0.2.0'
+    assert resolved['version'] == '0.3.0'
     assert resolved['resolved']['targets'] == {'channels': 2, 'outlines': 2, 'sections': 6}
     assert resolved['resolved']['governance']['method'] == 'git-history'
     assert resolved['resolved']['governance']['input_hashes']
@@ -151,5 +156,5 @@ def test_absent_fixed_adapter_is_red(project, tmp_path):
     spec.loader.exec_module(module)
     report = empty_report()
     with pytest.raises(ValueError, match='IA module is unavailable'):
-        module.resolve_ia(project[0], {'modules': {'ia': '0.2.0'}}, {}, {'web': {}}, report)
+        module.resolve_ia(project[0], {'modules': {'ia': '0.3.0'}}, {}, {'web': {}}, report)
     assert report['missing'][0]['id'] == 'ia'

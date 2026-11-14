@@ -44,6 +44,13 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 
 アウトラインのメッセージ（と痛みのセクション）ごとに、対象者のセグメントへ向かう枝だけを参照からたどる。ジョブはそのセグメントのもの、痛み・得たいものはそのジョブのもの、提供価値はそれらを和らげるか生むもの、約束はその提供価値を言い切るもの。経路上の提供価値を生む強みはすべて経路に入り、その強みが比べる同じセグメントの代替も入る（成果物の側で外せない）。経路の原子の中身を正規化した JSON の SHA-256 を経路のハッシュとし、確定と判定の入力に使う。
 
+### オーナーの確定（`ia:strategy:<id>`）
+
+戦略の原子の確定は、own-design-author と同じ `design/approvals.yaml` に、オーナーが記録する（AI は `design-author approve --prepare` で束を作るまで）。確定のハッシュ（`check.confirmation_hash`）は、原子の中身そのもの（媒体の解決を経ない）と、その原子が依存する原子の中身を束縛する。依存は、参照をセグメントまでたどったものと、提供価値を生む強み（とその代替）。原子か依存先のどちらが変わっても確定は外れる。確定かどうかは台帳のハッシュの一致だけで決まり、`state` には持たない。確定はオーナーの採用の判断だけを表し、顧客での検証を意味しない。
+
+- `infoarch-author targets --root .`：全部の戦略の原子の確定のハッシュ（`approval_hashes`）と、出荷チャネルのアウトラインの経路に乗る原子のキー（`must_approval_keys`）を出す。`ia_module.py`（契約 `ia-git-history-v3`、`modules.ia: 0.3.0`）がこれを own-design-author に返す。
+- 出荷の報告（`ship`）は `strategy` に、`owner_adopted`（confirmed / unconfirmed）・`semantic_fit`（意味の判定の状態。今は not-judged）・`customer_validation`（IA は判定しない：not-judged-by-ia）を分けて出す。
+
 ## 構造化アウトライン（版 2）
 
 - `brief`：purpose（目的）・action（取ってほしい行動）・medium・constraints・cut（この成果物では言わないメッセージ）。cut も参照として検査し、墓標をたどって改名先と比べる。
@@ -65,6 +72,8 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 | IA_VOICE_MULTIPLE | proposed の声が 2 つ以上 |
 | IA_STRATEGY_UNTRACED | アウトラインのメッセージが、どの戦略の原子も担っていない（出荷チャネルは失格、ほかは警告） |
 | IA_STRATEGY_SEGMENT_MISMATCH | メッセージ・痛みの戦略が、対象者のセグメントにたどり着かない（出荷チャネルは失格、ほかは警告） |
+| IA_STRATEGY_UNCONFIRMED | 経路の原子に、オーナーの確定が無いか外れたものがある（`detail.atoms`。出荷チャネルは失格、ほかは警告） |
+| IA_APPROVALS_INVALID | `design/approvals.yaml` が読めない・形が違う |
 | IA_NO_CHANNELS / IA_NO_OUTLINES / IA_CHANNEL_NAME / IA_CHANNEL_FILE / IA_OUTLINE_FILE / IA_OUTLINE_ID | 対象 0 件・名前の不一致・読まれないファイル |
 | IA_OUTLINE_CHANNEL / IA_OUTLINE_OUTPUT_UNDECLARED | 宣言の無いチャネル・チャネルの outputs に一致しない成果物 |
 | IA_OUTLINE_REF_BROKEN / IA_OUTLINE_REF_EMPTY | アウトラインの参照切れ（墓標なら先を案内）・空欄の原子を参照（参照の表は `check.outline_refs` の 1 か所） |

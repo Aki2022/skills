@@ -247,6 +247,79 @@ def strategy_path(m, root_ids, segment):
     return ids, digest
 
 
+# ---- owner confirmation (requirements 14 and 19) -----------------------------------------
+
+CONFIRM_PREFIX = 'ia:strategy:'
+_DOWN = {'job': ('segment',), 'pan': ('job',), 'gan': ('job',), 'alt': ('segment',),
+         'val': ('relieves', 'creates'), 'prm': ('values',), 'str': ('versus', 'produces')}
+
+
+def _depends_on(m, aid):
+    """Every strategy atom `aid` stands on: what it references, down to the segment, plus the strengths
+    behind a value (and their alternatives). A set, so the value <-> strength references cannot loop."""
+    seen, todo = set(), [aid]
+    while todo:
+        cur = todo.pop()
+        atom = m.atom(cur)
+        if not atom or atom['state'] != 'proposed':
+            continue
+        nxt = []
+        for fld in _DOWN.get(cur.split('-')[0], ()):
+            val = atom.get(fld)
+            nxt += val if isinstance(val, list) else ([val] if val else [])
+        if cur.startswith('val-'):
+            nxt += [sid for sid, a in (m.ssot.get('strengths') or {}).items()
+                    if a['state'] == 'proposed' and cur in a.get('produces', [])]
+        for x in nxt:
+            if x not in seen and x != aid:
+                seen.add(x)
+                todo.append(x)
+    return sorted(seen)
+
+
+def confirmation_hash(m, aid):
+    """Binds the atom's own content (as written; nothing is resolved) and the content of what it depends on."""
+    body = {'atom': [aid, m.atom(aid)], 'depends_on': [[d, m.atom(d)] for d in _depends_on(m, aid)]}
+    return hashlib.sha256(json.dumps(body, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+
+
+def strategy_targets(m):
+    """-> ({ia:strategy:<id>: hash} for every proposed strategy atom, sorted keys the shipped paths stand on)."""
+    hashes = {CONFIRM_PREFIX + aid: confirmation_hash(m, aid)
+              for block in STRATEGY for aid, a in (m.ssot.get(block) or {}).items() if a['state'] == 'proposed'}
+    must = set()
+    for _, (_, o) in m.outlines.items():
+        ch = m.channels.get(o['channel'])
+        if not (ch and ch[1]['ship']):
+            continue
+        segment = (m.atom(o['audience']) or {}).get('segment')
+        for p in o['pages']:
+            for s in p['sections']:
+                for key in ('message', 'pain'):
+                    if s.get(key) and m.atom(s[key]) is not None:
+                        must |= {CONFIRM_PREFIX + x for x in strategy_path(m, _roots(m, s[key]), segment)[0]}
+    return hashes, sorted(must & set(hashes))
+
+
+def read_confirmations(root, report):
+    """The owner's ia:strategy rows of design/approvals.yaml. Its full validation belongs to own-design-author."""
+    path = Path(root) / 'design/approvals.yaml'
+    if not path.is_file():
+        return {}
+    try:
+        rows = load_yaml(path)
+    except YamlError as exc:
+        report.add('fail', 'IA_APPROVALS_INVALID', f'design/approvals.yaml が読めない: {exc}', 'design/approvals.yaml')
+        return {}
+    if rows is None:
+        return {}
+    if not isinstance(rows, list) or any(not isinstance(r, dict) or not isinstance(r.get('key'), str)
+                                         or not isinstance(r.get('value_hash'), str) for r in rows):
+        report.add('fail', 'IA_APPROVALS_INVALID', 'design/approvals.yaml の形が違う（key と value_hash の行の並び）', 'design/approvals.yaml')
+        return {}
+    return {r['key']: r['value_hash'] for r in rows if r['key'].startswith(CONFIRM_PREFIX)}
+
+
 def _roots(m, aid):
     atom = m.atom(aid) or {}
     if aid.startswith('msg-'):
@@ -254,10 +327,12 @@ def _roots(m, aid):
     return [aid]
 
 
-def check_strategy(m, report, oid, rel, o, shipped):
-    """Every message and pain an outline uses must stand on the audience's segment (requirement 15)."""
+def check_strategy(m, report, oid, rel, o, shipped, hashes=None, confirmed=None):
+    """Every message and pain an outline uses must stand on the audience's segment, and every atom of those
+    paths must carry the owner's current confirmation (requirement 15)."""
     level = 'fail' if shipped else 'warn'
     segment = (m.atom(o['audience']) or {}).get('segment')
+    missing = set()
     for p in o['pages']:
         for i, s in enumerate(p['sections']):
             w = f'{oid}.{p["id"]}[{i}]'
@@ -274,6 +349,12 @@ def check_strategy(m, report, oid, rel, o, shipped):
                 if not ids:
                     report.add(level, 'IA_STRATEGY_SEGMENT_MISMATCH',
                                f'{w}: {aid} の戦略は対象者 {o["audience"]} のセグメント {segment} にたどり着かない', rel, id=aid)
+                if hashes is not None:
+                    missing |= {x for x in ids if (confirmed or {}).get(CONFIRM_PREFIX + x) != hashes.get(CONFIRM_PREFIX + x)}
+    if missing:
+        report.add(level, 'IA_STRATEGY_UNCONFIRMED',
+                   f'{oid}: 戦略の経路に、オーナーの確定が無いか外れた原子がある {sorted(missing)}'
+                   '（design-author approve --prepare で束を作り、オーナーが記録する）', rel, atoms=sorted(missing))
 
 
 # ---- outlines ----------------------------------------------------------------------------
@@ -388,10 +469,12 @@ def check(root, date):
         report.add('fail', 'IA_NO_CHANNELS', 'channels/*.yaml が 0 件（対象 0 件を合格にしない）', INFO_ARCH_DIR / 'channels')
     if not m.outlines:
         report.add('fail', 'IA_NO_OUTLINES', 'outlines/*.yaml が 0 件（対象 0 件を合格にしない）', INFO_ARCH_DIR / 'outlines')
+    hashes, _ = strategy_targets(m)
+    confirmed = read_confirmations(root, report)
     for oid, (rel, o) in sorted(m.outlines.items()):
         check_outline(m, report, oid, rel, o)
         ch = m.channels.get(o['channel'])
-        check_strategy(m, report, oid, rel, o, shipped=bool(ch and ch[1]['ship']))
+        check_strategy(m, report, oid, rel, o, shipped=bool(ch and ch[1]['ship']), hashes=hashes, confirmed=confirmed)
     check_expiry(m, report, date)
     report.targets = {'channels': len(m.channels), 'outlines': len(m.outlines),
                       'sections': sum(len(p['sections']) for _, o in m.outlines.values() for p in o['pages'])}

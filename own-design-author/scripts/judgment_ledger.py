@@ -10,7 +10,12 @@ from pathlib import Path
 POLICY = Path(__file__).resolve().parents[1]/'references/judgment-policy.json'
 # One shared policy for design and IA (ADR-20261111-ia-judgments-share-design-policy-and-ledger, biz_ops).
 KINDS = frozenset({'doc-relevance','na-rationale',
-    'ia-name-variant','ia-emphasis','ia-unregistered-claim','ia-audience-fit'})
+    'ia-name-variant','ia-emphasis','ia-unregistered-claim','ia-audience-fit','ia-strategy-fit'})
+# Ledger schema 3 keys each judgment by its own kind's prompt, so adding a kind or
+# rewording another kind's prompt leaves it valid (SPEC-information-architecture-
+# standardization v5 requirement 19, biz_ops). Schemas 1 and 2 keyed by all prompts.
+CURRENT_SCHEME=3
+SHARED=('schema_version','model','theta','prompt_version')
 
 
 def digest(value):
@@ -53,7 +58,16 @@ def policy_digest(policy):
     return digest(validate_policy(policy))
 
 
-def candidate(kind,ident,text,context,*,policy=None):
+def shared_digest(policy):
+    policy=validate_policy(policy)
+    return digest({k:policy[k] for k in SHARED})
+
+
+def prompt_digest(policy,kind,scheme=CURRENT_SCHEME):
+    return digest(policy['prompts'][kind]) if scheme>=3 else digest(policy['prompts'])
+
+
+def candidate(kind,ident,text,context,*,policy=None,scheme=CURRENT_SCHEME):
     policy=validate_policy(load_policy() if policy is None else policy)
     if kind not in policy['prompts'] or not isinstance(text,str) or not text.strip():
         raise ValueError('invalid judgment candidate')
@@ -62,7 +76,7 @@ def candidate(kind,ident,text,context,*,policy=None):
     # Context matters: identical prose for a different catalog item must not reuse a judgment.
     inputs={'span_hash':span_hash,'context_hash':digest({'kind':kind,'id':ident,'context':context}),
         'model_digest':digest({'provider':'typesafe','model':policy['model']}),
-        'prompt_version':policy['prompt_version'],'prompt_digest':digest(policy['prompts']),
+        'prompt_version':policy['prompt_version'],'prompt_digest':prompt_digest(policy,kind,scheme),
         'theta':policy['theta']}
     return {'id':kind+':'+ident,'judgment_hash':digest(inputs),**inputs,
         'input':{'kind':kind,'catalog_id':ident,'text':text,'context':context}}
@@ -93,7 +107,7 @@ def evaluation_metrics(holdout,theta):
     return {'status':'owner-labeled',**holdout_metrics(holdout,theta)}
 
 
-def _candidate_row(row,policy):
+def _candidate_row(row,policy,scheme=CURRENT_SCHEME):
     if not isinstance(row,dict) or set(row)!={'candidate','score'}:
         raise ValueError('invalid judgment candidate row')
     target=row['candidate']
@@ -102,7 +116,7 @@ def _candidate_row(row,policy):
         if (not isinstance(data['catalog_id'],str) or not data['catalog_id'].strip()
                 or not isinstance(data['context'],dict)):
             raise ValueError('invalid candidate identity/context')
-        expected=candidate(data['kind'],data['catalog_id'],data['text'],data['context'],policy=policy)
+        expected=candidate(data['kind'],data['catalog_id'],data['text'],data['context'],policy=policy,scheme=scheme)
         if digest(target)!=digest(expected):raise ValueError('judgment candidate identity mismatch')
     except (KeyError,TypeError,AttributeError):
         raise ValueError('invalid judgment candidate') from None
@@ -114,9 +128,11 @@ def _ledger_rows(ledger,policy):
             or not {'schema_version','policy','rows','holdout'}<=set(ledger)):
         raise ValueError('invalid judgment ledger')
     version=ledger['schema_version']
-    if type(version) is not int or version not in (1,2):raise ValueError('invalid judgment ledger version')
-    if policy_digest(ledger['policy'])!=policy_digest(policy):
+    if type(version) is not int or version not in (1,2,3):raise ValueError('invalid judgment ledger version')
+    if version<3 and policy_digest(ledger['policy'])!=policy_digest(policy):
         raise ValueError('judgment policy changed; migrate with a same input comparison')
+    if version==3 and shared_digest(ledger['policy'])!=shared_digest(policy):
+        raise ValueError('shared judgment policy changed; migrate with a same input comparison')
     # Schema 1 retains its original owner-labeled contract. Schema 2 permits an
     # explicit unmeasured evaluation and binds each score to its full input.
     metrics=({'status':'owner-labeled',**holdout_metrics(ledger['holdout'],policy['theta'])}
@@ -131,23 +147,30 @@ def _ledger_rows(ledger,policy):
                 raise ValueError('invalid judgment key/row')
             hashed=row['judgment_hash'];score=probability(row['score'])
         else:
-            target,score=_candidate_row(row,policy);hashed=target['judgment_hash']
+            # Schema 3 checks each row against the policy it was recorded under; a
+            # mismatch there is tampering. A row whose kind's prompt has since been
+            # reworded or removed is stale: it covers nothing and is not an error.
+            recorded=policy if version==2 else ledger['policy']
+            target,score=_candidate_row(row,recorded,scheme=version);hashed=target['judgment_hash']
             ident=(target['id'],digest(target['input']))
             if ident in identities:raise ValueError('duplicate judgment input identity')
             identities.add(ident)
+            kind=target['input']['kind']
+            if version==3 and (kind not in policy['prompts'] or policy['prompts'][kind]!=ledger['policy']['prompts'][kind]):
+                continue
         if hashed in rows:raise ValueError('duplicate judgment key')
         rows[hashed]=score
     return rows,metrics
 
 
 def _comparison_rows(ledger,other):
-    if ledger['schema_version']==2:
+    if ledger['schema_version']>=2:
         return {(r['candidate']['id'],digest(r['candidate']['input'])):
             {'judgment_hash':r['candidate']['judgment_hash'],'score':r['score']} for r in ledger['rows']}
     # Legacy rows lack input identities. They may be upgraded under the same
     # policy using replacement candidates that reproduce the exact old hashes.
     # A policy migration needs that upgrade first; guessing identities is unsafe.
-    if other['schema_version']==2:
+    if other['schema_version']>=2:
         if policy_digest(ledger['policy'])!=policy_digest(other['policy']):
             raise ValueError('same input proof requires upgrading legacy rows before policy changes')
         by_hash={r['candidate']['judgment_hash']:r['candidate'] for r in other['rows']}
@@ -217,8 +240,8 @@ def _legacy_migration_evidence(proof,ledger):
 
 def refresh_evidence(before,after):
     old,_=_ledger_rows(before,before['policy']);new,_=_ledger_rows(after,after['policy'])
-    if before['schema_version']!=2 or after['schema_version']!=2:
-        raise ValueError('refresh requires schema 2 input identities')
+    if before['schema_version']<2 or before['schema_version']!=after['schema_version']:
+        raise ValueError('refresh requires schema 2+ input identities of one schema')
     if policy_digest(before['policy'])!=policy_digest(after['policy']):
         raise ValueError('refresh cannot change judgment policy; use migrate')
     retained=sorted(set(old)&set(new))
@@ -254,7 +277,7 @@ def validate_ledger(ledger,policy):
         required={'previous_policy','previous_rows','previous_holdout','retained','added','removed'}
         if not isinstance(proof,dict) or set(proof)!=required:
             raise ValueError('invalid judgment refresh evidence')
-        previous={'schema_version':2,'policy':proof['previous_policy'],
+        previous={'schema_version':ledger['schema_version'],'policy':proof['previous_policy'],
             'rows':proof['previous_rows'],'holdout':proof['previous_holdout']}
         if digest(proof)!=digest(refresh_evidence(previous,ledger)):
             raise ValueError('judgment refresh evidence mismatch')
@@ -291,6 +314,32 @@ def migrate_ledger(previous,replacement,policy):
     return updated
 
 
+def rekey_ledger(previous,policy):
+    """Move a schema-2 ledger to per-kind keys once, keeping every score.
+
+    No model is called: each row's input is re-keyed under the current policy.
+    It refuses when a shared value or the prompt of a recorded kind changed,
+    because those judgments need a real re-judgment, not a new key.
+    """
+    validate_ledger(previous,previous['policy'])
+    if previous['schema_version']!=2:raise ValueError('rekey moves schema 2 ledgers only')
+    policy=validate_policy(policy)
+    if shared_digest(previous['policy'])!=shared_digest(policy):
+        raise ValueError('rekey requires an unchanged shared policy')
+    rows=[]
+    for row in previous['rows']:
+        data=row['candidate']['input'];kind=data['kind']
+        if policy['prompts'].get(kind)!=previous['policy']['prompts'][kind]:
+            raise ValueError('rekey requires unchanged prompts for recorded kinds')
+        rows.append({'candidate':candidate(kind,data['catalog_id'],data['text'],data['context'],policy=policy),
+            'score':row['score']})
+    replacement={'schema_version':3,'policy':policy,'rows':rows,'holdout':copy.deepcopy(previous['holdout'])}
+    migrated=migrate_ledger(previous,replacement,policy)
+    if [r['score'] for r in migrated['rows']]!=[r['score'] for r in previous['rows']]:
+        raise ValueError('rekey must keep every score')
+    return migrated
+
+
 def refresh_ledger(previous,replacement,policy):
     validate_ledger(previous,previous['policy'])
     validate_ledger(replacement,policy)
@@ -303,11 +352,13 @@ def refresh_ledger(previous,replacement,policy):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command',choices=['record','migrate','refresh'])
+    parser.add_argument('command',choices=['record','migrate','refresh','rekey'])
     parser.add_argument('--repo',default='.')
-    parser.add_argument('--replacement',type=Path,required=True)
+    parser.add_argument('--replacement',type=Path)
     parser.add_argument('--write',action='store_true')
     args=parser.parse_args()
+    if (args.command=='rekey')==(args.replacement is not None):
+        parser.error('rekey takes no --replacement; record, migrate and refresh require one')
     from design_author import git_root,inside,read_data,write_data
     try:
         design=git_root(args.repo)/'design';path=design/'judgments.json'
@@ -318,10 +369,12 @@ def main():
         with (directory/'judgments.lock').open('a') as lock:
             try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
             except BlockingIOError as exc:raise ValueError('judgment writer is active') from exc
-            updated=read_data(args.replacement);policy,policy_sha256=read_policy()
-            if args.command=='migrate':updated=migrate_ledger(read_data(path),updated,policy)
-            elif args.command=='refresh':updated=refresh_ledger(read_data(path),updated,policy)
+            policy,policy_sha256=read_policy()
+            if args.command=='rekey':updated=rekey_ledger(read_data(path),policy)
+            elif args.command=='migrate':updated=migrate_ledger(read_data(path),read_data(args.replacement),policy)
+            elif args.command=='refresh':updated=refresh_ledger(read_data(path),read_data(args.replacement),policy)
             else:
+                updated=read_data(args.replacement)
                 if path.exists():raise ValueError('existing ledger requires refresh or migrate')
                 validate_ledger(updated,policy)
             if hashlib.sha256(POLICY.read_bytes()).hexdigest()!=policy_sha256:
@@ -334,7 +387,7 @@ def main():
         print(json.dumps(report,ensure_ascii=False))
         return 0
     except (OSError,ValueError,KeyError,TypeError):
-        print(json.dumps({'status':'rejected','error':'judgment record/refresh/migration requires valid current policy and matching input evidence'}))
+        print(json.dumps({'status':'rejected','error':'judgment record/refresh/migration/rekey requires valid current policy and matching input evidence'}))
         return 2
 
 

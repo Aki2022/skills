@@ -217,7 +217,7 @@ def test_policy_change_during_l0_is_rejected_and_old_output_removed(project,monk
 
 
 def current_ledger(candidates,scores,policy=None,holdout=None):
-    return {'schema_version':2,'policy':policy or load_policy(),'rows':[
+    return {'schema_version':3,'policy':policy or load_policy(),'rows':[
         {'candidate':row,'score':score} for row,score in zip(candidates,scores)],
         'holdout':holdout or {'source':'unmeasured'}}
 

@@ -47,7 +47,7 @@ def candidates(root, *extra):
 
 def write_ledger(root, rows, holdout=None):
     policy = jl.load_policy()
-    ledger = {'schema_version': 2, 'policy': policy, 'rows': rows, 'holdout': holdout or {'source': 'unmeasured'}}
+    ledger = {'schema_version': 3, 'policy': policy, 'rows': rows, 'holdout': holdout or {'source': 'unmeasured'}}
     (root / 'design').mkdir(exist_ok=True)
     (root / 'design/judgments.json').write_text(json.dumps(ledger, ensure_ascii=False), encoding='utf-8')
     return ledger

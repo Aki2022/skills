@@ -4,7 +4,7 @@
 
 L0は、カタログ項目に対するdoc証拠の散文とn-a理由だけを決定論で抽出する。
 判定の対象はdoc-relevance（項目を扱っていない可能性）とna-rationale（適用外理由が不十分な可能性）。
-中央policyはIAと共有し、IAの4種類（ia-name-variant・ia-emphasis・ia-unregistered-claim・ia-audience-fit）も同じpolicy・台帳・使用量台帳を使う。IAの候補と読み取りはown-infoarch-authorのjudgeが持つ。どちらかのプロンプト・θ・モデルを変えると、両方の判定がmigrate対象になる。
+中央policyはIAと共有し、IAの5種類（ia-name-variant・ia-emphasis・ia-unregistered-claim・ia-audience-fit・ia-strategy-fit）も同じpolicy・台帳・使用量台帳を使う。IAの候補と読み取りはown-infoarch-authorのjudgeが持つ。判定の鍵は種類ごとに分かれる（schema3）。ある種類のプロンプトを変えても、ほかの種類の判定は外れない。種類を足しても同じ。θ・モデル・prompt_versionは共有の値で、変えると両方の判定がmigrate対象になる。
 JevをL0/L1/L2から呼ばない。カタログのmust分類は既存classify.pyが所有し、この台帳と混ぜない。
 
 ```sh
@@ -15,14 +15,14 @@ design-author check --repo . --include-candidates
 inputはkind・catalog_id・空白を正規化した本文・元カタログ項目とpreset等の文脈。
 公開できないプロジェクト内容をチャットやログへ転記しない。機密の分類や外部送信の認可はこの出力では変わらない。
 
-キーはspan_hash＋context_hash＋model_digest＋prompt_version＋prompt_digest＋thetaの辞書のSHA256。
+キーはspan_hash＋context_hash＋model_digest＋prompt_version＋prompt_digest＋thetaの辞書のSHA256。prompt_digestはその種類のプロンプトだけのdigest（schema3）。schema1・2はすべてのプロンプトをまとめたdigestだった。
 同じ文章でもカタログ項目・証拠参照・presetが違えば再利用しない。
 model_digestはproviderと版付きmodel idの識別情報のdigestであり、提供元の重みファイルを検証したものではない。
 現在は既存分類で観測済みのjev-1.13.0をpinし、thetaは中央のjudgment-policy.jsonに置く。
 
 ## 保存形式と読み取り
 
-design/judgments.jsonのschema2は、中央policyと同じpolicy、rows、holdoutを持つ。
+design/judgments.jsonのschema3は、記録した時点のpolicy、rows、holdoutを持つ。共有の値（schema_version・model・theta・prompt_version）は今のpolicyと一致しなければならない。各行は記録した時点のpolicyで再計算して照合し、合わなければ改ざんとして拒否する。その種類のプロンプトが今のpolicyと違う行は、失効した行として何も覆わない（拒否はしない）。schema2は今のpolicy全体と一致する時だけ読む。
 rowsは`{"candidate": <check --include-candidatesの候補全体>, "score": <実回答>}`の配列。
 candidateの入力・文脈・全hashを再計算し、policyとの一致を確認する。scoreはNoulのYes確率で、説明不足を確定する値ではない。
 ラベルが無い場合は`"holdout": {"source": "unmeasured"}`を明示し、recall・誤検出率を作らない。
@@ -84,7 +84,12 @@ refreshは同一policyのschema2だけで、旧行と追加・削除・保持し
 
 ## 版・モデル・thetaの変更
 
-中央policyを変えたら古い台帳とmanifestは失効する。判定の種類が中央policyに加わる前の台帳（種類が既知の種類の一部だけのもの）も、壊れた台帳ではなく失効した台帳として読み、L0はmigrateを案内する。同じ入力集合への新しい実回答を用意し、新旧scoreと閾値判定差分を記録する。実ラベルがあれば同じid・同じ正解ラベルも維持する。旧schema1は同一policyで完全candidateを持つschema2へ更新してからpolicyを変える。
+中央policyを変えたら古い台帳とmanifestは失効する。判定の種類が中央policyに加わる前の台帳（種類が既知の種類の一部だけのもの）も、壊れた台帳ではなく失効した台帳として読み、L0はmigrateを案内する。同じ入力集合への新しい実回答を用意し、新旧scoreと閾値判定差分を記録する。実ラベルがあれば同じid・同じ正解ラベルも維持する。旧schema1は同一policyで完全candidateを持つschema2へ更新してからpolicyを変える。schema2からschema3へは、次のrekeyで一度だけ移す。モデルを呼ばず、各行の入力を今のpolicyの種類ごとの鍵で付け替え、scoreとholdoutを保つ。共有の値か、記録した種類のプロンプトが変わっていれば拒否する（その判定は鍵の付け替えではなく、取り直しが要る）。移行の証拠はmigrateと同じ形で台帳に残る。
+
+```sh
+python3 <skill>/scripts/judgment_ledger.py rekey --repo .
+python3 <skill>/scripts/judgment_ledger.py rekey --repo . --write
+```
 
 ```sh
 python3 <skill>/scripts/judgment_ledger.py migrate --repo . --replacement new-answers.json

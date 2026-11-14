@@ -48,6 +48,7 @@ L0 はモデルを使わず、対象項目数・充足率・未判定・提案�
 push時の検査は、`design/design.yaml` を持つ全repoで pre-push の拡張が必ず回す。repoごとの有効化は要らない。
 出荷には `validation.json` の `pages`（画面の棚卸し）が必須。repo の画面はすべて、検査するか、オーナーの承認つきで対象外にする。URL で検査する画面は、URL のパスが画面ファイルの経路に合うことを L0 で照らし合わせる。詳細は `references/web-validation.md` の「画面の棚卸し」。
 クリックや送信の後にだけ現れる部品（ダイアログ・メニュー・送信後のエラー文など）は、`validation.json` の URL に `states`（click/focus/fill/submit の宣言的な手順）を置き、その状態を描いて確かめる。手順が要素に合わなければ失格。詳細は同じ文書の「操作の後の状態」。
+最初に外れた画面で止まらずに全画面・全状態の外れを並べたい時は `design-check --report-all`（診断用、出荷の証拠にはならない）。Google Fonts など CDN のフォントは、`render-environment.json` の `remote_fonts` で URL と SHA-256 を固定すれば描画に使える（`scripts/pin_remote_fonts.mjs`）。詳細は `references/web-validation.md`。
 
 `design-author sync` はL0通過後に宣言したTailwindとassetコピーを配置する。`design-check` はL0/L1を通ったら画面ごとにL2とITEMSを実行し、全画面が通ってからAFM段を実行するためL2実施確認後に呼ぶ。
 L1/L2と生成Tailwindの使い方・制約は `references/web-validation.md` を読む。

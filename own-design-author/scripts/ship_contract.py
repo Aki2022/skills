@@ -119,6 +119,7 @@ def validate_web_result(root,result,urls):
     root=Path(root)
     if result.get('exit_code') not in (0,1) or result.get('errors'):
         raise ValueError('L0/L1/L2 result failed')
+    if 'mode' in result:raise ValueError('a diagnostic report-all run is not ship evidence')
     config=read_json(root/'design/validation.json')
     from web_check import render_targets  # deferred: web_check imports the L0 checker
     targets=render_targets(config)
@@ -129,7 +130,7 @@ def validate_web_result(root,result,urls):
     stages=result.get('stages',[])
     items=read_json(root/'design/.resolved/items.json')
     pairs=items.get('afm_pairs')
-    if not isinstance(pairs,list) or items.get('failures') or items.get('pages')!=expected:
+    if not isinstance(pairs,list) or items.get('failures') or items.get('pages')!=expected or 'mode' in items:
         raise ValueError('missing or failed adopted item verification')
     if [r.get('stage') for r in stages]!=['L0','L1']+['L2']*len(expected)+['ITEMS']+(['AFM'] if pairs else []):
         raise ValueError('incomplete L0/L1/L2/ITEMS/AFM stage evidence')

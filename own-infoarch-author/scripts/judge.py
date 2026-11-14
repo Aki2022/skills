@@ -222,6 +222,8 @@ def replacement(ledger, rows, answers, policy, jl):
     """Shared-ledger replacement: keep every non-IA row, take answered current IA candidates, drop stale IA rows."""
     if answers.get('policy') != policy or answers.get('status') != 'model-answers-unlabeled':
         raise ValueError('回答の policy が現在の共有 policy と違う（migrate が要る）')
+    if ledger is not None and ledger.get('schema_version') != jl.CURRENT_SCHEME:
+        raise ValueError('共有の台帳が古い鍵の形（schema 2 以前）。先に judgment_ledger.py rekey で移す')
     current = {r['judgment_hash']: r for r in rows}
     answered = {}
     for a in answers['rows']:
@@ -232,7 +234,7 @@ def replacement(ledger, rows, answers, policy, jl):
     design = [r for r in old if not r['candidate']['input']['kind'].startswith(IA_PREFIX)]
     dropped = sum(1 for r in old if r['candidate']['input']['kind'].startswith(IA_PREFIX)
                   and r['candidate']['judgment_hash'] not in answered)
-    out = {'schema_version': 2, 'policy': policy, 'rows': design + list(answered.values()),
+    out = {'schema_version': jl.CURRENT_SCHEME, 'policy': policy, 'rows': design + list(answered.values()),
            'holdout': (ledger or {}).get('holdout', {'source': 'unmeasured'})}
     jl.validate_ledger(out, policy)
     summary = {'design_rows': len(design), 'ia_rows': len(answered),

@@ -127,7 +127,7 @@ python3 <own-design-author>/scripts/judgment_ledger.py record|refresh --repo . -
 ```
 
 `--replacement-out` は共有の台帳の置き換えを作る。design の行は全部残し、IA は現在の候補に対する実回答だけを入れ、古い IA の行は落とす。回答ファイルは `judgment_run.py` と同じ読み手で検査する（形・policy・候補のハッシュ・score と raw_answer の一致）。出力先は新規作成だけで、既存のファイル・symlink（親ディレクトリを含む）には書かない。
-holdout はそのまま引き継ぐ。回答の policy が今の共有 policy と違えば止める（migrate が要る）。既にあるファイルは上書きしない。
+holdout はそのまま引き継ぐ。回答の policy が今の共有 policy と違えば止める（migrate が要る）。既にあるファイルは上書きしない。置き換えは schema 3（判定の鍵が種類ごと）で作る。共有の台帳が schema 2 以前なら止める（先に `judgment_ledger.py rekey` で移す）。
 
 | code | 内容 |
 | --- | --- |

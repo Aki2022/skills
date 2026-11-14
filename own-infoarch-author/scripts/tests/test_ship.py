@@ -66,7 +66,7 @@ def cover_ledger(root, score=0.0):
     """Record every current IA candidate in the shared ledger, as a Jev run would."""
     code, out, _ = cli(root, 'judge', '--root', str(root), '--date', TODAY, '--include-candidates')
     assert code in (0, 1), out
-    ledger = {'schema_version': 2, 'policy': jl.load_policy(),
+    ledger = {'schema_version': 3, 'policy': jl.load_policy(),
               'rows': [{'candidate': r, 'score': score} for r in out['judgment_candidates']],
               'holdout': {'source': 'unmeasured'}}
     (root / 'design/judgments.json').write_text(json.dumps(ledger, ensure_ascii=False), encoding='utf-8')
@@ -606,7 +606,7 @@ def test_shipped_html_is_rendered_and_its_first_screens_are_judged(repo, tmp_pat
     code, data, proc = cli(repo, 'dom', '--root', str(repo), '--outline', 'lp-municipal', '--date', TODAY, env=env)
     dom_out.write_text(proc.stdout)
     code, data, _ = cli(repo, 'judge', '--root', str(repo), '--date', TODAY, '--dom-report', str(dom_out), '--include-candidates', env=env)
-    ledger = {'schema_version': 2, 'policy': jl.load_policy(),
+    ledger = {'schema_version': 3, 'policy': jl.load_policy(),
               'rows': [{'candidate': r, 'score': 0.0} for r in data['judgment_candidates']], 'holdout': {'source': 'unmeasured'}}
     (repo / 'design/judgments.json').write_text(json.dumps(ledger, ensure_ascii=False), encoding='utf-8')
     commit(repo, 'record the LP judgments')

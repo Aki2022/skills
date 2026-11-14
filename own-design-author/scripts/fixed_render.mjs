@@ -166,9 +166,10 @@ export async function configureFonts(context,environment,url) {
       const pinned=remote.files[request.url()];let response,body;
       try{if(pinned){response=await route.fetch();body=await response.body();}}catch{response=null;}
       if(pinned&&response&&response.ok()&&sha(body)===pinned){used.add(request.url());await route.fulfill({response,body});}
-      else{rejected.push(pinned?'remote font changed or unavailable':'remote font not pinned');await route.abort();}
+      // A declared CDN origin serves public files, so its URL is kept to find what to re-pin; nothing else is.
+      else{rejected.push({reason:pinned?'remote font changed or unavailable':'remote font not pinned',url:request.url()});await route.abort();}
     }
-    else if(request.resourceType()==='font'){rejected.push('unlisted font request');await route.abort();}
+    else if(request.resourceType()==='font'){rejected.push({reason:'unlisted font request'});await route.abort();}
     else await route.continue();
   });
   return {rejected,used,origin,loaded_fonts:[]};
@@ -238,7 +239,8 @@ export async function renderEvidence(page,context,environment,requests) {
   }
   if(!glyphs||!requests.used.size)fallback.add('no pinned font glyphs');
   return {font_glyphs:glyphs,fonts:[...used].sort(),font_sources:[...new Map(sources.map(s=>[digest(s),s])).values()].sort((a,b)=>digest(a).localeCompare(digest(b))),fallbacks:[...fallback].sort(),
-    rejected_font_requests:requests.rejected.length,...actual,
+    rejected_font_requests:requests.rejected.length,
+    rejected_fonts:[...new Map(requests.rejected.map(r=>[JSON.stringify(r),r])).values()].sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))),...actual,
     stable_capture:true,screenshot_sha256:keepScreenshot(await stableScreenshot(page))};
 }
 

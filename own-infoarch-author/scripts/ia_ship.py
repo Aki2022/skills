@@ -317,13 +317,16 @@ def _commit_or_none(root, sha):
         return None
 
 
+def _base():
+    _design_ship()  # puts own-design-author/scripts on sys.path
+    import ship_base
+    return ship_base
+
+
 def predicted_commit(root, base, source):
-    """A synthetic merge of `source` into `base`; never referenced or pushed."""
-    # A conflict or a missing merge base makes git fail, and that stops the push.
-    tree = _git(root, 'merge-tree', '--write-tree', base, source).splitlines()[0]
+    """A synthetic merge of `source` into `base`; never referenced or pushed (shared base, ADR-20261115)."""
     # It takes the pushing user's configured email; a checkout with no identity fails here, which stops the push.
-    return _git(root, '-c', 'user.name=IA Gate', 'commit-tree', tree, '-p', source, '-p', base,
-                input='IA predicted merge validation\n')
+    return _base().predicted_commit(root, base, source, name='IA Gate', message='IA predicted merge validation')
 
 
 def _marker_enabled(root, rev):
@@ -337,38 +340,15 @@ def _marker_enabled(root, rev):
 
 
 def _bases(root, base_ref, pushed):
-    """The merge base as it is now, plus what this same push sets the branch behind it to."""
-    bases = [_git(root, 'rev-parse', '--verify', base_ref + '^{commit}')]
-    try:
-        full = _git(root, 'rev-parse', '--symbolic-full-name', base_ref)
-    except ValueError:
-        full = ''
-    if full.startswith('refs/remotes/') and full.count('/') >= 3:
-        full = 'refs/heads/' + full.split('/', 3)[3]
-    if full.startswith('refs/heads/') and pushed.get(full) and pushed[full] not in bases:
-        bases.append(pushed[full])
-    return bases
+    """The merge base as it is now, plus what this same push sets the branch behind it to (shared base)."""
+    return _base().merge_bases(root, base_ref, pushed)
 
 
 def pre_push(root, refs_file, date):
     root = Path(root).resolve()
     if refs_file is None:
         raise ValueError('pre-push requires the preserved refs file')
-    records = Path(refs_file).read_text().splitlines()
-    if not records:
-        raise ValueError('zero push refs')
-    updates, pushed = [], {}
-    for row in records:
-        parts = row.split()
-        if len(parts) != 4:
-            raise ValueError('invalid push ref record')
-        _, sha, remote_ref, remote_sha = parts
-        if _is_zero(sha):
-            continue  # a deleted ref ships nothing
-        if _git(root, 'rev-parse', '--verify', sha + '^{commit}') != sha:
-            raise ValueError('push source must be a commit')
-        updates.append((sha, remote_ref, remote_sha))
-        pushed[remote_ref] = sha
+    updates, pushed = _base().read_push_refs(root, refs_file)  # deleted refs ship nothing
     # The extension decides whether this repository's gate is on; once called, every pushed commit is gated.
     checks, warnings, seen = [], [], set()
 
@@ -423,48 +403,8 @@ def pre_push(root, refs_file, date):
 # ---- doctor ------------------------------------------------------------------------------------
 
 def _dispatcher_propagates(text):
-    """Run a copy of the dispatcher against probe extensions: a failing one must make the whole hook fail.
-
-    The copy is re-rooted (its ROOT= line) into a temporary vibe-guard-shaped directory with a stub scanner, so
-    neither the real scanner nor the installed extensions run. A dispatcher that also fails with only passing
-    probes is rejected too, so a hook that always exits nonzero does not read as propagating.
-    """
-    lines = text.splitlines()
-    if not any(line.startswith('ROOT=') for line in lines):
-        raise ValueError('cannot verify that the pre-push dispatcher propagates an extension exit (no ROOT= line)')
-    with tempfile.TemporaryDirectory(prefix='infoarch-doctor-') as temporary:
-        sandbox = Path(temporary).resolve()
-        hooks = sandbox / 'git-hooks'
-        (hooks / 'pre-push.d').mkdir(parents=True)
-        (sandbox / 'bin').mkdir()
-        calls = sandbox / 'calls'
-
-        def script(path, body):
-            path.write_text('#!/bin/sh\n' + body)
-            path.chmod(0o755)
-
-        script(sandbox / 'bin/vibe-guard', 'cat >/dev/null\n')
-        copy = hooks / 'pre-push'
-        copy.write_text('\n'.join('ROOT=' + shlex.quote(str(sandbox)) if line.startswith('ROOT=') else line
-                                  for line in lines) + '\n')
-        copy.chmod(0o755)
-        env = _design_ship().hook_free_env()
-        env['PATH'] = str(sandbox / 'bin') + os.pathsep + env.get('PATH', '')
-
-        def run(first):
-            script(hooks / 'pre-push.d/00-probe', f'echo 00 >> {shlex.quote(str(calls))}\nexit {first}\n')
-            script(hooks / 'pre-push.d/99-probe', f'echo 99 >> {shlex.quote(str(calls))}\nexit 0\n')
-            calls.unlink(missing_ok=True)
-            code = subprocess.run([str(copy), 'probe', 'probe'], input='', capture_output=True, text=True,
-                                  env=env, cwd=sandbox, timeout=60).returncode
-            return code, calls.read_text().split() if calls.exists() else []
-
-        code, called = run(0)
-        if code != 0 or '00' not in called:
-            raise ValueError('pre-push dispatcher does not run passing extensions with exit 0; its exit cannot be trusted')
-        code, called = run(3)
-        if code == 0 or '00' not in called:
-            raise ValueError('pre-push dispatcher does not propagate a failing extension exit (the IA gate could not stop a push)')
+    """Run a copy of the dispatcher against probe extensions (shared base): a failing one must fail the hook."""
+    _base().dispatcher_propagates(text)
 
 
 def doctor(root):

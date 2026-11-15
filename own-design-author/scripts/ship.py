@@ -18,24 +18,10 @@ from urllib.request import urlopen
 from design_author import git_root, read_data, CATALOG
 from ship_contract import validate_channels, validate_integration_gate, artifact_hashes, validate_web_result, safe_path
 from web_check import validation_endpoint
+# Git, refs, bases, predicted merges and the dispatcher check are shared with the IA ship gate.
+from ship_base import hook_free_env, git, read_push_refs, merge_bases, predicted_commit, dispatcher_propagates
 
 SCRIPT=Path(__file__).resolve().parent
-
-
-@functools.cache
-def _local_git_env():
-    return frozenset(subprocess.run(['git','rev-parse','--local-env-vars'],capture_output=True,text=True,check=True).stdout.split())
-
-
-def hook_free_env(base=None):
-    """Drop the repository variables git exports to hooks, so every command targets its own checkout."""
-    return {key:value for key,value in (os.environ if base is None else base).items() if key not in _local_git_env()}
-
-
-def git(root,*args,input=None):
-    result=subprocess.run(['git','-C',str(root),*args],input=input,env=hook_free_env(),capture_output=True,text=True)
-    if result.returncode:raise ValueError('git '+args[0]+' failed')
-    return result.stdout.strip()
 
 
 def clean_commit(root):
@@ -180,6 +166,7 @@ def doctor(root,channels,integration=None):
         if not hook.is_file() or not os.access(hook,os.X_OK):raise ValueError('pre-push missing')
         text=hook.read_text()
         if 'pre-push.d' not in text or '"$ext"' not in text or 'scan-push' not in text:raise ValueError('scanner-preserving pre-push dispatcher missing')
+        dispatcher_propagates(text)  # run it: a dispatcher that swallows a failing extension cannot stop a push
         if not extension.is_file() or not os.access(extension,os.X_OK) or extension.read_bytes()!=(SCRIPT.parent/'hooks/pre-push.d/60-design-ship').read_bytes():
             raise ValueError('current design pre-push extension missing')
     except (OSError,ValueError) as exc:errors.append(str(exc))
@@ -189,17 +176,9 @@ def doctor(root,channels,integration=None):
 
 
 def pre_push(root,channels,catalogs,refs_file,integration=None):
-    if refs_file is None:raise ValueError('pre-push requires the preserved refs file')
-    records=Path(refs_file).read_text().splitlines()
-    if not records:raise ValueError('zero push refs')
+    updates,pushed=read_push_refs(root,refs_file)
     sources=[]
-    for row in records:
-        parts=row.split()
-        if len(parts)!=4:raise ValueError('invalid push ref record')
-        sha=parts[1]
-        if set(sha)=={'0'}:continue
-        verified=git(root,'rev-parse','--verify',sha+'^{commit}')
-        if verified!=sha:raise ValueError('push source must be a commit')
+    for sha,_,_ in updates:
         if sha not in sources:sources.append(sha)
     jobs=[(name,row,False) for name,row in channels.items()]
     if integration is not None:jobs.append(('local-integration',integration,True))
@@ -207,33 +186,33 @@ def pre_push(root,channels,catalogs,refs_file,integration=None):
     results=[]
     for source in sources:
         for name,channel,local in jobs:
-            base=git(root,'rev-parse','--verify',channel['merge_base']+'^{commit}')
-            # No merge conflict or missing merge-base is treated as a passed check.
-            tree=git(root,'merge-tree','--write-tree',base,source).splitlines()[0]
-            synthetic=git(root,'-c','user.name=Design Gate','-c','user.email=design-gate@example.invalid',
-                'commit-tree',tree,'-p',source,'-p',base,input='Design predicted merge validation\n')
-            with tempfile.TemporaryDirectory(prefix='design-ship-') as temporary:
-                snapshot=Path(temporary)/'checkout'
-                git(root,'worktree','add','--detach',str(snapshot),synthetic)
-                try:
-                    # Config and commands come from the predicted tree itself.
-                    config=read_data(snapshot/'design/design.yaml')
-                    predicted_channels=validate_channels(config)
-                    predicted_integration=validate_integration_gate(config)
-                    if set(predicted_channels)!=set(channels) or (predicted_integration is not None)!=(integration is not None):
-                        raise ValueError('predicted tree changed gate coverage')
-                    if local:
-                        predicted_channel=predicted_integration
-                        if predicted_channel is None:raise ValueError('predicted tree removed local integration gate')
-                    else:
-                        if name not in predicted_channels:raise ValueError('predicted tree removed ship channel')
-                        predicted_channel=predicted_channels[name]
-                    if predicted_channel['merge_base']!=channel['merge_base']:
-                        raise ValueError('predicted tree changed the gate merge base')
-                    result=gate(snapshot,name,predicted_channel,catalogs,source_commit=source,predicted=True,local=local)
-                    results.append(result)
-                    if result['exit_code']==2:return {'exit_code':2,'errors':['predicted merge ship gate failed'],'checks':results}
-                finally:git(root,'worktree','remove','--force',str(snapshot))
+            # The base as it is now, and what this same push sets it to (shared with the IA gate).
+            for base in merge_bases(root,channel['merge_base'],pushed):
+                # No merge conflict or missing merge-base is treated as a passed check.
+                # Like the IA gate, it takes the pushing user's configured email; no identity stops the push.
+                synthetic=predicted_commit(root,base,source,name='Design Gate',message='Design predicted merge validation')
+                with tempfile.TemporaryDirectory(prefix='design-ship-') as temporary:
+                    snapshot=Path(temporary)/'checkout'
+                    git(root,'worktree','add','--detach',str(snapshot),synthetic)
+                    try:
+                        # Config and commands come from the predicted tree itself.
+                        config=read_data(snapshot/'design/design.yaml')
+                        predicted_channels=validate_channels(config)
+                        predicted_integration=validate_integration_gate(config)
+                        if set(predicted_channels)!=set(channels) or (predicted_integration is not None)!=(integration is not None):
+                            raise ValueError('predicted tree changed gate coverage')
+                        if local:
+                            predicted_channel=predicted_integration
+                            if predicted_channel is None:raise ValueError('predicted tree removed local integration gate')
+                        else:
+                            if name not in predicted_channels:raise ValueError('predicted tree removed ship channel')
+                            predicted_channel=predicted_channels[name]
+                        if predicted_channel['merge_base']!=channel['merge_base']:
+                            raise ValueError('predicted tree changed the gate merge base')
+                        result=gate(snapshot,name,predicted_channel,catalogs,source_commit=source,predicted=True,local=local)
+                        results.append(result)
+                        if result['exit_code']==2:return {'exit_code':2,'errors':['predicted merge ship gate failed'],'checks':results}
+                    finally:git(root,'worktree','remove','--force',str(snapshot))
     return {'exit_code':0,'checks':results,'skipped':[] if sources else ['deleted refs only; no shipment']}
 
 

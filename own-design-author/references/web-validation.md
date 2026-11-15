@@ -319,4 +319,4 @@ viewports/schemesの順序と集合もpinに一致必須。ブラウザ版・フ
 
 各独立描画内では、スクロール等の計測で生じた再描画待ちを除くため、最大3枚の固定条件キャプチャから連続2枚の完全一致を要求する。安定しなければ失格。安定した画素のhashをさらに独立した2回の描画間で完全比較し、別runから都合のよい画像を選ばない。
 
-描画準備はDOMContentLoaded後に本文字体と全画像のdecodeを待ち、10秒以内に揃わなければ失格にする。prefetch/analytics等の背景ストリームのnetworkidleは準備判定に使わない。測定終了後の将来の非同期応答の内容は保証しない。
+描画準備はDOMContentLoaded後に本文字体と全画像のdecodeを待ち、10秒以内に揃わなければ失格にする。固定環境では、ページの load（stylesheet の読み込みを含む。script の無いページは stylesheet より先に DOMContentLoaded になる）を待ち、計測と字形の検査の前に、読み込み中の字体が無い状態が2回続くまで待つ（`document.fonts.ready` の後から読み込みを始める字体があるため。実サイトで 375px の 6 回に 1 回だけ system font に落ちた）。20 秒で落ち着かなければ `font-unsettled` で失格にし、合格にはしない。prefetch/analytics等の背景ストリームのnetworkidleは準備判定に使わない。測定終了後の将来の非同期応答の内容は保証しない。

@@ -103,5 +103,6 @@ serverはそのcheckoutで起動し、外から渡されたURLは利用しない
 commit/tree・元push commit・予測マージの有無・design入力・実描画の証拠を記録し、出荷物のhashや配布完了は記録しない。
 現在checkoutでの結果は`design/.resolved/integration.json`へ出力する。
 予測マージの結果はhookのJSON出力に含め、隔離checkoutは検査の成否にかかわらず除去する。
+予測マージの基準は、今の基準refと、同じpushでその基準のbranchが更新される先の両方。doctorはdispatcherを写しで実行し、失敗した拡張の終了コードを伝えるかを確かめる（文字列の確認だけにしない）。git・refsの読み取り・基準・予測マージ・dispatcherの確かめは`scripts/ship_base.py`でIAの出荷の関門と共有する（ADR-20261115-design-ia-two-skills-shared-base、biz_ops）。
 
 通常PATHへの導入では、既存の利用者binに3つのdesign-author/design-check/design-shipを正典scriptsへのsymlinkとして置ける。入口は相対・多段symlinkを解決して正典と同じPython実装を起動し、別コピーの実装を持たない。既存の実体や異なるlinkを無断で置き換えない。

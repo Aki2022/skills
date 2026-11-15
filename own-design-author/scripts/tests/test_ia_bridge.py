@@ -115,6 +115,26 @@ def test_python_and_javascript_reject_changed_checker_and_schema(project, tmp_pa
         for consumer in (python, node):
             assert subprocess.run(consumer, capture_output=True).returncode != 0
         path.write_bytes(saved)
+    # Prose is not code: editing a reference document leaves the resolved result valid (ADR-20261115, biz_ops),
+    # while a JSON reference the checker reads still binds.
+    for relative in ('references/contract.md', 'references/media/lp.md'):
+        path = installed / IA.name / relative
+        path.write_bytes(path.read_bytes() + '\n追記した説明。\n'.encode())
+        for consumer in (python, node):
+            kept = subprocess.run(consumer, capture_output=True, text=True)
+            assert kept.returncode == 0, (relative, kept.stdout + kept.stderr)
+    hidden = installed / IA.name / 'references/notes.md'  # a directory named like prose still binds its code
+    hidden.mkdir()
+    (hidden / 'extra.py').write_text('x = 1\n')
+    for consumer in (python, node):
+        assert subprocess.run(consumer, capture_output=True).returncode != 0
+    shutil.rmtree(hidden)
+    path = installed / IA.name / 'references/expiry.json'
+    saved = path.read_bytes()
+    path.write_bytes(saved + b'\n')
+    for consumer in (python, node):
+        assert subprocess.run(consumer, capture_output=True).returncode != 0
+    path.write_bytes(saved)
     # A symlinked trusted dependency is rejected by both consumers, even if bytes match.
     path = installed / IA.name / 'scripts/check.py'
     original = path.read_bytes()

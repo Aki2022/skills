@@ -121,3 +121,30 @@ def test_skeleton_passes_the_rendered_dom_check(tmp_path):
     proc = subprocess.run([sys.executable, str(SCRIPTS / 'infoarch_author.py'), 'dom', '--root', str(tmp_path),
                            '--outline', 'lp-municipal'], capture_output=True, text=True, env=env, check=False)
     assert proc.returncode == 0, json.loads(proc.stdout)['findings']
+
+
+def test_declared_text_sections_carry_their_key():
+    o = copy.deepcopy(OUTLINE)
+    o['pages'][0]['sections'][:0] = [{'role': 'navigation', 'key': 'nav', 'copy': 'サービス 使い方'},
+                                     {'role': 'other', 'key': 'label-problem', 'copy': 'PROBLEM'}]
+    html = skeleton.render(o, SSOT)['site/index.html']
+    assert 'data-ia-text="nav"' in html and 'data-ia-text="label-problem"' in html
+    assert parse(html).seq == ['pan-0001', 'msg-0001', 'msg-0002', 'msg-0003']  # message anchors unchanged
+    assert 'data-ia-text' not in skeleton.render(OUTLINE, SSOT)['site/index.html']
+
+
+@pytest.mark.skipif(not PW_DIR, reason='INFOARCH_TEST_PLAYWRIGHT_DIR is not set: real-browser integration not run (reported as skipped, not passed)')
+def test_skeleton_of_a_declared_outline_leaves_no_unanchored_text(tmp_path):
+    from test_check import DECK
+    o = copy.deepcopy(OUTLINE)
+    o['pages'][0]['sections'][:0] = [{'role': 'navigation', 'key': 'nav', 'copy': 'サービス 使い方'},
+                                     {'role': 'other', 'key': 'label-problem', 'copy': 'PROBLEM'}]
+    write_repo(tmp_path, outlines=(o, DECK))
+    for rel, html in skeleton.render(o, SSOT).items():
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(html, encoding='utf-8')
+    env = dict(os.environ, INFOARCH_PLAYWRIGHT_DIR=PW_DIR)
+    proc = subprocess.run([sys.executable, str(SCRIPTS / 'infoarch_author.py'), 'dom', '--root', str(tmp_path),
+                           '--outline', 'lp-municipal'], capture_output=True, text=True, env=env, check=False)
+    report = json.loads(proc.stdout)
+    assert proc.returncode == 0 and not report['unanchored'], report['findings']

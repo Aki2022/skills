@@ -151,6 +151,26 @@
       "id": "outline-placeholder-padded",
       "code": "IA_OUTLINE_BAD_PLACEHOLDER",
       "why": "余白や改行を含む {{ fct-NNNN }}（形は {{fct-NNNN}} だけ）"
+    },
+    {
+      "id": "outline-text-key-missing",
+      "code": "IA_OUTLINE_TEXT_KEY_MISSING",
+      "why": "メッセージも痛みも無い navigation・other のセクションに key が無い（画面の印を付けられない）"
+    },
+    {
+      "id": "outline-text-key-duplicate",
+      "code": "IA_OUTLINE_TEXT_KEY_DUPLICATE",
+      "why": "同じアウトラインで key が重複"
+    },
+    {
+      "id": "outline-text-key-misplaced",
+      "code": "IA_OUTLINE_TEXT_KEY_MISPLACED",
+      "why": "メッセージのあるセクションに key（主張は宣言でなくメッセージで書く）"
+    },
+    {
+      "id": "outline-text-key-claim-role",
+      "code": "IA_OUTLINE_TEXT_KEY_MISPLACED",
+      "why": "navigation・other 以外の role に key"
     }
   ]
 }

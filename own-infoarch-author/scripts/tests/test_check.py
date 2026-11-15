@@ -233,6 +233,15 @@ def mutate(case, root):
         ssot['messages']['msg-0000'] = copy.deepcopy(ssot['messages']['msg-0003'])
     elif case == 'ssot-id-trailing-newline':
         ssot['messages']['msg-0001\n'] = copy.deepcopy(ssot['messages']['msg-0003'])
+    elif case == 'outline-text-key-missing':
+        sec.insert(0, {'role': 'navigation', 'copy': 'サービス 使い方'})
+    elif case == 'outline-text-key-duplicate':
+        sec.insert(0, {'role': 'navigation', 'key': 'nav', 'copy': 'サービス 使い方'})
+        sec.insert(1, {'role': 'other', 'key': 'nav', 'copy': 'PROBLEM'})
+    elif case == 'outline-text-key-misplaced':
+        sec[1]['key'] = 'benefit'
+    elif case == 'outline-text-key-claim-role':
+        sec.insert(0, {'role': 'how', 'key': 'how', 'copy': '3 ステップで導入'})
     elif case == 'outline-placeholder-padded':
         deck['pages'][0]['sections'][0]['copy'] = '{{\nfct-0001\n}}が導入'
     else:
@@ -400,3 +409,12 @@ def test_empty_audience_is_not_checked(tmp_path):
     write_repo(tmp_path, ssot, outlines=(outline, deck))
     rc, report = check(tmp_path)
     assert rc == 0 and 'IA_PRIORITY_UNSUPPORTED' not in codes(report, 'warn'), report['findings']
+
+
+def test_declared_navigation_and_label_sections_pass(tmp_path):
+    outline = copy.deepcopy(OUTLINE)
+    outline['pages'][0]['sections'][:0] = [{'role': 'navigation', 'key': 'nav', 'copy': 'サービス 使い方'},
+                                           {'role': 'other', 'key': 'label-problem', 'copy': 'PROBLEM'}]
+    write_repo(tmp_path, outlines=(outline, DECK))
+    rc, report = check(tmp_path)
+    assert rc == 0, report['findings']

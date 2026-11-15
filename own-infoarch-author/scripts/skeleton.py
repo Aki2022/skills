@@ -38,6 +38,8 @@ def _section(s, facts):
         attrs.append(f'data-ia-pain="{s["pain"]}"')
     if 'message' in s:
         attrs.append(f'data-ia-msg="{s["message"]}"')
+    if 'key' in s:  # declared non-claim text (navigation / other); dom compares it on every occurrence
+        attrs.append(f'data-ia-text="{s["key"]}"')
     if 'frame' in s:  # element frames only; check refuses a sequence frame on a section
         attrs.append(f'data-ia-frame="{s["frame"]}"')
     tag = ROLE_TAG.get(s['role'], 'p')

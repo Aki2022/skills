@@ -4,7 +4,10 @@ The browser does the parsing and rendering; this module only compares its snapsh
 every message / pain the outline uses has a visible anchor, the anchors appear in the outline's order
 (as a subsequence of the rendered order, so a repeated call to action is fine), each section's visible text is
 the outline's copy (facts expanded), every fact the copy refers to is shown with the SSOT value, and two runs give
-the same snapshot. Visible text outside every anchor is reported, and passed on to the judgement ledger as a claim. The first-screen text is passed on to
+the same snapshot. Declared non-claim text (data-ia-text, a navigation / other section's key) must show its copy on
+every occurrence, and an official name (data-ia-entity) must show exactly the SSOT name. Visible text outside every
+anchor is text nobody manages: reported, and passed on to the judgement ledger as a claim. dom exit 0 means the page
+shows what the outline declares; it does not judge whether the claims are true. The first-screen text is passed on to
 the Jev judgement ledger (ISSUE-04); nothing here judges meaning.
 """
 from __future__ import annotations
@@ -57,6 +60,8 @@ def expected(outline):
                 seq.append(('pain', s['pain']))
             if 'message' in s:
                 seq.append(('msg', s['message']))
+            if 'key' in s and s['role'] == 'other':  # a label is part of the order; navigation is not
+                seq.append(('text', s['key']))
             facts += [f for f in check.PLACEHOLDER.findall(s['copy']) if f not in facts]
     return seq, facts
 
@@ -80,6 +85,17 @@ def expected_copy(outline, ssot, output=None):
                 if field in s:
                     out.setdefault((kind, s[field]), set()).add(text)
     return out
+
+
+def declared_text(outline, ssot, output=None):
+    """{key: normalized copy} — declared non-claim text (navigation / other sections with a key) on this output."""
+    values = {fid: str(f.get('value', '')) for fid, f in ssot['facts'].items()}
+    return {s['key']: _copy_norm(check.PLACEHOLDER.sub(lambda m: values.get(m.group(1), m.group(0)), s['copy']))
+            for p in _section_pages(outline, output) for s in p['sections'] if 'key' in s}
+
+
+def navigation_keys(outline, output=None):
+    return {s['key'] for p in _section_pages(outline, output) for s in p['sections'] if 'key' in s and s['role'] == 'navigation'}
 
 
 def _norm(text):
@@ -110,15 +126,24 @@ def compare(outline, ssot, snap, output=None):
     legacy = sorted({a['id'] for a in anchors if a['kind'] == 'legacy-problem'})
     if legacy:
         out.append(('IA_DOM_LEGACY_ATTRIBUTE', 'fail', f'{vp}: 旧属性 data-ia-problem が残っている {legacy}（v5 では data-ia-pain）'))
+    texts = declared_text(outline, ssot, output)
     for a in anchors:
         if a['kind'] in ('msg', 'pain') and (a['kind'], a['id']) not in wanted:
             out.append(('IA_DOM_ANCHOR_UNKNOWN', 'fail', f'{vp}: アンカー {a["id"]} はアウトラインに無い'))
+        elif a['kind'] == 'text' and a['id'] not in texts:
+            out.append(('IA_DOM_ANCHOR_UNKNOWN', 'fail', f'{vp}: 宣言した文言の印 {a["id"]} はこのページのアウトラインに無い'))
+        if a.get('nested'):
+            out.append(('IA_DOM_ANCHOR_NESTED', 'fail',
+                        f'{vp}: {a["id"]} の印（{a["kind"]}）の中にほかの IA の印がある（宣言した文言・正式名称はほかの印を包めない）'))
     rendered = [(a['kind'], a['id']) for a in sorted(anchors, key=lambda a: (a['top'], a['left']))
-                if a['visible'] and a['kind'] in ('msg', 'pain')]
-    for key in dict.fromkeys(seq):
+                if a['visible'] and (a['kind'] in ('msg', 'pain') or (a['kind'], a['id']) in wanted)]
+    nav = navigation_keys(outline, output)
+    for key in dict.fromkeys(seq + [('text', k) for k in texts]):
         found = [a for a in anchors if (a['kind'], a['id']) == key]
         if not found:
             out.append(('IA_DOM_ANCHOR_MISSING', 'fail', f'{vp}: アウトラインの {key[1]} のアンカーが描画物に無い'))
+        elif key[0] == 'text' and key[1] in nav:
+            continue  # navigation may be collapsed at a viewport (a menu); it must exist, and what shows must match
         elif not any(a['visible'] for a in found):
             out.append(('IA_DOM_ANCHOR_HIDDEN', 'fail', f'{vp}: {key[1]} のアンカーが見えていない（display / visibility / opacity / 大きさ 0）'))
     present = [k for k in seq if k in set(rendered)]
@@ -134,10 +159,25 @@ def compare(outline, ssot, snap, output=None):
             out.append(('IA_DOM_COPY_DRIFT', 'fail', f'{vp}: {key[1]} の表示がアウトラインの文案と違う（文言を変えずにスタイリングする）'))
         elif len(matches) < len(shown):
             out.append(('IA_DOM_COPY_EXTRA', 'warn', f'{vp}: {key[1]} の繰り返し {len(shown) - len(matches)} か所が文案と違う'))
+    for k, copy_ in texts.items():
+        shown = [a for a in anchors if a['kind'] == 'text' and a['id'] == k and a['visible']]
+        # Declared text has no repeat leniency: every visible occurrence is the declared copy.
+        if any(_copy_norm(a['text']) != copy_ for a in shown):
+            out.append(('IA_DOM_COPY_DRIFT', 'fail', f'{vp}: 宣言した文言 {k} の表示がアウトラインの文案と違う（全出現で一致させる）'))
+    entities = ssot.get('entities') or {}
+    for a in anchors:
+        if a['kind'] != 'entity':
+            continue
+        name = (entities.get(a['id']) or {}).get('name')
+        if not name:
+            out.append(('IA_DOM_ANCHOR_UNKNOWN', 'fail', f'{vp}: 正式名称の印 {a["id"]} は SSOT に無い'))
+        elif a['visible'] and _copy_norm(a['text']) != _copy_norm(name):
+            out.append(('IA_DOM_ENTITY_NAME', 'fail', f'{vp}: 正式名称 {a["id"]} の表示が SSOT の名前「{name}」と違う（名前だけを包む）'))
     unanchored = _norm(snap.get('unanchored'))
     if unanchored:
         out.append(('IA_DOM_UNANCHORED_TEXT', 'warn',
-                    f'{vp}: どのアンカーにも属さない表示の文言が {len(unanchored)} 文字ある（判定台帳で主張として判定する）'))
+                    f'{vp}: どの印にも属さない文言が {len(unanchored)} 文字ある（主張ならメッセージに、主張でなければ navigation・other の'
+                    'セクションに key で宣言する。判定台帳で主張として判定する）'))
     values = {fid: f.get('value') for fid, f in ssot['facts'].items()}
     for a in anchors:
         # A fact anchor this page does not refer to may only show a registered value; otherwise it would wrap

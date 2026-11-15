@@ -149,6 +149,11 @@
                   "type": "string",
                   "pattern": "^[a-z0-9][a-z0-9_-]*$",
                   "description": "このセクションに付ける要素の枠の実体 id（frames.instances で宣言したもの）"
+                },
+                "key": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9][a-z0-9_-]*$",
+                  "description": "主張でない文言（navigation・other で、message も pain も無いセクション）の宣言の鍵。アウトラインの中で一意。工場は data-ia-text=\"<key>\" を付け、dom が全出現で文案との完全一致を確かめる"
                 }
               }
             }

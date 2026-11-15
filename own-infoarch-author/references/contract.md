@@ -98,6 +98,7 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 | IA_OUTLINE_REF_BROKEN / IA_OUTLINE_REF_EMPTY | アウトラインの参照切れ（墓標なら先を案内）・空欄の原子を参照（参照の表は `check.outline_refs` の 1 か所） |
 | IA_OUTLINE_BAD_PLACEHOLDER / IA_OUTLINE_FACT_LITERAL | `{{fct-NNNN}}` の形でない `{{…}}`（改行をまたぐものを含む）・固定値の値を参照せず直接書いた |
 | IA_IMPACT_UNKNOWN_ID | `impact --id` に SSOT にも墓標にも無い id を渡した（空の結果を合格にしない） |
+| IA_OUTLINE_TEXT_KEY_MISSING / IA_OUTLINE_TEXT_KEY_DUPLICATE / IA_OUTLINE_TEXT_KEY_MISPLACED | message も pain も無い navigation・other のセクションに `key` が無い・`key` の重複・message か pain のあるセクションか、navigation・other 以外の role に `key` を書いた |
 | IA_OUTLINE_CUT_USED | brief.cut で削ると決めたメッセージを使った |
 | IA_OUTLINE_OFF_PRIORITY（warn） | 対象者の priorities に無いメッセージを使った |
 | IA_PRIORITY_UNSUPPORTED（warn） | proposed の対象者の priorities の先頭のメッセージを、proposed の証拠がどれも `supports` していない（`role` が cta・vision のものは主張ではないので対象外。2 番目以降は見ない） |
@@ -111,7 +112,7 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 ## 工場への受け渡し（`skeleton`）
 
 `infoarch-author skeleton --outline <id>` は、check が緑のアウトラインから骨組みの HTML を出す（失格していれば出さない）。
-セクションごとに `data-ia-role`・`data-ia-msg`／`data-ia-pain`（要素の枠があれば `data-ia-frame`）を付け、文案の `{{fct-NNNN}}` を SSOT の値の
+セクションごとに `data-ia-role`・`data-ia-msg`／`data-ia-pain`（宣言した文言なら `data-ia-text`、要素の枠があれば `data-ia-frame`）を付け、文案の `{{fct-NNNN}}` を SSOT の値の
 `<span data-ia-fact>` に展開し、文案は HTML エスケープする。pages と outputs の数が同じなら 1 ページずつ対応するファイルに、
 違えば全ページを各ファイルに入れる（`dom` も同じ対応で比べる）。`--out` を付けるとファイルに書き、既にあるファイルは上書きしない。
 工場（own-web-design）は、文言・順序・`data-ia-*` を変えずにスタイリングし、描画後に `dom` を走らせる。
@@ -121,13 +122,17 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 `infoarch-author dom --root . --outline <id>` は、アウトラインの outputs のうち HTML を、チャネルの viewports（無ければ 375×812 と 1280×800）でブラウザに描画し、DOM を確かめる。
 
 - 解析と描画はブラウザ（Playwright の Chromium）が行う。成果物のソースを自前のパーサで読まない。
-- 工場はアンカーを埋める：メッセージは `data-ia-msg`、痛みは `data-ia-pain`、固定値の表示は `data-ia-fact`。v4 の `data-ia-problem` が残っていれば IA_DOM_LEGACY_ATTRIBUTE で失格（互換は持たない）。要素の枠は `data-ia-frame`（既存の `data-ia-msg` 等には相乗りしない）。宣言した実体の印が無い・2 つ以上ある・宣言していない印がある、は IA_DOM_FRAME_MISSING / IA_DOM_FRAME_DUPLICATE / IA_DOM_FRAME_UNDECLARED で失格。
+- 工場はアンカーを埋める：メッセージは `data-ia-msg`、痛みは `data-ia-pain`、固定値の表示は `data-ia-fact`、正式名称（SSOT の `ent-`）の表示は `data-ia-entity`、宣言した文言は `data-ia-text`。v4 の `data-ia-problem` が残っていれば IA_DOM_LEGACY_ATTRIBUTE で失格（互換は持たない）。要素の枠は `data-ia-frame`（既存の `data-ia-msg` 等には相乗りしない）。宣言した実体の印が無い・2 つ以上ある・宣言していない印がある、は IA_DOM_FRAME_MISSING / IA_DOM_FRAME_DUPLICATE / IA_DOM_FRAME_UNDECLARED で失格。
 - Playwright は `INFOARCH_PLAYWRIGHT_DIR`、無ければ対象 repo（実行ディレクトリ）から解決する。自動では入れない。解決できなければ IA_DOM_PLAYWRIGHT で失格。
 - 読み取る前に、ページが落ち着くのを待つ：network idle の後に 1 秒（表示を始めるタイマーのため）、さらに実行中のアニメーションとトランジションが終わるまで最大 5 秒。終わらないアニメーションがあっても読み取り、2 回の描画の比較で揺れを報告する。
 - 同じ入力を 2 回描画し、結果が違えば IA_DOM_UNSTABLE（判定に使わない）。
 - 最初の画面の文言（各画面幅）を報告の `first_screens` に出す。強調の判定（Jev の判定台帳）の入力になる。
-- 各アンカーの表示の文言（`innerText`）を、アウトラインの文案（固定値を SSOT の値に展開）と比べる。NFKC で幅をそろえ、空白と改行をすべて除いてから比べる（改行は見た目で、文言ではない）。同じアンカーが繰り返されるときは、見えているうちの 1 つが文案と一致すればよい。報告に表示の文言は出さない。
-- どのアンカー（メッセージ・痛み・固定値）にも属さない、見えている文言を報告の `unanchored`（成果物 × 画面幅）に出す。文案と違う繰り返しのアンカーの文言も、ここに足す。判定台帳では、支える根拠の無い主張として `ia-unregistered-claim` で判定する。
+- 各アンカーの表示の文言（描かれている文字だけ。`unanchored` と同じ読み方で、opacity: 0 などの隠れた文字は入らない）を、アウトラインの文案（固定値を SSOT の値に展開）と比べる。NFKC で幅をそろえ、空白と改行をすべて除いてから比べる（改行は見た目で、文言ではない）。同じアンカーが繰り返されるときは、見えているうちの 1 つが文案と一致すればよい。報告に表示の文言は出さない。
+- **主張でない文言の宣言**：ナビ・節のラベル・見出し・法務やフッターのように主張でない文言は、アウトラインに `role: navigation` か `other` のセクションとして、安定した `key` と文言そのもの（`copy`）を書き、工場は `data-ia-text="<key>"` を付ける。主張になりうる文言（副の行動喚起など）は宣言ではなくメッセージにする。`dom` は、その key の見えている印の**すべて**が文案と一致することを確かめる（メッセージの繰り返しのような緩めは無い）。ページとの対応はメッセージと同じ（別のページの key は IA_DOM_ANCHOR_UNKNOWN、このページの key の印が無ければ IA_DOM_ANCHOR_MISSING）。`other` は順序の検査に入り、`navigation` は入らない（ヘッダーとフッターのどちらに置いてもよい）。`navigation` は画面幅によって畳んでよい（見えていなくても IA_DOM_ANCHOR_HIDDEN にしない。印が無ければ失格、見えている所は文案と一致）。
+- **正式名称**：`data-ia-entity="ent-NNNN"` の見えている印は、すべて全文が SSOT の `name` と一致する（NFKC・空白を除いて比べる）。名前以外の文言を包めない。
+- 宣言した文言・正式名称の印の中に、ほかの IA の印（メッセージ・痛み・宣言した文言・枠。正式名称は固定値と正式名称も）を入れると IA_DOM_ANCHOR_NESTED。宣言した文言は固定値と正式名称を中に持てる。
+- `dom` の 0 は「描画物がアウトラインの宣言どおりに表示している」までで、主張の妥当性は確かめない。宣言した文言の意味は、ほかのセクションと同じく判定台帳（`ia-unregistered-claim`。role にかかわらず全セクションの文案を回す）が見る。
+- どの印（メッセージ・痛み・固定値・正式名称・宣言した文言）にも属さない、見えている文言を報告の `unanchored`（成果物 × 画面幅）に出す。文案と違う繰り返しのアンカーの文言も、ここに足す。判定台帳では、支える根拠の無い主張として `ia-unregistered-claim` で判定する。
 - このページの文案が参照しない固定値のアンカーは、SSOT にある id で、その値を表示している時だけ認める（任意の文言を固定値のアンカーで包んで、検査を逃がさない）。
 - 文言が見えているかは、文字そのものが描かれているか（テキストの範囲の大きさ）で判定する。大きさ 0 の箱でも、はみ出して文字を描いていれば見えているとみなす。
 - 限界：CSS の `::before`・`::after` の `content` で描く文言は読まない。`judge` の判定は Jev の助言で、score が θ 未満でも IA_DOM_UNANCHORED_TEXT の警告は消えない（アンカーの外の文言は、必ず人の目に届く）。
@@ -135,14 +140,16 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 | code | 内容 |
 | --- | --- |
 | IA_DOM_NO_TARGETS | 描画されたテキストが 0 件 |
-| IA_DOM_ANCHOR_MISSING / IA_DOM_ANCHOR_HIDDEN | アウトラインのメッセージ・痛みのアンカーが無い・見えていない（display / visibility / opacity / 大きさ 0） |
-| IA_DOM_ANCHOR_UNKNOWN | アウトラインに無いメッセージ・痛みのアンカー・SSOT に無い固定値のアンカー |
+| IA_DOM_ANCHOR_MISSING / IA_DOM_ANCHOR_HIDDEN | アウトラインのメッセージ・痛み・宣言した文言のアンカーが無い・見えていない（display / visibility / opacity / 大きさ 0） |
+| IA_DOM_ANCHOR_UNKNOWN | アウトラインに無いメッセージ・痛み・宣言した文言のアンカー（別のページの key を含む）・SSOT に無い固定値・正式名称のアンカー |
+| IA_DOM_ANCHOR_NESTED | 宣言した文言・正式名称の印の中に、ほかの IA の印がある |
+| IA_DOM_ENTITY_NAME | 正式名称の印の表示の全文が、SSOT の名前と違う |
 | IA_DOM_ORDER | 見えているアンカーの描画順（上から）に、アウトラインの順が部分列として現れない（行動喚起の繰り返しは可） |
 | IA_DOM_FACT_MISSING / IA_DOM_FACT_VALUE | 文案が参照する固定値の表示が無い・固定値のアンカーの表示が SSOT の値と違う（空白は正規化して比べる。文案が参照しない固定値のアンカーも対象） |
 | IA_DOM_UNSTABLE | 2 回の描画で結果が違う |
-| IA_DOM_COPY_DRIFT | 見えているアンカーのどれも、アウトラインの文案と一致しない（工場が文言を変えた） |
+| IA_DOM_COPY_DRIFT | 見えているアンカーのどれも、アウトラインの文案と一致しない（工場が文言を変えた）。宣言した文言は、1 か所でも違えば失格 |
 | IA_DOM_COPY_EXTRA（warn） | 繰り返したアンカーのうち、文案と違うものがある（文案と一致するものは別にある） |
-| IA_DOM_UNANCHORED_TEXT（warn） | どのアンカーにも属さない、見えている文言がある（文字数だけを報告する） |
+| IA_DOM_UNANCHORED_TEXT（warn） | どの印にも属さない、見えている文言がある＝IA の誰も管理していない文言（文字数だけを報告する。主張ならメッセージに、主張でなければ宣言する） |
 | IA_DOM_OUTPUT_MISSING / IA_DOM_UNCOVERED（warn） | 成果物のファイルが無い・HTML 以外（未カバー） |
 | IA_DOM_PLAYWRIGHT | Playwright を解決できない・描画に失敗した |
 

@@ -23,8 +23,9 @@ SCRIPTS = Path(__file__).resolve().parents[1]
 VP = {'name': 'mobile', 'width': 375, 'height': 812}
 
 
-def anchor(kind, aid, top, text='x', visible=True, left=0, height=40):
-    return {'kind': kind, 'id': aid, 'top': top, 'left': left, 'width': 300, 'height': height, 'visible': visible, 'text': text}
+def anchor(kind, aid, top, text='x', visible=True, left=0, height=40, nested=False):
+    return {'kind': kind, 'id': aid, 'top': top, 'left': left, 'width': 300, 'height': height, 'visible': visible, 'text': text,
+            'nested': nested}
 
 
 def green_snapshot():
@@ -338,3 +339,132 @@ def test_drifted_message_of_a_pain_section_is_sent_to_judgment():
     outline, snap = _both()
     snap['anchors'].insert(2, anchor('msg', 'msg-0001', 20, '業界No.1 の実績'))
     assert '業界No.1 の実績' in dom.unjudged_text(outline, SSOT, snap)
+
+
+# --- declared text and official names (the unanchored warning means "text nobody manages", 2026-11-15) ---
+
+def declared_outline():
+    """OUTLINE plus a navigation bar, a section label (other) and the product's official name on the page."""
+    o = copy.deepcopy(OUTLINE)
+    sec = o['pages'][0]['sections']
+    sec.insert(0, {'role': 'navigation', 'key': 'nav', 'copy': 'サービス 使い方'})
+    sec.insert(3, {'role': 'other', 'key': 'label-proof', 'copy': 'EVIDENCE'})
+    return o
+
+
+def declared_snapshot():
+    s = green_snapshot()
+    s['anchors'] += [anchor('text', 'nav', 0, 'サービス 使い方', height=20),
+                     anchor('text', 'label-proof', 880, 'EVIDENCE', height=20),
+                     anchor('entity', 'ent-0001', 1700, 'Webサーバー', height=20)]
+    s['unanchored'] = ''
+    return s
+
+
+def drun(snap, outline=None):
+    return dom.compare(outline or declared_outline(), SSOT, snap)
+
+
+def test_declared_text_and_official_name_pass_with_no_warning():
+    found = drun(declared_snapshot())
+    assert codes(found) == [] and codes(found, 'warn') == [], found
+
+
+@pytest.mark.parametrize('mutation,code', [
+    # the official name must be the whole text of its anchor, everywhere
+    (lambda s: s['anchors'][-1].update(text='Web サーバー Pro'), 'IA_DOM_ENTITY_NAME'),
+    (lambda s: s['anchors'][-1].update(text='Webサーバー 業界No.1'), 'IA_DOM_ENTITY_NAME'),
+    (lambda s: s['anchors'].append(anchor('entity', 'ent-0001', 1800, 'Webサーバー2')), 'IA_DOM_ENTITY_NAME'),
+    (lambda s: s['anchors'].append(anchor('entity', 'ent-0099', 1800, 'Webサーバー')), 'IA_DOM_ANCHOR_UNKNOWN'),
+    # declared text must match on every visible occurrence (no COPY_EXTRA leniency)
+    (lambda s: s['anchors'][-2].update(text='EVIDENCE 業界No.1'), 'IA_DOM_COPY_DRIFT'),
+    (lambda s: s['anchors'].append(anchor('text', 'nav', 1900, 'サービス 料金')), 'IA_DOM_COPY_DRIFT'),
+    (lambda s: s['anchors'].append(anchor('text', 'undeclared', 1900, '業界No.1')), 'IA_DOM_ANCHOR_UNKNOWN'),
+    (lambda s: s['anchors'].pop(-3), 'IA_DOM_ANCHOR_MISSING'),   # navigation is still required on its page
+    (lambda s: s['anchors'].pop(-2), 'IA_DOM_ANCHOR_MISSING'),
+    (lambda s: s['anchors'][-2].update(visible=False), 'IA_DOM_ANCHOR_HIDDEN'),
+    # a label moved to another section breaks the outline's order; navigation does not take part in the order
+    (lambda s: s['anchors'][-2].update(top=1600), 'IA_DOM_ORDER'),
+    # declared text and names cannot carry other IA anchors inside them
+    (lambda s: s['anchors'][-2].update(nested=True), 'IA_DOM_ANCHOR_NESTED'),
+    (lambda s: s['anchors'][-1].update(nested=True), 'IA_DOM_ANCHOR_NESTED'),
+])
+def test_declared_text_and_name_red(mutation, code):
+    snap = declared_snapshot()
+    mutation(snap)
+    assert code in codes(drun(snap)), drun(snap)
+
+
+def test_navigation_may_move_without_breaking_order():
+    snap = declared_snapshot()
+    snap['anchors'][-3]['top'] = 3000  # e.g. a footer navigation
+    assert codes(drun(snap)) == [], drun(snap)
+
+
+def test_navigation_may_be_collapsed_at_a_viewport_but_must_exist():
+    snap = declared_snapshot()
+    snap['anchors'][-3]['visible'] = False  # e.g. a header menu hidden on mobile
+    assert codes(drun(snap)) == [], drun(snap)
+    snap['anchors'].pop(-3)
+    assert 'IA_DOM_ANCHOR_MISSING' in codes(drun(snap))
+
+
+def test_declared_text_of_another_page_is_unknown_on_this_page():
+    o = declared_outline()
+    o['outputs'] = ['site/index.html', 'site/b.html']
+    o['pages'].append({'id': 'b', 'sections': [{'role': 'other', 'key': 'label-b', 'copy': 'HOW'}]})
+    snap = declared_snapshot()
+    snap['anchors'].append(anchor('text', 'label-b', 1900, 'HOW'))
+    assert 'IA_DOM_ANCHOR_UNKNOWN' in codes(dom.compare(o, SSOT, snap, 'site/index.html'))
+
+
+def test_declared_text_with_a_fact_shows_the_value():
+    o = declared_outline()
+    o['pages'][0]['sections'][0]['copy'] = 'サービス {{fct-0002}}'
+    snap = declared_snapshot()
+    snap['anchors'][-3]['text'] = 'サービス 03-1234-5678'
+    assert codes(drun(snap, o)) == [], drun(snap, o)
+
+
+def test_unanchored_warning_points_at_declaring_the_text():
+    snap = declared_snapshot()
+    snap['unanchored'] = '業界No.1'
+    found = [f for f in drun(snap) if f[0] == 'IA_DOM_UNANCHORED_TEXT']
+    assert found and found[0][1] == 'warn' and '宣言' in found[0][2], found
+
+
+DECLARED = '''<!doctype html><html><head><meta charset="utf-8"><style>body{{font:16px sans-serif;margin:0}} section{{min-height:200px}}</style></head><body>
+<nav data-ia-text="nav">サービス 使い方</nav>
+<section data-ia-pain="pan-0001"><h1>既存システムの運用、重くありませんか</h1></section>
+<section data-ia-msg="msg-0001"><h2>運用の手間が半分になります</h2></section>
+<p data-ia-text="label-proof">{label}</p>
+<section data-ia-msg="msg-0002" style="margin-top:600px"><p>導入は<span data-ia-fact="fct-0001">100社以上</span></p></section>
+<section data-ia-msg="msg-0003"><a href="#">資料請求はこちら（<span data-ia-fact="fct-0002">03-1234-5678</span>）</a></section>
+<footer><span data-ia-entity="ent-0001">{name}</span></footer>
+</body></html>'''
+
+
+@pytest.mark.skipif(not PW_DIR, reason='INFOARCH_TEST_PLAYWRIGHT_DIR is not set: real-browser integration not run (reported as skipped, not passed)')
+@pytest.mark.parametrize('label,name,expect,code', [
+    ('EVIDENCE', 'Webサーバー', 0, None),
+    ('EVIDENCE 業界No.1', 'Webサーバー', 2, 'IA_DOM_COPY_DRIFT'),
+    ('EVIDENCE', 'Webサーバー Pro', 2, 'IA_DOM_ENTITY_NAME'),
+    # reads as the right label, but nothing is painted: the anchor text is the visible text, not innerText
+    ('<span style="opacity:0">EVIDENCE</span>', 'Webサーバー', 2, 'IA_DOM_COPY_DRIFT'),
+    ('EVIDENCE<span data-ia-msg="msg-0002">導入は100社以上</span>', 'Webサーバー', 2, 'IA_DOM_ANCHOR_NESTED'),
+])
+def test_real_browser_declared_text_and_names(tmp_path, label, name, expect, code):
+    from test_check import write_repo, CHANNEL, DRAFT, DECK
+    write_repo(tmp_path, outlines=(declared_outline(), DECK))
+    (tmp_path / 'site').mkdir(exist_ok=True)
+    (tmp_path / 'site/index.html').write_text(DECLARED.format(label=label, name=name), encoding='utf-8')
+    env = dict(os.environ, INFOARCH_PLAYWRIGHT_DIR=PW_DIR)
+    proc = subprocess.run([sys.executable, str(SCRIPTS / 'infoarch_author.py'), 'dom', '--root', str(tmp_path),
+                           '--outline', 'lp-municipal'], capture_output=True, text=True, env=env, check=False)
+    report = json.loads(proc.stdout)
+    found = [f['code'] for f in report['findings']]
+    assert proc.returncode == expect, report['findings']
+    if code:
+        assert code in found, report['findings']
+    else:
+        assert 'IA_DOM_UNANCHORED_TEXT' not in found and not report['unanchored'], report

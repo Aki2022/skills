@@ -554,6 +554,29 @@ def outline_refs(o):
     return out
 
 
+TEXT_ROLES = {'navigation', 'other'}  # roles whose non-claim text is declared with a key instead of a message
+
+
+def check_text_keys(report, oid, rel, o):
+    """Declared non-claim text: a navigation / other section without a message or pain names a stable key, unique in
+    the outline, so the factory can anchor it (data-ia-text) and dom can compare it; claims stay messages."""
+    seen = {}
+    for p in o['pages']:
+        for i, s in enumerate(p['sections']):
+            w = f'{oid}.{p["id"]}[{i}]'
+            claim = 'message' in s or 'pain' in s
+            if 'key' in s:
+                if claim or s['role'] not in TEXT_ROLES:
+                    report.add('fail', 'IA_OUTLINE_TEXT_KEY_MISPLACED',
+                               f'{w}: key は message も pain も無い navigation・other のセクションだけに書く（主張はメッセージで書く）', rel)
+                elif s['key'] in seen:
+                    report.add('fail', 'IA_OUTLINE_TEXT_KEY_DUPLICATE', f'{w}: key {s["key"]!r} は {seen[s["key"]]} と重複している', rel)
+                seen.setdefault(s['key'], w)
+            elif not claim and s['role'] in TEXT_ROLES:
+                report.add('fail', 'IA_OUTLINE_TEXT_KEY_MISSING',
+                           f'{w}: 主張でない文言のセクションに key が無い（画面の印 data-ia-text を付けられない）', rel)
+
+
 def check_outline(m, report, oid, rel, o):
     ch = m.channels.get(o['channel'])
     if ch is None:
@@ -563,6 +586,7 @@ def check_outline(m, report, oid, rel, o):
         for out in o['outputs']:
             if not any(g.match(out) for g in globs):
                 report.add('fail', 'IA_OUTLINE_OUTPUT_UNDECLARED', f'{oid}: 成果物 {out} がチャネル {o["channel"]} の outputs {ch[1]["outputs"]} に一致しない', rel)
+    check_text_keys(report, oid, rel, o)
     for where, aid in outline_refs(o):
         _ref(m, report, f'{oid}.{where}', aid, rel, from_proposed=True,
              broken_code='IA_OUTLINE_REF_BROKEN', empty_code='IA_OUTLINE_REF_EMPTY')

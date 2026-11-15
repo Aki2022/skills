@@ -176,3 +176,49 @@ def test_invalid_configuration_is_a_reported_failure(project):
     result = run(project)
     assert result['exit_code'] == 2 and result['status'] == 'failed'
     assert 'object' in ' '.join(result['errors'])
+
+
+# ---- one entry for own-session-close Step 2.5 (ADR-20261115-design-ia-two-skills-shared-base, biz_ops) ----
+
+def _attach_ia(root, proof_as_of):
+    import copy
+    import runpy
+    fixture = runpy.run_path(str(SKILL.parent / 'own-infoarch-author/scripts/tests/test_check.py'))
+    ssot = copy.deepcopy(fixture['SSOT'])
+    ssot['proofs']['prf-0001']['as_of'] = proof_as_of
+    ssot['proofs']['prf-0002']['as_of'] = '2026-10-01'
+    ssot['facts']['fct-0001']['as_of'] = '2026-10-01'
+    fixture['write_repo'](root, ssot)
+    config = json.loads((root / 'design/design.yaml').read_text())
+    config['modules'] = {'ia': '0.2.0'}
+    write(root / 'design/design.yaml', config)
+
+
+def test_single_entry_runs_ia_even_when_design_has_nothing_to_do(project):
+    from maintenance import maintain_all
+    from datetime import timedelta
+    root, catalogs = ready(project)
+    today = date.today()  # design L0 evaluates IA on the real date, so the fixture is relative to it
+    _attach_ia(root, (today - timedelta(days=365 - 10)).isoformat())  # due in 10 days, inside the 30-day window
+    commit(root, 'attach ia')
+    first = maintain_all(root, catalog_dir=catalogs, today=today)
+    assert first['status'] == 'checked' and first['errors'] == [], (first['errors'], first['triggers'])
+    second = maintain_all(root, catalog_dir=catalogs, today=today)
+    assert second['status'] == 'skipped', (second['triggers'], second['changed_paths'])  # design: nothing changed
+    assert second['ia']['status'] == 'checked' and [d['id'] for d in second['ia']['due']] == ['prf-0001'], second['ia']
+    assert second['exit_code'] == 1
+
+
+def test_single_entry_skips_ia_in_one_line_without_info_arch(project):
+    from maintenance import maintain_all
+    root, catalogs = ready(project)
+    result = maintain_all(root, catalog_dir=catalogs, today=date(2026, 10, 23))
+    assert result['ia'] == {'exit_code': 0, 'status': 'skipped', 'reason': 'design/info_arch/ absent'}
+    assert result['exit_code'] == 0  # design decides alone
+
+
+def test_cli_maintain_is_the_single_entry(project):
+    root, catalogs = ready(project)
+    run_cli = subprocess.run(['python3', str(SKILL / 'scripts/design_author.py'), 'maintain', '--repo', str(root),
+                              '--catalog-dir', str(catalogs)], capture_output=True, text=True)
+    assert 'ia' in json.loads(run_cli.stdout), run_cli.stdout + run_cli.stderr

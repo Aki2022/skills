@@ -586,6 +586,38 @@ def check_outline(m, report, oid, rel, o):
                     report.add('fail', 'IA_OUTLINE_FACT_LITERAL', f'{w}: 固定値 {fid} の値「{value}」を直接書いている（{{{{{fid}}}}} で参照する）', rel)
 
 
+# ---- design page inventory (ADR-20261115-design-ia-two-skills-shared-base) -------------------
+
+HTML_SUFFIXES = ('.html', '.htm')
+
+
+def check_pages(m, report):
+    """Shipped HTML outputs against design/validation.json pages: the two declarations are kept, but must agree."""
+    path = m.root / 'design/validation.json'
+    if not path.is_file():
+        return
+    try:
+        pages = json.loads(path.read_text(encoding='utf-8')).get('pages')
+    except (ValueError, AttributeError):
+        return  # design's own check reports a malformed validation.json
+    if not isinstance(pages, dict):
+        return
+    covered, excluded = pages.get('covered') or {}, pages.get('excluded') or {}
+    for oid, (rel, o) in sorted(m.outlines.items()):
+        ch = m.channels.get(o['channel'])
+        if not (ch and ch[1]['ship']):
+            continue
+        for out in o['outputs']:
+            if not out.lower().endswith(HTML_SUFFIXES):
+                continue
+            if out in excluded:
+                report.add('info', 'IA_PAGES_OUTPUT_EXCLUDED_BY_DESIGN',
+                           f'{oid}: {out} は design の棚卸しで対象外だが、IA の検査（check・dom・判定）は続ける', rel)
+            elif out not in covered:
+                report.add('warn', 'IA_PAGES_OUTPUT_NOT_INVENTORIED',
+                           f'{oid}: 出荷される {out} が design/validation.json の pages（covered・excluded）に無い。design の検査が見ていない', rel)
+
+
 # ---- expiry ------------------------------------------------------------------------------
 
 def _expiry(atom, days):
@@ -642,6 +674,7 @@ def check(root, date):
         ch = m.channels.get(o['channel'])
         check_strategy(m, report, oid, rel, o, shipped=bool(ch and ch[1]['ship']), hashes=hashes, confirmed=confirmed)
     check_expiry(m, report, date)
+    check_pages(m, report)
     report.targets = {'channels': len(m.channels), 'outlines': len(m.outlines),
                       'sections': sum(len(p['sections']) for _, o in m.outlines.values() for p in o['pages'])}
     return report, m

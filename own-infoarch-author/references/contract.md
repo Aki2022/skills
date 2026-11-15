@@ -91,6 +91,8 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 | IA_FRAME_UNKNOWN_MEDIA / IA_FRAME_UNKNOWN_TYPE | 枠の媒体・種類がノウハウに無い |
 | IA_FRAME_DUPLICATE_ID / IA_FRAME_MULTIPLICITY | 枠の実体 id の重複・種類ごとの実体の数が多重度に反する |
 | IA_FRAME_UNDECLARED / IA_FRAME_SEQUENCE_ANCHORED / IA_FRAME_DUPLICATE_USE / IA_FRAME_UNUSED | 宣言していない枠を使う・並びの枠をセクションに付ける・要素の枠を 2 つ以上のセクションに付ける・宣言した要素の枠をどこにも付けない |
+| IA_PAGES_OUTPUT_NOT_INVENTORIED（警告） | 出荷チャネルの HTML の成果物が、design/validation.json の pages（covered・excluded）に無い（design の検査が見ていない） |
+| IA_PAGES_OUTPUT_EXCLUDED_BY_DESIGN（info） | design が対象外にした成果物。IA の検査は続ける（ページの宣言は一本化しない。ADR-20261115-design-ia-two-skills-shared-base） |
 | IA_NO_CHANNELS / IA_NO_OUTLINES / IA_CHANNEL_NAME / IA_CHANNEL_FILE / IA_OUTLINE_FILE / IA_OUTLINE_ID | 対象 0 件・名前の不一致・読まれないファイル |
 | IA_OUTLINE_CHANNEL / IA_OUTLINE_OUTPUT_UNDECLARED | 宣言の無いチャネル・チャネルの outputs に一致しない成果物 |
 | IA_OUTLINE_REF_BROKEN / IA_OUTLINE_REF_EMPTY | アウトラインの参照切れ（墓標なら先を案内）・空欄の原子を参照（参照の表は `check.outline_refs` の 1 か所） |

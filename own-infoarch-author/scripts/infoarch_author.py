@@ -165,6 +165,22 @@ def cmd_compose(args):
     return 0
 
 
+def cmd_review(args):
+    """The owner reads what a confirmation request binds (requirement 14), and a stale request is refused."""
+    report = check.Report('review', dt.date.today().isoformat())
+    m = check.load(args.root, report)
+    if m.ssot is None or report.exit_code == 2:
+        _print(report.to_dict())
+        return 2
+    request = json.loads(Path(args.request).read_text(encoding='utf-8'))
+    hashes, must = check.strategy_targets(m)
+    rows = [r for r in request.get('rows', []) if str(r.get('key', '')).startswith(check.CONFIRM_PREFIX)]
+    stale = sorted(r['key'] for r in rows if hashes.get(r['key']) != r.get('value_hash'))
+    _print({'rows': len(rows), 'stale': stale, 'missing_required': sorted(set(must) - {r['key'] for r in rows}),
+            'markdown': check.review_markdown(m, [r['key'] for r in rows], hashes)})
+    return 2 if stale or not rows else 0
+
+
 def cmd_mapping(args):
     report = check.Report('mapping', dt.date.today().isoformat())
     m = check.load(args.root, report)
@@ -250,6 +266,10 @@ def main(argv=None):
     cp.add_argument('--audience', required=True)
     cp.add_argument('--strategy', required=True, help='comma-separated strategy atom ids (job, pan, gan, val, prm)')
     cp.set_defaults(fn=cmd_compose)
+    rv = sub.add_parser('review', help='readable content of an owner-confirmation request (ia:strategy rows); a stale request fails')
+    rv.add_argument('--root', default='.')
+    rv.add_argument('--request', required=True)
+    rv.set_defaults(fn=cmd_review)
     mp = sub.add_parser('mapping', help='mapping table of one deliverable: version hash, frame instances, atoms and their content hashes')
     mp.add_argument('--root', default='.')
     mp.add_argument('--outline', required=True)

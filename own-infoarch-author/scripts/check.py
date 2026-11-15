@@ -301,6 +301,34 @@ def strategy_targets(m):
     return hashes, sorted(must & set(hashes))
 
 
+REVIEW_NAMES = {'seg': 'セグメント', 'job': 'ジョブ', 'pan': '痛み', 'gan': '得たいもの', 'val': '提供価値',
+                'alt': '代替', 'str': '強み', 'cpt': 'カテゴリーとコンセプト', 'prm': '約束'}
+REVIEW_FIELDS = {'text': '', 'qualifier': '見分ける条件', 'situation': '状況', 'category': 'カテゴリー', 'concept': 'コンセプト',
+                 'push': '押す力', 'pull': '引く力', 'anxiety': '不安', 'habit': '習慣', 'segment': 'セグメント', 'job': 'ジョブ',
+                 'relieves': '和らげる痛み', 'creates': '生む得たいもの', 'versus': '比べる代替', 'produces': '生む提供価値',
+                 'values': '言い切る提供価値', 'provenance': '出所'}
+
+
+def review_markdown(m, keys, hashes):
+    """Markdown of the atoms a confirmation request binds, grouped by kind, with each binding hash."""
+    lines = []
+    for prefix, name in REVIEW_NAMES.items():
+        ids = sorted(k[len(CONFIRM_PREFIX):] for k in keys if k[len(CONFIRM_PREFIX):].startswith(prefix + '-'))
+        if not ids:
+            continue
+        lines.append(f'## {name}（{len(ids)}）')
+        for aid in ids:
+            atom = m.atom(aid) or {}
+            lines.append(f'### {aid}　`{(hashes.get(CONFIRM_PREFIX + aid) or "")[:12]}`')
+            for fld, label in REVIEW_FIELDS.items():
+                v = atom.get(fld)
+                if v:
+                    v = '、'.join(v) if isinstance(v, list) else v
+                    lines.append(f'- {label + "：" if label else ""}{v}')
+        lines.append('')
+    return '\n'.join(lines)
+
+
 def read_confirmations(root, report):
     """The owner's ia:strategy rows of design/approvals.yaml. Its full validation belongs to own-design-author."""
     path = Path(root) / 'design/approvals.yaml'
@@ -318,6 +346,23 @@ def read_confirmations(root, report):
         report.add('fail', 'IA_APPROVALS_INVALID', 'design/approvals.yaml の形が違う（key と value_hash の行の並び）', 'design/approvals.yaml')
         return {}
     return {r['key']: r['value_hash'] for r in rows if r['key'].startswith(CONFIRM_PREFIX)}
+
+
+def strategy_dependencies(m, o):
+    """Every strategy atom an outline stands on: the paths of its messages and pains, and of its chosen strategy."""
+    segment = (m.atom(o['audience']) or {}).get('segment')
+    roots = [s[k] for p in o['pages'] for s in p['sections'] for k in ('message', 'pain') if s.get(k) and m.atom(s[k])]
+    out = set()
+    for r in roots:
+        out |= set(strategy_path(m, _roots(m, r), segment)[0])
+    for x in (o.get('strategy') or {}).get('choose', []):
+        out |= set(strategy_path(m, [x], segment)[0])
+    return out
+
+
+def outline_dependencies(m, o):
+    """Direct references plus the strategy layer underneath (requirement 18: reverse lookup is transitive)."""
+    return {x for _, x in outline_refs(o)} | strategy_dependencies(m, o)
 
 
 def _roots(m, aid):
@@ -470,7 +515,9 @@ def mapping(m, oid):
     for out in o['outputs']:
         f = m.root / out
         outputs[out] = hashlib.sha256(f.read_bytes()).hexdigest() if f.is_file() else None
-    version = h({'outline': o, 'atoms': {aid: m.atom(aid) for s in sections for aid in atoms_of(s)}, 'outputs': outputs})
+    strategy = {aid: m.atom(aid) for aid in sorted(strategy_dependencies(m, o))}
+    version = h({'outline': o, 'atoms': {aid: m.atom(aid) for s in sections for aid in atoms_of(s)},
+                 'strategy': strategy, 'outputs': outputs})
     return {'deliverable': oid, 'version_hash': version, 'outputs': outputs, 'strategy': o['strategy'], 'frames': rows}
 
 
@@ -605,6 +652,6 @@ def impact(root, aid):
     m = load(root, report)
     if m.ssot is not None and m.atom(aid) is None and m.tombstone(aid) == '__live__':
         report.add('fail', 'IA_IMPACT_UNKNOWN_ID', f'{aid} は SSOT にも墓標にも無い（綴りを確かめる）')
-    hits = sorted(oid for oid, (_, o) in m.outlines.items() if aid in {x for _, x in outline_refs(o)})
+    hits = sorted(oid for oid, (_, o) in m.outlines.items() if m.ssot is not None and aid in outline_dependencies(m, o))
     outputs = sorted({out for oid in hits for out in m.outlines[oid][1]['outputs']})
     return report, {'id': aid, 'outlines': hits, 'outputs': outputs}

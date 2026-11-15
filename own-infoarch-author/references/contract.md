@@ -50,12 +50,13 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 
 ### 対応表（`infoarch-author mapping --outline <id>`）
 
-外部の実験の道具が「どの版の、どこを、何に変えたか」を指すための表。成果物 id・版のハッシュ（アウトライン・使う原子の中身・成果物のファイルから作る）・成果物ごとのファイルのハッシュ・枠の実体ごとの種類と、使う原子の id と中身のハッシュ（並びの枠は原子の並び）を出す。比べる案の管理・割り付け・実験の記録・配信・計測は持たない。
+外部の実験の道具が「どの版の、どこを、何に変えたか」を指すための表。成果物 id・版のハッシュ（アウトライン・使う原子の中身・成果物が立つ戦略の原子の中身・成果物のファイルから作る）・成果物ごとのファイルのハッシュ・枠の実体ごとの種類と、使う原子の id と中身のハッシュ（並びの枠は原子の並び）を出す。比べる案の管理・割り付け・実験の記録・配信・計測は持たない。
 
 ### オーナーの確定（`ia:strategy:<id>`）
 
 戦略の原子の確定は、own-design-author と同じ `design/approvals.yaml` に、オーナーが記録する（AI は `design-author approve --prepare` で束を作るまで）。確定のハッシュ（`check.confirmation_hash`）は、原子の中身そのもの（媒体の解決を経ない）と、その原子が依存する原子の中身を束縛する。依存は、参照をセグメントまでたどったものと、提供価値を生む強み（とその代替）。原子か依存先のどちらが変わっても確定は外れる。確定かどうかは台帳のハッシュの一致だけで決まり、`state` には持たない。確定はオーナーの採用の判断だけを表し、顧客での検証を意味しない。
 
+- `infoarch-author review --root . --request <束>`：束が束縛する原子の中身を、種類ごとに Markdown で出す（オーナーが読む）。今のハッシュと合わない行があれば `stale` に並べて失格（作り直す）。
 - `infoarch-author targets --root .`：全部の戦略の原子の確定のハッシュ（`approval_hashes`）と、出荷チャネルのアウトラインの経路に乗る原子のキー（`must_approval_keys`）を出す。`ia_module.py`（契約 `ia-git-history-v3`、`modules.ia: 0.3.0`）がこれを own-design-author に返す。
 - 出荷の報告（`ship`）は `strategy` に、`owner_adopted`（confirmed / unconfirmed）・`semantic_fit`（意味の判定の状態。今は not-judged）・`customer_validation`（IA は判定しない：not-judged-by-ia）を分けて出す。
 

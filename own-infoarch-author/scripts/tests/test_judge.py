@@ -231,7 +231,7 @@ def test_replacement_keeps_design_rows_and_takes_only_current_ia_answers(repo, t
                     '--answers', str(tmp_path / 'judgment-answers.json'), '--replacement-out', str(out_path))
     # Judged against the ledger as it is now: the IA candidates are still uncovered there.
     assert code == 1, out
-    assert out['replacement'] == {'design_rows': 1, 'ia_rows': len(rows) - 1, 'unanswered': 1, 'dropped_ia_rows': 1}
+    assert out['replacement'] == {'design_rows': 1, 'ia_rows': len(rows) - 1, 'kept_ia_rows': 0, 'unanswered': 1, 'dropped_ia_rows': 1}
     replacement = json.loads(out_path.read_text(encoding='utf-8'))
     ids = [r['candidate']['id'] for r in replacement['rows']]
     assert design['id'] in ids and stale['id'] not in ids

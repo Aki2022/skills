@@ -709,3 +709,11 @@ def test_ship_report_states_the_semantic_fit(repo, score, state):  # Q12 / D8: a
     code, out, _ = ship(repo)
     assert out['strategy']['semantic_fit'] == state, out
     assert code != 2 or out['errors'], out
+
+
+def test_maintain_lists_outlines_impacted_through_the_strategy_layer(repo):  # review 2026-11-15, defect 1
+    ssot = fresh_ssot()
+    ssot['strengths']['str-0001']['text'] = '別の強み'  # only the LP's path stands on str-0001
+    dump(repo / 'design/info_arch/info_arch.yaml', ssot)
+    code, out, _ = cli(repo, 'maintain', '--root', str(repo), '--date', TODAY)
+    assert out['impacted_outlines'] == ['lp-municipal'], out

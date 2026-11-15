@@ -234,8 +234,13 @@ def write_new(target, text):
         f.write(text)
 
 
-def replacement(ledger, rows, answers, policy, jl):
-    """Shared-ledger replacement: keep every non-IA row, take answered current IA candidates, drop stale IA rows."""
+def replacement(ledger, rows, answers, policy, jl, outlines=None):
+    """Shared-ledger replacement: keep every non-IA row, take answered current IA candidates, keep IA rows that are
+    still valid, drop only superseded ones and those of outlines that no longer exist.
+
+    A run may cover part of the IA (one deliverable's render): a row whose candidate id this run did not produce
+    belongs to work outside the run and stays while its outline exists. A row whose id the run produced with a
+    different hash is superseded."""
     if answers.get('policy') != policy or answers.get('status') != 'model-answers-unlabeled':
         raise ValueError('回答の policy が現在の共有 policy と違う（migrate が要る）')
     if ledger is not None and ledger.get('schema_version') != jl.CURRENT_SCHEME:
@@ -248,12 +253,25 @@ def replacement(ledger, rows, answers, policy, jl):
             answered[c['judgment_hash']] = {'candidate': c, 'score': jl.probability(a['score'])}
     old = (ledger or {}).get('rows', [])
     design = [r for r in old if not r['candidate']['input']['kind'].startswith(IA_PREFIX)]
-    dropped = sum(1 for r in old if r['candidate']['input']['kind'].startswith(IA_PREFIX)
-                  and r['candidate']['judgment_hash'] not in answered)
-    out = {'schema_version': jl.CURRENT_SCHEME, 'policy': policy, 'rows': design + list(answered.values()),
+    current_ids = {r['id']: r['judgment_hash'] for r in rows}
+    kept, dropped = [], 0
+    for r in old:
+        c = r['candidate']
+        if not c['input']['kind'].startswith(IA_PREFIX) or c['judgment_hash'] in answered:
+            continue
+        if c['id'] in current_ids:
+            valid = current_ids[c['id']] == c['judgment_hash']
+        else:
+            outline = c['id'].split(':', 1)[1].split('/', 1)[0].split('@', 1)[0]
+            valid = outlines is not None and outline in outlines
+        if valid:
+            kept.append(r)
+        else:
+            dropped += 1
+    out = {'schema_version': jl.CURRENT_SCHEME, 'policy': policy, 'rows': design + kept + list(answered.values()),
            'holdout': (ledger or {}).get('holdout', {'source': 'unmeasured'})}
     jl.validate_ledger(out, policy)
-    summary = {'design_rows': len(design), 'ia_rows': len(answered),
+    summary = {'design_rows': len(design), 'ia_rows': len(answered), 'kept_ia_rows': len(kept),
                'unanswered': len(current) - len(answered), 'dropped_ia_rows': dropped}
     return out, summary
 
@@ -301,6 +319,6 @@ def run(root, date, dom_reports=(), answers=None, replacement_out=None):
                       'by_kind': {k: sum(r['input']['kind'] == k for r in rows) for k in sorted({r['input']['kind'] for r in rows})}}
     summary = None
     if answers is not None and report.exit_code < 2:
-        out, summary = replacement(ledger, rows, read_answers(answers, policy), policy, jl)
+        out, summary = replacement(ledger, rows, read_answers(answers, policy), policy, jl, outlines=set(m.outlines))
         write_new(replacement_out, json.dumps(out, ensure_ascii=False, indent=2) + '\n')
     return report, rows, summary

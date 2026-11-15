@@ -553,7 +553,7 @@ def maintain(root, date, within_days=None):
         result['exit_code'] = 2
         return result
     shipped = set(shipped_outlines(m))
-    refs = {oid: {x for _, x in check.outline_refs(o)} for oid, (_, o) in m.outlines.items()}
+    refs = {oid: check.outline_dependencies(m, o) for oid, (_, o) in m.outlines.items()}
     days = {**expiry['expiry_days'], **((m.ssot.get('policy') or {}).get('expiry_days') or {})}
     for block, kind in (('proofs', 'proof'), ('facts', 'fact')):
         for aid, atom in sorted(m.ssot[block].items()):

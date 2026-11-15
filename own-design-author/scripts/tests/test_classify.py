@@ -112,8 +112,11 @@ def test_shared_ceiling_and_failure_consumption(tmp_path, monkeypatch):
     assert ledger["attempted_judgments"] == 2000
     assert ledger["batches"][-1]["status"] == "failed"
     assert "test-secret" not in usage.read_text()
+    # A caller-supplied max_judgments above the module ceiling never raises it:
+    # MAX_JUDGMENTS is the true shared cap regardless of a large per-call override.
+    usage.write_text(json.dumps({"schema_version": 1, "attempted_judgments": m.MAX_JUDGMENTS, "batches": []}))
     with pytest.raises(m.ClassificationError, match="budget"):
-        m.run(catalog, usage, limit=1, max_judgments=9999, _transport=responder([]))
+        m.run(catalog, usage, limit=1, max_judgments=m.MAX_JUDGMENTS * 10, _transport=responder([]))
 
 
 @pytest.mark.parametrize("kind", ["wrong_model", "missing_answer", "invalid_answer", "bad_usage", "not_json"])

@@ -17,6 +17,8 @@ function iaDigest(file, full) {
       if (lstatSync(path).isSymbolicLink() || realpathSync(path) !== path)
         throw new Error('IA trusted dependency symlink or escape');
       if (statSync(path).isDirectory()) walk(path);
+      // Reference prose (files only) is not bound (ADR-20261115-design-ia-two-skills-shared-base, biz_ops).
+      else if (statSync(path).isFile() && relative(skill, path).split(sep)[0] === 'references' && name.endsWith('.md')) continue;
       else if (statSync(path).isFile())
         inputs[relative(skill, path).split(sep).join('/')] = createHash('sha256').update(readFileSync(path)).digest('hex');
     }

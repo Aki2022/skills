@@ -822,8 +822,8 @@ def main(argv=None):
     try:
         root = git_root(args.repo)
         if args.command == 'maintain':
-            from maintenance import maintain_design
-            result = maintain_design(root, catalog_dir=args.catalog_dir, force=args.force)
+            from maintenance import maintain_all
+            result = maintain_all(root, catalog_dir=args.catalog_dir, force=args.force)
             print(json.dumps(result, ensure_ascii=False, sort_keys=True))
             return result['exit_code']
         if args.command == 'approve':

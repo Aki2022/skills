@@ -2,7 +2,7 @@
 
 `design-author maintain --repo .` をセッション終了のStep 2.5から呼ぶ。
 `design/`のないrepoは1行のJSONでskipする。`design/`に`info_arch/`と共有の判定台帳（`judgments.json`）しか無く
-`design.yaml`も無いrepo（IAだけ）も1行でskipし、IAは`infoarch-author maintain`に任せる。それ以外の物があって`design.yaml`が無ければ失格。
+`design.yaml`も無いrepo（IAだけ）もdesignの段は1行でskipする。IAの段（`infoarch-author maintain`）は、designの段が早く終わっても毎回走らせ、結果を`ia`に入れる。`design/info_arch/`が無ければ`ia`は1行でskip。終了コードは2つの段の悪い方（ADR-20261115-design-ia-two-skills-shared-base、biz_ops）。それ以外の物があって`design.yaml`が無ければ失格。
 モデル・ネットワーク・承認記録を使わない。
 `--force` は変更の有無にかかわらずL0を再実行する。
 

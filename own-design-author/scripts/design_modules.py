@@ -25,6 +25,11 @@ def _digest(path, full=False):
                 continue
             if candidate.is_symlink() or not candidate.resolve().is_relative_to(skill):
                 raise ValueError('IA trusted dependency symlink or escape')
+            # Prose under references/ explains; it is not executed or read by the checker. Editing it must not
+            # invalidate resolved results (ADR-20261115-design-ia-two-skills-shared-base, biz_ops). Files only:
+            # a directory named *.md still has its contents bound.
+            if candidate.is_file() and sub == 'references' and candidate.suffix == '.md':
+                continue
             if candidate.is_file():
                 inputs[relative.as_posix()] = hashlib.sha256(candidate.read_bytes()).hexdigest()
     if not inputs:

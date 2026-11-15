@@ -186,3 +186,30 @@ def maintain_design(root, *, catalog_dir=None, today=None, force=False):
             return result
     except (ValueError, OSError, KeyError, TypeError) as error:
         return {**result, 'exit_code': 2, 'status': 'failed', 'errors': [str(error)]}
+
+
+def maintain_all(root, catalog_dir=None, today=None, force=False):
+    """own-session-close Step 2.5 in one entry (ADR-20261115-design-ia-two-skills-shared-base, biz_ops).
+
+    The design stage may return early when nothing changed; the IA stage still runs every time, because evidence
+    and facts fall due by date alone. Without design/info_arch/ the IA stage is a one-line skip.
+    """
+    import subprocess
+    import sys
+    result = maintain_design(root, catalog_dir=catalog_dir, today=today, force=force)
+    base = Path(root).resolve()
+    if not (base / 'design/info_arch').is_dir():
+        ia = {'exit_code': 0, 'status': 'skipped', 'reason': 'design/info_arch/ absent'}
+    else:
+        cli = Path(__file__).resolve().parents[2] / 'own-infoarch-author/scripts/infoarch_author.py'
+        args = [sys.executable, str(cli), 'maintain', '--root', str(base)]
+        if today:
+            args += ['--date', today.isoformat()]
+        run = subprocess.run(args, capture_output=True, text=True, timeout=600)
+        try:
+            ia = json.loads(run.stdout)
+            if not isinstance(ia, dict) or ia.get('exit_code') != run.returncode:
+                raise ValueError
+        except ValueError:
+            ia = {'exit_code': 2, 'status': 'failed', 'errors': ['infoarch-author maintain gave no valid report']}
+    return {**result, 'ia': ia, 'exit_code': max(result['exit_code'], ia['exit_code'])}

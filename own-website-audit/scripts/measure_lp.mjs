@@ -856,7 +856,8 @@ for (const r of report.runs) {
     });
   if (r.headJumps.length) fail("heading-jump", { at, jumps: r.headJumps });
   if(fixed && (r.render_evidence.fallbacks.length || r.render_evidence.rejected_font_requests))
-    fail('font-fallback',{at,families:r.render_evidence.fallbacks,rejected_requests:r.render_evidence.rejected_font_requests});
+    fail('font-fallback',{at,families:r.render_evidence.fallbacks,rejected_requests:r.render_evidence.rejected_font_requests,
+      rejected_fonts:r.render_evidence.rejected_fonts});
   if(fixed){
     const actual=r.render_evidence,expected=fixed.config;
     if(actual.clock!==expected.clock||actual.dpr!==expected.device_scale_factor||!actual.reduced_motion||

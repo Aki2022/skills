@@ -126,7 +126,9 @@ absent). Say so, then continue with Step 2.5 — it does not depend on `docs/`.
 ### Step 2.5 — design and information-architecture maintenance
 
 This step is keyed on `design/` and `design/info_arch/`, not on `docs/`: run it even when
-Step 2 was skipped. Run both commands below; each prints one line. Treat their exit codes the same way.
+Step 2 was skipped. One command covers both: `design-author maintain` runs the design stage and
+then always runs the IA stage (`infoarch-author maintain`) and reports it under `ia`
+(ADR-20261115-design-ia-two-skills-shared-base, biz_ops). Its exit code is the worse of the two.
 
 Run `design-author maintain --repo <repo>` through the existing PATH (or the
 runtime's existing `DESIGN_AUTHOR_PYTHON` with the discovered skill script).
@@ -146,16 +148,16 @@ closeout. A repository without `design/` can use a one-line skip even when the
 command is unavailable. Include generated recommendations in the work unit's
 Next Actions, then continue to Step 3; do not approve them automatically.
 
-Then run `infoarch-author maintain --root <repo>` the same way (PATH, or the runtime's
-`DESIGN_AUTHOR_PYTHON` with the discovered **own-infoarch-author** script). It prints
-one line and skips repositories without `design/info_arch/` — even when the command
-is unavailable, that skip is one line. Otherwise it runs the deterministic IA check,
+The `ia` stage is a one-line skip in repositories without `design/info_arch/`. It runs even
+when the design stage returned early with nothing to do, because evidence and facts fall due by
+date alone. Otherwise it runs the deterministic IA check,
 reads the shared judgment ledger without calling a model, and lists SSOT/outline
 changes, the outlines they impact, evidence and facts falling due, and uncovered
 judgments. On exit 1, put the due evidence and uncovered judgments into the work
-unit's Next Actions; on exit 2 or a missing command when `design/info_arch/`
-exists, read **own-infoarch-author** and stop the integration phase if the failure
-remains. It never edits the SSOT, outlines or the ledger.
+unit's Next Actions; on an `ia` exit 2 when `design/info_arch/` exists, read
+**own-infoarch-author** and stop the integration phase if the failure remains. It never
+edits the SSOT, outlines or the ledger. `infoarch-author maintain --root <repo>` remains
+available to run the IA stage alone.
 
 ### Step 3 — own-git-clean
 

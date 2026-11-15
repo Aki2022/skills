@@ -22,7 +22,7 @@
 
 import { writeFileSync, existsSync, realpathSync, unlinkSync } from "node:fs";
 import {dirname} from "node:path";
-import {loadEnvironment,verifyRuntime,configureFonts,trackFonts,renderEvidence,compareRepeats,fixedLaunchOptions,describeRenderFailure,parseState,applyState} from "../../own-design-author/scripts/fixed_render.mjs";
+import {loadEnvironment,verifyRuntime,configureFonts,trackFonts,renderEvidence,compareRepeats,fixedLaunchOptions,describeRenderFailure,parseState,applyState,settleFonts} from "../../own-design-author/scripts/fixed_render.mjs";
 import { loadManifest, collectDesign, collectItemChecks } from "../../own-design-author/scripts/resolved_contract.mjs";
 import { createRequire } from "node:module";
 
@@ -655,6 +655,9 @@ for (const scheme of schemes) {
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
     // 遅延読み込みを確定させる（未読込を「壊れている」と誤判定しないため）
     stage='assets';
+    // A page without scripts fires DOMContentLoaded before its stylesheets arrive; until they do, no web font
+    // face exists and the font set looks idle. The load event waits for stylesheets (a failed one still ends).
+    if (fixed) await page.waitForLoadState('load', {timeout: 10000}).catch(() => { throw Error('visible assets did not become ready'); });
     await assetsReady(page);
     // A declared state renders the page after its steps; the same readiness wait follows the last step.
     if (state) {
@@ -664,6 +667,8 @@ for (const scheme of schemes) {
       await assetsReady(page);
     }
 
+    // Every measurement reads the page with its fonts settled, not only the glyph evidence.
+    if (fixed) await settleFonts(page);
     stage='collect';
     const data = await page.evaluate(collect, T);
     data.design = await page.evaluate(collectDesign, manifest);

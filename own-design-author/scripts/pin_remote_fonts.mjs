@@ -17,7 +17,7 @@
  */
 import {readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
-import {sha,fixedLaunchOptions} from './fixed_render.mjs';
+import {sha,fixedLaunchOptions,settleFonts} from './fixed_render.mjs';
 
 const args=process.argv.slice(2);
 const flag=name=>{const i=args.indexOf('--'+name);return i===-1?null:args[i+1];};
@@ -77,8 +77,9 @@ try{
     await client.send('DOM.enable');await client.send('CSS.enable');
     await page.clock.setFixedTime(new Date(config.clock));
     await page.goto(url,{waitUntil:'domcontentloaded',timeout:60000});
-    await page.evaluate(()=>document.fonts.ready);
-    await page.waitForTimeout(700);
+    // Same readiness as the measurement: stylesheets loaded, then no font face still loading.
+    await page.waitForLoadState('load',{timeout:10000});
+    await settleFonts(page);
     for(const font of loaded){
       const src=typeof font.src==='string'?font.src:'';
       const sources=[...src.matchAll(/url\(\s*(['"]?)(.*?)\1\s*\)/g)].map(m=>m[2]).concat(/^https?:\/\//.test(src)?[src]:[]);

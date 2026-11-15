@@ -35,6 +35,7 @@ const FAILURE_DETAILS=[
   [/EncodingError|cannot be decoded/,'a visible image could not be decoded',null],
   [/environment changed/,'fixed rendering environment changed during measurement',null],
   [/fixed runtime mismatch/,'fixed runtime changed during measurement',null],
+  [/fonts did not settle/,'a font kept loading past the settle limit (20 seconds)','font-unsettled'],
   [/^state step/,'a declared state step matched no unique element or could not run','state-unreachable'],
 ];
 export function describeRenderFailure(error,stage) {
@@ -195,7 +196,27 @@ async function stableScreenshot(page) {
   throw Error('render did not stabilize within three captures');
 }
 
+// document.fonts.ready resolves for the faces loading at that moment; a face that starts later (text laid out
+// later, a narrow viewport's reflow) can still be loading when glyphs are read, and font-display:swap text is
+// then drawn in a system font in some renders only. Wait until no face is loading, twice in a row.
+export async function settleFonts(page) {
+  const settled=await page.evaluate(async()=>{
+    const idle=()=>document.fonts.status==='loaded'&&[...document.fonts].every(f=>f.status!=='loading');
+    const pause=ms=>new Promise(r=>setTimeout(r,ms));
+    let quiet=0;
+    for(let i=0;i<100;i++){
+      await Promise.race([document.fonts.ready,pause(100)]);
+      await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+      await pause(100);
+      if(idle()){if(++quiet>=2)return true;}else quiet=0;
+    }
+    return false;
+  });
+  if(!settled)throw Error('fonts did not settle within 20 seconds');
+}
+
 export async function renderEvidence(page,context,environment,requests) {
+  await settleFonts(page);
   const client=requests.client;
   let glyphs=0;const fallback=new Set();const used=new Set();
   try {

@@ -195,7 +195,8 @@ export async function stableCapture(page, options={}) {
     if(previous && sha(previous)===sha(current))return current;
     previous=current;
   }
-  throw Error('render did not stabilize within three captures');
+  // The code lets callers fail on it instead of folding it into an ordinary unmeasured warning.
+  throw Object.assign(Error('render did not stabilize within three captures'),{code:'render-unstable'});
 }
 
 async function stableScreenshot(page) {

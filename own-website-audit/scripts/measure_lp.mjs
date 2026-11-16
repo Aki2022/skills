@@ -764,6 +764,8 @@ for (const scheme of schemes) {
         data.imageLightness.push({
           ...region,
           skipped: String(e).slice(0, 60),
+          // 落ち着かなかった画素は「測れなかった」ではなく、描画が揺れている事実として失格にする
+          ...(e?.code === "render-unstable" ? { unstable: true } : {}),
         });
       }
     }
@@ -883,6 +885,19 @@ for (const r of report.runs) {
   if (profile === 'lp' && r.fold.primaryCtaVisible === false && !r.fold.hasStickyCta)
     fail("fold-cta", { at });
   for (const im of r.imageLightness) {
+    // 切り取り率は要素の寸法から出るので、画素が測れなくても判定する
+    if (im.croppedRatio > T.imageCropMax)
+      fail("image-over-crop", {
+        at,
+        src: im.src,
+        croppedRatio: im.croppedRatio,
+        max: T.imageCropMax,
+        note: "object-fit: cover の切り取りが大きく、意図した構図が画面に出ていない",
+      });
+    if (im.unstable) {
+      fail("image-unstable", { at, src: im.src, note: "画像領域の画素が 3 回撮っても落ち着かない" });
+      continue;
+    }
     if (im.skipped) {
       // 未検証を緑にしない。測れなかったこと自体を報告する。
       warn("image-unverified", { at, src: im.src, reason: im.skipped });
@@ -904,14 +919,6 @@ for (const r of report.runs) {
         min: T.imageStandoutArea,
         mode: im.mode,
         note: "合成後の画像に、支配的な明度から離れた画素がほとんど無い。scrim や重なりで焦点が潰れ、絵が地に沈んでいる",
-      });
-    if (im.croppedRatio > T.imageCropMax)
-      fail("image-over-crop", {
-        at,
-        src: im.src,
-        croppedRatio: im.croppedRatio,
-        max: T.imageCropMax,
-        note: "object-fit: cover の切り取りが大きく、意図した構図が画面に出ていない",
       });
   }
 }

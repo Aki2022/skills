@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 
 import pytest
+from test_core import project  # noqa: F401  (fixture used by the measure_lp tests below)
 
 SCRIPTS = Path(__file__).resolve().parents[1]
 
@@ -42,15 +43,27 @@ await browser.close();
 '''
 
 
-def test_focus_rule_leaves_the_page_where_it_was(tmp_path):
-    html = ('<!doctype html><html><body style="margin:0"><div style="height:5000px">tall</div>'
-            '<a href="#x" style="outline-style:solid">last link</a></body></html>')
+def focus_check(link_style, tmp_path):
+    html = ('<!doctype html><html><head><style>a{outline:none}' + link_style + '</style></head>'
+            '<body style="margin:0"><div style="height:5000px">tall</div><a href="#x">last link</a></body></html>')
     rule = {'id': 'focus-ring', 'kind': 'style', 'targets': ['a[href]'], 'property': 'outline-style',
-            'state': 'focus', 'allowlist': ['solid', 'auto']}
+            'state': 'focus', 'allowlist': ['solid']}
     manifest = {'item_checks': {'collect': ['rule:focus-ring'], 'applicability': {}},
                 'palette': {'dimension': ['0px'], 'fontWeight': ['400'], 'shadow': []}, 'rules': [rule]}
-    out = run_node(FOCUS_RUNNER % json.dumps((SCRIPTS / 'resolved_contract.mjs').as_uri()), [html, manifest], tmp_path)
-    assert out['results']['rule:focus-ring'].get('checked') is not False
+    return run_node(FOCUS_RUNNER % json.dumps((SCRIPTS / 'resolved_contract.mjs').as_uri()), [html, manifest], tmp_path)
+
+
+def test_focus_rule_measures_the_focused_style_without_scrolling(tmp_path):
+    # The ring exists only while focused, so a pass proves the check read the focused state.
+    out = focus_check('a:focus{outline-style:solid}', tmp_path)
+    row = out['results']['rule:focus-ring']
+    assert row.get('checked') is not False and row['count'] == 0, out
+    assert out['scrollY'] == 0, out
+
+
+def test_focus_rule_still_fails_a_missing_focus_ring_without_scrolling(tmp_path):
+    out = focus_check('', tmp_path)
+    assert out['results']['rule:focus-ring']['count'] == 1, out
     assert out['scrollY'] == 0, out
 
 
@@ -92,3 +105,35 @@ def test_region_capture_refuses_pixels_that_never_settle(tmp_path):
             '`rgb(${n},${255-n},${n})`},5)</script>')
     out = capture(html, tmp_path)
     assert out['ok'] is False and 'stabilize' in out['error'], out
+
+
+# Through measure_lp itself, so reverting measureRegion to a single capture turns these red.
+WIDE = ("data:image/svg+xml," "%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='200'%3E"
+        "%3Crect width='600' height='200' fill='%23336699'/%3E%3C/svg%3E")
+TALL = ("data:image/svg+xml," "%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='400'%3E"
+        "%3Crect width='100' height='400' fill='%23336699'/%3E%3C/svg%3E")
+FLICKER = ('<div style="position:relative;width:300px;height:100px">'
+           '<img src="SRC" alt="chart" style="width:300px;height:100px;object-fit:FIT;display:block">'
+           '<div id="f" style="position:absolute;left:0;top:0;width:60px;height:60px;background:#000"></div></div>'
+           '<script>let n=0;setInterval(()=>{n=(n+53)%256;document.getElementById("f").style.background='
+           '`rgb(${n},${255-n},${n})`},5)</script>')
+
+
+def measure_flicker(project, src, fit):
+    from test_measure_profiles import BROWSER, NORMAL, prepare, measure
+    if not BROWSER:
+        pytest.skip('explicit real browser run required')
+    root = prepare(project)
+    return measure(root, NORMAL.replace('CONTENT', FLICKER.replace('SRC', src).replace('FIT', fit)), 'product-ui')
+
+
+def test_an_image_region_that_never_settles_fails_instead_of_passing(project):
+    run, report = measure_flicker(project, WIDE, 'contain')
+    ids = [row['id'] for row in report['failures']]
+    assert run.returncode == 1 and 'image-unstable' in ids, report
+
+
+def test_over_crop_is_still_judged_when_the_region_pixels_never_settle(project):
+    run, report = measure_flicker(project, TALL, 'cover')
+    ids = [row['id'] for row in report['failures']]
+    assert 'image-over-crop' in ids and 'image-unstable' in ids, report

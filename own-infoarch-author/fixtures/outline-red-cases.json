@@ -1,0 +1,642 @@
+{
+  "version": 1,
+  "note": "outline の失格（SPEC-information-architecture-standardization v6 要件 7、と要件 6 の形）と差分の失格（要件 9）と、それを壊す赤のフィクスチャの対応表。scripts/tests/test_outline.py が、全条件に赤のケースが 1 つ以上あること（対応の無い条件 0 件）、全ケースが既知の条件を指すこと、全ケースが条件の code で失格になることを確かめる。cases は基準のフィクスチャ（test_check.OUTLINE、出荷チャネルの LP）への操作（path は outline の中の位置。unapprove は positioning の要素の承認を外す）。diff_cases は 2 つの別案の描画の報告（dom の unanchored）。",
+  "conditions": [
+    {
+      "id": "7-value-unapproved",
+      "requirement": "7",
+      "code": "IA_OUTLINE_VALUE_UNAPPROVED",
+      "text": "承認済みの提供価値を指さないメッセージ（出荷チャネルは失格、制作中は警告）"
+    },
+    {
+      "id": "7-value-other-positioning",
+      "requirement": "7",
+      "code": "IA_OUTLINE_VALUE_OTHER_POSITIONING",
+      "text": "立っていない positioning（target のセグメントのもの以外）の提供価値を指すメッセージ"
+    },
+    {
+      "id": "7-lead-count",
+      "requirement": "7",
+      "code": "IA_OUTLINE_LEAD_COUNT",
+      "text": "一番のメッセージが 1 つでない"
+    },
+    {
+      "id": "7-lead-unplaced",
+      "requirement": "7",
+      "code": "IA_OUTLINE_LEAD_UNPLACED",
+      "text": "一番のメッセージがどのセクションにも置かれていない"
+    },
+    {
+      "id": "7-cta-missing",
+      "requirement": "7",
+      "code": "IA_OUTLINE_CTA_MISSING",
+      "text": "「CTA を置かない」と書かずに CTA のメッセージをどこにも置いていない"
+    },
+    {
+      "id": "7-cta-contradicts",
+      "requirement": "7",
+      "code": "IA_OUTLINE_CTA_CONTRADICTS",
+      "text": "「CTA を置かない」と書いたのに CTA がある"
+    },
+    {
+      "id": "7-cta-no-action",
+      "requirement": "7",
+      "code": "IA_OUTLINE_CTA_NO_ACTION",
+      "text": "取ってほしい行動を指さない CTA"
+    },
+    {
+      "id": "7-no-sections",
+      "requirement": "7",
+      "code": "IA_OUTLINE_NO_SECTIONS",
+      "text": "セクションが 0 件"
+    },
+    {
+      "id": "7-section-no-message",
+      "requirement": "7",
+      "code": "IA_OUTLINE_SECTION_NO_MESSAGE",
+      "text": "通常のメッセージを置かないセクション"
+    },
+    {
+      "id": "7-section-overloaded",
+      "requirement": "7",
+      "code": "IA_OUTLINE_SECTION_OVERLOADED",
+      "text": "通常のメッセージが 2 つ以上か CTA が 2 つ以上のセクション"
+    },
+    {
+      "id": "7-copy-section",
+      "requirement": "7",
+      "code": "IA_OUTLINE_COPY_SECTION",
+      "text": "セクションに属さない文案"
+    },
+    {
+      "id": "7-copy-message",
+      "requirement": "7",
+      "code": "IA_OUTLINE_COPY_MESSAGE",
+      "text": "伝えるメッセージを指さないか、同じセクションに無いメッセージを指す文案"
+    },
+    {
+      "id": "7-message-unconveyed",
+      "requirement": "7",
+      "code": "IA_OUTLINE_MESSAGE_UNCONVEYED",
+      "text": "置かれたメッセージのうち、それを伝える文案が 1 つも無いもの"
+    },
+    {
+      "id": "7-target-unset",
+      "requirement": "7",
+      "code": "IA_SCHEMA",
+      "text": "設定されていない target"
+    },
+    {
+      "id": "7-target-not-segment",
+      "requirement": "7",
+      "code": "IA_OUTLINE_TARGET",
+      "text": "セグメントを指さない target"
+    },
+    {
+      "id": "7-target-malformed",
+      "requirement": "7",
+      "code": "IA_SCHEMA",
+      "text": "形が違う target"
+    },
+    {
+      "id": "6-order-duplicate",
+      "requirement": "6",
+      "code": "IA_OUTLINE_ORDER_DUPLICATE",
+      "text": "セクションの順序、同じセクションの中の文案の順番が重なる（並びが決まらない）"
+    },
+    {
+      "id": "6-compares-invalid",
+      "requirement": "6",
+      "code": "IA_OUTLINE_COMPARE_INVALID",
+      "text": "比べる相手が、立っている positioning（target のセグメント）の代替でない"
+    },
+    {
+      "id": "6-compares-unapproved",
+      "requirement": "6",
+      "code": "IA_OUTLINE_COMPARE_UNAPPROVED",
+      "text": "比べる相手の代替にオーナーの承認が無い（出荷チャネルは失格、制作中は警告）"
+    },
+    {
+      "id": "9-unassigned-difference",
+      "requirement": "9",
+      "code": "IA_DIFF_UNASSIGNED",
+      "text": "どの要素にも割り当てられない差分（印の外の文の変化など）を持つ別案"
+    },
+    {
+      "id": "6-text-misplaced",
+      "requirement": "6",
+      "code": "IA_OUTLINE_TEXT_MISPLACED",
+      "text": "ナビの文言をセクションに置いた、ラベルを置くセクションが無い"
+    }
+  ],
+  "cases": [
+    {
+      "id": "value-unapproved",
+      "condition": "7-value-unapproved",
+      "why": "LP（出荷）の msg-0002 が指す提供価値を承認していない",
+      "ops": [
+        {
+          "op": "unapprove",
+          "key": "val-0003"
+        }
+      ]
+    },
+    {
+      "id": "value-of-other-segment",
+      "condition": "7-value-other-positioning",
+      "why": "seg-0001 に立つ LP のメッセージが seg-0002 の提供価値を指す",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "messages",
+            "msg-0002",
+            "value"
+          ],
+          "value": "val-0002"
+        }
+      ]
+    },
+    {
+      "id": "lead-none",
+      "condition": "7-lead-count",
+      "why": "一番のメッセージが無い",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "messages",
+            "msg-0001",
+            "rank"
+          ],
+          "value": "support"
+        }
+      ]
+    },
+    {
+      "id": "lead-two",
+      "condition": "7-lead-count",
+      "why": "一番のメッセージが 2 つ",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "messages",
+            "msg-0002",
+            "rank"
+          ],
+          "value": "lead"
+        }
+      ]
+    },
+    {
+      "id": "lead-unplaced",
+      "condition": "7-lead-unplaced",
+      "why": "一番のメッセージを指す文案とセクションを別のメッセージへ移した",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "messages",
+            "msg-0004"
+          ],
+          "value": {
+            "value": "val-0001",
+            "rank": "lead",
+            "type": "normal"
+          }
+        },
+        {
+          "op": "set",
+          "path": [
+            "messages",
+            "msg-0001",
+            "rank"
+          ],
+          "value": "support"
+        }
+      ]
+    },
+    {
+      "id": "cta-missing",
+      "condition": "7-cta-missing",
+      "why": "CTA を置いたセクションから外した（宣言なし）",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "sections",
+            "sec-0003",
+            "places"
+          ],
+          "value": [
+            "msg-0001"
+          ]
+        },
+        {
+          "op": "delete",
+          "path": [
+            "copies",
+            "cpy-0005"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cta-contradicts",
+      "condition": "7-cta-contradicts",
+      "why": "「CTA を置かない」と書いたのに CTA を置いている",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "no_cta"
+          ],
+          "value": true
+        }
+      ]
+    },
+    {
+      "id": "cta-no-action",
+      "condition": "7-cta-no-action",
+      "why": "CTA が取ってほしい行動を指さない",
+      "ops": [
+        {
+          "op": "delete",
+          "path": [
+            "messages",
+            "msg-0003",
+            "achieves"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cta-wrong-action",
+      "condition": "7-cta-no-action",
+      "why": "CTA が outline の目的変数でない行動を指す",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "messages",
+            "msg-0003",
+            "achieves"
+          ],
+          "value": "obj-0009"
+        }
+      ]
+    },
+    {
+      "id": "no-sections",
+      "condition": "7-no-sections",
+      "why": "セクションも文案も 0 件",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "sections"
+          ],
+          "value": {}
+        },
+        {
+          "op": "set",
+          "path": [
+            "copies"
+          ],
+          "value": {}
+        }
+      ]
+    },
+    {
+      "id": "section-cta-only",
+      "condition": "7-section-no-message",
+      "why": "セクションに CTA だけを置いた",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "sections",
+            "sec-0003",
+            "places"
+          ],
+          "value": [
+            "msg-0003"
+          ]
+        },
+        {
+          "op": "delete",
+          "path": [
+            "copies",
+            "cpy-0004"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "section-two-normal",
+      "condition": "7-section-overloaded",
+      "why": "セクションに通常のメッセージを 2 つ置いた",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "sections",
+            "sec-0001",
+            "places"
+          ],
+          "value": [
+            "msg-0001",
+            "msg-0002"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "section-two-cta",
+      "condition": "7-section-overloaded",
+      "why": "セクションに CTA を 2 つ置いた",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "messages",
+            "msg-0004"
+          ],
+          "value": {
+            "value": "val-0001",
+            "rank": "support",
+            "type": "cta",
+            "achieves": "obj-0001"
+          }
+        },
+        {
+          "op": "set",
+          "path": [
+            "sections",
+            "sec-0003",
+            "places"
+          ],
+          "value": [
+            "msg-0001",
+            "msg-0003",
+            "msg-0004"
+          ]
+        },
+        {
+          "op": "set",
+          "path": [
+            "copies",
+            "cpy-0006"
+          ],
+          "value": {
+            "section": "sec-0003",
+            "order": 3,
+            "message": "msg-0004",
+            "text": "今すぐ相談する"
+          }
+        }
+      ]
+    },
+    {
+      "id": "copy-without-section",
+      "condition": "7-copy-section",
+      "why": "文案が存在しないセクションに属する",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "copies",
+            "cpy-0004",
+            "section"
+          ],
+          "value": "sec-0099"
+        }
+      ]
+    },
+    {
+      "id": "copy-message-elsewhere",
+      "condition": "7-copy-message",
+      "why": "文案が同じセクションに置かれていないメッセージを伝える",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "copies",
+            "cpy-0001",
+            "message"
+          ],
+          "value": "msg-0002"
+        }
+      ]
+    },
+    {
+      "id": "copy-message-missing",
+      "condition": "7-copy-message",
+      "why": "文案が存在しないメッセージを伝える",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "copies",
+            "cpy-0001",
+            "message"
+          ],
+          "value": "msg-0099"
+        }
+      ]
+    },
+    {
+      "id": "message-without-copy",
+      "condition": "7-message-unconveyed",
+      "why": "置かれたメッセージを伝える文案を消した",
+      "ops": [
+        {
+          "op": "delete",
+          "path": [
+            "copies",
+            "cpy-0003"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "target-unset",
+      "condition": "7-target-unset",
+      "why": "target が無い",
+      "ops": [
+        {
+          "op": "delete",
+          "path": [
+            "target"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "target-unknown-segment",
+      "condition": "7-target-not-segment",
+      "why": "target が存在しないセグメントを指す",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "target",
+            "segment"
+          ],
+          "value": "seg-0099"
+        }
+      ]
+    },
+    {
+      "id": "target-string",
+      "condition": "7-target-malformed",
+      "why": "target を文字列で書いた",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "target"
+          ],
+          "value": "seg-0001 の情報部門"
+        }
+      ]
+    },
+    {
+      "id": "section-order-duplicate",
+      "condition": "6-order-duplicate",
+      "why": "2 つのセクションの順序が同じ",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "sections",
+            "sec-0002",
+            "order"
+          ],
+          "value": 1
+        }
+      ]
+    },
+    {
+      "id": "copy-order-duplicate",
+      "condition": "6-order-duplicate",
+      "why": "同じセクションの 2 つの文案の順番が同じ",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "copies",
+            "cpy-0002",
+            "order"
+          ],
+          "value": 1
+        }
+      ]
+    },
+    {
+      "id": "compares-other-segment",
+      "condition": "6-compares-invalid",
+      "why": "比べる相手が別のセグメントの代替",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "messages",
+            "msg-0001",
+            "compares"
+          ],
+          "value": [
+            "alt-0003"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "compares-unapproved",
+      "condition": "6-compares-unapproved",
+      "why": "LP（出荷）の一番のメッセージが比べる代替を承認していない",
+      "ops": [
+        {
+          "op": "unapprove",
+          "key": "alt-0001"
+        }
+      ]
+    },
+    {
+      "id": "target-empty-segment",
+      "condition": "7-target-not-segment",
+      "why": "target が空欄のセグメントを指す",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "target",
+            "segment"
+          ],
+          "value": "seg-0009"
+        }
+      ],
+      "ssot_ops": [
+        {
+          "op": "empty_segment",
+          "id": "seg-0009"
+        }
+      ]
+    },
+    {
+      "id": "label-without-section",
+      "condition": "6-text-misplaced",
+      "why": "見出しのラベルを、置くセクション無しで宣言した",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "texts"
+          ],
+          "value": {
+            "label-x": {
+              "kind": "label",
+              "text": "PROBLEM"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "diff_cases": [
+    {
+      "id": "text-outside-anchors-changed",
+      "condition": "9-unassigned-difference",
+      "why": "2 つの別案の outline は同じなのに、描画物の印の外の文が違う（どの要素にも割り当てられない）",
+      "dom_a": {
+        "unanchored": [
+          {
+            "outline": "lp-municipal",
+            "file": "site/index.html",
+            "viewport": "mobile",
+            "text": "いまだけ無料"
+          }
+        ]
+      },
+      "dom_b": {
+        "unanchored": [
+          {
+            "outline": "lp-municipal-b",
+            "file": "site/b.html",
+            "viewport": "mobile",
+            "text": "いまだけ半額"
+          }
+        ]
+      }
+    },
+    {
+      "id": "fact-value-changed",
+      "condition": "9-unassigned-difference",
+      "why": "2 つの別案が参照する固定値の値が違う（outline の要素にも positioning にも割り当てられない）",
+      "fact_b": {
+        "fct-0001": "500社以上"
+      }
+    }
+  ]
+}

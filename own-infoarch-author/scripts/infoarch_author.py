@@ -1,4 +1,4 @@
-"""own-infoarch-author CLI: check (deterministic), dom, judge (judgment ledger reader), evaluate (all three), ship (gate), maintain, skeleton, impact. Never writes approvals."""
+"""own-infoarch-author CLI: check (deterministic), dom, judge (judgment ledger reader), evaluate (all three), ship (gate), maintain, skeleton, impact, positioning, set, diff. Never writes approvals."""
 from __future__ import annotations
 
 import argparse
@@ -145,26 +145,6 @@ def cmd_impact(args):
     return 0
 
 
-def cmd_migrate(args):
-    import migrate
-    report, code = migrate.run(args.root, write=args.write)
-    _print(report)
-    return code
-
-
-def cmd_compose(args):
-    report = check.Report('compose', dt.date.today().isoformat())
-    m = check.load(args.root, report)
-    if m.ssot is None or report.exit_code == 2:
-        _print(report.to_dict())
-        return 2
-    chosen = [x for x in args.positioning.split(',') if x]
-    aud = m.atom(args.audience) or {}
-    _print({'audience': args.audience, 'segment': aud.get('segment'), 'positioning': chosen,
-            'messages': check.compose(m, args.audience, chosen)})
-    return 0
-
-
 def cmd_review(args):
     """The owner reads what an approval request binds (requirement 3), and a stale request is refused."""
     report = check.Report('review', dt.date.today().isoformat())
@@ -181,16 +161,52 @@ def cmd_review(args):
     return 2 if stale or not rows else 0
 
 
-def cmd_mapping(args):
-    report = check.Report('mapping', dt.date.today().isoformat())
+def _loaded(args, level):
+    report = check.Report(level, dt.date.today().isoformat())
     m = check.load(args.root, report)
-    if m.ssot is None or report.exit_code == 2 or args.outline not in m.outlines:
-        if m.ssot is not None and args.outline not in m.outlines:
-            report.add('fail', 'IA_MAPPING_UNKNOWN_OUTLINE', f'アウトライン {args.outline} が無い')
+    if m.ssot is None or report.exit_code == 2:
+        return report, None, None
+    import positioning
+    approved = positioning.approved_keys(m, check.read_approvals(args.root, report))
+    return report, m, (None if report.exit_code == 2 else approved)
+
+
+def cmd_set(args):
+    """The set id (requirement 8) of one deliverable, with the content hash of each of its outline elements."""
+    import outline
+    report, m, approved = _loaded(args, 'set')
+    if approved is not None and args.outline not in m.outlines:
+        report.add('fail', 'IA_SET_UNKNOWN_OUTLINE', f'アウトライン {args.outline} が無い')
+    if approved is None or report.exit_code == 2:
         _print(report.to_dict())
         return 2
-    _print(check.mapping(m, args.outline))
+    _, o = m.outlines[args.outline]
+    ids = outline.set_ids(m, args.outline, approved)
+    elems = {}
+    for key, value in outline.elements(o).items():
+        block, _, name = key.partition('/')
+        if name:
+            elems.setdefault(block, {})[name] = outline.pos.sha256(value)
+    _print({'deliverable': args.outline, **ids, 'elements': elems})
     return 0
+
+
+def cmd_diff(args):
+    """Requirement 9: the difference between two sets (two deliverables, optionally of two checkouts)."""
+    import outline
+    root_b = args.root_b or args.root
+    ra, ma, aa = _loaded(argparse.Namespace(root=args.root), 'diff')
+    rb, mb, ab = _loaded(argparse.Namespace(root=root_b), 'diff')
+    for rep_, m, appr, oid in ((ra, ma, aa, args.a), (rb, mb, ab, args.b)):
+        if appr is not None and oid not in m.outlines:
+            rep_.add('fail', 'IA_SET_UNKNOWN_OUTLINE', f'アウトライン {oid} が無い')
+        if appr is None or rep_.exit_code == 2:
+            _print(rep_.to_dict())
+            return 2
+    out = outline.diff(ma, args.a, aa, mb, args.b, ab,
+                       outline.load_dom_report(args.dom_a), outline.load_dom_report(args.dom_b))
+    _print(out)
+    return out['exit_code']
 
 
 def cmd_positioning(args):
@@ -274,23 +290,22 @@ def main(argv=None):
     i.add_argument('--root', default='.')
     i.add_argument('--id', required=True)
     i.set_defaults(fn=cmd_impact)
-    mg = sub.add_parser('migrate', help='one atomic v2 -> v4 migration of design/info_arch/ (preview unless --write)')
-    mg.add_argument('--root', default='.')
-    mg.add_argument('--write', action='store_true')
-    mg.set_defaults(fn=cmd_migrate)
-    cp = sub.add_parser('compose', help='step 3: messages that stand on the chosen positioning atoms for an audience, in priority order')
-    cp.add_argument('--root', default='.')
-    cp.add_argument('--audience', required=True)
-    cp.add_argument('--positioning', required=True, help='comma-separated positioning atom ids (job, pan, gan, val)')
-    cp.set_defaults(fn=cmd_compose)
     rv = sub.add_parser('review', help='readable content of an owner-approval request (ia:positioning rows); a stale request fails')
     rv.add_argument('--root', default='.')
     rv.add_argument('--request', required=True)
     rv.set_defaults(fn=cmd_review)
-    mp = sub.add_parser('mapping', help='mapping table of one deliverable: version hash, frame instances, atoms and their content hashes')
-    mp.add_argument('--root', default='.')
-    mp.add_argument('--outline', required=True)
-    mp.set_defaults(fn=cmd_mapping)
+    st = sub.add_parser('set', help='set id of one deliverable: positioning id + outline id, and its element hashes')
+    st.add_argument('--root', default='.')
+    st.add_argument('--outline', required=True)
+    st.set_defaults(fn=cmd_set)
+    df = sub.add_parser('diff', help='difference between two sets: changed elements, changed layers, same experiment or not')
+    df.add_argument('--root', default='.')
+    df.add_argument('--root-b', help='checkout of the second set (default: --root)')
+    df.add_argument('--a', required=True, help='first deliverable (outline id)')
+    df.add_argument('--b', required=True, help='second deliverable (outline id)')
+    df.add_argument('--dom-a', help='dom report of the first deliverable (compares text outside anchors)')
+    df.add_argument('--dom-b', help='dom report of the second deliverable')
+    df.set_defaults(fn=cmd_diff)
     t = sub.add_parser('targets', help='owner-approval targets (ia:positioning keys and hashes) for own-design-author approvals')
     t.add_argument('--root', default='.')
     t.set_defaults(fn=cmd_targets)

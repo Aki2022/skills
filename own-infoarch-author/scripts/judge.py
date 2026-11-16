@@ -2,12 +2,13 @@
 
 Four kinds share own-design-author's judgment policy and `design/judgments.json`
 (ADR-20261111-ia-judgments-share-design-policy-and-ledger, biz_ops):
-- ia-name-variant: a section's copy writes an official name in another notation.
-- ia-unregistered-claim: a section's copy claims something its message / proofs / facts do not support. Rendered text
-  outside every anchor (`dom`'s `unanchored`) is judged the same way, with nothing on the page supporting it.
-- ia-audience-fit: the outline's order and emphasis do not suit its audience and brief.
-- ia-emphasis: a rendered first screen does not carry the audience's top-priority message.
-- ia-strategy-fit: a section's message does not actually serve the positioning it stands on. The input carries the
+- ia-name-variant: a piece of copy writes an official name in another notation.
+- ia-unregistered-claim: a piece of copy claims something its message's value, the evidence on that value's path and
+  its facts do not support. Rendered text outside every anchor (`dom`'s `unanchored`) is judged the same way, with
+  nothing on the page supporting it.
+- ia-audience-fit: the outline's order and emphasis do not suit its target, touchpoint, tone and objective.
+- ia-emphasis: a rendered first screen does not carry the lead message's value.
+- ia-strategy-fit: a piece of copy does not actually serve the positioning its message stands on. The input carries the
   positioning path hash, so a changed positioning never reuses an old judgment. (The kind keeps its v5 name until
   ISSUE-16 replaces it with copy x one value.)
 
@@ -23,6 +24,7 @@ from pathlib import Path
 
 import check
 import dom
+import outline as ol
 from common import Report
 
 DESIGN_SCRIPTS = Path(__file__).resolve().parents[2] / 'own-design-author/scripts'
@@ -54,44 +56,56 @@ def _expand(copy, facts):
     return check.PLACEHOLDER.sub(lambda m: str(facts.get(m.group(1), {}).get('value', m.group(0))), copy)
 
 
+def _segment_model(outline, ssot):
+    return check.Model(root=Path('.'), ssot=ssot), ol.segment_of(outline)
+
+
+def _value(ssot, vid):
+    return {'id': vid, 'text': (ssot.get('values', {}).get(vid) or {}).get('text', '')}
+
+
+def _evidence(m, path):
+    """Positioning evidence that supports any element of a value's path: what a message inherits (v6)."""
+    on = set(path)
+    ev = sorted({e['from'] for e in check.pos.edges(m).values() if e['kind'] == 'supports' and e['to'] in on})
+    return [{'id': p, 'text': (m.ssot.get('proofs', {}).get(p) or {}).get('text', '')} for p in ev]
+
+
 def outline_candidates(oid, outline, ssot, policy, jl):
     facts = ssot.get('facts', {})
     entities = [{'id': eid, 'name': e['name']} for eid, e in sorted(ssot.get('entities', {}).items()) if e.get('name')]
+    m, segment = _segment_model(outline, ssot)
     rows, lines = [], []
-    for page in outline['pages']:
-        for i, s in enumerate(page['sections']):
-            text = _expand(s.get('copy', ''), facts)
-            lines.append(f"{s['role']}: {text}")
+    for sid, sec, copies in ol.ordered_sections(outline):
+        for cid, c in copies:
+            text = _expand(c['text'], facts)
+            lines.append(f"{sec['role']}: {text}")
             if not text.strip():
                 continue
-            ident = f"{oid}/{page['id']}/{i}"
+            ident = f'{oid}/{sid}/{cid}'
             if entities:
                 rows.append(jl.candidate('ia-name-variant', ident, text, {'outline': oid, 'entities': entities}, policy=policy))
-            msg = ssot.get('messages', {}).get(s.get('message'), {})
-            ctx = {'outline': oid, 'role': s['role'],
-                   'message': {'id': s['message'], 'text': msg.get('text', '')} if 'message' in s else None,
-                   'pain': ssot.get('pains', {}).get(s.get('pain'), {}).get('text') if 'pain' in s else None,
-                   'proofs': [{'id': p, 'text': ssot.get('proofs', {}).get(p, {}).get('text', '')} for p in s.get('proofs', [])],
+            msg = outline['messages'].get(c['message']) or {}
+            ids, path_hash = check.positioning_path(m, [msg['value']], segment) if msg else ([], None)
+            message = {'id': c['message'], 'value': _value(ssot, msg.get('value'))} if msg else None
+            ctx = {'outline': oid, 'role': sec['role'], 'message': message, 'evidence': _evidence(m, ids),
                    'facts': [{'id': f, 'label': facts.get(f, {}).get('label', ''), 'value': facts.get(f, {}).get('value', '')}
-                             for f in dict.fromkeys(check.PLACEHOLDER.findall(s.get('copy', '')))]}
+                             for f in dict.fromkeys(check.PLACEHOLDER.findall(c['text']))]}
             rows.append(jl.candidate('ia-unregistered-claim', ident, text, ctx, policy=policy))
-            if 'message' in s and msg:
-                m = check.Model(root=Path('.'), ssot=ssot)
-                segment = ssot.get('audiences', {}).get(outline['audience'], {}).get('segment')
-                ids, path_hash = check.positioning_path(m, check._roots(m, s['message']), segment)
-                if ids:
-                    fit = {'outline': oid, 'segment': segment, 'path_hash': path_hash,
-                           'message': {'id': s['message'], 'text': msg.get('text', '')},
-                           'positioning': [{'id': a, 'text': _element_text(check.element(m, a))} for a in ids]}
-                    rows.append(jl.candidate('ia-strategy-fit', ident, text, fit, policy=policy))
-    aud = ssot.get('audiences', {}).get(outline['audience'], {})
-    # The priority order is what the fit is judged against, so reordering it must invalidate the judgment.
-    priorities = [{'id': p, 'text': ssot.get('messages', {}).get(p, {}).get('text', '')} for p in aud.get('priorities') or []]
-    fit_ctx = {'outline': oid, 'audience': {**{k: aud.get(k) for k in ('label', 'situation', 'desired_action')},
-                                            'priorities': priorities},
-               'brief': outline.get('brief', {})}
+            if ids:
+                fit = {'outline': oid, 'segment': segment, 'path_hash': path_hash, 'message': message,
+                       'positioning': [{'id': a, 'text': _element_text(check.element(m, a))} for a in ids]}
+                rows.append(jl.candidate('ia-strategy-fit', ident, text, fit, policy=policy))
+    # The order of the copy is what the fit is judged against, so reordering it must invalidate the judgment.
+    fit_ctx = {'outline': oid, 'target': outline['target'], 'touchpoint': outline['touchpoint'], 'tone': outline['tone'],
+               'objective': outline['objective'], 'lead': _lead(outline, ssot)}
     rows.append(jl.candidate('ia-audience-fit', oid, '\n'.join(lines), fit_ctx, policy=policy))
     return rows
+
+
+def _lead(outline, ssot):
+    lead = [(mid, msg) for mid, msg in sorted(outline['messages'].items()) if msg['rank'] == 'lead']
+    return {'id': lead[0][0], 'value': _value(ssot, lead[0][1]['value'])} if len(lead) == 1 else None
 
 
 def _element_text(element):
@@ -103,19 +117,16 @@ def _element_text(element):
 
 
 def emphasis_candidates(oid, outline, ssot, screens, policy, jl):
-    aud = ssot.get('audiences', {}).get(outline['audience'], {})
-    top = (aud.get('priorities') or [None])[0]
-    top_msg = {'id': top, 'text': ssot.get('messages', {}).get(top, {}).get('text', '')}
     return [jl.candidate('ia-emphasis', f"{oid}/{s['file']}@{s['viewport']}", s['text'],
                          {'outline': oid, 'file': s['file'], 'viewport': s['viewport'],
-                          'audience': aud.get('label'), 'top_message': top_msg}, policy=policy)
+                          'target': outline['target'], 'lead': _lead(outline, ssot)}, policy=policy)
             for s in screens]
 
 
 def unanchored_candidates(oid, rows, policy, jl):
     """Text the page shows outside every section: a claim with no message, proof or fact behind it."""
     return [jl.candidate('ia-unregistered-claim', f"{oid}/{r['file']}@{r['viewport']}#unanchored", r['text'],
-                         {'outline': oid, 'role': 'unanchored', 'message': None, 'pain': None, 'proofs': [], 'facts': []},
+                         {'outline': oid, 'role': 'unanchored', 'message': None, 'evidence': [], 'facts': []},
                          policy=policy)
             for r in rows]
 

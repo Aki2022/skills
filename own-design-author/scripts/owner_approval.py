@@ -10,9 +10,12 @@ from approvals import SCHEME,repository_id,verify_rows
 def _snapshot(root,catalog_dir):
     from design_author import check_design
     result=check_design(root,catalog_dir=catalog_dir)
-    # IA_POSITIONING_UNAPPROVED is a positioning atom or arrow without the owner's current approval: an approval gap
-    # like the two above, so preparing that very approval must not be refused because of it (IA v6, biz_ops WS-20261114).
-    allowed=('must n-a approval hash missing/mismatch:','approval hash mismatch:','IA_POSITIONING_UNAPPROVED:')
+    # IA_POSITIONING_UNAPPROVED (a positioning atom or arrow without the owner's current approval) and
+    # IA_OUTLINE_VALUE_UNAPPROVED / IA_OUTLINE_COMPARE_UNAPPROVED (a shipped message pointing at such a value or
+    # alternative) are approval gaps like the two above, so preparing that very approval must not be refused because
+    # of them (IA v6, biz_ops WS-20261114).
+    allowed=('must n-a approval hash missing/mismatch:','approval hash mismatch:','IA_POSITIONING_UNAPPROVED:',
+             'IA_OUTLINE_VALUE_UNAPPROVED:','IA_OUTLINE_COMPARE_UNAPPROVED:')
     if any(not error.startswith(allowed) for error in result['errors']) or not result['manifest']:
         raise ValueError('repair structural or approval errors before preparing approval')
     return result['approval_targets'],sorted(set(result['approval_required']))

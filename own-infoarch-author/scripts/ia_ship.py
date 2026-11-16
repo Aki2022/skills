@@ -471,8 +471,11 @@ def _dirty(root):
 def _atoms(ssot):
     if not isinstance(ssot, dict):
         return {}
-    return {aid: atom for block in list(check.BLOCKS) + ['entities', 'voices']
-            for aid, atom in (ssot.get(block) or {}).items()}
+    out = {aid: atom for block in list(check.BLOCKS) + ['entities', 'voices']
+           for aid, atom in (ssot.get(block) or {}).items()}
+    # Arrows are positioning elements too: a changed degree or a new `supports` moves the outlines standing on it.
+    out.update({f'{e.get("kind")}:{e.get("from")}:{e.get("to")}': e for e in ssot.get('edges') or [] if isinstance(e, dict)})
+    return out
 
 
 def maintain(root, date, within_days=None):

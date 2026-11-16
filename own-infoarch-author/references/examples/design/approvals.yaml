@@ -119,6 +119,14 @@
   value_hash: 5df3cdee77a6f558aec05ba52ebb66bafd7d3234a79fd0119dfebc7c4d38f122
   approver: example-owner
   date: '2026-11-16'
+- key: ia:positioning:prf-0001
+  value_hash: 6ea0e3b71d510c550d687c8f8a2490ee693cc52c180d52ba42338a73cb96d96f
+  approver: example-owner
+  date: '2026-11-16'
+- key: ia:positioning:prf-0002
+  value_hash: 11c71c2326f5c666d69f0a7ff13717e9d04207bc739249a19891a1bbd445cddb
+  approver: example-owner
+  date: '2026-11-16'
 - key: ia:positioning:prf-0003
   value_hash: 3b2831af9dd4955595f9655e950e6c7bf90b174ad285821d826ec0dfef378ce0
   approver: example-owner
@@ -169,6 +177,14 @@
   date: '2026-11-16'
 - key: ia:positioning:str-0002
   value_hash: 631abc6a50d6cb086bf60e952c62c969530bd192d620687c883624cfb82fb441
+  approver: example-owner
+  date: '2026-11-16'
+- key: ia:positioning:supports:prf-0001:val-0001
+  value_hash: 5c8c9427f5a82a9d894bee3535a01ff199ea8fd077900ef8cb39ef1b573f7d49
+  approver: example-owner
+  date: '2026-11-16'
+- key: ia:positioning:supports:prf-0002:val-0002
+  value_hash: bbca08f6397517de16aa2fe7e64db528a7239c2399c6cabed12ad378b92af837
   approver: example-owner
   date: '2026-11-16'
 - key: ia:positioning:supports:prf-0003:fulfills:alt-0001:pan-0001

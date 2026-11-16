@@ -18,7 +18,7 @@ import pytest
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from test_check import DECK, OUTLINE, SSOT, dump, write_repo  # noqa: E402
+from test_check import DECK, OUTLINE, SSOT, confirm, dump, write_repo  # noqa: E402
 
 SCRIPTS = Path(__file__).resolve().parents[1]
 SKILL = SCRIPTS.parent
@@ -100,7 +100,7 @@ def repo(tmp_path):
 
 def expire_shipped_proof(root):
     ssot = fresh_ssot()
-    ssot['proofs']['prf-0001']['as_of'] = '2024-01-01'  # DECK (shipped) references prf-0001
+    ssot['proofs']['prf-0002']['as_of'] = '2024-01-01'  # DECK (shipped) stands on val-0002, which prf-0002 supports
     dump(root / 'design/info_arch/info_arch.yaml', ssot)
 
 
@@ -186,7 +186,7 @@ def test_symlinks_in_shipped_paths_are_refused(repo, tmp_path, path):
 
 def test_uncovered_judgment_of_a_shipped_outline_stops_but_a_draft_does_not(repo):
     changed = {**copy.deepcopy(DECK), 'channel': 'deck'}
-    changed['pages'][0]['sections'][1]['copy'] = 'いますぐお問い合わせ {{fct-0002}}'
+    changed['copies']['cpy-0003']['text'] = 'いますぐお問い合わせ {{fct-0002}}'
     dump(repo / 'design/info_arch/outlines/deck-smb.yaml', changed)
     commit(repo, 'shipped copy changed without a judgment')
     code, out, _ = ship(repo)
@@ -194,7 +194,7 @@ def test_uncovered_judgment_of_a_shipped_outline_stops_but_a_draft_does_not(repo
     assert 'IA_SHIP_UNCOVERED' in codes(out)
     cover_ledger(repo)
     draft = copy.deepcopy(LP_DRAFT)
-    draft['pages'][0]['sections'][1]['copy'] = '運用の手間がかなり減ります'
+    draft['copies']['cpy-0002']['text'] = '運用の手間がかなり減ります'
     dump(repo / 'design/info_arch/outlines/lp-municipal.yaml', draft)
     commit(repo, 'draft copy changed without a judgment')
     code, out, _ = ship(repo)
@@ -266,16 +266,17 @@ def test_two_green_branches_fail_on_their_predicted_merge(repo, tmp_path):
     """The topic is green alone; main has since expired the proof the topic starts to ship."""
     base = run_git(repo, 'rev-parse', 'HEAD').stdout.strip()
     ssot = fresh_ssot()
-    ssot['proofs']['prf-0004'] = {'state': 'proposed', 'provenance': 'owner', 'text': '満足度調査',
-                                  'source': '調査票', 'supports': ['msg-0002'], 'as_of': '2026-10-01'}
+    ssot['proofs']['prf-0004'] = {'state': 'proposed', 'provenance': 'owner', 'segment': 'seg-0002', 'text': '満足度調査',
+                                  'source': '調査票', 'as_of': '2026-10-01'}
     ssot['ledger']['next']['prf'] = 5
     dump(repo / 'design/info_arch/info_arch.yaml', ssot)
     cover_ledger(repo)
     base = commit(repo, 'second proof, used by nobody')
     run_git(repo, 'checkout', '-qb', 'topic')
-    deck = {**copy.deepcopy(DECK), 'channel': 'deck'}
-    deck['pages'][0]['sections'][0]['proofs'] = ['prf-0001', 'prf-0004']
-    dump(repo / 'design/info_arch/outlines/deck-smb.yaml', deck)
+    topic_ssot = copy.deepcopy(ssot)
+    topic_ssot['edges'].append({'kind': 'supports', 'from': 'prf-0004', 'to': 'val-0002', 'state': 'proposed', 'provenance': 'owner'})
+    dump(repo / 'design/info_arch/info_arch.yaml', topic_ssot)  # the deck's value now inherits prf-0004
+    confirm(repo, topic_ssot)  # inherited evidence ships only with the owner's approval
     cover_ledger(repo)
     topic = commit(repo, 'ship the second proof')
     code, out, _ = ship(repo)
@@ -314,17 +315,18 @@ def test_pre_push_checks_the_pushed_commit_itself(repo, tmp_path):
 def test_refs_pushed_together_are_merged_with_each_other(repo, tmp_path):
     """main and topic are pushed at once: topic is green against origin/main but red against the pushed main."""
     ssot = fresh_ssot()
-    ssot['proofs']['prf-0004'] = {'state': 'proposed', 'provenance': 'owner', 'text': '満足度調査',
-                                  'source': '調査票', 'supports': ['msg-0002'], 'as_of': '2026-10-01'}
+    ssot['proofs']['prf-0004'] = {'state': 'proposed', 'provenance': 'owner', 'segment': 'seg-0002', 'text': '満足度調査',
+                                  'source': '調査票', 'as_of': '2026-10-01'}
     ssot['ledger']['next']['prf'] = 5
     dump(repo / 'design/info_arch/info_arch.yaml', ssot)
     cover_ledger(repo)
     old = commit(repo, 'second proof, used by nobody')
     run_git(repo, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
     run_git(repo, 'checkout', '-qb', 'topic')
-    deck = {**copy.deepcopy(DECK), 'channel': 'deck'}
-    deck['pages'][0]['sections'][0]['proofs'] = ['prf-0001', 'prf-0004']
-    dump(repo / 'design/info_arch/outlines/deck-smb.yaml', deck)
+    topic_ssot = copy.deepcopy(ssot)
+    topic_ssot['edges'].append({'kind': 'supports', 'from': 'prf-0004', 'to': 'val-0002', 'state': 'proposed', 'provenance': 'owner'})
+    dump(repo / 'design/info_arch/info_arch.yaml', topic_ssot)  # the deck's value now inherits prf-0004
+    confirm(repo, topic_ssot)  # inherited evidence ships only with the owner's approval
     cover_ledger(repo)
     topic = commit(repo, 'ship the second proof')
     run_git(repo, 'checkout', '-q', 'main')
@@ -620,7 +622,7 @@ def test_shipped_html_is_rendered_and_its_first_screens_are_judged(repo, tmp_pat
     commit(repo, 'a claim outside every section')
     code, out, _ = ship(repo, env=env)
     assert code == 2 and 'IA_SHIP_UNCOVERED' in codes(out), out  # the added text is judged before it ships
-    html.write_text(original.replace('data-ia-msg', 'data-x'))
+    html.write_text(original.replace('data-ia-copy', 'data-x'))
     commit(repo, 'anchors lost')
     code, out, _ = ship(repo, env=env)
     assert code == 2 and [s['stage'] for s in out['stages']][-1] == 'dom', out
@@ -641,14 +643,16 @@ def test_maintain_skips_in_one_line_without_info_arch(tmp_path):
 
 def test_maintain_lists_due_evidence_and_changed_ssot(repo):
     ssot = fresh_ssot()
-    ssot['proofs']['prf-0001']['expires'] = '2026-11-20'  # within the default window
+    ssot['proofs']['prf-0002']['expires'] = '2026-11-20'  # within the default window; the shipped deck inherits it
     dump(repo / 'design/info_arch/info_arch.yaml', ssot)
+    confirm(repo, ssot)  # the owner re-approves the edited evidence
+    cover_ledger(repo)  # the deck inherits that evidence, so its judgments are taken again
     code, out, proc = maintain(repo)
     assert proc.stdout.count('\n') == 1, proc.stdout
     assert code == 1, out
-    assert out['due'] == [{'id': 'prf-0001', 'expires': '2026-11-20', 'outlines': ['deck-smb', 'lp-municipal'], 'shipped': True}]
+    assert out['due'] == [{'id': 'prf-0002', 'expires': '2026-11-20', 'outlines': ['deck-smb'], 'shipped': True}]
     assert out['changed_paths'] == ['design/info_arch/info_arch.yaml']
-    assert out['impacted_outlines'] == ['deck-smb', 'lp-municipal']
+    assert out['impacted_outlines'] == ['deck-smb']
     code, out, _ = maintain(repo, '--within-days', '3')
     assert out['due'] == [] and code == 0, out  # a change alone is listed, not a warning
     assert out['changed_paths'] == ['design/info_arch/info_arch.yaml']
@@ -732,3 +736,15 @@ def test_one_unapproved_element_stops_the_ship_gate_and_only_warns_in_a_draft(re
     check_stage = next(s for s in out['stages'] if s['stage'] == 'check')
     hits = [(f['level'], f['detail'].get('atoms')) for f in check_stage['findings'] if f['code'] == 'IA_POSITIONING_UNAPPROVED']
     assert ('fail', ['str-0002']) in hits and ('warn', ['produces:str-0001:val-0001']) in hits, hits
+
+
+def test_maintain_lists_outlines_impacted_through_a_changed_arrow(repo):
+    """A degree is an attribute of an arrow: changing it moves the deliverables standing on that positioning."""
+    ssot = fresh_ssot()
+    [edge] = [e for e in ssot['edges'] if e['kind'] == 'satisfies' and e['from'] == 'val-0002']
+    ssot['edges'] = [e for e in ssot['edges'] if e is not edge] + [{**edge, 'provenance': 'proposal'}]
+    ssot['edges'].append({'kind': 'supports', 'from': 'prf-0002', 'to': 'satisfies:val-0002:pan-0002',
+                          'state': 'proposed', 'provenance': 'owner'})
+    dump(repo / 'design/info_arch/info_arch.yaml', ssot)
+    code, out, _ = maintain(repo)
+    assert out['impacted_outlines'] == ['deck-smb'], out

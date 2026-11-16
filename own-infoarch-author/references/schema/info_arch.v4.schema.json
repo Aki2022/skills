@@ -2,14 +2,12 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "own-infoarch-author/info_arch.v4.schema.json",
   "title": "design/info_arch/info_arch.yaml schema version 4 (positioning atoms and arrows + messaging SSOT)",
-  "description": "伝え方の SSOT。positioning（SPEC-information-architecture-standardization v6 要件 2）の原子（セグメント・ジョブ・痛み・得たいもの・代替・カテゴリー・強み・提供価値・証拠）と矢印（edges）を持つ。原子は 1 つのセグメントにだけ属し（segment）、別のセグメントで使うときは写しを作って出どころ（copied_from）を書く。v5 の約束とカテゴリーとコンセプトは持たない。対象者・メッセージは outline へ移すまで（ISSUE-14）ここに残る。state に approved は無い：承認はハッシュ束縛の承認台帳（ia:positioning:<原子 id か矢印のキー>）が持つ。",
+  "description": "伝え方の SSOT のうち、人が保守するもの：positioning（SPEC-information-architecture-standardization v6 要件 2）の原子（セグメント・ジョブ・痛み・得たいもの・代替・カテゴリー・強み・提供価値・証拠）と矢印（edges）、固定値・正式名称・声。原子は 1 つのセグメントにだけ属し（segment）、別のセグメントで使うときは写しを作って出どころ（copied_from）を書く。対象者とメッセージは outline（outlines/*.yaml、版 3）の target とメッセージに移った。state に approved は無い：承認はハッシュ束縛の承認台帳（ia:positioning:<原子 id か矢印のキー>）が持つ。",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "schema_version",
     "ledger",
-    "audiences",
-    "messages",
     "proofs",
     "facts",
     "entities",
@@ -40,8 +38,6 @@
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "aud",
-            "msg",
             "prf",
             "fct",
             "ent",
@@ -56,14 +52,6 @@
             "cat"
           ],
           "properties": {
-            "aud": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "msg": {
-              "type": "integer",
-              "minimum": 1
-            },
             "prf": {
               "type": "integer",
               "minimum": 1
@@ -150,24 +138,6 @@
             }
           }
         }
-      }
-    },
-    "audiences": {
-      "type": "object",
-      "propertyNames": {
-        "pattern": "^aud-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
-      },
-      "additionalProperties": {
-        "$ref": "#/$defs/audience"
-      }
-    },
-    "messages": {
-      "type": "object",
-      "propertyNames": {
-        "pattern": "^msg-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
-      },
-      "additionalProperties": {
-        "$ref": "#/$defs/message"
       }
     },
     "proofs": {
@@ -289,7 +259,7 @@
   "$defs": {
     "anyId": {
       "type": "string",
-      "pattern": "^(aud|msg|prf|fct|ent|vce|seg|job|pan|gan|val|alt|str|cat)-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
+      "pattern": "^(prf|fct|ent|vce|seg|job|pan|gan|val|alt|str|cat)-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
     },
     "state": {
       "enum": [
@@ -316,145 +286,6 @@
         "type": "string"
       }
     },
-    "audience": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "state",
-        "provenance"
-      ],
-      "properties": {
-        "state": {
-          "$ref": "#/$defs/state"
-        },
-        "provenance": {
-          "$ref": "#/$defs/provenance"
-        },
-        "label": {
-          "$ref": "#/$defs/text"
-        },
-        "situation": {
-          "$ref": "#/$defs/text"
-        },
-        "pains": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/text"
-          }
-        },
-        "desired_action": {
-          "$ref": "#/$defs/text"
-        },
-        "tone": {
-          "$ref": "#/$defs/text"
-        },
-        "priorities": {
-          "allOf": [
-            {
-              "$ref": "#/$defs/ids"
-            },
-            {
-              "items": {
-                "pattern": "^msg-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
-              }
-            }
-          ],
-          "description": "この対象者に伝えるメッセージを優先順に並べる。先頭が 1 位"
-        },
-        "segment": {
-          "type": "string",
-          "pattern": "^seg-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
-        }
-      },
-      "if": {
-        "properties": {
-          "state": {
-            "const": "proposed"
-          }
-        }
-      },
-      "then": {
-        "required": [
-          "label",
-          "situation",
-          "desired_action",
-          "priorities",
-          "segment"
-        ],
-        "properties": {
-          "priorities": {
-            "minItems": 1
-          }
-        }
-      }
-    },
-    "message": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "state",
-        "provenance"
-      ],
-      "properties": {
-        "state": {
-          "$ref": "#/$defs/state"
-        },
-        "provenance": {
-          "$ref": "#/$defs/provenance"
-        },
-        "text": {
-          "$ref": "#/$defs/text"
-        },
-        "role": {
-          "enum": [
-            "benefit",
-            "proof",
-            "how",
-            "objection",
-            "cta",
-            "vision"
-          ]
-        },
-        "addresses": {
-          "allOf": [
-            {
-              "$ref": "#/$defs/ids"
-            },
-            {
-              "items": {
-                "pattern": "^pan-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
-              }
-            }
-          ]
-        },
-        "serves": {
-          "allOf": [
-            {
-              "$ref": "#/$defs/ids"
-            },
-            {
-              "items": {
-                "pattern": "^(val|job|pan|gan)-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
-              }
-            }
-          ],
-          "description": "このメッセージが立つ positioning の原子（ISSUE-14 で提供価値ちょうど 1 つに替わる）"
-        }
-      },
-      "if": {
-        "properties": {
-          "state": {
-            "const": "proposed"
-          }
-        }
-      },
-      "then": {
-        "required": [
-          "text",
-          "role"
-        ]
-      }
-    },
     "proof": {
       "type": "object",
       "additionalProperties": false,
@@ -475,19 +306,6 @@
         "source": {
           "$ref": "#/$defs/text"
         },
-        "supports": {
-          "allOf": [
-            {
-              "$ref": "#/$defs/ids"
-            },
-            {
-              "items": {
-                "pattern": "^msg-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
-              }
-            }
-          ],
-          "description": "outline へ移すまでのメッセージの証拠（ISSUE-14 で positioning の経路から受け継ぐ形に替わる）"
-        },
         "as_of": {
           "$ref": "#/$defs/date"
         },
@@ -497,7 +315,7 @@
         "segment": {
           "type": "string",
           "pattern": "^seg-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$",
-          "description": "positioning の証拠のとき、属するセグメント。支える原子と矢印は edges の supports で結ぶ（メッセージの supports とは併記しない）"
+          "description": "属するセグメント。支える原子と矢印は edges の supports で結ぶ（outline のメッセージは、指した提供価値の経路の証拠を受け継ぐ）"
         }
       },
       "if": {
@@ -510,45 +328,18 @@
       "then": {
         "required": [
           "text",
-          "source"
+          "source",
+          "segment"
         ],
-        "allOf": [
+        "anyOf": [
           {
-            "anyOf": [
-              {
-                "required": [
-                  "as_of"
-                ]
-              },
-              {
-                "required": [
-                  "expires"
-                ]
-              }
+            "required": [
+              "as_of"
             ]
           },
           {
-            "oneOf": [
-              {
-                "required": [
-                  "supports"
-                ],
-                "not": {
-                  "required": [
-                    "segment"
-                  ]
-                }
-              },
-              {
-                "required": [
-                  "segment"
-                ],
-                "not": {
-                  "required": [
-                    "supports"
-                  ]
-                }
-              }
+            "required": [
+              "expires"
             ]
           }
         ]

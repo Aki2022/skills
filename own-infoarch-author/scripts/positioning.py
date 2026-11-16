@@ -294,20 +294,42 @@ def check_positioning(m, report, approved, path=SSOT_REL):
     return derived
 
 
+def _verify_rows():
+    """own-design-author's approval-ledger validator: IA reads the ledger exactly as design does (no differential)."""
+    import sys
+    from pathlib import Path
+    design = Path(__file__).resolve().parents[2] / 'own-design-author/scripts'
+    if not (design / 'approvals.py').is_file():
+        raise RuntimeError('own-design-author/scripts/approvals.py が無い（承認台帳は design と共有）')
+    if str(design) not in sys.path:
+        sys.path.insert(0, str(design))
+    from approvals import verify_rows
+    return verify_rows
+
+
 def read_approvals(root, report, load_yaml, yaml_error):
-    """The owner's ia:positioning rows of design/approvals.yaml: {key: value_hash}. Full validation is design's."""
-    path = root / 'design/approvals.yaml'
+    """The owner's ia:positioning rows of design/approvals.yaml: {key: value_hash}.
+
+    Validated by own-design-author's verify_rows (fields, key namespace, hash, approver, ISO date, no duplicate key)
+    plus a symlink refusal. Any violation fails closed: IA_APPROVALS_INVALID and nothing counts as approved.
+    """
+    rel = 'design/approvals.yaml'
+    path = root / rel
+    if path.is_symlink():
+        report.add('fail', 'IA_APPROVALS_INVALID', f'{rel} が symlink（承認台帳は repo の実ファイルだけを読む）', rel)
+        return {}
     if not path.is_file():
         return {}
     try:
         rows = load_yaml(path)
     except yaml_error as exc:
-        report.add('fail', 'IA_APPROVALS_INVALID', f'design/approvals.yaml が読めない: {exc}', 'design/approvals.yaml')
+        report.add('fail', 'IA_APPROVALS_INVALID', f'{rel} が読めない: {exc}', rel)
         return {}
     if rows is None:
         return {}
-    if not isinstance(rows, list) or any(not isinstance(r, dict) or not isinstance(r.get('key'), str)
-                                         or not isinstance(r.get('value_hash'), str) for r in rows):
-        report.add('fail', 'IA_APPROVALS_INVALID', 'design/approvals.yaml の形が違う（key と value_hash の行の並び）', 'design/approvals.yaml')
+    try:
+        approved = _verify_rows()(rows, root)
+    except ValueError as exc:
+        report.add('fail', 'IA_APPROVALS_INVALID', f'{rel} が承認台帳の形でない: {exc}（何も承認済みとして数えない）', rel)
         return {}
-    return {r['key']: r['value_hash'] for r in rows if r['key'].startswith(APPROVAL_PREFIX)}
+    return {k: v for k, v in approved.items() if k.startswith(APPROVAL_PREFIX)}

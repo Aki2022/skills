@@ -3,7 +3,7 @@ re-targeted at the v6 positioning shape; the v5 -> v6 bulk migration is ISSUE-17
 
 Mechanical moves only: problems (prb) -> pains (pan) with the same number, each audience gets a segment (seg, same
 number) and an empty job for that segment, each pain belongs to its audience's segment, message addresses follow, outlines go to version 2 (problem -> pain),
-rendered HTML outputs rename data-ia-problem / data-ia-role="problem", and design.yaml pins modules.ia 0.3.0.
+rendered HTML outputs rename data-ia-problem / data-ia-role="problem", and design.yaml pins modules.ia 0.4.0.
 What needs judgment (jobs, arrows, values, strengths, alternatives, categories, message serves, outline strategy) is
 listed, never invented. Nothing is committed: undo with git (the report says how). A v4 tree is a no-op, so the tool
 is rerunnable; a v3 (v5) tree is refused here.
@@ -118,7 +118,7 @@ def plan(root):
     if design.is_file():
         cfg = json.loads(design.read_text(encoding='utf-8'))
         if (cfg.get('modules') or {}).get('ia') == '0.2.0':
-            cfg['modules']['ia'] = '0.3.0'
+            cfg['modules']['ia'] = '0.4.0'
             raw = design.read_text(encoding='utf-8')
             writes[design] = json.dumps(cfg, ensure_ascii=False, indent=2 if raw.startswith('{\n') else None) + ('\n' if raw.endswith('\n') else '')
     ledger = root / 'design/judgments.json'

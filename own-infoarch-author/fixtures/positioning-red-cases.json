@@ -97,6 +97,12 @@
       "requirement": "2",
       "code": "IA_SCHEMA",
       "text": "positioning の証拠（segment あり）がメッセージの supports も持つ（outline の変更で positioning の id が動く）"
+    },
+    {
+      "id": "15-unapproved-shipped",
+      "requirement": "15",
+      "code": "IA_POSITIONING_UNAPPROVED",
+      "text": "出荷チャネルの outline が、承認の無い（または中身が変わって承認が外れた）原子・矢印に立つ（制作中は警告）"
     }
   ],
   "cases": [
@@ -566,6 +572,28 @@
           "value": [
             "msg-0001"
           ]
+        }
+      ]
+    },
+    {
+      "id": "shipped-on-unapproved-value",
+      "condition": "15-unapproved-shipped",
+      "why": "LP（出荷チャネル）が立つ提供価値を承認していない",
+      "ops": [
+        {
+          "op": "unapprove",
+          "key": "val-0001"
+        }
+      ]
+    },
+    {
+      "id": "shipped-on-unapproved-arrow",
+      "condition": "15-unapproved-shipped",
+      "why": "LP が立つ矢印（強み→提供価値）を 1 本だけ承認していない",
+      "ops": [
+        {
+          "op": "unapprove",
+          "key": "produces:str-0001:val-0001"
         }
       ]
     }

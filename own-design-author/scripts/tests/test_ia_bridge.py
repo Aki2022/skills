@@ -27,7 +27,7 @@ def attach(project):
     ssot['facts']['fct-0001']['as_of'] = '2099-01-01'
     FIXTURE['write_repo'](root, ssot)
     config = json.loads((root / 'design/design.yaml').read_text())
-    config['modules'] = {'ia': '0.3.0'}
+    config['modules'] = {'ia': '0.4.0'}
     write(root / 'design/design.yaml', config)
     return root
 
@@ -47,7 +47,9 @@ def test_schema2_actual_check_has_counts_and_preserves_ds_approvals(project):
     assert [k for k in result['approval_required'] if k.startswith('ds:')] == before['approval_required']
     assert 'ia:positioning:val-0001' in result['approval_required']
     resolved = result['manifest']['web']['modules']['ia']
-    assert resolved['version'] == '0.3.0'
+    assert resolved['version'] == '0.4.0'
+    assert resolved['resolved']['governance']['contract'] == 'ia-git-history-v4'
+    assert resolved['resolved']['governance']['schema_version'] == 4
     assert resolved['resolved']['targets'] == {'channels': 2, 'outlines': 2, 'sections': 6}
     assert resolved['resolved']['governance']['method'] == 'git-history'
     assert resolved['resolved']['governance']['input_hashes']
@@ -88,7 +90,7 @@ def test_actual_ia_bad_inputs_make_l0_red(project, broken):
         assert any(expected in error for error in result['errors']), result['errors']
 
 
-@pytest.mark.parametrize('version', [None, '0.1.0'])
+@pytest.mark.parametrize('version', [None, '0.1.0', '0.3.0'])
 def test_missing_or_wrong_pin_stays_red(project, version):
     root = attach(project)
     config = json.loads((root / 'design/design.yaml').read_text())
@@ -177,7 +179,7 @@ def test_absent_fixed_adapter_is_red(project, tmp_path):
     spec.loader.exec_module(module)
     report = empty_report()
     with pytest.raises(ValueError, match='IA module is unavailable'):
-        module.resolve_ia(project[0], {'modules': {'ia': '0.3.0'}}, {}, {'web': {}}, report)
+        module.resolve_ia(project[0], {'modules': {'ia': '0.4.0'}}, {}, {'web': {}}, report)
     assert report['missing'][0]['id'] == 'ia'
 
 
@@ -198,3 +200,22 @@ def test_unapproved_positioning_can_be_prepared_and_recorded_by_the_owner(projec
     assert 'ia:positioning:val-0001' in keys and 'ia:positioning:lacks:str-0001:alt-0001' in keys
     approve_request(root, project[1], request, 'fixture-owner')
     assert not any(e.startswith('IA_POSITIONING_UNAPPROVED') for e in check(project, ship=True)['errors'])
+
+
+def test_changing_one_positioning_element_withdraws_only_its_approval(project):
+    """ISSUE-13: per-element approval through the design bridge; ds: approvals and the other ia: rows stay."""
+    approve(project)
+    before = check(project, ship=True)
+    root = attach(project)
+    approved = check(project, ship=True)
+    assert approved['exit_code'] == 0, approved['errors']
+    ssot = copy.deepcopy(FIXTURE['SSOT'])
+    ssot['proofs']['prf-0001']['as_of'] = '2099-01-01'
+    ssot['facts']['fct-0001']['as_of'] = '2099-01-01'
+    ssot['strengths']['str-0001']['text'] = '自動更新で保守がほぼ要らない'
+    FIXTURE['dump'](root / 'design/info_arch/info_arch.yaml', ssot)
+    after = check(project, ship=True)
+    moved = sorted(k for k, v in approved['approval_targets'].items() if after['approval_targets'].get(k) != v)
+    assert moved == ['ia:positioning:str-0001'], moved
+    assert {k: v for k, v in after['approval_targets'].items() if k.startswith('ds:')} == before['approval_targets']
+    assert any(e.startswith('IA_POSITIONING_UNAPPROVED') and 'str-0001' in e for e in after['errors']), after['errors']

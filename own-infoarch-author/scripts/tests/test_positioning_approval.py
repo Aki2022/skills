@@ -92,3 +92,57 @@ def test_targets_keys_fit_the_design_approval_key_shape(tmp_path):
     _, out = cli('targets', '--root', str(tmp_path))
     for key in out['approval_hashes']:
         assert re.fullmatch(r'ia:[a-z][a-z0-9-]*:[A-Za-z0-9_.:/-]+', key) and ia_module.KEY.fullmatch(key), key
+
+
+# ---- the ledger is read by the same validator design uses, and fails closed (ISSUE-13; I12 security review) ----
+
+import os  # noqa: E402
+
+import pytest  # noqa: E402
+import yaml  # noqa: E402
+
+
+def _rows(root):
+    return yaml.safe_load((root / 'design/approvals.yaml').read_text(encoding='utf-8'))
+
+
+@pytest.mark.parametrize('broken', ['duplicate-key', 'missing-approver', 'bad-approver', 'bad-date', 'bad-hash',
+                                    'extra-field', 'not-a-list', 'symlink'])
+def test_malformed_ledger_fails_closed(tmp_path, broken):
+    write_repo(tmp_path)
+    path = tmp_path / 'design/approvals.yaml'
+    rows = _rows(tmp_path)
+    target = next(r for r in rows if r['key'] == 'ia:positioning:val-0001')
+    if broken == 'duplicate-key':
+        rows.append({**target, 'value_hash': '0' * 64})  # a later forged row must not win
+    elif broken == 'missing-approver':
+        del target['approver']
+    elif broken == 'bad-approver':
+        target['approver'] = 'someone with spaces'
+    elif broken == 'bad-date':
+        target['date'] = '2026/11/16'
+    elif broken == 'bad-hash':
+        target['value_hash'] = 'xyz'
+    elif broken == 'extra-field':
+        target['note'] = 'ok'
+    elif broken == 'not-a-list':
+        rows = {'rows': rows}
+    if broken == 'symlink':
+        outside = tmp_path / 'outside-approvals.yaml'
+        outside.write_text(path.read_text(encoding='utf-8'), encoding='utf-8')
+        path.unlink()
+        os.symlink(outside, path)
+    else:
+        dump(path, rows)
+    rc, report = check(tmp_path)
+    assert rc == 2 and 'IA_APPROVALS_INVALID' in [f['code'] for f in report['findings'] if f['level'] == 'fail'], report['findings']
+    assert 'val-0001' in unapproved(report)  # nothing in an invalid ledger counts as approved
+
+
+def test_valid_ledger_with_design_rows_is_read(tmp_path):
+    write_repo(tmp_path)
+    rows = _rows(tmp_path) + [{'key': 'ds:web:token:color.primary', 'value_hash': 'a' * 64,
+                               'approver': 'fixture-owner', 'date': '2026-11-16'}]
+    dump(tmp_path / 'design/approvals.yaml', rows)
+    rc, report = check(tmp_path)
+    assert rc == 0, report['findings']

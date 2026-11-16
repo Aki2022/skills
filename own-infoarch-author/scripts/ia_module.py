@@ -9,8 +9,8 @@ import re
 import subprocess
 import sys
 
-VERSION = '0.3.0'
-CONTRACT = 'ia-git-history-v3'
+VERSION = '0.4.0'
+CONTRACT = 'ia-git-history-v4'
 _ID = r'[a-z]{3}-[0-9]{4,}'
 # ia:positioning:<atom id> or ia:positioning:<kind>:<from>:<to> (a supports arrow may point at another arrow's key)
 KEY = re.compile(rf'ia:positioning:(?:{_ID}|[a-z_]+:{_ID}:(?:{_ID}|[a-z_]+:{_ID}:{_ID}))')
@@ -100,7 +100,7 @@ def resolve(*, root, approvals, profiles):
     commit = head.stdout.strip() if head.returncode == 0 else None
     if commit is not None and not re.fullmatch(r'[0-9a-f]{40}|[0-9a-f]{64}', commit):
         raise ValueError('invalid IA git commit')
-    governance = {'contract': CONTRACT, 'method': 'git-history', 'schema_version': 3,
+    governance = {'contract': CONTRACT, 'method': 'git-history', 'schema_version': 4,
                   'commit': commit, 'input_hashes': inputs}
     report = {key: [] for key in CATEGORIES}
     report['executed'].append({'id': 'ia-deterministic', 'exit_code': 2 if errors else run.returncode,

@@ -70,6 +70,9 @@ def shipped_outlines(m):
                   if (ch := m.channels.get(o['channel'])) and ch[1]['ship'])
 
 
+ADVISORY = ('ia-value-fit:',)
+
+
 def _outline_of(judgment_id):
     ident = judgment_id.split(':', 1)[1]
     return ident.split('/', 1)[0].split('@', 1)[0]
@@ -241,14 +244,15 @@ def _evaluate(root, commit, tree, date, source, predicted):
             return finish('IA rendered DOM check failed')
         report, _, _ = judge.run(root, date, dom_paths)
 
-    blocking = [u for u in report.uncovered if _outline_of(u['id']) in shipped]
+    # ia-value-fit is advisory until the owner's answer key has measured it (v6 requirement 11): reported, never blocking.
+    blocking = [u for u in report.uncovered if _outline_of(u['id']) in shipped and not u['id'].startswith(ADVISORY)]
     if blocking:
         report.add('fail', 'IA_SHIP_UNCOVERED',
                    f'出荷される成果物の判定 {len(blocking)} 件が台帳に無い（Jev で取得して記録してから出荷する）',
                    ids=sorted(u['id'] for u in blocking))
     result['stages'].append(_stage('judge', report, uncovered=report.uncovered, screened=len(report.screened)))
-    fit = [r for r in report.screened if r['id'].startswith('ia-strategy-fit:') and _outline_of(r['id']) in shipped]
-    uncovered_fit = [u for u in report.uncovered if u['id'].startswith('ia-strategy-fit:') and _outline_of(u['id']) in shipped]
+    fit = [r for r in report.screened if r['id'].startswith('ia-value-fit:') and _outline_of(r['id']) in shipped]
+    uncovered_fit = [u for u in report.uncovered if u['id'].startswith('ia-value-fit:') and _outline_of(u['id']) in shipped]
     if fit and not uncovered_fit:
         result['positioning']['semantic_fit'] = 'needs-review' if any(r['flagged_advisory'] for r in fit) else 'judged'
     return finish('IA judgment gate failed' if report.exit_code == 2 else None)

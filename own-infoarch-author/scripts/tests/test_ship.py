@@ -749,3 +749,16 @@ def test_maintain_lists_outlines_impacted_through_a_changed_arrow(repo):
     dump(repo / 'design/info_arch/info_arch.yaml', ssot)
     code, out, _ = maintain(repo)
     assert out['impacted_outlines'] == ['deck-smb'], out
+
+
+def test_an_unjudged_value_fit_never_stops_shipping(repo):
+    """v6 requirement 11: the copy x value judgment is a warning until the answer key has measured it."""
+    path = repo / 'design/judgments.json'
+    ledger = json.loads(path.read_text(encoding='utf-8'))
+    ledger['rows'] = [r for r in ledger['rows'] if r['candidate']['input']['kind'] != 'ia-value-fit']
+    path.write_text(json.dumps(ledger, ensure_ascii=False), encoding='utf-8')
+    commit(repo, 'value fit not judged yet')
+    code, out, _ = ship(repo)
+    assert code == 1, out  # reported as uncovered, never blocking
+    assert 'IA_SHIP_UNCOVERED' not in codes(out) and 'IA_JUDGE_UNCOVERED' in codes(out)
+    assert out['positioning']['semantic_fit'] == 'not-judged', out

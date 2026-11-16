@@ -212,9 +212,15 @@ outline のメッセージが指す提供価値ごとに、target のセグメ�
 | --- | --- | --- | --- |
 | `ia-name-variant` | 文案（正式名称が 1 つ以上ある時。id は `<outline>/<sec>/<cpy>`） | 固定値を展開した文案 | 正式名称の一覧 |
 | `ia-unregistered-claim` | 文案。加えて、成果物 × 画面幅ごとのアンカーの外の文言（id の末尾が `#unanchored`） | 固定値を展開した文案。アンカーの外は `dom` の `unanchored` | メッセージとその提供価値・経路から受け継ぐ証拠・使った固定値。アンカーの外は、すべて空（支える根拠が無い） |
-| `ia-strategy-fit`（ISSUE-16 で「文案 × 提供価値 1 件」に置き換える） | 文案 | 固定値を展開した文案 | メッセージと、target のセグメントで立っている positioning の経路（原子と矢印のキーと文）と経路のハッシュ。positioning が変わると判定のキーが変わる。θ 以上は要確認で、出荷は止めない（精度を測るまで。D8）。`ship` の `positioning.semantic_fit` は judged / needs-review / not-judged |
+| `ia-value-fit` | 文案（承認済みの提供価値を指すメッセージのもの） | 固定値を展開した文案 | その文案が伝えるメッセージが指す提供価値 1 件（id と文面）。文案か提供価値の中身が変われば判定のキーが変わる。正解表で精度を測るまでは警告だけで、θ 以上も、台帳に無いことも、出荷を止めない（v6 要件 11）。`ship` の `positioning.semantic_fit` は judged / needs-review / not-judged。v5 の `ia-strategy-fit`（経路を丸ごと渡す）は生成しない（既存の台帳の行は読める） |
 | `ia-audience-fit` | outline | 全部の文案と役割（セクションと文案の順に） | target・接点・トーン・目的変数・一番のメッセージ。並びや一番を替えると判定のキーが変わる |
 | `ia-emphasis` | 成果物 × 画面幅 | `dom` が切り出した最初の画面の文言 | target と、一番のメッセージ（とその提供価値） |
+
+### 正解表（`infoarch-author answer-key`。v6 要件 12）
+
+- `answer-key --root . --out DIR`：承認済みの提供価値に立つ文案ごとに、自分の提供価値との組（own）と、同じ positioning のほかの承認済みの提供価値に付け替えた組（swap。提供価値が 1 つしか無い positioning では、別の positioning の提供価値と組む）を作る。`answer-key.json`（組と判定のハッシュ、正解表の id）・`candidates.json`（`judgment_run.py` に渡す `ia-value-fit` の候補）・`answer-key-page.html`（オーナーが ○ 伝わる／× 伝わらない／？ 分からないを付けて labels.json を保存するページ。外部の読み込み無し）を書く。既にあるファイルは上書きしない。機械が作るのは外れの候補まで。正解はオーナーのラベルで決まる。
+- `answer-key --root . --measure labels.json --key DIR/answer-key.json`：ラベルと共有の判定台帳の答え（θ 以上＝伝わらない）を比べ、一致の割合・見逃し（オーナーが × で Jev が通した組）・誤検出（オーナーが ○ で Jev が止めた組）を出す。？ は数えない。台帳に無い組は `uncovered` に並べて数えない。数えた組に ○ か × のどちらかが 0 件なら、数字を出さず `status: unmeasurable`。ラベルが別の正解表のもの（正解表の id が違う）・知らない組を含む・outline や提供価値が作った後で変わった、は失格（作り直してラベルを付け直す）。
+- モデルは呼ばない。本物の Jev は `judgment_run.py`（上限つき、`--execute` のときだけ）で取る。
 
 score は「問題がある確率」。θ 以上は IA_JUDGE_REVIEW（要確認）として人に回し、score だけで失格にしない。
 強調の判定でゲートを止めるかは、最初の実回答で精度を測ってから決める（spec）。

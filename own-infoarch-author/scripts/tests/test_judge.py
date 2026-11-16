@@ -168,11 +168,11 @@ def test_changed_copy_invalidates_only_its_own_judgments(repo, tmp_path):
     dump(repo / 'design/info_arch/outlines/lp-municipal.yaml', changed)
     code, out = cli('judge', '--root', str(repo), '--date', DATE, '--dom-report', str(report))
     assert code == 1
-    # The copy itself (its name, claim and strategy fit), plus the outline-level fit that reads every piece of copy.
+    # The copy itself (its name, claim and value fit), plus the outline-level fit that reads every piece of copy.
     assert sorted(u['id'] for u in out['uncovered']) == ['ia-audience-fit:lp-municipal',
                                                           'ia-name-variant:lp-municipal/sec-0001/cpy-0002',
-                                                          'ia-strategy-fit:lp-municipal/sec-0001/cpy-0002',
-                                                          'ia-unregistered-claim:lp-municipal/sec-0001/cpy-0002']
+                                                          'ia-unregistered-claim:lp-municipal/sec-0001/cpy-0002',
+                                                          'ia-value-fit:lp-municipal/sec-0001/cpy-0002']
 
 
 def test_design_rows_in_the_shared_ledger_do_not_disturb_ia(repo):

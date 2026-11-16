@@ -8,9 +8,9 @@ Four kinds share own-design-author's judgment policy and `design/judgments.json`
   nothing on the page supporting it.
 - ia-audience-fit: the outline's order and emphasis do not suit its target, touchpoint, tone and objective.
 - ia-emphasis: a rendered first screen does not carry the lead message's value.
-- ia-strategy-fit: a piece of copy does not actually serve the positioning its message stands on. The input carries the
-  positioning path hash, so a changed positioning never reuses an old judgment. (The kind keeps its v5 name until
-  ISSUE-16 replaces it with copy x one value.)
+- ia-value-fit: a piece of copy does not convey the one value its message points to (v6 requirement 11). The input
+  carries the copy and the value's content, so changing either never reuses an old judgment. It is advisory until
+  its accuracy is measured with the owner's answer key (answer_key.py); it replaced v5's ia-strategy-fit.
 
 The gate only reads the ledger. It never calls a model: missing judgments are "uncovered", stored ones are
 "screened" (never "clean"), and a score at or above theta goes to a human as IA_JUDGE_REVIEW.
@@ -86,16 +86,14 @@ def outline_candidates(oid, outline, ssot, policy, jl):
             if entities:
                 rows.append(jl.candidate('ia-name-variant', ident, text, {'outline': oid, 'entities': entities}, policy=policy))
             msg = outline['messages'].get(c['message']) or {}
-            ids, path_hash = check.positioning_path(m, [msg['value']], segment) if msg else ([], None)
+            ids, _ = check.positioning_path(m, [msg['value']], segment) if msg else ([], None)
             message = {'id': c['message'], 'value': _value(ssot, msg.get('value'))} if msg else None
             ctx = {'outline': oid, 'role': sec['role'], 'message': message, 'evidence': _evidence(m, ids),
                    'facts': [{'id': f, 'label': facts.get(f, {}).get('label', ''), 'value': facts.get(f, {}).get('value', '')}
                              for f in dict.fromkeys(check.PLACEHOLDER.findall(c['text']))]}
             rows.append(jl.candidate('ia-unregistered-claim', ident, text, ctx, policy=policy))
-            if ids:
-                fit = {'outline': oid, 'segment': segment, 'path_hash': path_hash, 'message': message,
-                       'positioning': [{'id': a, 'text': _element_text(check.element(m, a))} for a in ids]}
-                rows.append(jl.candidate('ia-strategy-fit', ident, text, fit, policy=policy))
+            if msg and (ssot.get('values', {}).get(msg['value']) or {}).get('text'):
+                rows.append(value_fit(jl, policy, ident, text, oid, c['message'], _value(ssot, msg['value'])))
     # The order of the copy is what the fit is judged against, so reordering it must invalidate the judgment.
     fit_ctx = {'outline': oid, 'target': outline['target'], 'touchpoint': outline['touchpoint'], 'tone': outline['tone'],
                'objective': outline['objective'], 'lead': _lead(outline, ssot)}
@@ -103,17 +101,14 @@ def outline_candidates(oid, outline, ssot, policy, jl):
     return rows
 
 
+def value_fit(jl, policy, ident, text, oid, message, value):
+    """The one question Jev is asked about meaning: does this copy convey this value (v6 requirement 11)."""
+    return jl.candidate('ia-value-fit', ident, text, {'outline': oid, 'message': message, 'value': value}, policy=policy)
+
+
 def _lead(outline, ssot):
     lead = [(mid, msg) for mid, msg in sorted(outline['messages'].items()) if msg['rank'] == 'lead']
     return {'id': lead[0][0], 'value': _value(ssot, lead[0][1]['value'])} if len(lead) == 1 else None
-
-
-def _element_text(element):
-    element = element or {}
-    if 'kind' in element and 'from' in element:  # an arrow
-        degree = f' ({element["degree"]})' if 'degree' in element else ''
-        return f'{element["from"]} {element["kind"]} {element["to"]}{degree}'
-    return element.get('text') or ' / '.join(str(element[k]) for k in ('qualifier', 'situation') if element.get(k))
 
 
 def emphasis_candidates(oid, outline, ssot, screens, policy, jl):

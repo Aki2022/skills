@@ -82,11 +82,12 @@ def test_rewritten_copy_fails_and_is_not_judged(repo, monkeypatch):
     assert result['stages']['judge'] == 'skipped'
 
 
-def test_unanchored_text_is_warned_and_sent_to_judgment(repo, monkeypatch):
+def test_unanchored_text_fails_the_render(repo, monkeypatch):
+    """v6 requirement 10: text outside every mark fails; it goes back to the outline, it is not judged."""
     monkeypatch.setattr(dom, 'snapshot', fake_snapshot(lambda s: s.update(unanchored='業界No.1 の実績')))
     result = evaluate.run(repo, DATE, ['lp-municipal'])
-    assert 'IA_DOM_UNANCHORED_TEXT' in codes(result, 'warn')
-    assert any(c['input']['catalog_id'].endswith('#unanchored') for c in result['candidates'])
+    assert result['exit_code'] == 2 and 'IA_DOM_UNANCHORED_TEXT' in codes(result, 'fail')
+    assert not any(c['input']['catalog_id'].endswith('#unanchored') for c in result.get('candidates', []))
 
 
 def test_failing_check_stops_before_rendering(repo, monkeypatch):

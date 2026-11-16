@@ -110,6 +110,8 @@ try {
             width: Math.round(r.width), height: Math.round(r.height),
             visible: visible(el), text: visibleText(el),
             nested: NESTED[kind] ? el.querySelector(NESTED[kind]) !== null : false,
+            // the section a mark is drawn inside (screen conformance: a copy belongs to its own section)
+            section: el.parentElement?.closest("[data-ia-section]")?.getAttribute("data-ia-section") ?? null,
           });
         }
       }

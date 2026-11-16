@@ -185,15 +185,21 @@ export async function trackFonts(page,context,requests) {
 // Scroll/hit-area measurement can leave Chromium's raster tiles awaiting paint.
 // Require two consecutive identical captures in each independent render; never
 // choose between the outer repeat runs or tolerate a changing pixel.
-async function stableScreenshot(page) {
+// Region captures (image lightness) follow the same rule: a full-page clip resizes the viewport and
+// can catch images mid-raster, which made one region's pixels differ between two renders of one page.
+export async function stableCapture(page, options={}) {
   let previous;
   for (let sample=0;sample<3;sample++) {
     await page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done))));
-    const current=await page.screenshot({fullPage:true,animations:'disabled',caret:'hide'});
+    const current=await page.screenshot({animations:'disabled',caret:'hide',...options});
     if(previous && sha(previous)===sha(current))return current;
     previous=current;
   }
   throw Error('render did not stabilize within three captures');
+}
+
+async function stableScreenshot(page) {
+  return stableCapture(page, {fullPage:true});
 }
 
 // document.fonts.ready resolves for the faces loading at that moment; a face that starts later (text laid out

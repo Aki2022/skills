@@ -22,7 +22,7 @@
 
 import { writeFileSync, existsSync, realpathSync, unlinkSync } from "node:fs";
 import {dirname} from "node:path";
-import {loadEnvironment,verifyRuntime,configureFonts,trackFonts,renderEvidence,compareRepeats,fixedLaunchOptions,describeRenderFailure,parseState,applyState,settleFonts} from "../../own-design-author/scripts/fixed_render.mjs";
+import {loadEnvironment,verifyRuntime,configureFonts,trackFonts,renderEvidence,compareRepeats,fixedLaunchOptions,describeRenderFailure,parseState,applyState,settleFonts,stableCapture} from "../../own-design-author/scripts/fixed_render.mjs";
 import { loadManifest, collectDesign, collectItemChecks } from "../../own-design-author/scripts/resolved_contract.mjs";
 import { createRequire } from "node:module";
 
@@ -527,7 +527,8 @@ function collect(T) {
 
 /** 合成後のスクリーンショットから、領域の知覚明度（L*）分位を測る */
 async function measureRegion(page, region) {
-  const shot = await page.screenshot({
+  // 2 回続けて同じ画素になるまで撮る。1 回撮りでは画像のラスタ途中を拾い、同じページの 2 回の描画で値が揺れた。
+  const shot = await stableCapture(page, {
     fullPage: true, // clip はページ座標。fullPage 無しだと折り返し下が撮れず undefined になる
     clip: { x: region.x, y: region.y, width: region.w, height: region.h },
   });

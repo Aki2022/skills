@@ -446,7 +446,9 @@ export function collectItemChecks(manifest) {
         const targets = scopes.flatMap(scope => within(scope, rule.targets));
         applicable = targets.length;
         for (const el of targets) {
-          if (rule.state === 'focus') el.focus({focusVisible: true});
+          // preventScroll: focusing scrolls the page, and the capture that follows would then
+          // depend on where the last focused element sat, so two renders of one page differ.
+          if (rule.state === 'focus') el.focus({focusVisible: true, preventScroll: true});
           const value = getComputedStyle(el).getPropertyValue(property);
           if (rule.state === 'focus') el.blur();
           if (!allowed.has(value)) add(id, el, property + ' ' + value);

@@ -23,9 +23,9 @@ SCRIPTS = Path(__file__).resolve().parents[1]
 VP = {'name': 'mobile', 'width': 375, 'height': 812}
 
 
-def anchor(kind, aid, top, text='x', visible=True, left=0, height=40, nested=False):
+def anchor(kind, aid, top, text='x', visible=True, left=0, height=40, nested=False, section=None):
     return {'kind': kind, 'id': aid, 'top': top, 'left': left, 'width': 300, 'height': height, 'visible': visible, 'text': text,
-            'nested': nested}
+            'nested': nested, 'section': section}
 
 
 C1, C2 = '既存システムの運用、重くありませんか', '運用の手間が半分になります'
@@ -37,15 +37,15 @@ def green_snapshot():
     #               8 cpy-0005, 9 fct-0002
     return {'viewport': VP, 'text_chars': 400, 'first_screen': f'{C1} {C2}', 'anchors': [
         anchor('section', 'sec-0001', 0, f'{C1} {C2}', height=200),
-        anchor('copy', 'cpy-0001', 10, C1),
-        anchor('copy', 'cpy-0002', 120, C2),
+        anchor('copy', 'cpy-0001', 10, C1, section='sec-0001'),
+        anchor('copy', 'cpy-0002', 120, C2, section='sec-0001'),
         anchor('section', 'sec-0002', 880, C3, height=200),
-        anchor('copy', 'cpy-0003', 900, C3),
-        anchor('fact', 'fct-0001', 905, '100社以上', height=20),
+        anchor('copy', 'cpy-0003', 900, C3, section='sec-0002'),
+        anchor('fact', 'fct-0001', 905, '100社以上', height=20, section='sec-0002'),
         anchor('section', 'sec-0003', 1480, f'{C4} {C5}', height=200),
-        anchor('copy', 'cpy-0004', 1490, C4),
-        anchor('copy', 'cpy-0005', 1500, C5),
-        anchor('fact', 'fct-0002', 1505, '03-1234-5678', height=20),
+        anchor('copy', 'cpy-0004', 1490, C4, section='sec-0003'),
+        anchor('copy', 'cpy-0005', 1500, C5, section='sec-0003'),
+        anchor('fact', 'fct-0002', 1505, '03-1234-5678', height=20, section='sec-0003'),
     ]}
 
 
@@ -65,7 +65,7 @@ def test_green_snapshot_passes():
     (lambda s: s['anchors'].pop(2), 'IA_DOM_ANCHOR_MISSING'),
     (lambda s: s['anchors'].pop(3), 'IA_DOM_ANCHOR_MISSING'),
     (lambda s: s['anchors'][2].update(visible=False), 'IA_DOM_ANCHOR_HIDDEN'),
-    (lambda s: s['anchors'][2].update(top=1600), 'IA_DOM_ORDER'),
+    (lambda s: s['anchors'][2].update(top=5), 'IA_DOM_COPY_ORDER'),
     (lambda s: s['anchors'][3].update(top=1700), 'IA_DOM_ORDER'),
     (lambda s: s['anchors'][5].update(text='120社以上'), 'IA_DOM_FACT_VALUE'),
     (lambda s: s['anchors'].pop(5), 'IA_DOM_FACT_MISSING'),
@@ -85,12 +85,11 @@ def test_red_snapshots_fail(mutation, code):
     assert code in codes(run(snap)), run(snap)
 
 
-def test_cta_may_repeat_without_breaking_order():
+def test_a_repeated_call_to_action_is_another_copy_in_the_outline():
+    """v6: a repeat on the page is a repeat in the outline (another copy of the CTA message in another section)."""
     snap = green_snapshot()
-    snap['anchors'].insert(3, anchor('copy', 'cpy-0005', 300, '資料請求'))
-    assert codes(run(snap)) == []
-    # The repeat does not carry the outline's copy: reported, but the section itself still matches.
-    assert 'IA_DOM_COPY_EXTRA' in codes(run(snap), 'warn'), run(snap)
+    snap['anchors'].insert(3, anchor('copy', 'cpy-0005', 300, '資料請求', section='sec-0001'))
+    assert {'IA_DOM_COPY_REPEATED', 'IA_DOM_COPY_SECTION', 'IA_DOM_COPY_DRIFT'} <= set(codes(run(snap))), run(snap)
 
 
 # --- rendered copy must be the outline's copy (2026-11-12) ---
@@ -113,7 +112,7 @@ def test_copy_comparison_ignores_whitespace_and_width():
     snap = green_snapshot()
     snap['anchors'][2]['text'] = '運用の手間が\n半分に なります'
     snap['anchors'][4]['text'] = '導入は１００社以上、止まらずに 動き続けます'
-    assert codes(run(snap)) == [] and 'IA_DOM_COPY_EXTRA' not in codes(run(snap), 'warn')
+    assert codes(run(snap)) == []
 
 
 def test_hidden_copy_does_not_count_as_the_section():
@@ -123,18 +122,18 @@ def test_hidden_copy_does_not_count_as_the_section():
     assert 'IA_DOM_COPY_DRIFT' in codes(run(snap))
 
 
-def test_text_outside_every_anchor_is_a_warning_without_echo():
+def test_text_outside_every_anchor_fails_without_echo():
     snap = green_snapshot()
     snap['unanchored'] = '業界No.1 の実績'
     found = run(snap)
-    assert codes(found) == [] and 'IA_DOM_UNANCHORED_TEXT' in codes(found, 'warn'), found
+    assert codes(found) == ['IA_DOM_UNANCHORED_TEXT'], found
     assert not any('業界' in f[2] for f in found)
 
 
 def test_no_unanchored_text_is_quiet():
     snap = green_snapshot()
     snap['unanchored'] = ''
-    assert 'IA_DOM_UNANCHORED_TEXT' not in codes(run(snap), 'warn')
+    assert 'IA_DOM_UNANCHORED_TEXT' not in codes(run(snap))
 
 
 def test_fact_whitespace_is_normalized_but_value_must_match():
@@ -241,7 +240,7 @@ EXTRA = HTML.replace('</body>', '<footer><p>業界No.1 の実績</p></footer></b
 
 
 @pytest.mark.skipif(not PW_DIR, reason='INFOARCH_TEST_PLAYWRIGHT_DIR is not set: real-browser integration not run (reported as skipped, not passed)')
-@pytest.mark.parametrize('page,expect,code', [(DRIFT, 2, 'IA_DOM_COPY_DRIFT'), (EXTRA, 1, 'IA_DOM_UNANCHORED_TEXT')])
+@pytest.mark.parametrize('page,expect,code', [(DRIFT, 2, 'IA_DOM_COPY_DRIFT'), (EXTRA, 2, 'IA_DOM_UNANCHORED_TEXT')])
 def test_real_browser_reads_copy_and_unanchored_text(tmp_path, page, expect, code):
     from test_check import write_repo
     write_repo(tmp_path)
@@ -308,8 +307,8 @@ def test_real_browser_zero_size_anchor_that_paints_text_is_checked(tmp_path):
     proc = subprocess.run([sys.executable, str(SCRIPTS / 'infoarch_author.py'), 'dom', '--root', str(tmp_path),
                            '--outline', 'lp-municipal'], capture_output=True, text=True, env=env, check=False)
     report = json.loads(proc.stdout)
-    # The second cpy-0002 has no box but its text is painted: it is a repeat with other copy, and its text is judged.
-    assert 'IA_DOM_COPY_EXTRA' in [f['code'] for f in report['findings']], report['findings']
+    # The second cpy-0002 has no box but its text is painted: it is a repeated mark, and its text is still collected.
+    assert 'IA_DOM_COPY_REPEATED' in [f['code'] for f in report['findings']], report['findings']
     assert report['unanchored'] and all('業界No.1' in r['text'] for r in report['unanchored'])
 
 
@@ -407,7 +406,7 @@ def test_unanchored_warning_points_at_declaring_the_text():
     snap = declared_snapshot()
     snap['unanchored'] = '業界No.1'
     found = [f for f in drun(snap) if f[0] == 'IA_DOM_UNANCHORED_TEXT']
-    assert found and found[0][1] == 'warn' and '宣言' in found[0][2], found
+    assert found and found[0][1] == 'fail' and '宣言' in found[0][2], found
 
 
 DECLARED = '''<!doctype html><html><head><meta charset="utf-8"><style>body{{font:16px sans-serif;margin:0}} section{{min-height:200px}}</style></head><body>
@@ -443,3 +442,48 @@ def test_real_browser_declared_text_and_names(tmp_path, label, name, expect, cod
         assert code in found, report['findings']
     else:
         assert 'IA_DOM_UNANCHORED_TEXT' not in found and not report['unanchored'], report
+
+
+# --- screen conformance with a real browser (requirement 10; fixtures/screen-red-cases.json) ---
+
+SEC1 = '<section data-ia-section="sec-0001" data-ia-role="pain"><h1 data-ia-copy="cpy-0001">既存システムの運用、重くありませんか</h1><h2 data-ia-copy="cpy-0002">運用の手間が半分になります</h2></section>'
+SEC2 = '<section data-ia-section="sec-0002" data-ia-role="trust"><p data-ia-copy="cpy-0003">導入は<span data-ia-fact="fct-0001">100社以上</span>、止まらずに動き続けます</p></section>'
+SEC3 = '<section data-ia-section="sec-0003" data-ia-role="act"><p data-ia-copy="cpy-0004">保守の要らない運用へ</p><a href="#" data-ia-copy="cpy-0005">資料請求はこちら（<span data-ia-fact="fct-0002">03-1234-5678</span>）</a></section>'
+PAGE = ('<!doctype html><html><head><meta charset="utf-8"><style>body{{font:16px sans-serif;margin:0}} section{{min-height:200px}}</style>'
+        '</head><body>{body}</body></html>')
+SCREEN_RED = [
+    ('sections-swapped', SEC1 + SEC3 + SEC2, 'IA_DOM_ORDER'),
+    ('copy-one-character', (SEC1 + SEC2 + SEC3).replace('半分になります', '半分になりました'), 'IA_DOM_COPY_DRIFT'),
+    ('copies-swapped', SEC1.replace('<h1 data-ia-copy="cpy-0001">既存システムの運用、重くありませんか</h1><h2 data-ia-copy="cpy-0002">運用の手間が半分になります</h2>',
+                                    '<h2 data-ia-copy="cpy-0002">運用の手間が半分になります</h2><h1 data-ia-copy="cpy-0001">既存システムの運用、重くありませんか</h1>') + SEC2 + SEC3,
+     'IA_DOM_COPY_ORDER'),
+    ('copy-in-other-section', SEC1.replace('<h2 data-ia-copy="cpy-0002">運用の手間が半分になります</h2>', '')
+     + SEC2.replace('</section>', '<p data-ia-copy="cpy-0002">運用の手間が半分になります</p></section>') + SEC3, 'IA_DOM_COPY_SECTION'),
+    ('text-added-outside', SEC1 + SEC2 + SEC3 + '<footer><p>いまだけ無料</p></footer>', 'IA_DOM_UNANCHORED_TEXT'),
+]
+
+
+@pytest.mark.skipif(not PW_DIR, reason='INFOARCH_TEST_PLAYWRIGHT_DIR is not set: real-browser integration not run (reported as skipped, not passed)')
+@pytest.mark.parametrize('name,body,code', [('conforming', SEC1 + SEC2 + SEC3, None)] + SCREEN_RED, ids=lambda v: v if isinstance(v, str) and len(v) < 30 else None)
+def test_real_browser_screen_conformance(tmp_path, name, body, code):
+    from test_check import write_repo
+    write_repo(tmp_path)
+    (tmp_path / 'site').mkdir(exist_ok=True)
+    (tmp_path / 'site/index.html').write_text(PAGE.format(body=body), encoding='utf-8')
+    env = dict(os.environ, INFOARCH_PLAYWRIGHT_DIR=PW_DIR)
+    proc = subprocess.run([sys.executable, str(SCRIPTS / 'infoarch_author.py'), 'dom', '--root', str(tmp_path),
+                           '--outline', 'lp-municipal'], capture_output=True, text=True, env=env, check=False)
+    report = json.loads(proc.stdout)
+    found = [f['code'] for f in report['findings'] if f['level'] == 'fail']
+    if code is None:
+        assert proc.returncode == 0 and found == [], report['findings']
+    else:
+        assert proc.returncode == 2 and code in found, report['findings']
+
+
+def test_every_screen_condition_has_a_real_browser_fixture():
+    import json as _json
+    table = _json.loads((SCRIPTS.parent / 'fixtures/screen-red-cases.json').read_text(encoding='utf-8'))
+    required = {'IA_DOM_ORDER', 'IA_DOM_COPY_DRIFT', 'IA_DOM_COPY_ORDER', 'IA_DOM_COPY_SECTION', 'IA_DOM_UNANCHORED_TEXT'}
+    assert required <= {c['code'] for c in table['conditions']}
+    assert {code for _, _, code in SCREEN_RED} == required

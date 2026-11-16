@@ -167,34 +167,36 @@ outline のメッセージが指す提供価値ごとに、target のセグメ�
 `infoarch-author dom --root . --outline <id>` は、アウトラインの outputs のうち HTML を、チャネルの viewports（無ければ 375×812 と 1280×800）でブラウザに描画し、DOM を確かめる。
 
 - 解析と描画はブラウザ（Playwright の Chromium）が行う。成果物のソースを自前のパーサで読まない。
-- 工場はアンカーを埋める：セクションは `data-ia-section`、文案は `data-ia-copy`、固定値の表示は `data-ia-fact`、正式名称（SSOT の `ent-`）の表示は `data-ia-entity`、宣言した文言は `data-ia-text`。v4・v5 の `data-ia-problem`・`data-ia-msg`・`data-ia-pain`・`data-ia-frame` が残っていれば IA_DOM_LEGACY_ATTRIBUTE で失格（互換は持たない）。セクションと文案は、outline の順で現れること（IA_DOM_ORDER。繰り返しの CTA は許す）。
+- 工場はアンカーを埋める：セクションは `data-ia-section`、文案は `data-ia-copy`、固定値の表示は `data-ia-fact`、正式名称（SSOT の `ent-`）の表示は `data-ia-entity`、宣言した文言は `data-ia-text`。v4・v5 の `data-ia-problem`・`data-ia-msg`・`data-ia-pain`・`data-ia-frame` が残っていれば IA_DOM_LEGACY_ATTRIBUTE で失格（互換は持たない。移行は ISSUE-17 の道具が読み替える）。
+- **画面の適合（SPEC v6 要件 10）**：セクションの印は outline の順序どおりにちょうど並ぶ（IA_DOM_ORDER）。文案の印は、outline で属するセクションの印の中にあり（IA_DOM_COPY_SECTION）、セクションの中で outline の順番どおりに並ぶ（IA_DOM_COPY_ORDER）。同じ文案の印は 1 つだけ（IA_DOM_COPY_REPEATED。繰り返したい行動喚起は、outline に別の文案として置く）。条件と赤のフィクスチャの対応表は `fixtures/screen-red-cases.json`（DOM の写しと実ブラウザの両方で確かめる）。
 - Playwright は `INFOARCH_PLAYWRIGHT_DIR`、無ければ対象 repo（実行ディレクトリ）から解決する。自動では入れない。解決できなければ IA_DOM_PLAYWRIGHT で失格。
 - 読み取る前に、ページが落ち着くのを待つ：network idle の後に 1 秒（表示を始めるタイマーのため）、さらに実行中のアニメーションとトランジションが終わるまで最大 5 秒。終わらないアニメーションがあっても読み取り、2 回の描画の比較で揺れを報告する。
 - 同じ入力を 2 回描画し、結果が違えば IA_DOM_UNSTABLE（判定に使わない）。
 - 最初の画面の文言（各画面幅）を報告の `first_screens` に出す。強調の判定（Jev の判定台帳）の入力になる。
-- 各文案のアンカーの表示の文言（描かれている文字だけ。`unanchored` と同じ読み方で、opacity: 0 などの隠れた文字は入らない）を、アウトラインの文案（固定値を SSOT の値に展開）と比べる。NFKC で幅をそろえ、空白と改行をすべて除いてから比べる（改行は見た目で、文言ではない）。同じアンカーが繰り返されるときは、見えているうちの 1 つが文案と一致すればよい。報告に表示の文言は出さない。
+- 各文案のアンカーの表示の文言（描かれている文字だけ。`unanchored` と同じ読み方で、opacity: 0 などの隠れた文字は入らない）を、アウトラインの文案（固定値を SSOT の値に展開）と比べる。NFKC で幅をそろえ、空白と改行をすべて除いてから比べる（改行は見た目で、文言ではない）。見えている印はすべて一字一句一致すること（IA_DOM_COPY_DRIFT）。報告に表示の文言は出さない。
 - **主張でない文言の宣言**：ナビ・節のラベル・見出し・法務やフッターのように主張でない文言は、outline の `texts` に安定した key と文言そのもの（`text`）を書き、工場は `data-ia-text="<key>"` を付ける。主張になりうる文言（副の行動喚起など）は宣言ではなくメッセージにする。`dom` は、その key の見えている印の**すべて**が文言と一致することを確かめる（繰り返しの緩めは無い）。outline に無い key は IA_DOM_ANCHOR_UNKNOWN、key の印が無ければ IA_DOM_ANCHOR_MISSING。`navigation` は画面幅によって畳んでよい（見えていなくても IA_DOM_ANCHOR_HIDDEN にしない。印が無ければ失格、見えている所は文言と一致）。
 - **正式名称**：`data-ia-entity="ent-NNNN"` の見えている印は、すべて全文が SSOT の `name` と一致する（NFKC・空白を除いて比べる）。名前以外の文言を包めない。
 - 文案・宣言した文言・正式名称の印の中に、ほかの IA の印（セクション・文案・宣言した文言。正式名称は固定値と正式名称も）を入れると IA_DOM_ANCHOR_NESTED。文案と宣言した文言は固定値と正式名称を中に持てる。
 - `dom` の 0 は「描画物が outline の宣言どおりに表示している」までで、主張の妥当性は確かめない。文案の意味は判定台帳（`ia-unregistered-claim`。role にかかわらず全部の文案を回す）が見る。
-- どの印（文案・固定値・正式名称・宣言した文言）にも属さない（セクションは入れ物なので、セクションの中でも文案の外なら属さない）、見えている文言を報告の `unanchored`（成果物 × 画面幅）に出す。文案と違う繰り返しのアンカーの文言も、ここに足す。判定台帳では、支える根拠の無い主張として `ia-unregistered-claim` で判定する。
+- どの印（文案・固定値・正式名称・宣言した文言）にも属さない（セクションは入れ物なので、セクションの中でも文案の外なら属さない）見えている文言があれば、IA_DOM_UNANCHORED_TEXT で失格（要件 10。v5 の D12 では警告だった。文言は報告に出さない）。その文言は報告の `unanchored`（成果物 × 画面幅）に出す（文案と違う印の文言も、ここに足す）。dom が失格した描画は判定に使わないので、まず outline へ戻す。
 - このページの文案が参照しない固定値のアンカーは、SSOT にある id で、その値を表示している時だけ認める（任意の文言を固定値のアンカーで包んで、検査を逃がさない）。
 - 文言が見えているかは、文字そのものが描かれているか（テキストの範囲の大きさ）で判定する。大きさ 0 の箱でも、はみ出して文字を描いていれば見えているとみなす。
-- 限界：CSS の `::before`・`::after` の `content` で描く文言は読まない。`judge` の判定は Jev の助言で、score が θ 未満でも IA_DOM_UNANCHORED_TEXT の警告は消えない（アンカーの外の文言は、必ず人の目に届く）。
+- 限界：CSS の `::before`・`::after` の `content` で描く文言は読まない。印の外の文言は、判定の結果にかかわらず失格のまま（必ず outline に戻す）。
 
 | code | 内容 |
 | --- | --- |
 | IA_DOM_NO_TARGETS | 描画されたテキストが 0 件 |
-| IA_DOM_ANCHOR_MISSING / IA_DOM_ANCHOR_HIDDEN | アウトラインのメッセージ・痛み・宣言した文言のアンカーが無い・見えていない（display / visibility / opacity / 大きさ 0） |
-| IA_DOM_ANCHOR_UNKNOWN | アウトラインに無いメッセージ・痛み・宣言した文言のアンカー（別のページの key を含む）・SSOT に無い固定値・正式名称のアンカー |
-| IA_DOM_ANCHOR_NESTED | 宣言した文言・正式名称の印の中に、ほかの IA の印がある |
+| IA_DOM_ANCHOR_MISSING / IA_DOM_ANCHOR_HIDDEN | outline のセクション・文案・宣言した文言の印が無い・見えていない（display / visibility / opacity / 大きさ 0） |
+| IA_DOM_ANCHOR_UNKNOWN | outline に無いセクション・文案・宣言した文言の印・SSOT に無い固定値・正式名称の印 |
+| IA_DOM_ANCHOR_NESTED | 文案・宣言した文言・正式名称の印の中に、ほかの IA の印がある |
 | IA_DOM_ENTITY_NAME | 正式名称の印の表示の全文が、SSOT の名前と違う |
-| IA_DOM_ORDER | 見えているアンカーの描画順（上から）に、アウトラインの順が部分列として現れない（行動喚起の繰り返しは可） |
+| IA_DOM_ORDER | 見えているセクションの印の描画順（上から）が、outline の順序とちょうど同じでない |
+| IA_DOM_COPY_ORDER / IA_DOM_COPY_SECTION / IA_DOM_COPY_REPEATED | セクションの中の文案の順番が違う・文案が別のセクションの中にある・同じ文案の印が 2 つ以上 |
+| IA_DOM_LEGACY_ATTRIBUTE | v4・v5 の印（`data-ia-problem`・`data-ia-msg`・`data-ia-pain`・`data-ia-frame`）が残っている |
 | IA_DOM_FACT_MISSING / IA_DOM_FACT_VALUE | 文案が参照する固定値の表示が無い・固定値のアンカーの表示が SSOT の値と違う（空白は正規化して比べる。文案が参照しない固定値のアンカーも対象） |
 | IA_DOM_UNSTABLE | 2 回の描画で結果が違う |
-| IA_DOM_COPY_DRIFT | 見えているアンカーのどれも、アウトラインの文案と一致しない（工場が文言を変えた）。宣言した文言は、1 か所でも違えば失格 |
-| IA_DOM_COPY_EXTRA（warn） | 繰り返したアンカーのうち、文案と違うものがある（文案と一致するものは別にある） |
-| IA_DOM_UNANCHORED_TEXT（warn） | どの印にも属さない、見えている文言がある＝IA の誰も管理していない文言（文字数だけを報告する。主張ならメッセージに、主張でなければ宣言する） |
+| IA_DOM_COPY_DRIFT | 見えている文案の印の文言が、outline の文案と一字一句同じでない（工場が文言を変えた）。宣言した文言も、1 か所でも違えば失格 |
+| IA_DOM_UNANCHORED_TEXT | どの印にも属さない、見えている文言がある＝IA の誰も管理していない文言（文字数だけを報告する。主張なら outline のメッセージと文案に、主張でなければ texts に宣言する） |
 | IA_DOM_OUTPUT_MISSING / IA_DOM_UNCOVERED（warn） | 成果物のファイルが無い・HTML 以外（未カバー） |
 | IA_DOM_PLAYWRIGHT | Playwright を解決できない・描画に失敗した |
 

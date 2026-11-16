@@ -617,11 +617,12 @@ def test_shipped_html_is_rendered_and_its_first_screens_are_judged(repo, tmp_pat
     assert code == 0, out
     html = written[0]
     original = html.read_text()
-    # Below the first screen, so only the text outside every section changes (not the emphasis input).
+    # Below the first screen, so only the text outside every mark changes (not the emphasis input).
     html.write_text(original.replace('</body>', '<div style="height:4000px"></div><footer><p>業界No.1 の実績</p></footer></body>'))
-    commit(repo, 'a claim outside every section')
+    commit(repo, 'a claim outside every mark')
     code, out, _ = ship(repo, env=env)
-    assert code == 2 and 'IA_SHIP_UNCOVERED' in codes(out), out  # the added text is judged before it ships
+    assert code == 2 and 'IA_DOM_UNANCHORED_TEXT' in codes(out), out  # v6 requirement 10: it never ships
+    assert [s['stage'] for s in out['stages']][-1] == 'dom', out
     html.write_text(original.replace('data-ia-copy', 'data-x'))
     commit(repo, 'anchors lost')
     code, out, _ = ship(repo, env=env)

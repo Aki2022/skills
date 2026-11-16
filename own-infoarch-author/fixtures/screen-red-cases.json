@@ -1,0 +1,170 @@
+{
+  "version": 1,
+  "note": "画面の適合の失格（SPEC-information-architecture-standardization v6 要件 10）と、それを壊す赤のフィクスチャの対応表。scripts/tests/test_screen.py が、全条件に赤のケースが 1 つ以上あること（対応の無い条件 0 件）と、全ケースが条件の code で失格になることを、DOM の写し（test_dom.green_snapshot への操作）で確かめる。実ブラウザでも、印の付いた HTML を壊して同じ code を確かめる（INFOARCH_TEST_PLAYWRIGHT_DIR があるとき）。",
+  "conditions": [
+    {
+      "id": "10-section-order",
+      "requirement": "10",
+      "code": "IA_DOM_ORDER",
+      "text": "セクションの並びが outline と違う"
+    },
+    {
+      "id": "10-copy-text",
+      "requirement": "10",
+      "code": "IA_DOM_COPY_DRIFT",
+      "text": "文案が outline と一字一句同じでない"
+    },
+    {
+      "id": "10-copy-order",
+      "requirement": "10",
+      "code": "IA_DOM_COPY_ORDER",
+      "text": "セクションの中の文案の順番が outline と違う"
+    },
+    {
+      "id": "10-copy-section",
+      "requirement": "10",
+      "code": "IA_DOM_COPY_SECTION",
+      "text": "文案が outline と別のセクションの中にある"
+    },
+    {
+      "id": "10-copy-repeated",
+      "requirement": "10",
+      "code": "IA_DOM_COPY_REPEATED",
+      "text": "同じ文案の印が 2 つ以上ある（繰り返しは outline の別の文案にする）"
+    },
+    {
+      "id": "10-outside-text",
+      "requirement": "10",
+      "code": "IA_DOM_UNANCHORED_TEXT",
+      "text": "印の外に文がある（印の外の文の変化）"
+    },
+    {
+      "id": "10-anchor-missing",
+      "requirement": "10",
+      "code": "IA_DOM_ANCHOR_MISSING",
+      "text": "outline のセクション・文案の印が無い"
+    }
+  ],
+  "cases": [
+    {
+      "id": "sections-swapped",
+      "condition": "10-section-order",
+      "why": "2 番目と 3 番目のセクションを入れ替えて描いた",
+      "ops": [
+        {
+          "op": "set",
+          "index": 3,
+          "field": "top",
+          "value": 1600
+        },
+        {
+          "op": "set",
+          "index": 4,
+          "field": "top",
+          "value": 1610
+        },
+        {
+          "op": "set",
+          "index": 5,
+          "field": "top",
+          "value": 1615
+        }
+      ]
+    },
+    {
+      "id": "copy-one-character",
+      "condition": "10-copy-text",
+      "why": "文案を 1 文字だけ変えた",
+      "ops": [
+        {
+          "op": "set",
+          "index": 2,
+          "field": "text",
+          "value": "運用の手間が半分になりました"
+        }
+      ]
+    },
+    {
+      "id": "copies-swapped",
+      "condition": "10-copy-order",
+      "why": "同じセクションの 2 つの文案を入れ替えて描いた",
+      "ops": [
+        {
+          "op": "set",
+          "index": 1,
+          "field": "top",
+          "value": 130
+        }
+      ]
+    },
+    {
+      "id": "copy-in-other-section",
+      "condition": "10-copy-section",
+      "why": "sec-0001 の文案を sec-0002 の中に描いた",
+      "ops": [
+        {
+          "op": "set",
+          "index": 2,
+          "field": "section",
+          "value": "sec-0002"
+        },
+        {
+          "op": "set",
+          "index": 2,
+          "field": "top",
+          "value": 890
+        }
+      ]
+    },
+    {
+      "id": "copy-twice",
+      "condition": "10-copy-repeated",
+      "why": "同じ文案の印をもう 1 つ描いた",
+      "ops": [
+        {
+          "op": "append",
+          "anchor": {
+            "kind": "copy",
+            "id": "cpy-0005",
+            "section": "sec-0003",
+            "top": 1520,
+            "text": "資料請求はこちら（03-1234-5678）"
+          }
+        }
+      ]
+    },
+    {
+      "id": "text-added-outside",
+      "condition": "10-outside-text",
+      "why": "どの印にも属さない文を足した",
+      "ops": [
+        {
+          "op": "unanchored",
+          "value": "いまだけ無料"
+        }
+      ]
+    },
+    {
+      "id": "copy-mark-removed",
+      "condition": "10-anchor-missing",
+      "why": "文案の印を外した",
+      "ops": [
+        {
+          "op": "remove",
+          "index": 7
+        }
+      ]
+    },
+    {
+      "id": "section-mark-removed",
+      "condition": "10-anchor-missing",
+      "why": "セクションの印を外した",
+      "ops": [
+        {
+          "op": "remove",
+          "index": 6
+        }
+      ]
+    }
+  ]
+}

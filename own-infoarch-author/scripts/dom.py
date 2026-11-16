@@ -1,12 +1,13 @@
-"""Rendered DOM vs outline (v6 anchors: data-ia-section and data-ia-copy).
+"""Rendered DOM vs outline: screen conformance (SPEC-information-architecture-standardization v6, requirement 10).
 
 The browser does the parsing and rendering; this module only compares its snapshot with the outline: every section
-and every piece of copy has a visible anchor, sections and copy appear in the outline's order (as a subsequence of
-the rendered order, so a repeated call to action is fine), each copy anchor shows the outline's copy (facts
-expanded), every fact the copy refers to is shown with the SSOT value, and two runs give the same snapshot.
+and every piece of copy has exactly one visible mark (data-ia-section / data-ia-copy), the sections appear exactly in
+the outline's order, each piece of copy is drawn inside its own section and in the section's order, each copy mark
+shows the outline's copy word for word (facts expanded; width and whitespace folded), every fact the copy refers to
+is shown with the SSOT value, and two runs give the same snapshot. A repeat is another piece of copy in the outline.
 Declared non-claim text (data-ia-text) must show its text on every occurrence, and an official name (data-ia-entity)
 must show exactly the SSOT name. A v4/v5 attribute (data-ia-problem / -msg / -pain / -frame) left on the page fails.
-Visible text outside every anchor is text nobody manages: reported, and passed on to the judgement ledger as a claim.
+Visible text outside every mark is text nobody manages: it fails (requirement 10) without echoing the text.
 dom exit 0 means the page shows what the outline declares; it does not judge whether the claims are true.
 """
 from __future__ import annotations
@@ -66,11 +67,6 @@ def _copy_norm(text):
     return ''.join(unicodedata.normalize('NFKC', text or '').split())
 
 
-def _is_subsequence(want, have):
-    it = iter(have)
-    return all(any(w == h for h in it) for w in want)
-
-
 def compare(outline, ssot, snap, output=None):
     """-> [(code, level, message)] for one snapshot (one file, one viewport)."""
     out = []
@@ -104,21 +100,29 @@ def compare(outline, ssot, snap, output=None):
             continue  # navigation may be collapsed at a viewport (a menu); it must exist, and what shows must match
         elif not any(a['visible'] for a in found):
             out.append(('IA_DOM_ANCHOR_HIDDEN', 'fail', f'{vp}: {key[1]} のアンカーが見えていない（display / visibility / opacity / 大きさ 0）'))
-    for kind in ('section', 'copy'):
-        want = [k for k in seq if k[0] == kind and k in set(rendered)]
-        have = [k for k in rendered if k[0] == kind]
-        if not _is_subsequence(want, have):
-            out.append(('IA_DOM_ORDER', 'fail', f'{vp}: 描画の順 {[k[1] for k in have]} がアウトラインの順 {[k[1] for k in want]} と違う'))
+    have = [k[1] for k in rendered if k[0] == 'section']
+    want = [sid for kind, sid in seq if kind == 'section' and sid in have]
+    if have != want:
+        out.append(('IA_DOM_ORDER', 'fail', f'{vp}: セクションの描画の順 {have} が outline の順 {want} と違う'))
+    owner = {cid: c['section'] for cid, c in outline['copies'].items()}
+    for cid in sorted(owner):
+        marks = [a for a in anchors if (a['kind'], a['id']) == ('copy', cid)]
+        if len(marks) > 1:
+            out.append(('IA_DOM_COPY_REPEATED', 'fail', f'{vp}: 文案 {cid} の印が {len(marks)} つある（繰り返すなら outline に別の文案を置く）'))
+        for a in marks:
+            if a.get('section') != owner[cid]:
+                out.append(('IA_DOM_COPY_SECTION', 'fail', f'{vp}: 文案 {cid} が {a.get("section")} の中にある（outline では {owner[cid]}）'))
+    for sid, _, copies in ol.ordered_sections(outline):
+        drawn = [a['id'] for a in sorted(anchors, key=lambda a: (a['top'], a['left']))
+                 if a['kind'] == 'copy' and a['visible'] and a.get('section') == sid and owner.get(a['id']) == sid]
+        expected_order = [cid for cid, _ in copies if cid in drawn]
+        if list(dict.fromkeys(drawn)) != expected_order:
+            out.append(('IA_DOM_COPY_ORDER', 'fail', f'{vp}: {sid} の文案の描画の順 {drawn} が outline の順 {expected_order} と違う'))
     for cid, copy_ in expected_copy(outline, ssot).items():
         shown = [a for a in anchors if (a['kind'], a['id']) == ('copy', cid) and a['visible']]
-        if not shown:
-            continue  # missing or hidden is reported above
-        matches = [a for a in shown if _copy_norm(a['text']) == copy_]
         # The text itself is not echoed: it is unpublished copy and may be long.
-        if not matches:
-            out.append(('IA_DOM_COPY_DRIFT', 'fail', f'{vp}: {cid} の表示がアウトラインの文案と違う（文言を変えずにスタイリングする）'))
-        elif len(matches) < len(shown):
-            out.append(('IA_DOM_COPY_EXTRA', 'warn', f'{vp}: {cid} の繰り返し {len(shown) - len(matches)} か所が文案と違う'))
+        if any(_copy_norm(a['text']) != copy_ for a in shown):
+            out.append(('IA_DOM_COPY_DRIFT', 'fail', f'{vp}: {cid} の表示が outline の文案と一字一句同じでない（文言を変えずにスタイリングする）'))
     for k, copy_ in texts.items():
         shown = [a for a in anchors if a['kind'] == 'text' and a['id'] == k and a['visible']]
         # Declared text has no repeat leniency: every visible occurrence is the declared text.
@@ -135,9 +139,9 @@ def compare(outline, ssot, snap, output=None):
             out.append(('IA_DOM_ENTITY_NAME', 'fail', f'{vp}: 正式名称 {a["id"]} の表示が SSOT の名前「{name}」と違う（名前だけを包む）'))
     unanchored = _norm(snap.get('unanchored'))
     if unanchored:
-        out.append(('IA_DOM_UNANCHORED_TEXT', 'warn',
-                    f'{vp}: どの印にも属さない文言が {len(unanchored)} 文字ある（主張ならメッセージに、主張でなければ navigation・other の'
-                    'セクションに key で宣言する。判定台帳で主張として判定する）'))
+        out.append(('IA_DOM_UNANCHORED_TEXT', 'fail',
+                    f'{vp}: どの印にも属さない文言が {len(unanchored)} 文字ある（主張なら outline のメッセージと文案に、主張でなければ'
+                    ' texts に宣言する）'))
     values = {fid: f.get('value') for fid, f in ssot['facts'].items()}
     for a in anchors:
         # A fact anchor this page does not refer to may only show a registered value; otherwise it would wrap

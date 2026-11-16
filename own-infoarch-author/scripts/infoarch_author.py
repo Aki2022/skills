@@ -158,23 +158,23 @@ def cmd_compose(args):
     if m.ssot is None or report.exit_code == 2:
         _print(report.to_dict())
         return 2
-    chosen = [x for x in args.strategy.split(',') if x]
+    chosen = [x for x in args.positioning.split(',') if x]
     aud = m.atom(args.audience) or {}
-    _print({'audience': args.audience, 'segment': aud.get('segment'), 'strategy': chosen,
+    _print({'audience': args.audience, 'segment': aud.get('segment'), 'positioning': chosen,
             'messages': check.compose(m, args.audience, chosen)})
     return 0
 
 
 def cmd_review(args):
-    """The owner reads what a confirmation request binds (requirement 14), and a stale request is refused."""
+    """The owner reads what an approval request binds (requirement 3), and a stale request is refused."""
     report = check.Report('review', dt.date.today().isoformat())
     m = check.load(args.root, report)
     if m.ssot is None or report.exit_code == 2:
         _print(report.to_dict())
         return 2
     request = json.loads(Path(args.request).read_text(encoding='utf-8'))
-    hashes, must = check.strategy_targets(m)
-    rows = [r for r in request.get('rows', []) if str(r.get('key', '')).startswith(check.CONFIRM_PREFIX)]
+    hashes, must = check.positioning_targets(m)
+    rows = [r for r in request.get('rows', []) if str(r.get('key', '')).startswith(check.APPROVAL_PREFIX)]
     stale = sorted(r['key'] for r in rows if hashes.get(r['key']) != r.get('value_hash'))
     _print({'rows': len(rows), 'stale': stale, 'missing_required': sorted(set(must) - {r['key'] for r in rows}),
             'markdown': check.review_markdown(m, [r['key'] for r in rows], hashes)})
@@ -193,14 +193,31 @@ def cmd_mapping(args):
     return 0
 
 
+def cmd_positioning(args):
+    """Every approved positioning: its id, derived gaps and points of parity, and what waits for the owner."""
+    import positioning
+    report = check.Report('positioning', dt.date.today().isoformat())
+    m = check.load(args.root, report)
+    if m.ssot is None or report.exit_code == 2:
+        _print(report.to_dict())
+        return 2
+    approved = positioning.approved_keys(m, check.read_approvals(args.root, report))
+    if report.exit_code == 2:
+        _print(report.to_dict())
+        return 2
+    _print({'positionings': {seg: p.to_dict() for seg, p in positioning.derive(m, approved).items()}})
+    return 0
+
+
 def cmd_targets(args):
-    """Owner-confirmation targets for own-design-author: every strategy atom's hash and the keys shipping needs."""
+    """Owner-approval targets for own-design-author: every positioning atom's and arrow's hash, and the keys
+    shipping needs."""
     report = check.Report('targets', dt.date.today().isoformat())
     m = check.load(args.root, report)
     if m.ssot is None or report.exit_code == 2:
         _print(report.to_dict())
         return 2
-    hashes, must = check.strategy_targets(m)
+    hashes, must = check.positioning_targets(m)
     _print({'approval_hashes': hashes, 'must_approval_keys': must})
     return 0
 
@@ -257,16 +274,16 @@ def main(argv=None):
     i.add_argument('--root', default='.')
     i.add_argument('--id', required=True)
     i.set_defaults(fn=cmd_impact)
-    mg = sub.add_parser('migrate', help='one atomic v2 -> v3 migration of design/info_arch/ (preview unless --write)')
+    mg = sub.add_parser('migrate', help='one atomic v2 -> v4 migration of design/info_arch/ (preview unless --write)')
     mg.add_argument('--root', default='.')
     mg.add_argument('--write', action='store_true')
     mg.set_defaults(fn=cmd_migrate)
-    cp = sub.add_parser('compose', help='step 3: messages that stand on the chosen strategy atoms for an audience, in priority order')
+    cp = sub.add_parser('compose', help='step 3: messages that stand on the chosen positioning atoms for an audience, in priority order')
     cp.add_argument('--root', default='.')
     cp.add_argument('--audience', required=True)
-    cp.add_argument('--strategy', required=True, help='comma-separated strategy atom ids (job, pan, gan, val, prm)')
+    cp.add_argument('--positioning', required=True, help='comma-separated positioning atom ids (job, pan, gan, val)')
     cp.set_defaults(fn=cmd_compose)
-    rv = sub.add_parser('review', help='readable content of an owner-confirmation request (ia:strategy rows); a stale request fails')
+    rv = sub.add_parser('review', help='readable content of an owner-approval request (ia:positioning rows); a stale request fails')
     rv.add_argument('--root', default='.')
     rv.add_argument('--request', required=True)
     rv.set_defaults(fn=cmd_review)
@@ -274,9 +291,12 @@ def main(argv=None):
     mp.add_argument('--root', default='.')
     mp.add_argument('--outline', required=True)
     mp.set_defaults(fn=cmd_mapping)
-    t = sub.add_parser('targets', help='owner-confirmation targets (ia:strategy keys and hashes) for own-design-author approvals')
+    t = sub.add_parser('targets', help='owner-approval targets (ia:positioning keys and hashes) for own-design-author approvals')
     t.add_argument('--root', default='.')
     t.set_defaults(fn=cmd_targets)
+    po = sub.add_parser('positioning', help='approved positionings per segment: id, gaps, points of parity, member category, drafts')
+    po.add_argument('--root', default='.')
+    po.set_defaults(fn=cmd_positioning)
     args = ap.parse_args(argv)
     try:
         return args.fn(args)

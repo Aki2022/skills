@@ -1,6 +1,6 @@
 ---
 name: own-infoarch-author
-description: "repo 直下 design/info_arch/ の「伝え方の SSOT」（戦略の層：セグメント・ジョブ・痛み・提供価値・代替・強み・約束など、と伝え方：対象者・メッセージ・証拠・固定値・正式名称・声）を読み書きし、Web サイト・LP・チラシ・ポスター・資料を作るときに、誰に・何を・どの順で・どう話すかをそろえる。「情報設計を作って」「伝え方をそろえて」「SSOT から LP の構成を作って」「メッセージを整理して」「info_arch を検査して」で使う。見た目は own-design-author と工場 skill（own-web-design 等）。"
+description: "repo 直下 design/info_arch/ の「伝え方の SSOT」（positioning：セグメントごとの原子と矢印＝ジョブ・痛み・代替・カテゴリー・強み・提供価値、と伝え方：対象者・メッセージ・証拠・固定値・正式名称・声）を読み書きし、Web サイト・LP・チラシ・ポスター・資料を作るときに、誰に・何を・どの順で・どう話すかをそろえる。「情報設計を作って」「伝え方をそろえて」「SSOT から LP の構成を作って」「メッセージを整理して」「info_arch を検査して」で使う。見た目は own-design-author と工場 skill（own-web-design 等）。"
 ---
 
 # own-infoarch-author — 伝え方の SSOT と構造化アウトライン
@@ -45,7 +45,7 @@ description: "repo 直下 design/info_arch/ の「伝え方の SSOT」（戦略�
 
 ```sh
 infoarch-author check --root .              # SSOT・チャネル・アウトラインの決定論の検査。終了コード 0 / 1（警告）/ 2（失格）
-infoarch-author impact --root . --id fct-0001  # その原子に立つアウトラインと成果物を列挙（戦略の層は経路をたどって推移的に）
+infoarch-author impact --root . --id fct-0001  # その原子に立つアウトラインと成果物を列挙（positioning は矢印をたどって推移的に）
 infoarch-author skeleton --root . --outline lp-xxx [--out DIR]  # アウトラインから骨組みの HTML（アンカー・順序・固定値）を出す。工場はこれを崩さずにスタイリングする
 infoarch-author dom --root . --outline lp-xxx # 描画物をブラウザで開き、アンカー・順序・固定値の表示を確かめる
 infoarch-author judge --root . [--dom-report dom.json]  # 意味の判定（表記ゆれ・強調・未登録の主張・妥当性）を共有の判定台帳から読む。Jev は呼ばない
@@ -54,11 +54,12 @@ infoarch-author evaluate --root . --outline lp-xxx --acquire --answers-dir DIR -
 infoarch-author ship --root . --channel web   # 出荷の正式の入口。出荷されるコミット（git の中身）で tree → check → dom → judge が緑の時だけ ship_command を実行する
 infoarch-author ship --root . --doctor        # ship_command・merge_base の無い出荷チャネル、pre-push の未導入、拡張の失格を伝えない dispatcher を失格にする
 infoarch-author maintain --root .             # セッション終了の Step 2.5。design/info_arch/ が無ければ 1 行で skip
-infoarch-author compose --root . --audience aud-0001 --strategy val-0001,prm-0001  # 段 3：選んだ戦略に立つメッセージを優先順で
-infoarch-author mapping --root . --outline lp-xxx  # 対応表：版のハッシュ（戦略の依存先を含む）・枠の実体・原子の中身のハッシュ
-infoarch-author targets --root .               # 戦略の確定の対象（ia:strategy のハッシュ）と、出荷の経路が要るキー
-infoarch-author review --root . --request design/approval-request-ia-strategy.json  # 確定の束の中身を読める形で。古い束は失格
-infoarch-author migrate --root . [--write]     # v2 から v3 への一括移行（--write が無ければ予行）
+infoarch-author compose --root . --audience aud-0001 --positioning val-0001  # 段 3：選んだ positioning の原子に立つメッセージを優先順で
+infoarch-author mapping --root . --outline lp-xxx  # 対応表：版のハッシュ（立っている positioning を含む）・枠の実体・原子の中身のハッシュ
+infoarch-author positioning --root .           # セグメントごとの positioning の id・隙間・同等であるべき点・所属カテゴリー・承認待ち
+infoarch-author targets --root .               # 承認の対象（ia:positioning:<原子 id か矢印のキー> のハッシュ）と、出荷の経路が要るキー
+infoarch-author review --root . --request design/approval-request-ia-positioning.json  # 承認の束の中身を読める形で。古い束は失格
+infoarch-author migrate --root . [--write]     # v2 から v4 への一括移行（--write が無ければ予行。v5 の形は ISSUE-17）
 ```
 
 出荷は `ship --channel` を通す（`ship_command` を直接叩かない）。push は、マーカー（`templates/infoarch-ship.enabled` を
@@ -73,7 +74,7 @@ push される各コミットそのものと、その予測マージ木で止ま
 ## 参照
 
 - `references/contract.md` — ディレクトリ・原子・アウトラインの契約、検査の code 一覧、期限の扱い、描画物の確認（工場が埋めるアンカー）、意味の判定（判定台帳）。
-- `references/schema/` — `info_arch.yaml`（版 3）・`channels/*.yaml`（版 2）・`outlines/*.yaml`（版 2）の JSON Schema。
+- `references/schema/` — `info_arch.yaml`（版 4）・`channels/*.yaml`（版 2）・`outlines/*.yaml`（版 2）の JSON Schema。
 - `references/media/frames.json` — 媒体ごとの差し替えの枠の種類と多重度（今は LP）。
 - `references/expiry.json` — 証拠・固定値の期限の初期値。
 - `fixtures/red-cases.json` — 必須の赤ケース。自己テストは `uv run --no-project --with-requirements <skill>/scripts/tests/requirements.txt -- pytest -q <skill>/scripts/tests`。

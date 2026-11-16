@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "own-infoarch-author/info_arch.v3.schema.json",
-  "title": "design/info_arch/info_arch.yaml schema version 3 (strategy layer + messaging SSOT)",
-  "description": "伝え方の SSOT。v4 の原子（対象者・メッセージ・証拠・固定値・正式名称・声）に、戦略の層の原子（セグメント・ジョブ・痛み・得たいもの・提供価値・代替・強み・カテゴリーとコンセプト・約束）を足す。v2 の「課題」は「痛み」に移った。state に approved は無い：戦略の原子の確定はハッシュ束縛の承認台帳が持つ。出典: SPEC-information-architecture-standardization v5。",
+  "$id": "own-infoarch-author/info_arch.v4.schema.json",
+  "title": "design/info_arch/info_arch.yaml schema version 4 (positioning atoms and arrows + messaging SSOT)",
+  "description": "伝え方の SSOT。positioning（SPEC-information-architecture-standardization v6 要件 2）の原子（セグメント・ジョブ・痛み・得たいもの・代替・カテゴリー・強み・提供価値・証拠）と矢印（edges）を持つ。原子は 1 つのセグメントにだけ属し（segment）、別のセグメントで使うときは写しを作って出どころ（copied_from）を書く。v5 の約束とカテゴリーとコンセプトは持たない。対象者・メッセージは outline へ移すまで（ISSUE-14）ここに残る。state に approved は無い：承認はハッシュ束縛の承認台帳（ia:positioning:<原子 id か矢印のキー>）が持つ。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -21,12 +21,12 @@
     "values",
     "alternatives",
     "strengths",
-    "concepts",
-    "promises"
+    "categories",
+    "edges"
   ],
   "properties": {
     "schema_version": {
-      "const": 3
+      "const": 4
     },
     "ledger": {
       "type": "object",
@@ -53,8 +53,7 @@
             "val",
             "alt",
             "str",
-            "cpt",
-            "prm"
+            "cat"
           ],
           "properties": {
             "aud": {
@@ -109,11 +108,7 @@
               "type": "integer",
               "minimum": 1
             },
-            "cpt": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "prm": {
+            "cat": {
               "type": "integer",
               "minimum": 1
             }
@@ -274,29 +269,27 @@
         "$ref": "#/$defs/strength"
       }
     },
-    "concepts": {
+    "categories": {
       "type": "object",
       "propertyNames": {
-        "pattern": "^cpt-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
+        "pattern": "^cat-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
       },
       "additionalProperties": {
-        "$ref": "#/$defs/concept"
+        "$ref": "#/$defs/category"
       }
     },
-    "promises": {
-      "type": "object",
-      "propertyNames": {
-        "pattern": "^prm-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
-      },
-      "additionalProperties": {
-        "$ref": "#/$defs/promise"
+    "edges": {
+      "type": "array",
+      "description": "矢印の並び。書いた順番は id に入らない。キーは <種類>:<始点>:<終点>（同じキーは 1 本だけ）",
+      "items": {
+        "$ref": "#/$defs/edge"
       }
     }
   },
   "$defs": {
     "anyId": {
       "type": "string",
-      "pattern": "^(aud|msg|prf|fct|ent|vce|seg|job|pan|gan|val|alt|str|cpt|prm)-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
+      "pattern": "^(aud|msg|prf|fct|ent|vce|seg|job|pan|gan|val|alt|str|cat)-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
     },
     "state": {
       "enum": [
@@ -441,11 +434,11 @@
             },
             {
               "items": {
-                "pattern": "^(val|prm|job|pan|gan)-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
+                "pattern": "^(val|job|pan|gan)-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
               }
             }
           ],
-          "description": "このメッセージが担う戦略の原子。依存経路の起点（要件 13・15）"
+          "description": "このメッセージが立つ positioning の原子（ISSUE-14 で提供価値ちょうど 1 つに替わる）"
         }
       },
       "if": {
@@ -492,13 +485,19 @@
                 "pattern": "^msg-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
               }
             }
-          ]
+          ],
+          "description": "outline へ移すまでのメッセージの証拠（ISSUE-14 で positioning の経路から受け継ぐ形に替わる）"
         },
         "as_of": {
           "$ref": "#/$defs/date"
         },
         "expires": {
           "$ref": "#/$defs/date"
+        },
+        "segment": {
+          "type": "string",
+          "pattern": "^seg-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$",
+          "description": "positioning の証拠のとき、属するセグメント。支える原子と矢印は edges の supports で結ぶ（メッセージの supports とは併記しない）"
         }
       },
       "if": {
@@ -511,18 +510,45 @@
       "then": {
         "required": [
           "text",
-          "source",
-          "supports"
+          "source"
         ],
-        "anyOf": [
+        "allOf": [
           {
-            "required": [
-              "as_of"
+            "anyOf": [
+              {
+                "required": [
+                  "as_of"
+                ]
+              },
+              {
+                "required": [
+                  "expires"
+                ]
+              }
             ]
           },
           {
-            "required": [
-              "expires"
+            "oneOf": [
+              {
+                "required": [
+                  "supports"
+                ],
+                "not": {
+                  "required": [
+                    "segment"
+                  ]
+                }
+              },
+              {
+                "required": [
+                  "segment"
+                ],
+                "not": {
+                  "required": [
+                    "supports"
+                  ]
+                }
+              }
             ]
           }
         ]
@@ -727,7 +753,7 @@
     },
     "segment": {
       "type": "object",
-      "description": "セグメント：見分ける条件と、置かれている状況",
+      "description": "セグメント：見分ける条件と、置かれている状況。払う人と使う人が違えば別のセグメント",
       "additionalProperties": false,
       "required": [
         "state",
@@ -763,7 +789,7 @@
     },
     "job": {
       "type": "object",
-      "description": "ジョブ：セグメントが片付けたい用事。乗り換えを押す力（push・pull）と引き止める力（anxiety・habit）",
+      "description": "ジョブ：セグメントが片付けたい用事（4 つの力は持たない。Deferred Q13）",
       "additionalProperties": false,
       "required": [
         "state",
@@ -776,36 +802,16 @@
         "provenance": {
           "$ref": "#/$defs/provenance"
         },
-        "text": {
-          "$ref": "#/$defs/text"
-        },
         "segment": {
           "type": "string",
           "pattern": "^seg-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
         },
-        "push": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/text"
-          }
+        "text": {
+          "$ref": "#/$defs/text"
         },
-        "pull": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/text"
-          }
-        },
-        "anxiety": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/text"
-          }
-        },
-        "habit": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/text"
-          }
+        "copied_from": {
+          "$ref": "#/$defs/anyId",
+          "description": "写しの出どころ（別のセグメントの同じ種類の原子）。どの id にも入らない"
         }
       },
       "if": {
@@ -817,14 +823,14 @@
       },
       "then": {
         "required": [
-          "text",
-          "segment"
+          "segment",
+          "text"
         ]
       }
     },
     "pain": {
       "type": "object",
-      "description": "痛み：ジョブの周りで顧客が感じる困りごと（v2 の課題）",
+      "description": "痛み：ジョブの周りで顧客が感じる困りごと（重要度は持たない）",
       "additionalProperties": false,
       "required": [
         "state",
@@ -837,12 +843,16 @@
         "provenance": {
           "$ref": "#/$defs/provenance"
         },
+        "segment": {
+          "type": "string",
+          "pattern": "^seg-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
+        },
         "text": {
           "$ref": "#/$defs/text"
         },
-        "job": {
-          "type": "string",
-          "pattern": "^job-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
+        "copied_from": {
+          "$ref": "#/$defs/anyId",
+          "description": "写しの出どころ（別のセグメントの同じ種類の原子）。どの id にも入らない"
         }
       },
       "if": {
@@ -854,14 +864,14 @@
       },
       "then": {
         "required": [
-          "text",
-          "job"
+          "segment",
+          "text"
         ]
       }
     },
     "gain": {
       "type": "object",
-      "description": "得たいもの：ジョブの周りで顧客が望むこと",
+      "description": "得たいもの：ジョブの周りで顧客が得たいこと（重要度は持たない）",
       "additionalProperties": false,
       "required": [
         "state",
@@ -874,12 +884,16 @@
         "provenance": {
           "$ref": "#/$defs/provenance"
         },
+        "segment": {
+          "type": "string",
+          "pattern": "^seg-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
+        },
         "text": {
           "$ref": "#/$defs/text"
         },
-        "job": {
-          "type": "string",
-          "pattern": "^job-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
+        "copied_from": {
+          "$ref": "#/$defs/anyId",
+          "description": "写しの出どころ（別のセグメントの同じ種類の原子）。どの id にも入らない"
         }
       },
       "if": {
@@ -891,14 +905,14 @@
       },
       "then": {
         "required": [
-          "text",
-          "job"
+          "segment",
+          "text"
         ]
       }
     },
     "value": {
       "type": "object",
-      "description": "提供価値：顧客が得るもの。和らげる痛みと生む得たいものを結ぶ",
+      "description": "提供価値：顧客が得るもの。difference（違い）は隙間を、parity（同等）は同等であるべき点を満たす",
       "additionalProperties": false,
       "required": [
         "state",
@@ -911,31 +925,21 @@
         "provenance": {
           "$ref": "#/$defs/provenance"
         },
+        "segment": {
+          "type": "string",
+          "pattern": "^seg-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
+        },
         "text": {
           "$ref": "#/$defs/text"
         },
-        "relieves": {
-          "allOf": [
-            {
-              "$ref": "#/$defs/ids"
-            },
-            {
-              "items": {
-                "pattern": "^pan-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
-              }
-            }
-          ]
+        "copied_from": {
+          "$ref": "#/$defs/anyId",
+          "description": "写しの出どころ（別のセグメントの同じ種類の原子）。どの id にも入らない"
         },
-        "creates": {
-          "allOf": [
-            {
-              "$ref": "#/$defs/ids"
-            },
-            {
-              "items": {
-                "pattern": "^gan-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
-              }
-            }
+        "kind": {
+          "enum": [
+            "difference",
+            "parity"
           ]
         }
       },
@@ -948,35 +952,15 @@
       },
       "then": {
         "required": [
-          "text"
-        ],
-        "anyOf": [
-          {
-            "required": [
-              "relieves"
-            ],
-            "properties": {
-              "relieves": {
-                "minItems": 1
-              }
-            }
-          },
-          {
-            "required": [
-              "creates"
-            ],
-            "properties": {
-              "creates": {
-                "minItems": 1
-              }
-            }
-          }
+          "segment",
+          "text",
+          "kind"
         ]
       }
     },
     "alternative": {
       "type": "object",
-      "description": "代替：顧客がほかに選べるもの（今の対策・何もしないを含む）",
+      "description": "代替：顧客がほかに選べるもの（競合・今の対策・何もしない）",
       "additionalProperties": false,
       "required": [
         "state",
@@ -989,12 +973,16 @@
         "provenance": {
           "$ref": "#/$defs/provenance"
         },
-        "text": {
-          "$ref": "#/$defs/text"
-        },
         "segment": {
           "type": "string",
           "pattern": "^seg-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
+        },
+        "text": {
+          "$ref": "#/$defs/text"
+        },
+        "copied_from": {
+          "$ref": "#/$defs/anyId",
+          "description": "写しの出どころ（別のセグメントの同じ種類の原子）。どの id にも入らない"
         }
       },
       "if": {
@@ -1006,14 +994,14 @@
       },
       "then": {
         "required": [
-          "text",
-          "segment"
+          "segment",
+          "text"
         ]
       }
     },
     "strength": {
       "type": "object",
-      "description": "強み：代替に無い、こちらだけの能力。比べる代替と生む提供価値を結ぶ",
+      "description": "強み：代替に無い、こちらだけの能力",
       "additionalProperties": false,
       "required": [
         "state",
@@ -1025,33 +1013,17 @@
         },
         "provenance": {
           "$ref": "#/$defs/provenance"
+        },
+        "segment": {
+          "type": "string",
+          "pattern": "^seg-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
         },
         "text": {
           "$ref": "#/$defs/text"
         },
-        "versus": {
-          "allOf": [
-            {
-              "$ref": "#/$defs/ids"
-            },
-            {
-              "items": {
-                "pattern": "^alt-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
-              }
-            }
-          ]
-        },
-        "produces": {
-          "allOf": [
-            {
-              "$ref": "#/$defs/ids"
-            },
-            {
-              "items": {
-                "pattern": "^val-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
-              }
-            }
-          ]
+        "copied_from": {
+          "$ref": "#/$defs/anyId",
+          "description": "写しの出どころ（別のセグメントの同じ種類の原子）。どの id にも入らない"
         }
       },
       "if": {
@@ -1063,59 +1035,14 @@
       },
       "then": {
         "required": [
-          "text",
-          "versus",
-          "produces"
-        ],
-        "properties": {
-          "versus": {
-            "minItems": 1
-          },
-          "produces": {
-            "minItems": 1
-          }
-        }
-      }
-    },
-    "concept": {
-      "type": "object",
-      "description": "カテゴリー（顧客がどの棚で比べるか）とコンセプト（その棚の中での、こちらの一言）",
-      "additionalProperties": false,
-      "required": [
-        "state",
-        "provenance"
-      ],
-      "properties": {
-        "state": {
-          "$ref": "#/$defs/state"
-        },
-        "provenance": {
-          "$ref": "#/$defs/provenance"
-        },
-        "category": {
-          "$ref": "#/$defs/text"
-        },
-        "concept": {
-          "$ref": "#/$defs/text"
-        }
-      },
-      "if": {
-        "properties": {
-          "state": {
-            "const": "proposed"
-          }
-        }
-      },
-      "then": {
-        "required": [
-          "category",
-          "concept"
+          "segment",
+          "text"
         ]
       }
     },
-    "promise": {
+    "category": {
       "type": "object",
-      "description": "約束：顧客に言い切ること。どの提供価値を言い切るかを結ぶ",
+      "description": "カテゴリー：顧客が解決策を分類して比べる枠（顧客の側の認知）",
       "additionalProperties": false,
       "required": [
         "state",
@@ -1128,20 +1055,16 @@
         "provenance": {
           "$ref": "#/$defs/provenance"
         },
+        "segment": {
+          "type": "string",
+          "pattern": "^seg-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
+        },
         "text": {
           "$ref": "#/$defs/text"
         },
-        "values": {
-          "allOf": [
-            {
-              "$ref": "#/$defs/ids"
-            },
-            {
-              "items": {
-                "pattern": "^val-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
-              }
-            }
-          ]
+        "copied_from": {
+          "$ref": "#/$defs/anyId",
+          "description": "写しの出どころ（別のセグメントの同じ種類の原子）。どの id にも入らない"
         }
       },
       "if": {
@@ -1153,13 +1076,63 @@
       },
       "then": {
         "required": [
-          "text",
-          "values"
-        ],
-        "properties": {
-          "values": {
-            "minItems": 1
-          }
+          "segment",
+          "text"
+        ]
+      }
+    },
+    "edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "from",
+        "to",
+        "state",
+        "provenance"
+      ],
+      "description": "矢印。種類ごとの始点と終点の原子の種類、度合いの有無は check が確かめる（要件 2）",
+      "properties": {
+        "kind": {
+          "enum": [
+            "has_job",
+            "need",
+            "fulfills",
+            "recalls",
+            "includes",
+            "member_of",
+            "lacks",
+            "produces",
+            "satisfies",
+            "supports"
+          ]
+        },
+        "from": {
+          "$ref": "#/$defs/anyId"
+        },
+        "to": {
+          "type": "string",
+          "minLength": 1,
+          "description": "原子の id。supports だけは矢印のキー（<種類>:<始点>:<終点>）も指せる"
+        },
+        "degree": {
+          "enum": [
+            "full",
+            "partial",
+            "none"
+          ],
+          "description": "fulfills（代替→痛み・得たいもの）の満たす度合い。ほかの種類には書かない"
+        },
+        "state": {
+          "$ref": "#/$defs/state"
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        },
+        "copied_from": {
+          "type": "string",
+          "minLength": 1,
+          "description": "写しの出どころの矢印のキー。どの id にも入らない"
         }
       }
     }

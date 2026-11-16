@@ -9,7 +9,7 @@
 3. **複数ページ**：ページごとに目的を 1 つにする。ラベル（ナビゲーションの語）は、同じ語を繰り返さず、読み手の言葉で書く。ページの集合は、読み手の行動の順に並べる。
 4. 各セクションに `role`（pain / benefit / proof / how / objection / cta / vision / navigation / other）を付ける。行動喚起（cta）は最後だけでなく、長い成果物では途中にも置いてよい。
    ナビ・節のラベル・見出し・法務やフッターのように主張でない文言も、画面に出すなら `navigation`（順序に入らない）か `other`（順序に入る）のセクションに、安定した `key` と文言そのものを書いて宣言する。宣言しない文言は、描画後に IA_DOM_UNANCHORED_TEXT（誰も管理していない文言）になる。主張になりうる文言は宣言せず、メッセージにする。
-5. （v5）なぜこの戦略を選び、この順に並べたかを `strategy.rationale` に書く。A/B で比べたい場所は、LP なら `frames` で枠の実体として宣言する（`media/frames.json`）。
+5. なぜこの positioning の原子を選び、この順に並べたかを `strategy.rationale` に書く。A/B で比べたい場所は、LP なら `frames` で枠の実体として宣言する（`media/frames.json`）。
 
 ## よくある失敗
 

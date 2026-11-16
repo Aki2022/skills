@@ -8,7 +8,7 @@
 2. 二次の読み手がいる場合は、「同じ行動を取るが、前提が違う人」かどうかで分ける。前提が大きく違うなら、成果物を分けることを依頼主に提案する（1 つの成果物で 2 人に話すと、どちらにも弱くなる）。
 3. 選んだ対象者の `situation`・`pains`・`desired_action`・`tone` を読み、段 1 の行動と合っているか確かめる。合わなければ、依頼か対象者のどちらかが違う。
 4. SSOT に合う対象者がいなければ、作業を止め、対象者の追加を別の PR で提案する（制作中に SSOT を書き換えない）。
-5. （v5）対象者の `segment` から、この成果物が立つ戦略の原子（提供価値・約束・ジョブ・痛み・得たいもの）を選び、アウトラインの `strategy.choose` に書く。選べるのは、そのセグメントにたどり着く原子だけ（違えば IA_COMPOSITION_STRATEGY_INVALID）。オーナーの確定が無い原子を選ぶと、出荷で止まる（IA_STRATEGY_UNCONFIRMED）。
+5. 対象者の `segment` から、この成果物が立つ positioning の原子（提供価値・ジョブ・痛み・得たいもの）を選び、アウトラインの `strategy.choose` に書く。選べるのは、そのセグメントにたどり着く原子だけ（違えば IA_COMPOSITION_POSITIONING_INVALID）。`infoarch-author positioning` で隙間と同等であるべき点を見てから選ぶ。オーナーの承認が無い原子・矢印に立つと、出荷で止まる（IA_POSITIONING_UNAPPROVED）。
 
 ## よくある失敗
 

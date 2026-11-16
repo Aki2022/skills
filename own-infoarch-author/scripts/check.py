@@ -12,13 +12,13 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import positioning as pos
 from common import INFO_ARCH_DIR, Report, YamlError, load_ref, load_yaml, validator_for
 
-# Strategy layer (v5): segment, job, pain, gain, value, alternative, strength, concept, promise.
-STRATEGY = {'segments': 'seg', 'jobs': 'job', 'pains': 'pan', 'gains': 'gan', 'values': 'val',
-            'alternatives': 'alt', 'strengths': 'str', 'concepts': 'cpt', 'promises': 'prm'}
+# Positioning (v6): segment, job, pain, gain, alternative, category, strength, value (+ evidence in proofs).
+POSITIONING = dict(pos.ATOM_BLOCKS)
 BLOCKS = {'audiences': 'aud', 'messages': 'msg', 'proofs': 'prf', 'facts': 'fct',
-          'entities': 'ent', 'voices': 'vce', **STRATEGY}
+          'entities': 'ent', 'voices': 'vce', **POSITIONING}
 PREFIX_BLOCK = {v: k for k, v in BLOCKS.items()}
 ID_RE = re.compile(r'(' + '|'.join(BLOCKS.values()) + r')-((?!0000)[0-9]{4}|[1-9][0-9]{4,})')  # always fullmatch: $ would accept a trailing newline
 PLACEHOLDER = re.compile(r'\{\{(fct-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,}))\}\}')  # exactly {{fct-NNNN}}, no padding
@@ -72,7 +72,7 @@ def load(root, report):
     data, ok = _load(root / SSOT_PATH, SSOT_PATH, report)
     if not ok:
         return m
-    errs = _errors(validator_for('info_arch.v3.schema.json'), data)
+    errs = _errors(validator_for('info_arch.v4.schema.json'), data)
     for e in errs:
         report.add('fail', 'IA_SCHEMA', e.message, SSOT_PATH, pointer='/' + '/'.join(map(str, e.absolute_path)))
     if errs:
@@ -111,10 +111,8 @@ def load(root, report):
 def ssot_refs(block, atom):
     """Every id an SSOT atom references, as (field, id). One table, so no field is forgotten."""
     out = []
-    single = {'audiences': ('segment',), 'jobs': ('segment',), 'pains': ('job',), 'gains': ('job',),
-              'alternatives': ('segment',)}
-    many = {'audiences': ('priorities',), 'messages': ('addresses', 'serves'), 'proofs': ('supports',),
-            'values': ('relieves', 'creates'), 'strengths': ('versus', 'produces'), 'promises': ('values',)}
+    single = {'audiences': ('segment',), 'proofs': ('segment',), **{b: ('segment',) for b in POSITIONING if b != 'segments'}}
+    many = {'audiences': ('priorities',), 'messages': ('addresses', 'serves'), 'proofs': ('supports',)}
     for fld in single.get(block, ()):
         if fld in atom:
             out.append((fld, atom[fld]))
@@ -189,104 +187,57 @@ def check_lead_support(m, report):
                    str(SSOT_PATH), id=lead)
 
 
-# ---- strategy path (requirements 13 and 15) ----------------------------------------------
+# ---- positioning path (v6 requirements 2, 3 and 15; ISSUE-14 replaces the message side) ---------------------
 
-def _live(m, block, aid):
-    atom = (m.ssot.get(block) or {}).get(aid)
-    return atom if atom and atom['state'] == 'proposed' else None
+# How a message's positioning atoms pull in what they stand on: (atom prefix, arrow kind, direction, other end).
+_PATH_RULES = (('val', 'satisfies', 'out'), ('val', 'produces', 'in'), ('str', 'lacks', 'out'),
+               ('pan', 'need', 'in'), ('gan', 'need', 'in'), ('job', 'has_job', 'in'))
 
 
-def strategy_path(m, root_ids, segment):
-    """The strategy atoms a message (or pain) stands on for one segment, and their hash.
+def positioning_path(m, root_ids, segment):
+    """The positioning atoms and arrows a message (or pain) stands on in one segment, and their hash.
 
-    Derived from references only, so a deliverable cannot leave anything out: a job is on the path when it
-    belongs to the segment; a pain or gain when its job is; a value when it relieves or creates one of those;
-    a promise when it states such a value; every strength that produces such a value, with the alternatives of
-    the same segment it is compared against. Branches that lead to another segment are not followed.
-    -> (sorted ids, sha256 of the canonical JSON of those atoms). An empty path hashes to None.
+    Derived from arrows alone, so a deliverable cannot leave anything out: a value pulls in the needs it satisfies
+    and the strengths that produce it (with the alternatives they are compared against); a need pulls in its job;
+    a job its segment. Proposed elements only; approval is checked separately. Arrows into another segment are not
+    followed. -> (sorted keys, sha256 of their content). An empty path hashes to None.
     """
     if isinstance(root_ids, str):
         root_ids = _roots(m, root_ids)
-    d = m.ssot
-    jobs = {j for j, a in (d.get('jobs') or {}).items() if a['state'] == 'proposed' and a.get('segment') == segment}
-    needs = {b: {k for k, a in (d.get(b) or {}).items() if a['state'] == 'proposed' and a.get('job') in jobs}
-             for b in ('pains', 'gains')}
-    values = {v for v, a in (d.get('values') or {}).items() if a['state'] == 'proposed'
-              and (set(a.get('relieves', [])) & needs['pains'] or set(a.get('creates', [])) & needs['gains'])}
-    promises = {p for p, a in (d.get('promises') or {}).items() if a['state'] == 'proposed' and set(a.get('values', [])) & values}
-    reachable = jobs | needs['pains'] | needs['gains'] | values | promises
-    roots = [r for r in root_ids if r in reachable]
+    atoms, edges, segs = pos.atoms(m), pos.edges(m), pos.segment_map(m)
+    def mine(aid):
+        return aid in atoms and segs.get(aid) == segment
+    roots = [r for r in root_ids if mine(r) and pos._prefix(r) in ('val', 'job', 'pan', 'gan')]
     if not roots:
         return [], None
-    on = set()
-    for r in roots:
-        prefix = r.split('-')[0]
-        if prefix == 'prm':
-            vals = set(d['promises'][r].get('values', [])) & values
-            on |= {r} | vals
-        elif prefix == 'val':
-            vals = {r}
-            on |= vals
-        else:
-            vals = set()
-            on.add(r)
-        for v in vals:
-            a = d['values'][v]
-            on |= (set(a.get('relieves', [])) & needs['pains']) | (set(a.get('creates', [])) & needs['gains'])
-    for k in [x for x in on if x.split('-')[0] in ('pan', 'gan')]:
-        on.add(d['pains' if k.startswith('pan') else 'gains'][k]['job'])
-    on_values = {x for x in on if x.startswith('val-')}
-    for sid, a in (d.get('strengths') or {}).items():
-        if a['state'] == 'proposed' and set(a.get('produces', [])) & on_values:
-            on.add(sid)
-            on |= {x for x in a.get('versus', []) if (_live(m, 'alternatives', x) or {}).get('segment') == segment}
-    on.add(segment)
-    ids = sorted(on)
-    body = [[aid, m.atom(aid)] for aid in ids]
-    digest = hashlib.sha256(json.dumps(body, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
-    return ids, digest
-
-
-# ---- owner confirmation (requirements 14 and 19) -----------------------------------------
-
-CONFIRM_PREFIX = 'ia:strategy:'
-_DOWN = {'job': ('segment',), 'pan': ('job',), 'gan': ('job',), 'alt': ('segment',),
-         'val': ('relieves', 'creates'), 'prm': ('values',), 'str': ('versus', 'produces')}
-
-
-def _depends_on(m, aid):
-    """Every strategy atom `aid` stands on: what it references, down to the segment, plus the strengths
-    behind a value (and their alternatives). A set, so the value <-> strength references cannot loop."""
-    seen, todo = set(), [aid]
+    on, todo = set(), list(roots)
     while todo:
         cur = todo.pop()
-        atom = m.atom(cur)
-        if not atom or atom['state'] != 'proposed':
+        if cur in on:
             continue
-        nxt = []
-        for fld in _DOWN.get(cur.split('-')[0], ()):
-            val = atom.get(fld)
-            nxt += val if isinstance(val, list) else ([val] if val else [])
-        if cur.startswith('val-'):
-            nxt += [sid for sid, a in (m.ssot.get('strengths') or {}).items()
-                    if a['state'] == 'proposed' and cur in a.get('produces', [])]
-        for x in nxt:
-            if x not in seen and x != aid:
-                seen.add(x)
-                todo.append(x)
-    return sorted(seen)
+        on.add(cur)
+        for prefix, kind, direction in _PATH_RULES:
+            if pos._prefix(cur) != prefix:
+                continue
+            for key, e in edges.items():
+                end = e['to'] if direction == 'out' else e['from']
+                if e['kind'] == kind and (e['from'] if direction == 'out' else e['to']) == cur and mine(end):
+                    on.add(key)
+                    todo.append(end)
+    on.add(segment)
+    ids = sorted(on)
+    body = [[k, pos.content(atoms.get(k) or edges[k])] for k in ids]
+    return ids, pos.sha256(body)
 
 
-def confirmation_hash(m, aid):
-    """Binds the atom's own content (as written; nothing is resolved) and the content of what it depends on."""
-    body = {'atom': [aid, m.atom(aid)], 'depends_on': [[d, m.atom(d)] for d in _depends_on(m, aid)]}
-    return hashlib.sha256(json.dumps(body, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+# ---- owner approval per atom and arrow (v6 requirement 3; ISSUE-13 adds prepare, the contract and the ship report) --
+
+APPROVAL_PREFIX = pos.APPROVAL_PREFIX
 
 
-def strategy_targets(m):
-    """-> ({ia:strategy:<id>: hash} for every proposed strategy atom, sorted keys the shipped paths stand on)."""
-    hashes = {CONFIRM_PREFIX + aid: confirmation_hash(m, aid)
-              for block in STRATEGY for aid, a in (m.ssot.get(block) or {}).items() if a['state'] == 'proposed'}
+def positioning_targets(m):
+    """-> ({ia:positioning:<key>: hash} for every proposed atom and arrow, sorted keys the shipped paths stand on)."""
+    hashes = pos.approval_targets(m)
     must = set()
     for _, (_, o) in m.outlines.items():
         ch = m.channels.get(o['channel'])
@@ -297,72 +248,67 @@ def strategy_targets(m):
             for s in p['sections']:
                 for key in ('message', 'pain'):
                     if s.get(key) and m.atom(s[key]) is not None:
-                        must |= {CONFIRM_PREFIX + x for x in strategy_path(m, _roots(m, s[key]), segment)[0]}
+                        must |= {APPROVAL_PREFIX + x for x in positioning_path(m, _roots(m, s[key]), segment)[0]}
     return hashes, sorted(must & set(hashes))
 
 
-REVIEW_NAMES = {'seg': 'セグメント', 'job': 'ジョブ', 'pan': '痛み', 'gan': '得たいもの', 'val': '提供価値',
-                'alt': '代替', 'str': '強み', 'cpt': 'カテゴリーとコンセプト', 'prm': '約束'}
-REVIEW_FIELDS = {'text': '', 'qualifier': '見分ける条件', 'situation': '状況', 'category': 'カテゴリー', 'concept': 'コンセプト',
-                 'push': '押す力', 'pull': '引く力', 'anxiety': '不安', 'habit': '習慣', 'segment': 'セグメント', 'job': 'ジョブ',
-                 'relieves': '和らげる痛み', 'creates': '生む得たいもの', 'versus': '比べる代替', 'produces': '生む提供価値',
-                 'values': '言い切る提供価値', 'provenance': '出所'}
+REVIEW_NAMES = {'seg': 'セグメント', 'job': 'ジョブ', 'pan': '痛み', 'gan': '得たいもの', 'alt': '代替',
+                'cat': 'カテゴリー', 'str': '強み', 'val': '提供価値', 'prf': '証拠'}
+REVIEW_FIELDS = {'text': '', 'qualifier': '見分ける条件', 'situation': '状況', 'kind': '種類', 'segment': 'セグメント',
+                 'source': '出典', 'as_of': '時点', 'expires': '期限', 'copied_from': '写しの出どころ', 'provenance': '出所'}
+EDGE_NAMES = {'has_job': 'ジョブを持つ', 'need': '痛み・得たいものを持つ', 'fulfills': '満たす度合い', 'recalls': '思い出す',
+              'includes': '入れている', 'member_of': '所属', 'lacks': '代替に無い', 'produces': '生む',
+              'satisfies': '満たす', 'supports': '支える'}
 
 
 def review_markdown(m, keys, hashes):
-    """Markdown of the atoms a confirmation request binds, grouped by kind, with each binding hash."""
-    lines = []
+    """Markdown of the atoms and arrows an approval request binds, grouped by kind, with each binding hash."""
+    lines, chosen = [], sorted(k[len(APPROVAL_PREFIX):] for k in keys)
+    atoms, edges = pos.atoms(m, proposed_only=False), pos.edges(m, proposed_only=False)
     for prefix, name in REVIEW_NAMES.items():
-        ids = sorted(k[len(CONFIRM_PREFIX):] for k in keys if k[len(CONFIRM_PREFIX):].startswith(prefix + '-'))
+        ids = [k for k in chosen if pos._prefix(k) == prefix and k in atoms]
         if not ids:
             continue
         lines.append(f'## {name}（{len(ids)}）')
         for aid in ids:
-            atom = m.atom(aid) or {}
-            lines.append(f'### {aid}　`{(hashes.get(CONFIRM_PREFIX + aid) or "")[:12]}`')
+            lines.append(f'### {aid}　`{(hashes.get(APPROVAL_PREFIX + aid) or "")[:12]}`')
             for fld, label in REVIEW_FIELDS.items():
-                v = atom.get(fld)
+                v = atoms[aid].get(fld)
                 if v:
-                    v = '、'.join(v) if isinstance(v, list) else v
-                    lines.append(f'- {label + "：" if label else ""}{v}')
+                    lines.append(f'- {label + "：" if label else ""}{"、".join(v) if isinstance(v, list) else v}')
+        lines.append('')
+    arrows = [k for k in chosen if k in edges]
+    if arrows:
+        lines.append(f'## 矢印（{len(arrows)}）')
+        for k in arrows:
+            e = edges[k]
+            degree = f'（{e["degree"]}）' if 'degree' in e else ''
+            lines.append(f'- {e["from"]} → {e["to"]}：{EDGE_NAMES.get(e["kind"], e["kind"])}{degree}　'
+                         f'`{(hashes.get(APPROVAL_PREFIX + k) or "")[:12]}`')
         lines.append('')
     return '\n'.join(lines)
 
 
-def read_confirmations(root, report):
-    """The owner's ia:strategy rows of design/approvals.yaml. Its full validation belongs to own-design-author."""
-    path = Path(root) / 'design/approvals.yaml'
-    if not path.is_file():
-        return {}
-    try:
-        rows = load_yaml(path)
-    except YamlError as exc:
-        report.add('fail', 'IA_APPROVALS_INVALID', f'design/approvals.yaml が読めない: {exc}', 'design/approvals.yaml')
-        return {}
-    if rows is None:
-        return {}
-    if not isinstance(rows, list) or any(not isinstance(r, dict) or not isinstance(r.get('key'), str)
-                                         or not isinstance(r.get('value_hash'), str) for r in rows):
-        report.add('fail', 'IA_APPROVALS_INVALID', 'design/approvals.yaml の形が違う（key と value_hash の行の並び）', 'design/approvals.yaml')
-        return {}
-    return {r['key']: r['value_hash'] for r in rows if r['key'].startswith(CONFIRM_PREFIX)}
+def read_approvals(root, report):
+    """The owner's ia:positioning rows of design/approvals.yaml. Its full validation belongs to own-design-author."""
+    return pos.read_approvals(Path(root), report, load_yaml, YamlError)
 
 
-def strategy_dependencies(m, o):
-    """Every strategy atom an outline stands on: the paths of its messages and pains, and of its chosen strategy."""
+def positioning_dependencies(m, o):
+    """Every positioning element an outline stands on: the paths of its messages and pains, and of its chosen atoms."""
     segment = (m.atom(o['audience']) or {}).get('segment')
     roots = [s[k] for p in o['pages'] for s in p['sections'] for k in ('message', 'pain') if s.get(k) and m.atom(s[k])]
     out = set()
     for r in roots:
-        out |= set(strategy_path(m, _roots(m, r), segment)[0])
+        out |= set(positioning_path(m, _roots(m, r), segment)[0])
     for x in (o.get('strategy') or {}).get('choose', []):
-        out |= set(strategy_path(m, [x], segment)[0])
+        out |= set(positioning_path(m, [x], segment)[0])
     return out
 
 
 def outline_dependencies(m, o):
-    """Direct references plus the strategy layer underneath (requirement 18: reverse lookup is transitive)."""
-    return {x for _, x in outline_refs(o)} | strategy_dependencies(m, o)
+    """Direct references plus the positioning underneath (requirement 14: reverse lookup is transitive)."""
+    return {x for _, x in outline_refs(o)} | positioning_dependencies(m, o)
 
 
 def _roots(m, aid):
@@ -372,9 +318,14 @@ def _roots(m, aid):
     return [aid]
 
 
-def check_strategy(m, report, oid, rel, o, shipped, hashes=None, confirmed=None):
-    """Every message and pain an outline uses must stand on the audience's segment, and every atom of those
-    paths must carry the owner's current confirmation (requirement 15)."""
+def element(m, key):
+    """An atom or an arrow by its key (None when there is none)."""
+    return m.atom(key) or pos.edges(m, proposed_only=False).get(key)
+
+
+def check_positioning_use(m, report, oid, rel, o, shipped, approved=None):
+    """Every message and pain an outline uses must stand on the audience's segment, and every element of those
+    paths must carry the owner's current approval (requirement 15)."""
     level = 'fail' if shipped else 'warn'
     segment = (m.atom(o['audience']) or {}).get('segment')
     missing = set()
@@ -387,53 +338,53 @@ def check_strategy(m, report, oid, rel, o, shipped, hashes=None, confirmed=None)
                     continue
                 roots = _roots(m, aid)
                 if not roots:
-                    report.add(level, 'IA_STRATEGY_UNTRACED',
-                               f'{w}: {aid} はどの戦略の原子も担っていない（serves で提供価値・約束・ジョブ・痛み・得たいものを結ぶ）', rel, id=aid)
+                    report.add(level, 'IA_POSITIONING_UNTRACED',
+                               f'{w}: {aid} はどの positioning の原子にも立っていない（serves で提供価値・ジョブ・痛み・得たいものを結ぶ）', rel, id=aid)
                     continue
-                ids, _ = strategy_path(m, roots, segment)
+                ids, _ = positioning_path(m, roots, segment)
                 if not ids:
-                    report.add(level, 'IA_STRATEGY_SEGMENT_MISMATCH',
-                               f'{w}: {aid} の戦略は対象者 {o["audience"]} のセグメント {segment} にたどり着かない', rel, id=aid)
-                if hashes is not None:
-                    missing |= {x for x in ids if (confirmed or {}).get(CONFIRM_PREFIX + x) != hashes.get(CONFIRM_PREFIX + x)}
+                    report.add(level, 'IA_POSITIONING_SEGMENT_MISMATCH',
+                               f'{w}: {aid} の positioning は対象者 {o["audience"]} のセグメント {segment} にたどり着かない', rel, id=aid)
+                if approved is not None:
+                    missing |= {x for x in ids if x not in approved}
     if missing:
-        report.add(level, 'IA_STRATEGY_UNCONFIRMED',
-                   f'{oid}: 戦略の経路に、オーナーの確定が無いか外れた原子がある {sorted(missing)}'
+        report.add(level, 'IA_POSITIONING_UNAPPROVED',
+                   f'{oid}: 立っている positioning に、オーナーの承認が無いか外れた原子・矢印がある {sorted(missing)}'
                    '（design-author approve --prepare で束を作り、オーナーが記録する）', rel, atoms=sorted(missing))
 
 
-# ---- composition (steps 2-4; requirements 12 and 15) -------------------------------------
+# ---- composition (steps 2-4) -----------------------------------------------------------------------------------
 
 def compose(m, audience, chosen):
-    """Messages that stand on the chosen strategy atoms for the audience's segment, in the audience's priority order
-    (then the rest, by id). The deterministic half of step 3; choosing and cutting stays with the author."""
+    """Messages that stand on the chosen positioning atoms for the audience's segment, in the audience's priority
+    order (then the rest, by id). The deterministic half of step 3; choosing and cutting stays with the author."""
     aud = m.atom(audience) or {}
     segment = aud.get('segment')
     chosen = set(chosen)
     picked = [mid for mid, a in sorted((m.ssot.get('messages') or {}).items())
-              if a['state'] == 'proposed' and set(strategy_path(m, _roots(m, mid), segment)[0]) & chosen]
+              if a['state'] == 'proposed' and set(positioning_path(m, _roots(m, mid), segment)[0]) & chosen]
     order = {mid: i for i, mid in enumerate(aud.get('priorities') or [])}
     return sorted(picked, key=lambda mid: (order.get(mid, len(order)), mid))
 
 
 def check_composition(m, report, oid, rel, o):
-    """The recorded strategy choice must stand on the audience's segment; messages should stand on it; dropping the
-    audience's top message needs a recorded reason."""
+    """The recorded choice must stand on the audience's segment; messages should stand on it; dropping the
+    audience's top message needs a recorded reason. (The outline field keeps the name `strategy` until ISSUE-14.)"""
     segment = (m.atom(o['audience']) or {}).get('segment')
     st = o['strategy']
-    bad = [x for x in st['choose'] if m.atom(x) is None or not strategy_path(m, [x], segment)[0]]
+    bad = [x for x in st['choose'] if m.atom(x) is None or not positioning_path(m, [x], segment)[0]]
     if bad:
-        report.add('fail', 'IA_COMPOSITION_STRATEGY_INVALID',
-                   f'{oid}: 選んだ戦略 {bad} が無いか、対象者のセグメント {segment} の原子でない', rel)
+        report.add('fail', 'IA_COMPOSITION_POSITIONING_INVALID',
+                   f'{oid}: 選んだ positioning の原子 {bad} が無いか、対象者のセグメント {segment} の原子でない', rel)
         return
     chosen = set(st['choose'])
     for p in o['pages']:
         for i, s in enumerate(p['sections']):
             mid = s.get('message')
             if mid and m.atom(mid) is not None and _roots(m, mid):
-                if not set(strategy_path(m, _roots(m, mid), segment)[0]) & chosen:
-                    report.add('warn', 'IA_COMPOSITION_OFF_STRATEGY',
-                               f'{oid}.{p["id"]}[{i}]: {mid} は選んだ戦略 {sorted(chosen)} に立っていない', rel, id=mid)
+                if not set(positioning_path(m, _roots(m, mid), segment)[0]) & chosen:
+                    report.add('warn', 'IA_COMPOSITION_OFF_POSITIONING',
+                               f'{oid}.{p["id"]}[{i}]: {mid} は選んだ positioning の原子 {sorted(chosen)} に立っていない', rel, id=mid)
     top = ((m.atom(o['audience']) or {}).get('priorities') or [None])[0]
     used = {s.get('message') for p in o['pages'] for s in p['sections']}
     cut = {m.resolve(x) for x in o['brief'].get('cut', [])} - {None}
@@ -515,9 +466,9 @@ def mapping(m, oid):
     for out in o['outputs']:
         f = m.root / out
         outputs[out] = hashlib.sha256(f.read_bytes()).hexdigest() if f.is_file() else None
-    strategy = {aid: m.atom(aid) for aid in sorted(strategy_dependencies(m, o))}
+    standing = {k: element(m, k) for k in sorted(positioning_dependencies(m, o))}
     version = h({'outline': o, 'atoms': {aid: m.atom(aid) for s in sections for aid in atoms_of(s)},
-                 'strategy': strategy, 'outputs': outputs})
+                 'positioning': standing, 'outputs': outputs})
     return {'deliverable': oid, 'version_hash': version, 'outputs': outputs, 'strategy': o['strategy'], 'frames': rows}
 
 
@@ -685,18 +636,18 @@ def check(root, date):
     if m.ssot is None:
         return report, m
     check_ssot(m, report)
+    approved = pos.approved_keys(m, read_approvals(root, report))
+    pos.check_positioning(m, report, approved, str(SSOT_PATH))
     if not m.channels:
         report.add('fail', 'IA_NO_CHANNELS', 'channels/*.yaml が 0 件（対象 0 件を合格にしない）', INFO_ARCH_DIR / 'channels')
     if not m.outlines:
         report.add('fail', 'IA_NO_OUTLINES', 'outlines/*.yaml が 0 件（対象 0 件を合格にしない）', INFO_ARCH_DIR / 'outlines')
-    hashes, _ = strategy_targets(m)
-    confirmed = read_confirmations(root, report)
     for oid, (rel, o) in sorted(m.outlines.items()):
         check_outline(m, report, oid, rel, o)
         check_frames(m, report, oid, rel, o)
         check_composition(m, report, oid, rel, o)
         ch = m.channels.get(o['channel'])
-        check_strategy(m, report, oid, rel, o, shipped=bool(ch and ch[1]['ship']), hashes=hashes, confirmed=confirmed)
+        check_positioning_use(m, report, oid, rel, o, shipped=bool(ch and ch[1]['ship']), approved=approved)
     check_expiry(m, report, date)
     check_pages(m, report)
     report.targets = {'channels': len(m.channels), 'outlines': len(m.outlines),

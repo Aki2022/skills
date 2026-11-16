@@ -1,21 +1,23 @@
-schema_version: 3
+# 例：自治体の情報部門（seg-0001）と中小企業の経営者（seg-0002）の 2 つの positioning。
+# seg-0001 の隙間は pan-0001・gan-0001（どの代替も「満たす」に届かない）、同等であるべき点は gan-0002
+# （所属カテゴリー cat-0001 に入っている代替がすべて満たす）。alt-0003 は alt-0001 の写し（copied_from）。
+schema_version: 4
 ledger:
   next:
     aud: 3
     msg: 5
-    prf: 3
+    prf: 4
     fct: 3
     ent: 2
     vce: 2
     seg: 3
     job: 3
     pan: 3
-    gan: 2
-    val: 3
-    alt: 2
-    str: 2
-    cpt: 2
-    prm: 3
+    gan: 3
+    alt: 4
+    cat: 3
+    str: 3
+    val: 4
   tombstones:
     msg-0004: msg-0003
 audiences:
@@ -59,83 +61,246 @@ jobs:
   job-0001:
     state: proposed
     provenance: owner
-    text: 既存システムを無理なく運用する
     segment: seg-0001
-    push:
-    - 保守の手間が増え続ける
-    anxiety:
-    - 移行で止まるのが怖い
+    text: 既存システムを無理なく運用する
   job-0002:
     state: proposed
     provenance: owner
-    text: 少ない人数で業務を回す
     segment: seg-0002
+    text: 少ない人数で業務を回す
 pains:
   pan-0001:
     state: proposed
     provenance: owner
+    segment: seg-0001
     text: 運用が重い
-    job: job-0001
   pan-0002:
     state: proposed
     provenance: owner
+    segment: seg-0002
     text: 人手が足りない
-    job: job-0002
 gains:
   gan-0001:
     state: proposed
     provenance: owner
+    segment: seg-0001
     text: 職員が本来の業務に時間を使える
-    job: job-0001
-values:
-  val-0001:
+  gan-0002:
     state: proposed
     provenance: owner
-    text: 運用の手間が減る
-    relieves:
-    - pan-0001
-    creates:
-    - gan-0001
-  val-0002:
-    state: proposed
-    provenance: owner
-    text: 少人数でも回る
-    relieves:
-    - pan-0002
+    segment: seg-0001
+    text: 止まらずに動き続ける
 alternatives:
   alt-0001:
     state: proposed
     provenance: owner
-    text: 今のシステムを使い続ける
     segment: seg-0001
+    text: 今のシステムを使い続ける
+  alt-0002:
+    state: proposed
+    provenance: owner
+    segment: seg-0001
+    text: 保守を外部に委託する
+  alt-0003:
+    state: proposed
+    provenance: owner
+    segment: seg-0002
+    text: 今のシステムを使い続ける
+    copied_from: alt-0001
+categories:
+  cat-0001:
+    state: proposed
+    provenance: owner
+    segment: seg-0001
+    text: 自治体向け Web サーバー
+  cat-0002:
+    state: proposed
+    provenance: owner
+    segment: seg-0002
+    text: 中小企業向けの業務システム
 strengths:
   str-0001:
     state: proposed
     provenance: owner
+    segment: seg-0001
     text: 自動更新で保守が要らない
-    versus:
-    - alt-0001
-    produces:
-    - val-0001
-concepts:
-  cpt-0001:
+  str-0002:
     state: proposed
     provenance: owner
-    category: 自治体向け Web サーバー
-    concept: 保守のいらない Web サーバー
-promises:
-  prm-0001:
+    segment: seg-0002
+    text: 設定なしで使い始められる
+values:
+  val-0001:
     state: proposed
     provenance: owner
-    text: 運用の手間を半分にする
-    values:
-    - val-0001
-  prm-0002:
+    segment: seg-0001
+    kind: difference
+    text: 運用の手間が減る
+  val-0002:
     state: proposed
     provenance: owner
-    text: 少人数でも止まらない
-    values:
-    - val-0002
+    segment: seg-0002
+    kind: difference
+    text: 少人数でも回る
+  val-0003:
+    state: proposed
+    provenance: owner
+    segment: seg-0001
+    kind: parity
+    text: 止まらずに動く
+edges:
+- kind: has_job
+  from: seg-0001
+  to: job-0001
+  state: proposed
+  provenance: owner
+- kind: need
+  from: job-0001
+  to: pan-0001
+  state: proposed
+  provenance: owner
+- kind: need
+  from: job-0001
+  to: gan-0001
+  state: proposed
+  provenance: owner
+- kind: need
+  from: job-0001
+  to: gan-0002
+  state: proposed
+  provenance: owner
+- kind: recalls
+  from: job-0001
+  to: cat-0001
+  state: proposed
+  provenance: owner
+- kind: includes
+  from: cat-0001
+  to: alt-0001
+  state: proposed
+  provenance: owner
+- kind: member_of
+  from: seg-0001
+  to: cat-0001
+  state: proposed
+  provenance: owner
+- kind: fulfills
+  from: alt-0001
+  to: pan-0001
+  state: proposed
+  provenance: owner
+  degree: none
+- kind: fulfills
+  from: alt-0002
+  to: pan-0001
+  state: proposed
+  provenance: owner
+  degree: partial
+- kind: fulfills
+  from: alt-0001
+  to: gan-0001
+  state: proposed
+  provenance: owner
+  degree: none
+- kind: fulfills
+  from: alt-0002
+  to: gan-0001
+  state: proposed
+  provenance: owner
+  degree: partial
+- kind: fulfills
+  from: alt-0001
+  to: gan-0002
+  state: proposed
+  provenance: owner
+  degree: full
+- kind: fulfills
+  from: alt-0002
+  to: gan-0002
+  state: proposed
+  provenance: owner
+  degree: full
+- kind: lacks
+  from: str-0001
+  to: alt-0001
+  state: proposed
+  provenance: owner
+- kind: produces
+  from: str-0001
+  to: val-0001
+  state: proposed
+  provenance: owner
+- kind: satisfies
+  from: val-0001
+  to: pan-0001
+  state: proposed
+  provenance: owner
+- kind: satisfies
+  from: val-0001
+  to: gan-0001
+  state: proposed
+  provenance: owner
+- kind: satisfies
+  from: val-0003
+  to: gan-0002
+  state: proposed
+  provenance: owner
+- kind: supports
+  from: prf-0003
+  to: str-0001
+  state: proposed
+  provenance: owner
+- kind: supports
+  from: prf-0003
+  to: fulfills:alt-0001:pan-0001
+  state: proposed
+  provenance: owner
+- kind: has_job
+  from: seg-0002
+  to: job-0002
+  state: proposed
+  provenance: owner
+- kind: need
+  from: job-0002
+  to: pan-0002
+  state: proposed
+  provenance: owner
+- kind: recalls
+  from: job-0002
+  to: cat-0002
+  state: proposed
+  provenance: owner
+- kind: includes
+  from: cat-0002
+  to: alt-0003
+  state: proposed
+  provenance: owner
+- kind: member_of
+  from: seg-0002
+  to: cat-0002
+  state: proposed
+  provenance: owner
+- kind: fulfills
+  from: alt-0003
+  to: pan-0002
+  state: proposed
+  provenance: owner
+  degree: none
+- kind: lacks
+  from: str-0002
+  to: alt-0003
+  state: proposed
+  provenance: owner
+- kind: produces
+  from: str-0002
+  to: val-0002
+  state: proposed
+  provenance: owner
+- kind: satisfies
+  from: val-0002
+  to: pan-0002
+  state: proposed
+  provenance: owner
 messages:
   msg-0001:
     state: proposed
@@ -146,7 +311,6 @@ messages:
     - pan-0001
     serves:
     - val-0001
-    - prm-0001
   msg-0002:
     state: proposed
     provenance: owner
@@ -161,8 +325,8 @@ messages:
     text: 資料を請求する
     role: cta
     serves:
-    - prm-0001
-    - prm-0002
+    - val-0001
+    - val-0002
 proofs:
   prf-0001:
     state: proposed
@@ -179,6 +343,13 @@ proofs:
     source: 導入事例の計測
     supports:
     - msg-0001
+    as_of: '2026-10-01'
+  prf-0003:
+    state: proposed
+    provenance: owner
+    segment: seg-0001
+    text: 自動更新の稼働記録
+    source: 運用ログ
     as_of: '2026-10-01'
 facts:
   fct-0001:

@@ -1,9 +1,9 @@
 """Defects found by the external review of 2026-11-15 (biz_ops docs/log/design-ia-boundary-review-20261115.md).
 
-1. Reverse lookup must follow the strategy layer transitively (requirement 18).
-2. The mapping table's version hash must move when a strategy atom the deliverable stands on changes (requirement 17).
+1. Reverse lookup must follow the positioning transitively (v6 requirement 14).
+2. The mapping table's version hash must move when a positioning element the deliverable stands on changes.
 3. A replacement written from one deliverable's run must not drop the valid IA judgments of other deliverables.
-5. The owner-confirmation bundle must be readable as content, and refuse a stale request (requirement 14).
+5. The owner-approval bundle must be readable as content, and refuse a stale request (v6 requirement 3).
 """
 import copy
 import json
@@ -18,7 +18,7 @@ import judge  # noqa: E402
 from test_check import DECK, OUTLINE, SSOT, cli, dump, write_repo  # noqa: E402
 
 
-def test_impact_follows_the_strategy_layer(tmp_path):
+def test_impact_follows_the_positioning(tmp_path):
     write_repo(tmp_path)
     rc, out = cli('impact', '--root', str(tmp_path), '--id', 'str-0001')
     assert rc == 0 and out['outlines'] == ['lp-municipal'], out  # str-0001 backs val-0001 on the LP's path
@@ -28,7 +28,7 @@ def test_impact_follows_the_strategy_layer(tmp_path):
     assert out['outlines'] == ['lp-municipal'], out
 
 
-def test_mapping_version_moves_with_a_strategy_dependency(tmp_path):
+def test_mapping_version_moves_with_a_positioning_dependency(tmp_path):
     write_repo(tmp_path)
     _, before = cli('mapping', '--root', str(tmp_path), '--outline', 'lp-municipal')
     changed = copy.deepcopy(SSOT)
@@ -83,7 +83,7 @@ def test_replacement_drops_superseded_and_orphaned_judgments():
 def test_review_bundle_shows_content_and_refuses_a_stale_request(tmp_path):
     write_repo(tmp_path, confirmed=False)
     m = ia_check.Model(root=tmp_path, ssot=SSOT)
-    hashes, _ = ia_check.strategy_targets(m)
+    hashes, _ = ia_check.positioning_targets(m)
     request = {'schema_version': 2, 'approval_scheme': 'hash-jcs-v1', 'repo_id': 'x',
                'rows': [{'key': k, 'value_hash': v, 'date': '2026-11-15'} for k, v in sorted(hashes.items())]}
     req = tmp_path / 'request.json'
@@ -91,9 +91,10 @@ def test_review_bundle_shows_content_and_refuses_a_stale_request(tmp_path):
     rc, out = cli('review', '--root', str(tmp_path), '--request', str(req))
     assert rc == 0, out
     text = out['markdown']
-    assert '自動更新で保守が要らない' in text and 'str-0001' in text and '比べる代替' in text
+    assert '自動更新で保守が要らない' in text and 'str-0001' in text and 'str-0001 → alt-0001：代替に無い' in text
+    assert 'alt-0001 → pan-0001：満たす度合い（none）' in text and '写しの出どころ：alt-0001' in text
     changed = copy.deepcopy(SSOT)
     changed['strengths']['str-0001']['text'] = '別の強み'
     dump(tmp_path / 'design/info_arch/info_arch.yaml', changed)
     rc, out = cli('review', '--root', str(tmp_path), '--request', str(req))
-    assert rc == 2 and 'ia:strategy:str-0001' in out['stale'], out
+    assert rc == 2 and out['stale'] == ['ia:positioning:str-0001'], out  # its arrows keep their approval

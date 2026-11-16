@@ -265,22 +265,22 @@ def test_two_green_branches_fail_on_their_predicted_merge(repo, tmp_path):
     """The topic is green alone; main has since expired the proof the topic starts to ship."""
     base = run_git(repo, 'rev-parse', 'HEAD').stdout.strip()
     ssot = fresh_ssot()
-    ssot['proofs']['prf-0003'] = {'state': 'proposed', 'provenance': 'owner', 'text': '満足度調査',
+    ssot['proofs']['prf-0004'] = {'state': 'proposed', 'provenance': 'owner', 'text': '満足度調査',
                                   'source': '調査票', 'supports': ['msg-0002'], 'as_of': '2026-10-01'}
-    ssot['ledger']['next']['prf'] = 4
+    ssot['ledger']['next']['prf'] = 5
     dump(repo / 'design/info_arch/info_arch.yaml', ssot)
     cover_ledger(repo)
     base = commit(repo, 'second proof, used by nobody')
     run_git(repo, 'checkout', '-qb', 'topic')
     deck = {**copy.deepcopy(DECK), 'channel': 'deck'}
-    deck['pages'][0]['sections'][0]['proofs'] = ['prf-0001', 'prf-0003']
+    deck['pages'][0]['sections'][0]['proofs'] = ['prf-0001', 'prf-0004']
     dump(repo / 'design/info_arch/outlines/deck-smb.yaml', deck)
     cover_ledger(repo)
     topic = commit(repo, 'ship the second proof')
     code, out, _ = ship(repo)
     assert code == 0, out  # green on its own commit
     run_git(repo, 'checkout', '-q', 'main')
-    ssot['proofs']['prf-0003']['as_of'] = '2024-01-01'
+    ssot['proofs']['prf-0004']['as_of'] = '2024-01-01'
     dump(repo / 'design/info_arch/info_arch.yaml', ssot)
     commit(repo, 'second proof is old (nobody ships it yet)')
     code, out, _ = ship(repo)
@@ -313,21 +313,21 @@ def test_pre_push_checks_the_pushed_commit_itself(repo, tmp_path):
 def test_refs_pushed_together_are_merged_with_each_other(repo, tmp_path):
     """main and topic are pushed at once: topic is green against origin/main but red against the pushed main."""
     ssot = fresh_ssot()
-    ssot['proofs']['prf-0003'] = {'state': 'proposed', 'provenance': 'owner', 'text': '満足度調査',
+    ssot['proofs']['prf-0004'] = {'state': 'proposed', 'provenance': 'owner', 'text': '満足度調査',
                                   'source': '調査票', 'supports': ['msg-0002'], 'as_of': '2026-10-01'}
-    ssot['ledger']['next']['prf'] = 4
+    ssot['ledger']['next']['prf'] = 5
     dump(repo / 'design/info_arch/info_arch.yaml', ssot)
     cover_ledger(repo)
     old = commit(repo, 'second proof, used by nobody')
     run_git(repo, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
     run_git(repo, 'checkout', '-qb', 'topic')
     deck = {**copy.deepcopy(DECK), 'channel': 'deck'}
-    deck['pages'][0]['sections'][0]['proofs'] = ['prf-0001', 'prf-0003']
+    deck['pages'][0]['sections'][0]['proofs'] = ['prf-0001', 'prf-0004']
     dump(repo / 'design/info_arch/outlines/deck-smb.yaml', deck)
     cover_ledger(repo)
     topic = commit(repo, 'ship the second proof')
     run_git(repo, 'checkout', '-q', 'main')
-    ssot['proofs']['prf-0003']['as_of'] = '2024-01-01'
+    ssot['proofs']['prf-0004']['as_of'] = '2024-01-01'
     dump(repo / 'design/info_arch/info_arch.yaml', ssot)
     main = commit(repo, 'second proof is old (nobody ships it on main)')
     alone = tmp_path / 'alone'
@@ -691,14 +691,14 @@ def test_wrapper_runs_through_absolute_and_relative_symlinks(tmp_path):
 
 
 def test_ship_report_separates_adoption_semantic_fit_and_customer_validation(repo):
-    """Requirement 15: 'confirmed and passed' is never one word; customer validation is stated as not judged."""
+    """Requirement 15: 'approved and passed' is never one word; customer validation is stated as not judged."""
     code, out, _ = ship(repo)
-    assert out['strategy'] == {'owner_adopted': 'confirmed', 'semantic_fit': 'judged',
-                               'customer_validation': 'not-judged-by-ia'}, out
+    assert out['positioning'] == {'owner_adopted': 'approved', 'semantic_fit': 'judged',
+                                  'customer_validation': 'not-judged-by-ia'}, out
     (repo / 'design/approvals.yaml').write_text('[]\n', encoding='utf-8')
-    commit(repo, 'withdraw every confirmation')
+    commit(repo, 'withdraw every approval')
     code, out, _ = ship(repo)
-    assert code == 2 and out['strategy']['owner_adopted'] == 'unconfirmed', out
+    assert code == 2 and out['positioning']['owner_adopted'] == 'unapproved', out
 
 
 @pytest.mark.parametrize('score,state', [(0.0, 'judged'), (0.9, 'needs-review')])
@@ -707,11 +707,11 @@ def test_ship_report_states_the_semantic_fit(repo, score, state):  # Q12 / D8: a
     run_git(repo, 'add', '-A')
     run_git(repo, 'commit', '-qm', 'judged', '--allow-empty')
     code, out, _ = ship(repo)
-    assert out['strategy']['semantic_fit'] == state, out
+    assert out['positioning']['semantic_fit'] == state, out
     assert code != 2 or out['errors'], out
 
 
-def test_maintain_lists_outlines_impacted_through_the_strategy_layer(repo):  # review 2026-11-15, defect 1
+def test_maintain_lists_outlines_impacted_through_the_positioning(repo):  # review 2026-11-15, defect 1
     ssot = fresh_ssot()
     ssot['strengths']['str-0001']['text'] = '別の強み'  # only the LP's path stands on str-0001
     dump(repo / 'design/info_arch/info_arch.yaml', ssot)

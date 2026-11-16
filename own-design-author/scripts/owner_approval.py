@@ -10,9 +10,9 @@ from approvals import SCHEME,repository_id,verify_rows
 def _snapshot(root,catalog_dir):
     from design_author import check_design
     result=check_design(root,catalog_dir=catalog_dir)
-    # IA_STRATEGY_UNCONFIRMED is the IA strategy layer's missing owner confirmation: an approval gap like the two
-    # above, so preparing that very confirmation must not be refused because of it (IA v5, biz_ops WS-20261114).
-    allowed=('must n-a approval hash missing/mismatch:','approval hash mismatch:','IA_STRATEGY_UNCONFIRMED:')
+    # IA_POSITIONING_UNAPPROVED is a positioning atom or arrow without the owner's current approval: an approval gap
+    # like the two above, so preparing that very approval must not be refused because of it (IA v6, biz_ops WS-20261114).
+    allowed=('must n-a approval hash missing/mismatch:','approval hash mismatch:','IA_POSITIONING_UNAPPROVED:')
     if any(not error.startswith(allowed) for error in result['errors']) or not result['manifest']:
         raise ValueError('repair structural or approval errors before preparing approval')
     return result['approval_targets'],sorted(set(result['approval_required']))

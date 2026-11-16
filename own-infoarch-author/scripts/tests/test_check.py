@@ -13,10 +13,42 @@ SKILL = SCRIPTS.parent
 DATE = '2026-10-23'
 RED = json.loads((SKILL / 'fixtures/red-cases.json').read_text(encoding='utf-8'))['cases']
 
+def _a(**kw):
+    return {'state': 'proposed', 'provenance': 'owner', **kw}
+
+
+def _e(kind, frm, to, **kw):
+    return {'kind': kind, 'from': frm, 'to': to, 'state': 'proposed', 'provenance': 'owner', **kw}
+
+
+# Positioning (SPEC-information-architecture-standardization v6, requirement 2): atoms belong to one segment each;
+# arrows are listed once, with their kind and direction. seg-0001 has a gap (pan-0001, gan-0001: no alternative fully
+# meets them) and a point of parity (gan-0002: every alternative of the member category meets it). seg-0002 reuses
+# alt-0001 as a copy (alt-0003, copied_from) instead of sharing it.
+EDGES = [
+    _e('has_job', 'seg-0001', 'job-0001'),
+    _e('need', 'job-0001', 'pan-0001'), _e('need', 'job-0001', 'gan-0001'), _e('need', 'job-0001', 'gan-0002'),
+    _e('recalls', 'job-0001', 'cat-0001'), _e('includes', 'cat-0001', 'alt-0001'),
+    _e('member_of', 'seg-0001', 'cat-0001'),
+    _e('fulfills', 'alt-0001', 'pan-0001', degree='none'), _e('fulfills', 'alt-0002', 'pan-0001', degree='partial'),
+    _e('fulfills', 'alt-0001', 'gan-0001', degree='none'), _e('fulfills', 'alt-0002', 'gan-0001', degree='partial'),
+    _e('fulfills', 'alt-0001', 'gan-0002', degree='full'), _e('fulfills', 'alt-0002', 'gan-0002', degree='full'),
+    _e('lacks', 'str-0001', 'alt-0001'), _e('produces', 'str-0001', 'val-0001'),
+    _e('satisfies', 'val-0001', 'pan-0001'), _e('satisfies', 'val-0001', 'gan-0001'),
+    _e('satisfies', 'val-0003', 'gan-0002'),
+    _e('supports', 'prf-0003', 'str-0001'), _e('supports', 'prf-0003', 'fulfills:alt-0001:pan-0001'),
+    _e('has_job', 'seg-0002', 'job-0002'), _e('need', 'job-0002', 'pan-0002'),
+    _e('recalls', 'job-0002', 'cat-0002'), _e('includes', 'cat-0002', 'alt-0003'),
+    _e('member_of', 'seg-0002', 'cat-0002'),
+    _e('fulfills', 'alt-0003', 'pan-0002', degree='none'),
+    _e('lacks', 'str-0002', 'alt-0003'), _e('produces', 'str-0002', 'val-0002'),
+    _e('satisfies', 'val-0002', 'pan-0002'),
+]
+
 SSOT = {
-    'schema_version': 3,
-    'ledger': {'next': {'aud': 3, 'msg': 5, 'prf': 3, 'fct': 3, 'ent': 2, 'vce': 2,
-                        'seg': 3, 'job': 3, 'pan': 3, 'gan': 2, 'val': 3, 'alt': 2, 'str': 2, 'cpt': 2, 'prm': 3},
+    'schema_version': 4,
+    'ledger': {'next': {'aud': 3, 'msg': 5, 'prf': 4, 'fct': 3, 'ent': 2, 'vce': 2,
+                        'seg': 3, 'job': 3, 'pan': 3, 'gan': 3, 'alt': 4, 'cat': 3, 'str': 3, 'val': 4},
                'tombstones': {'msg-0004': 'msg-0003'}},
     'audiences': {
         'aud-0001': {'state': 'proposed', 'provenance': 'owner', 'label': '自治体の情報部門', 'situation': '既存システムの運用が重い',
@@ -26,38 +58,47 @@ SSOT = {
                      'desired_action': '問い合わせ', 'priorities': ['msg-0002', 'msg-0001', 'msg-0003'], 'segment': 'seg-0002'},
     },
     'segments': {
-        'seg-0001': {'state': 'proposed', 'provenance': 'owner', 'qualifier': '自治体の情報部門', 'situation': '既存システムの運用が重い'},
-        'seg-0002': {'state': 'proposed', 'provenance': 'owner', 'qualifier': '中小企業の経営者', 'situation': '人手が足りない'}},
+        'seg-0001': _a(qualifier='自治体の情報部門', situation='既存システムの運用が重い'),
+        'seg-0002': _a(qualifier='中小企業の経営者', situation='人手が足りない')},
     'jobs': {
-        'job-0001': {'state': 'proposed', 'provenance': 'owner', 'text': '既存システムを無理なく運用する', 'segment': 'seg-0001',
-                     'push': ['保守の手間が増え続ける'], 'anxiety': ['移行で止まるのが怖い']},
-        'job-0002': {'state': 'proposed', 'provenance': 'owner', 'text': '少ない人数で業務を回す', 'segment': 'seg-0002'}},
+        'job-0001': _a(segment='seg-0001', text='既存システムを無理なく運用する'),
+        'job-0002': _a(segment='seg-0002', text='少ない人数で業務を回す')},
     'pains': {
-        'pan-0001': {'state': 'proposed', 'provenance': 'owner', 'text': '運用が重い', 'job': 'job-0001'},
-        'pan-0002': {'state': 'proposed', 'provenance': 'owner', 'text': '人手が足りない', 'job': 'job-0002'}},
-    'gains': {'gan-0001': {'state': 'proposed', 'provenance': 'owner', 'text': '職員が本来の業務に時間を使える', 'job': 'job-0001'}},
+        'pan-0001': _a(segment='seg-0001', text='運用が重い'),
+        'pan-0002': _a(segment='seg-0002', text='人手が足りない')},
+    'gains': {
+        'gan-0001': _a(segment='seg-0001', text='職員が本来の業務に時間を使える'),
+        'gan-0002': _a(segment='seg-0001', text='止まらずに動き続ける')},
+    'alternatives': {
+        'alt-0001': _a(segment='seg-0001', text='今のシステムを使い続ける'),
+        'alt-0002': _a(segment='seg-0001', text='保守を外部に委託する'),
+        'alt-0003': _a(segment='seg-0002', text='今のシステムを使い続ける', copied_from='alt-0001')},
+    'categories': {
+        'cat-0001': _a(segment='seg-0001', text='自治体向け Web サーバー'),
+        'cat-0002': _a(segment='seg-0002', text='中小企業向けの業務システム')},
+    'strengths': {
+        'str-0001': _a(segment='seg-0001', text='自動更新で保守が要らない'),
+        'str-0002': _a(segment='seg-0002', text='設定なしで使い始められる')},
     'values': {
-        'val-0001': {'state': 'proposed', 'provenance': 'owner', 'text': '運用の手間が減る', 'relieves': ['pan-0001'], 'creates': ['gan-0001']},
-        'val-0002': {'state': 'proposed', 'provenance': 'owner', 'text': '少人数でも回る', 'relieves': ['pan-0002']}},
-    'alternatives': {'alt-0001': {'state': 'proposed', 'provenance': 'owner', 'text': '今のシステムを使い続ける', 'segment': 'seg-0001'}},
-    'strengths': {'str-0001': {'state': 'proposed', 'provenance': 'owner', 'text': '自動更新で保守が要らない',
-                               'versus': ['alt-0001'], 'produces': ['val-0001']}},
-    'concepts': {'cpt-0001': {'state': 'proposed', 'provenance': 'owner', 'category': '自治体向け Web サーバー', 'concept': '保守のいらない Web サーバー'}},
-    'promises': {
-        'prm-0001': {'state': 'proposed', 'provenance': 'owner', 'text': '運用の手間を半分にする', 'values': ['val-0001']},
-        'prm-0002': {'state': 'proposed', 'provenance': 'owner', 'text': '少人数でも止まらない', 'values': ['val-0002']}},
+        'val-0001': _a(segment='seg-0001', kind='difference', text='運用の手間が減る'),
+        'val-0002': _a(segment='seg-0002', kind='difference', text='少人数でも回る'),
+        'val-0003': _a(segment='seg-0001', kind='parity', text='止まらずに動く')},
+    'edges': EDGES,
     'messages': {
         'msg-0001': {'state': 'proposed', 'provenance': 'owner', 'text': '運用の手間が半分になる', 'role': 'benefit', 'addresses': ['pan-0001'],
-                     'serves': ['val-0001', 'prm-0001']},
+                     'serves': ['val-0001']},
         'msg-0002': {'state': 'proposed', 'provenance': 'owner', 'text': '多くの自治体で使われている', 'role': 'proof',
                      'serves': ['val-0001', 'val-0002']},
         'msg-0003': {'state': 'proposed', 'provenance': 'owner', 'text': '資料を請求する', 'role': 'cta',
-                     'serves': ['prm-0001', 'prm-0002']},
+                     'serves': ['val-0001', 'val-0002']},
     },
     'proofs': {'prf-0001': {'state': 'proposed', 'provenance': 'owner', 'text': '導入自治体の数', 'source': '導入台帳',
                             'supports': ['msg-0002'], 'as_of': '2026-10-01'},
                'prf-0002': {'state': 'proposed', 'provenance': 'owner', 'text': '導入前後の運用時間の比較', 'source': '導入事例の計測',
-                            'supports': ['msg-0001'], 'as_of': '2026-10-01'}},
+                            'supports': ['msg-0001'], 'as_of': '2026-10-01'},
+               # positioning evidence: belongs to a segment and supports atoms and arrows through `supports` edges
+               'prf-0003': {'state': 'proposed', 'provenance': 'owner', 'segment': 'seg-0001', 'text': '自動更新の稼働記録',
+                            'source': '運用ログ', 'as_of': '2026-10-01'}},
     'facts': {
         'fct-0001': {'state': 'proposed', 'provenance': 'owner', 'label': '導入社数', 'value': '100社以上', 'as_of': '2026-10-01'},
         'fct-0002': {'state': 'proposed', 'provenance': 'owner', 'label': '問い合わせ電話', 'value': '03-1234-5678', 'evergreen': True},
@@ -74,8 +115,8 @@ OUTLINE = {
     'schema_version': 2, 'id': 'lp-municipal', 'channel': 'web',
     'brief': {'purpose': '自治体の情報部門からの資料請求を増やす', 'action': '資料請求', 'medium': 'LP', 'constraints': ['1 ページ']},
     'audience': 'aud-0001', 'outputs': ['site/index.html'],
-    'strategy': {'choose': ['val-0001', 'prm-0001'],
-                 'rationale': '運用の重さを感じている情報部門に、手間が減る価値と半分にする約束を先に示す'},
+    'strategy': {'choose': ['val-0001'],
+                 'rationale': '運用の重さを感じている情報部門に、手間が減る価値を先に示す'},
     'pages': [{'id': 'top', 'label': 'トップ', 'sections': [
         {'role': 'pain', 'pain': 'pan-0001', 'copy': '既存システムの運用、重くありませんか'},
         {'role': 'benefit', 'message': 'msg-0001', 'copy': '運用の手間が半分になります'},
@@ -100,15 +141,18 @@ def dump(path, data):
 
 
 def confirm(root, ssot, skip=()):
-    """Record the owner's confirmation of every proposed strategy atom (as the owner would with design-author approve)."""
+    """Record the owner's approval of every proposed positioning atom and arrow (as the owner would with
+    design-author approve). `skip` names atom ids or arrow keys (kind:from:to) left unapproved."""
     sys.path.insert(0, str(SCRIPTS))
     import check as ia_check
+    import positioning
     m = ia_check.Model(root=root, ssot=ssot)
-    rows = [{'key': key, 'value_hash': digest, 'approver': 'fixture-owner', 'date': '2026-11-14'}
-            for key, digest in sorted(ia_check.strategy_targets(m)[0].items()) if key.split(':')[-1] not in skip]
+    rows = [{'key': key, 'value_hash': digest, 'approver': 'fixture-owner', 'date': '2026-11-16'}
+            for key, digest in sorted(positioning.approval_targets(m).items())
+            if key[len(positioning.APPROVAL_PREFIX):] not in skip]
     path = root / 'design/approvals.yaml'
     kept = yaml.safe_load(path.read_text(encoding='utf-8')) if path.is_file() else []
-    kept = [r for r in (kept or []) if not str(r.get('key', '')).startswith(ia_check.CONFIRM_PREFIX)]
+    kept = [r for r in (kept or []) if not str(r.get('key', '')).startswith(positioning.APPROVAL_PREFIX)]
     dump(path, kept + rows)  # keep the design rows (ds:*) the owner already recorded
 
 

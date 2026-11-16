@@ -225,6 +225,45 @@ def cmd_positioning(args):
     return 0
 
 
+def cmd_answer_key(args):
+    """Requirement 12: write the answer key (pairs, candidates for Jev, the owner's labeling page), or measure it."""
+    import answer_key
+    report, m, approved = _loaded(args, 'answer-key')
+    if approved is None or report.exit_code == 2:
+        _print(report.to_dict())
+        return 2
+    jl = judge._jl()
+    policy = jl.load_policy()
+    if args.measure:
+        if not args.key:
+            _print({'exit_code': 2, 'error': '--measure には、作った時の --key（answer-key.json）が要る'})
+            return 2
+        items = answer_key.load_items(m, approved, policy, jl, args.key)
+        labels = json.loads(Path(args.measure).read_text(encoding='utf-8'))
+        result = answer_key.measure(items, labels, judge.read_ledger(args.root), policy['theta'])
+        _print(result)
+        return 0
+    items = answer_key.build(m, approved, policy, jl)
+    if not items:
+        _print({'exit_code': 2, 'error': '正解表の組が 0 件（承認済みの提供価値に立つ文案が無い）'})
+        return 2
+    out = Path(args.out)
+    files = {out / 'answer-key.json': json.dumps(answer_key.key_file(items), ensure_ascii=False, indent=2),
+             out / 'candidates.json': json.dumps(answer_key.candidates_file(items), ensure_ascii=False, indent=2),
+             out / 'answer-key-page.html': answer_key.page(items)}
+    existing = [str(p) for p in files if p.exists() or p.is_symlink()]
+    if existing:
+        _print({'exit_code': 2, 'error': f'上書きしない: {existing}'})
+        return 2
+    out.mkdir(parents=True, exist_ok=True)
+    for p, text in files.items():
+        p.write_text(text + ('' if text.endswith('\n') else '\n'), encoding='utf-8')
+    _print({'answer_key': answer_key.key_hash(items), 'pairs': len(items),
+            'own': sum(i['kind'] == 'own' for i in items), 'swap': sum(i['kind'] == 'swap' for i in items),
+            'written': sorted(str(p) for p in files)})
+    return 0
+
+
 def cmd_targets(args):
     """Owner-approval targets for own-design-author: every positioning atom's and arrow's hash, and the keys
     shipping needs."""
@@ -309,6 +348,12 @@ def main(argv=None):
     t = sub.add_parser('targets', help='owner-approval targets (ia:positioning keys and hashes) for own-design-author approvals')
     t.add_argument('--root', default='.')
     t.set_defaults(fn=cmd_targets)
+    ak = sub.add_parser('answer-key', help='answer key for the meaning judgment: pairs, candidates and the labeling page, or --measure')
+    ak.add_argument('--root', default='.')
+    ak.add_argument('--out', default='answer-key', help='directory to write into (files are never overwritten)')
+    ak.add_argument('--measure', help="the owner's labels.json: measure agreement against design/judgments.json")
+    ak.add_argument('--key', help='answer-key.json written with the page (required with --measure)')
+    ak.set_defaults(fn=cmd_answer_key)
     po = sub.add_parser('positioning', help='approved positionings per segment: id, gaps, points of parity, member category, drafts')
     po.add_argument('--root', default='.')
     po.set_defaults(fn=cmd_positioning)

@@ -9,8 +9,9 @@ from pathlib import Path
 
 POLICY = Path(__file__).resolve().parents[1]/'references/judgment-policy.json'
 # One shared policy for design and IA (ADR-20261111-ia-judgments-share-design-policy-and-ledger, biz_ops).
+# ia-strategy-fit (v5) is still read so that existing ledgers stay valid; IA v6 generates ia-value-fit instead.
 KINDS = frozenset({'doc-relevance','na-rationale',
-    'ia-name-variant','ia-emphasis','ia-unregistered-claim','ia-audience-fit','ia-strategy-fit'})
+    'ia-name-variant','ia-emphasis','ia-unregistered-claim','ia-audience-fit','ia-strategy-fit','ia-value-fit'})
 # Ledger schema 3 keys each judgment by its own kind's prompt, so adding a kind or
 # rewording another kind's prompt leaves it valid (SPEC-information-architecture-
 # standardization v5 requirement 19, biz_ops). Schemas 1 and 2 keyed by all prompts.

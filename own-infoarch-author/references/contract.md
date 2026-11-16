@@ -1,12 +1,12 @@
 # design/info_arch/ の契約
 
-方針は、利用側の repo の spec `information-architecture-standardization`（v4）に従う。
+方針は、利用側の repo の spec `information-architecture-standardization`（v6）に従う。
 
 ## ディレクトリ
 
-- `info_arch.yaml`：伝え方の SSOT（7 つの原子と id 台帳）。承認の状態は持たない。変更は他の変更と同じく、検査が緑なら自律マージする（人のレビューは置かない）。記録は git の履歴が持つ。
+- `info_arch.yaml`：人が保守する SSOT（positioning の原子と矢印、固定値・正式名称・声、id 台帳）。承認の状態は持たない（承認台帳が持つ）。変更は他の変更と同じく、検査が緑なら自律マージする（人のレビューは置かない）。記録は git の履歴が持つ。
 - `channels/<media>.yaml`：成果物の置き場所と出し方の宣言だけ。中身は `media`（ファイル名と一致）・`outputs`（repo 相対の glob）・`ship`・`ship_command`（`ship: true` なら必須。出荷の正式の入口が実行する）・`merge_base`（pre-push の予測マージの相手。出荷チャネルで無いと doctor が失格）・`viewports`。
-- `outlines/<成果物 id>.yaml`：成果物ごとの構造化アウトライン。AI が書き、人は保守しない。`id` はファイル名と一致する。
+- `outlines/<成果物 id>.yaml`：成果物ごとの outline（版 3）。1 ページ＝1 outline。AI が書き、人は保守しない。`id` はファイル名と一致する。
 - `INFO_ARCH.md`：散文。原子を id で参照するだけで、値を持たない。
 
 それ以外のファイルやサブディレクトリが `channels/` `outlines/` にあると失格にする（黙って無視しない）。`.` で始まるファイル（`.DS_Store`・`.gitkeep`）だけは読まずに飛ばす。`.` で始まるサブディレクトリは失格にする。
@@ -17,14 +17,12 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 
 | 種別 | 接頭辞 | proposed で必須 | 参照 |
 | --- | --- | --- | --- |
-| 対象者 | `aud` | label・situation・desired_action・priorities（メッセージを優先順に。先頭が 1 位）・segment | priorities → msg、segment → seg |
-| メッセージ | `msg` | text・role（benefit / proof / how / objection / cta / vision） | addresses → pan、serves → val・job・pan・gan（立つ positioning の原子） |
-| 証拠 | `prf` | text・source・as_of か expires・supports か segment のどちらか一方 | supports → msg（outline 側）。segment があれば positioning の証拠で、支える先は矢印 `supports` |
+| 証拠 | `prf` | text・source・segment・as_of か expires | 支える原子・矢印は、矢印 `supports` で結ぶ（positioning の原子として承認する） |
 | 固定値 | `fct` | label・value・as_of か expires か evergreen: true（evergreen と日付は併存させない） | ― |
 | 正式名称 | `ent` | type・name | ― |
 | 声 | `vce` | traits（3〜4 個。trait・is・is_not） | proposed はプロジェクトに 1 つ |
 
-対象者とメッセージは、ISSUE-14 で outline の定数（target）と outline の原子へ移る。それまではここに残る。
+対象者とメッセージは SSOT に持たない。outline の target（定数）とメッセージ（outline の原子）に書く。
 
 ### positioning（SPEC-information-architecture-standardization v6 要件 2・4・5・8）
 
@@ -82,15 +80,9 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 
 ### 立っている positioning の経路（`check.positioning_path`）
 
-アウトラインのメッセージ（と痛みのセクション）ごとに、対象者のセグメントの中だけで矢印をたどる。提供価値からは、満たす痛み・得たいもの（`satisfies`）と、それを生む強み（`produces`）とその強みが比べる代替（`lacks`）。痛み・得たいものからはジョブ（`need`）、ジョブからはセグメント（`has_job`）。経路は原子と矢印のキーで、中身を正規化した JSON の SHA-256 を経路のハッシュとし、意味の判定の入力に使う。経路の要素に承認の無いものがあれば IA_POSITIONING_UNAPPROVED（ISSUE-14 で、メッセージが提供価値ちょうど 1 つを指す形に替わる）。
+outline のメッセージが指す提供価値ごとに、target のセグメントの中だけで矢印をたどる。提供価値からは、満たす痛み・得たいもの（`satisfies`）と、それを生む強み（`produces`）とその強みが比べる代替（`lacks`）。痛み・得たいものからはジョブ（`need`）、ジョブからはセグメント（`has_job`）。経路の要素を `supports` する証拠も、その矢印とともに経路に入る（メッセージは独自の証拠を持たず、経路の証拠を受け継ぐ。承認が要り、未登録の主張の判定の入力になる）。経路は原子と矢印のキーで、中身を正規化した JSON の SHA-256 を経路のハッシュとし、意味の判定の入力に使う。経路の要素（証拠を含む）と比べる代替に承認の無いものがあれば、出荷を止める（IA_POSITIONING_UNAPPROVED・IA_OUTLINE_COMPARE_UNAPPROVED。`targets` の `must_approval_keys` に入る）。一番のメッセージが支えられているか（IA_LEAD_UNSUPPORTED）は、承認済みの証拠だけで数える。
 
-### v2 からの移行（`infoarch-author migrate --root . [--write]`）
-
-猶予なしの一括移行。機械で決まることだけを移す：課題（prb）を同じ番号の痛み（pan。対象者のセグメントに属する）へ、対象者ごとに同じ番号のセグメント（seg）と空のジョブ（job）を作る、メッセージの addresses を追う、アウトラインを版 2 へ（problem → pain）、出荷チャネルの HTML の `data-ia-problem`・`data-ia-role="problem"` を改名、`design/design.yaml` の `modules.ia` を 0.4.0 へ。判断が要るもの（ジョブ・代替・カテゴリー・強み・提供価値・矢印・メッセージの serves・アウトラインの strategy）は `drafting_required` に並べ、作らない。報告は、旧→新の id の対応（`id_map`）・移しそこね（`missed`。0 件でなければ exit 2）・HTML のコメントに残る旧 id（`comment_mentions`。属性以外は書き換えない）・外れる IA の判定の数（`invalidated_judgments`）・戻し方（`recovery`）。`--write` が無ければ何も書かない。コミットはしない。版 4 の木では何もしない（再実行できる）。版 3（v5 の形）は断る（v5 から v6 への移行は ISSUE-17 の道具）。
-
-### 対応表（`infoarch-author mapping --outline <id>`）
-
-外部の実験の道具が「どの版の、どこを、何に変えたか」を指すための表。成果物 id・版のハッシュ（アウトライン・使う原子の中身・成果物が立つ positioning の要素の中身・成果物のファイルから作る）・成果物ごとのファイルのハッシュ・枠の実体ごとの種類と、使う原子の id と中身のハッシュ（並びの枠は原子の並び）を出す。比べる案の管理・割り付け・実験の記録・配信・計測は持たない（ISSUE-14 で set の id に置き換える）。
+成果物が立つもの（期限・逆引き・maintain の影響）は、target のセグメントの positioning 全体：隙間と同等であるべき点は、そこにあるすべての代替と満たす度合いの矢印から決まるので、その証拠の期限切れや変更も成果物に届く。
 
 ### 承認の対象（`ia:positioning:<key>`）
 
@@ -98,14 +90,24 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 - `infoarch-author targets --root .`：proposed の全部の原子と矢印の承認のハッシュ（`approval_hashes`）と、出荷チャネルのアウトラインの経路に乗る要素のキー（`must_approval_keys`）を出す。`ia_module.py`（契約 `ia-git-history-v4`、`modules.ia: 0.4.0`、governance の schema_version 4）がこれを own-design-author に返す。
 - 出荷の報告（`ship`）は `positioning` に、`owner_adopted`（approved / unapproved）・`semantic_fit`（意味の判定の状態。今は not-judged）・`customer_validation`（IA は判定しない：not-judged-by-ia）を分けて出す。
 
-## 構造化アウトライン（版 2）
+## outline（版 3。SPEC v6 要件 6〜9・13）
 
-- `brief`：purpose（目的）・action（取ってほしい行動）・medium・constraints・cut（この成果物では言わないメッセージ）。cut も参照として検査し、墓標をたどって改名先と比べる。
-- `audience`：対象者 id。
-- `outputs`：成果物のファイル（チャネルの outputs の glob に一致すること）。
-- `strategy`（必須。ISSUE-14 の outline まで、この名前のまま）：段 2〜4 で選んだ positioning の原子（`choose`：job・pan・gan・val）と構成の理由（`rationale`）。既定の優先順から外れる理由は `deviation`。`infoarch-author compose --audience <aud> --positioning <ids>` が、選んだ原子に立つメッセージを対象者の優先順に並べて出す。
-- `frames`（任意）：差し替えできる枠の実体。`media`（例 lp）と `instances`（`id`・`type`）。種類と多重度は `references/media/frames.json`。実体 id は成果物の中で一意。要素の枠はセクションの `frame` で 1 つのセクションに付け、並びの枠（節の順序）はアウトラインの上だけで持つ。
-- `pages[].sections[]`：role（v1 の problem は pain）・message・pain・proofs・frame・copy（文案）。固定値は copy の中で `{{fct-NNNN}}` として参照する（括弧の中に空白や改行を入れない。入れたものは形の崩れた参照として失格）。
+- 置き場所：`channel`・`outputs`（チャネルの outputs の glob に一致すること）。`id`・`channel`・`outputs` は outline の id に入らない。
+- 定数：`target`（`segment`＋`condition`。outline はこのセグメントの positioning にだけ立つ）・`touchpoint`（接点）・`tone`。目的変数：`objective`（`id`・`action`）。
+- `messages`（`msg-NNNN`）：`value`（提供価値ちょうど 1 つ）・`rank`（lead / support）・`type`（normal / cta）・`compares`（比べる代替）・`achieves`（CTA が指す目的変数）。`no_cta: true` で CTA を置かないことを宣言できる。
+- `sections`（`sec-NNNN`）：`order`・`role`（aware / pain / compare / trust / act）・`places`（通常のメッセージ 1 つと CTA 0〜1 つ）。
+- `copies`（`cpy-NNNN`）：`section`・`order`（セクションの中の順番）・`message`（同じセクションに置かれたもの）・`text`。固定値は `{{fct-NNNN}}` で参照する（括弧の中に空白や改行を入れない。入れたものは形の崩れた参照として失格）。
+- `texts`（任意）：主張でない文言の宣言。key ごとに `kind`（navigation / label）・`text`・（label なら）`section`。
+- 並びは `order` で持ち、ファイルの中で書いた順番は意味を持たない。outline の原子の id は outline の中で一意で、台帳は持たない（別案は同じ id を引き継ぐ）。
+
+### id と set（`infoarch-author set --outline <id>`）
+
+- outline の id：`out-` ＋ outline の中身（定数・目的変数・`no_cta`・メッセージ・セクションの順序と置き方・文案の順番と文言・`texts`）を正規化した JSON の SHA-256。立つ positioning の id は入れない。メッセージは提供価値を原子の id で指すので、提供価値の文面だけを直しても outline の id は変わらない。
+- set の id：`<positioning の id>+<outline の id>`。立つ positioning に承認済みの要素が無ければ、positioning と set の id は無い（None）。`set` は、要素（messages・sections・copies・texts）ごとの中身のハッシュも出す。v5 の対応表（mapping）はこれに置き換えた。
+
+### 差分（`infoarch-author diff --a <id> --b <id> [--root-b DIR] [--dom-a A --dom-b B]`）
+
+2 つの set の差分を、変わった要素（`messages/<id>` などの outline の要素と、positioning の原子・矢印）と属性で列挙する。両方の文案が参照する固定値の値が違えば、IA_DIFF_UNASSIGNED で失格（固定値はどちらの id にも入らない。値は報告に出さない）。`changed_layers` で、どちらの層が変わったかが分かる（両方が変わる別案も認める）。定数か目的変数が違えば `same_experiment: false`（別の試験として扱う。失格ではない）。両方の dom の報告を渡すと、印の外の文を画面幅ごとに比べ、違えば IA_DIFF_UNASSIGNED で失格（どの要素にも割り当てられない差分）。渡さなければ `not_checked` に比べていないことを出す。A/B の実行・指標・統計は持たない。
 
 ## 終了コード
 
@@ -120,16 +122,8 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 | IA_REF_BROKEN / IA_EMPTY_REFERENCED | SSOT 内の参照切れ・proposed の原子が空欄を参照（参照の表は `check.ssot_refs` の 1 か所） |
 | IA_VOICE_MULTIPLE | proposed の声が 2 つ以上 |
 | IA_POSITIONING_*（要件 5・要件 2） | 上の positioning の表 |
-| IA_POSITIONING_UNTRACED | アウトラインのメッセージが、どの positioning の原子にも立っていない（出荷チャネルは失格、ほかは警告） |
-| IA_POSITIONING_SEGMENT_MISMATCH | メッセージ・痛みの positioning が、対象者のセグメントにたどり着かない（出荷チャネルは失格、ほかは警告） |
-| IA_POSITIONING_UNAPPROVED | 経路の原子・矢印に、オーナーの承認が無いか外れたものがある（`detail.atoms`。出荷チャネルは失格、ほかは警告） |
+| IA_POSITIONING_UNAPPROVED | 立っている positioning の経路の原子・矢印に、オーナーの承認が無いか外れたものがある（`detail.atoms`。出荷チャネルは失格、ほかは警告） |
 | IA_APPROVALS_INVALID | `design/approvals.yaml` が読めない・symlink・design の `verify_rows` を通らない（重複キー・項目の過不足・承認者・日付・ハッシュ）。何も承認済みとして数えない |
-| IA_COMPOSITION_POSITIONING_INVALID | `strategy.choose` の原子が無いか、対象者のセグメントにたどり着かない |
-| IA_COMPOSITION_OFF_POSITIONING（警告） | セクションのメッセージが、選んだ positioning の原子に立っていない |
-| IA_COMPOSITION_DEVIATION_UNEXPLAINED（警告） | 対象者の 1 位のメッセージを使わず、`brief.cut` にも `strategy.deviation` にも理由が無い |
-| IA_FRAME_UNKNOWN_MEDIA / IA_FRAME_UNKNOWN_TYPE | 枠の媒体・種類がノウハウに無い |
-| IA_FRAME_DUPLICATE_ID / IA_FRAME_MULTIPLICITY | 枠の実体 id の重複・種類ごとの実体の数が多重度に反する |
-| IA_FRAME_UNDECLARED / IA_FRAME_SEQUENCE_ANCHORED / IA_FRAME_DUPLICATE_USE / IA_FRAME_UNUSED | 宣言していない枠を使う・並びの枠をセクションに付ける・要素の枠を 2 つ以上のセクションに付ける・宣言した要素の枠をどこにも付けない |
 | IA_PAGES_OUTPUT_NOT_INVENTORIED（警告） | 出荷チャネルの HTML の成果物が、design/validation.json の pages（covered・excluded）に無い（design の検査が見ていない） |
 | IA_PAGES_OUTPUT_EXCLUDED_BY_DESIGN（info） | design が対象外にした成果物。IA の検査は続ける（ページの宣言は一本化しない。ADR-20261115-design-ia-two-skills-shared-base） |
 | IA_NO_CHANNELS / IA_NO_OUTLINES / IA_CHANNEL_NAME / IA_CHANNEL_FILE / IA_OUTLINE_FILE / IA_OUTLINE_ID | 対象 0 件・名前の不一致・読まれないファイル |
@@ -137,11 +131,23 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 | IA_OUTLINE_REF_BROKEN / IA_OUTLINE_REF_EMPTY | アウトラインの参照切れ（墓標なら先を案内）・空欄の原子を参照（参照の表は `check.outline_refs` の 1 か所） |
 | IA_OUTLINE_BAD_PLACEHOLDER / IA_OUTLINE_FACT_LITERAL | `{{fct-NNNN}}` の形でない `{{…}}`（改行をまたぐものを含む）・固定値の値を参照せず直接書いた |
 | IA_IMPACT_UNKNOWN_ID | `impact --id` に SSOT にも墓標にも無い id を渡した（空の結果を合格にしない） |
-| IA_OUTLINE_TEXT_KEY_MISSING / IA_OUTLINE_TEXT_KEY_DUPLICATE / IA_OUTLINE_TEXT_KEY_MISPLACED | message も pain も無い navigation・other のセクションに `key` が無い・`key` の重複・message か pain のあるセクションか、navigation・other 以外の role に `key` を書いた |
-| IA_OUTLINE_CUT_USED | brief.cut で削ると決めたメッセージを使った |
-| IA_OUTLINE_OFF_PRIORITY（warn） | 対象者の priorities に無いメッセージを使った |
-| IA_PRIORITY_UNSUPPORTED（warn） | proposed の対象者の priorities の先頭のメッセージを、proposed の証拠がどれも `supports` していない（`role` が cta・vision のものは主張ではないので対象外。2 番目以降は見ない） |
-| IA_EXPIRED_SHIPPED / IA_EXPIRED_UNSHIPPED（info） | 期限切れの証拠・固定値を、出荷チャネル（`ship: true`）のアウトラインが参照している／参照していない |
+| IA_OUTLINE_TARGET | target のセグメントが無いか空欄（target が無い・形が違うのは IA_SCHEMA） |
+| IA_OUTLINE_VALUE_UNAPPROVED | メッセージが承認の無い提供価値を指す（出荷チャネルは失格、ほかは警告） |
+| IA_OUTLINE_VALUE_OTHER_POSITIONING | メッセージが立っていない positioning の提供価値を指す |
+| IA_OUTLINE_COMPARE_INVALID / IA_OUTLINE_COMPARE_UNAPPROVED | 比べる相手が立っている positioning の代替でない・承認の無い代替（出荷チャネルは失格、ほかは警告） |
+| IA_OUTLINE_LEAD_COUNT / IA_OUTLINE_LEAD_UNPLACED | 一番のメッセージが 1 つでない・どのセクションにも置かれていない |
+| IA_OUTLINE_CTA_MISSING / IA_OUTLINE_CTA_CONTRADICTS / IA_OUTLINE_CTA_NO_ACTION | 宣言なしで CTA を置いていない・`no_cta` と書いたのに CTA がある・CTA が目的変数を指さない |
+| IA_OUTLINE_NO_SECTIONS / IA_OUTLINE_SECTION_NO_MESSAGE / IA_OUTLINE_SECTION_OVERLOADED | セクションが 0 件・通常のメッセージを置かないセクション・通常 2 つ以上か CTA 2 つ以上のセクション |
+| IA_OUTLINE_COPY_SECTION / IA_OUTLINE_COPY_MESSAGE / IA_OUTLINE_MESSAGE_UNCONVEYED | セクションに属さない文案・同じセクションに無いメッセージを伝える文案・置かれたメッセージを伝える文案が無い |
+| IA_OUTLINE_ORDER_DUPLICATE | セクションの順序、同じセクションの文案の順番が重なる |
+| IA_OUTLINE_TEXT_MISPLACED | ナビの文言をセクションに置いた・ラベルを置くセクションが無い |
+| IA_OUTLINE_MESSAGE_UNPLACED（warn） | 一番以外のメッセージが、どのセクションにも置かれていない |
+| IA_OUTLINE_NO_CTA_INTENDED（info） | `no_cta: true` の outline。報告に必ず「CTA なし（意図）」を出す |
+| IA_LEAD_UNSUPPORTED（warn） | 一番のメッセージの提供価値の経路に、証拠が `supports` する原子・矢印が無い（CTA は対象外） |
+| IA_DIFF_UNASSIGNED | 別案どうしで、印の外の文か参照する固定値の値が違う（`diff`） |
+| IA_EXPIRED_SHIPPED / IA_EXPIRED_UNSHIPPED（info） | 期限切れの証拠（経路から受け継ぐもの）・固定値（文案が参照するもの）に、出荷チャネル（`ship: true`）の outline が立っている／立っていない |
+
+条件と赤のフィクスチャの対応表：`fixtures/red-cases.json`（参照と形）・`positioning-red-cases.json`（要件 5）・`outline-red-cases.json`（要件 7・9）。
 
 ## 期限
 
@@ -151,9 +157,9 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 ## 工場への受け渡し（`skeleton`）
 
 `infoarch-author skeleton --outline <id>` は、check が緑のアウトラインから骨組みの HTML を出す（失格していれば出さない）。
-セクションごとに `data-ia-role`・`data-ia-msg`／`data-ia-pain`（宣言した文言なら `data-ia-text`、要素の枠があれば `data-ia-frame`）を付け、文案の `{{fct-NNNN}}` を SSOT の値の
-`<span data-ia-fact>` に展開し、文案は HTML エスケープする。pages と outputs の数が同じなら 1 ページずつ対応するファイルに、
-違えば全ページを各ファイルに入れる（`dom` も同じ対応で比べる）。`--out` を付けるとファイルに書き、既にあるファイルは上書きしない。
+セクションを `order` の順に `<section data-ia-section="sec-…" data-ia-role="…">` で、その中の文案を `order` の順に `data-ia-copy="cpy-…"` で出す。
+ナビの宣言は `<nav data-ia-text>`、ラベルはそのセクションの先頭に `data-ia-text` で出す。文案の `{{fct-NNNN}}` は SSOT の値の
+`<span data-ia-fact>` に展開し、文案は HTML エスケープする。1 ページ＝1 outline なので、どの output にも outline 全体を出す。`--out` を付けるとファイルに書き、既にあるファイルは上書きしない。
 工場（own-web-design）は、文言・順序・`data-ia-*` を変えずにスタイリングし、描画後に `dom` を走らせる。
 
 ## 描画物の確認（`dom`）
@@ -161,17 +167,17 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 `infoarch-author dom --root . --outline <id>` は、アウトラインの outputs のうち HTML を、チャネルの viewports（無ければ 375×812 と 1280×800）でブラウザに描画し、DOM を確かめる。
 
 - 解析と描画はブラウザ（Playwright の Chromium）が行う。成果物のソースを自前のパーサで読まない。
-- 工場はアンカーを埋める：メッセージは `data-ia-msg`、痛みは `data-ia-pain`、固定値の表示は `data-ia-fact`、正式名称（SSOT の `ent-`）の表示は `data-ia-entity`、宣言した文言は `data-ia-text`。v4 の `data-ia-problem` が残っていれば IA_DOM_LEGACY_ATTRIBUTE で失格（互換は持たない）。要素の枠は `data-ia-frame`（既存の `data-ia-msg` 等には相乗りしない）。宣言した実体の印が無い・2 つ以上ある・宣言していない印がある、は IA_DOM_FRAME_MISSING / IA_DOM_FRAME_DUPLICATE / IA_DOM_FRAME_UNDECLARED で失格。
+- 工場はアンカーを埋める：セクションは `data-ia-section`、文案は `data-ia-copy`、固定値の表示は `data-ia-fact`、正式名称（SSOT の `ent-`）の表示は `data-ia-entity`、宣言した文言は `data-ia-text`。v4・v5 の `data-ia-problem`・`data-ia-msg`・`data-ia-pain`・`data-ia-frame` が残っていれば IA_DOM_LEGACY_ATTRIBUTE で失格（互換は持たない）。セクションと文案は、outline の順で現れること（IA_DOM_ORDER。繰り返しの CTA は許す）。
 - Playwright は `INFOARCH_PLAYWRIGHT_DIR`、無ければ対象 repo（実行ディレクトリ）から解決する。自動では入れない。解決できなければ IA_DOM_PLAYWRIGHT で失格。
 - 読み取る前に、ページが落ち着くのを待つ：network idle の後に 1 秒（表示を始めるタイマーのため）、さらに実行中のアニメーションとトランジションが終わるまで最大 5 秒。終わらないアニメーションがあっても読み取り、2 回の描画の比較で揺れを報告する。
 - 同じ入力を 2 回描画し、結果が違えば IA_DOM_UNSTABLE（判定に使わない）。
 - 最初の画面の文言（各画面幅）を報告の `first_screens` に出す。強調の判定（Jev の判定台帳）の入力になる。
-- 各アンカーの表示の文言（描かれている文字だけ。`unanchored` と同じ読み方で、opacity: 0 などの隠れた文字は入らない）を、アウトラインの文案（固定値を SSOT の値に展開）と比べる。NFKC で幅をそろえ、空白と改行をすべて除いてから比べる（改行は見た目で、文言ではない）。同じアンカーが繰り返されるときは、見えているうちの 1 つが文案と一致すればよい。報告に表示の文言は出さない。
-- **主張でない文言の宣言**：ナビ・節のラベル・見出し・法務やフッターのように主張でない文言は、アウトラインに `role: navigation` か `other` のセクションとして、安定した `key` と文言そのもの（`copy`）を書き、工場は `data-ia-text="<key>"` を付ける。主張になりうる文言（副の行動喚起など）は宣言ではなくメッセージにする。`dom` は、その key の見えている印の**すべて**が文案と一致することを確かめる（メッセージの繰り返しのような緩めは無い）。ページとの対応はメッセージと同じ（別のページの key は IA_DOM_ANCHOR_UNKNOWN、このページの key の印が無ければ IA_DOM_ANCHOR_MISSING）。`other` は順序の検査に入り、`navigation` は入らない（ヘッダーとフッターのどちらに置いてもよい）。`navigation` は画面幅によって畳んでよい（見えていなくても IA_DOM_ANCHOR_HIDDEN にしない。印が無ければ失格、見えている所は文案と一致）。
+- 各文案のアンカーの表示の文言（描かれている文字だけ。`unanchored` と同じ読み方で、opacity: 0 などの隠れた文字は入らない）を、アウトラインの文案（固定値を SSOT の値に展開）と比べる。NFKC で幅をそろえ、空白と改行をすべて除いてから比べる（改行は見た目で、文言ではない）。同じアンカーが繰り返されるときは、見えているうちの 1 つが文案と一致すればよい。報告に表示の文言は出さない。
+- **主張でない文言の宣言**：ナビ・節のラベル・見出し・法務やフッターのように主張でない文言は、outline の `texts` に安定した key と文言そのもの（`text`）を書き、工場は `data-ia-text="<key>"` を付ける。主張になりうる文言（副の行動喚起など）は宣言ではなくメッセージにする。`dom` は、その key の見えている印の**すべて**が文言と一致することを確かめる（繰り返しの緩めは無い）。outline に無い key は IA_DOM_ANCHOR_UNKNOWN、key の印が無ければ IA_DOM_ANCHOR_MISSING。`navigation` は画面幅によって畳んでよい（見えていなくても IA_DOM_ANCHOR_HIDDEN にしない。印が無ければ失格、見えている所は文言と一致）。
 - **正式名称**：`data-ia-entity="ent-NNNN"` の見えている印は、すべて全文が SSOT の `name` と一致する（NFKC・空白を除いて比べる）。名前以外の文言を包めない。
-- 宣言した文言・正式名称の印の中に、ほかの IA の印（メッセージ・痛み・宣言した文言・枠。正式名称は固定値と正式名称も）を入れると IA_DOM_ANCHOR_NESTED。宣言した文言は固定値と正式名称を中に持てる。
-- `dom` の 0 は「描画物がアウトラインの宣言どおりに表示している」までで、主張の妥当性は確かめない。宣言した文言の意味は、ほかのセクションと同じく判定台帳（`ia-unregistered-claim`。role にかかわらず全セクションの文案を回す）が見る。
-- どの印（メッセージ・痛み・固定値・正式名称・宣言した文言）にも属さない、見えている文言を報告の `unanchored`（成果物 × 画面幅）に出す。文案と違う繰り返しのアンカーの文言も、ここに足す。判定台帳では、支える根拠の無い主張として `ia-unregistered-claim` で判定する。
+- 文案・宣言した文言・正式名称の印の中に、ほかの IA の印（セクション・文案・宣言した文言。正式名称は固定値と正式名称も）を入れると IA_DOM_ANCHOR_NESTED。文案と宣言した文言は固定値と正式名称を中に持てる。
+- `dom` の 0 は「描画物が outline の宣言どおりに表示している」までで、主張の妥当性は確かめない。文案の意味は判定台帳（`ia-unregistered-claim`。role にかかわらず全部の文案を回す）が見る。
+- どの印（文案・固定値・正式名称・宣言した文言）にも属さない（セクションは入れ物なので、セクションの中でも文案の外なら属さない）、見えている文言を報告の `unanchored`（成果物 × 画面幅）に出す。文案と違う繰り返しのアンカーの文言も、ここに足す。判定台帳では、支える根拠の無い主張として `ia-unregistered-claim` で判定する。
 - このページの文案が参照しない固定値のアンカーは、SSOT にある id で、その値を表示している時だけ認める（任意の文言を固定値のアンカーで包んで、検査を逃がさない）。
 - 文言が見えているかは、文字そのものが描かれているか（テキストの範囲の大きさ）で判定する。大きさ 0 の箱でも、はみ出して文字を描いていれば見えているとみなす。
 - 限界：CSS の `::before`・`::after` の `content` で描く文言は読まない。`judge` の判定は Jev の助言で、score が θ 未満でも IA_DOM_UNANCHORED_TEXT の警告は消えない（アンカーの外の文言は、必ず人の目に届く）。
@@ -202,11 +208,11 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 
 | 種類 | 単位 | 入力の本文 | 文脈 |
 | --- | --- | --- | --- |
-| `ia-name-variant` | セクション（正式名称が 1 つ以上ある時） | 固定値を展開した文案 | 正式名称の一覧 |
-| `ia-unregistered-claim` | セクション。加えて、成果物 × 画面幅ごとのアンカーの外の文言（id の末尾が `#unanchored`） | 固定値を展開した文案。アンカーの外は `dom` の `unanchored` | メッセージ・課題・証拠・使った固定値。アンカーの外は、すべて空（支える根拠が無い） |
-| `ia-strategy-fit`（ISSUE-16 で「文案 × 提供価値 1 件」に置き換える） | セクション（メッセージがあるもの） | 固定値を展開した文案 | メッセージと、対象者のセグメントで立っている positioning の経路（原子と矢印のキーと文）と経路のハッシュ。positioning が変わると判定のキーが変わる。θ 以上は要確認で、出荷は止めない（精度を測るまで。D8）。`ship` の `positioning.semantic_fit` は judged / needs-review / not-judged |
-| `ia-audience-fit` | アウトライン | 全セクションの役割と文案（順に） | 対象者（label・situation・desired_action・優先順位のメッセージを順に）と brief。優先順位を入れ替えると判定のキーが変わる |
-| `ia-emphasis` | 成果物 × 画面幅 | `dom` が切り出した最初の画面の文言 | 対象者と、その 1 位のメッセージ |
+| `ia-name-variant` | 文案（正式名称が 1 つ以上ある時。id は `<outline>/<sec>/<cpy>`） | 固定値を展開した文案 | 正式名称の一覧 |
+| `ia-unregistered-claim` | 文案。加えて、成果物 × 画面幅ごとのアンカーの外の文言（id の末尾が `#unanchored`） | 固定値を展開した文案。アンカーの外は `dom` の `unanchored` | メッセージとその提供価値・経路から受け継ぐ証拠・使った固定値。アンカーの外は、すべて空（支える根拠が無い） |
+| `ia-strategy-fit`（ISSUE-16 で「文案 × 提供価値 1 件」に置き換える） | 文案 | 固定値を展開した文案 | メッセージと、target のセグメントで立っている positioning の経路（原子と矢印のキーと文）と経路のハッシュ。positioning が変わると判定のキーが変わる。θ 以上は要確認で、出荷は止めない（精度を測るまで。D8）。`ship` の `positioning.semantic_fit` は judged / needs-review / not-judged |
+| `ia-audience-fit` | outline | 全部の文案と役割（セクションと文案の順に） | target・接点・トーン・目的変数・一番のメッセージ。並びや一番を替えると判定のキーが変わる |
+| `ia-emphasis` | 成果物 × 画面幅 | `dom` が切り出した最初の画面の文言 | target と、一番のメッセージ（とその提供価値） |
 
 score は「問題がある確率」。θ 以上は IA_JUDGE_REVIEW（要確認）として人に回し、score だけで失格にしない。
 強調の判定でゲートを止めるかは、最初の実回答で精度を測ってから決める（spec）。

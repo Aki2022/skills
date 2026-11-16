@@ -50,10 +50,10 @@ def test_schema2_actual_check_has_counts_and_preserves_ds_approvals(project):
     assert resolved['version'] == '0.4.0'
     assert resolved['resolved']['governance']['contract'] == 'ia-git-history-v4'
     assert resolved['resolved']['governance']['schema_version'] == 4
-    assert resolved['resolved']['targets'] == {'channels': 2, 'outlines': 2, 'sections': 6}
+    assert resolved['resolved']['targets'] == {'channels': 2, 'outlines': 2, 'sections': 5}
     assert resolved['resolved']['governance']['method'] == 'git-history'
     assert resolved['resolved']['governance']['input_hashes']
-    assert any(row['id'] == 'ia-deterministic' and row['targets'] == 6 for row in result['report']['executed'])
+    assert any(row['id'] == 'ia-deterministic' and row['targets'] == 5 for row in result['report']['executed'])
     assert any(row['id'] == 'ia-semantic-judgments' for row in result['report']['missing'])
     assert any(row['id'] == 'ia-dom' for row in result['report']['skipped'])
     validate_module_state(result['manifest']['web']['modules'])
@@ -65,7 +65,7 @@ def test_actual_ia_bad_inputs_make_l0_red(project, broken):
     base = root / 'design/info_arch'
     if broken == 'ref':
         data = copy.deepcopy(FIXTURE['OUTLINE'])
-        data['pages'][0]['sections'][1]['message'] = 'msg-9999'
+        data['sections']['sec-0002']['places'] = ['msg-9999']
         FIXTURE['dump'](base / 'outlines/lp-municipal.yaml', data)
     elif broken == 'expiry':
         data = copy.deepcopy(FIXTURE['SSOT'])

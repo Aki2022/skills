@@ -114,9 +114,10 @@ def test_findings_are_not_repeated_per_stage(repo):
     path = repo / 'design/info_arch/info_arch.yaml'
     ssot = yaml.safe_load(path.read_text(encoding='utf-8'))
     del ssot['proofs']['prf-0002']
+    ssot['edges'] = [e for e in ssot['edges'] if e['from'] != 'prf-0002']
     path.write_text(yaml.safe_dump(ssot, allow_unicode=True, sort_keys=False), encoding='utf-8')
     result = evaluate.run(repo, DATE)
-    assert codes(result).count('IA_PRIORITY_UNSUPPORTED') == 1, result['findings']
+    assert codes(result).count('IA_LEAD_UNSUPPORTED') == 1, result['findings']
     keys = [(f['level'], f['code'], f['message'], f['path']) for f in result['findings']]
     assert len(keys) == len(set(keys))
 

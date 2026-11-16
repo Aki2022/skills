@@ -1,34 +1,73 @@
-schema_version: 2
+# 例：seg-0001 の positioning に立つ LP。target・接点・トーンと取ってほしい行動を固定し、メッセージ・セクション・文案を組み立てる。
+schema_version: 3
 id: lp-municipal
 channel: web
-brief:
-  purpose: 自治体の情報部門からの資料請求を増やす
-  action: 資料請求
-  medium: LP
-  constraints:
-  - 1 ページ
-audience: aud-0001
 outputs:
 - site/index.html
-strategy:
-  choose:
-  - val-0001
-  rationale: 運用の重さを感じている情報部門に、手間が減る価値を先に示す
-pages:
-- id: top
-  label: トップ
-  sections:
-  - role: pain
-    pain: pan-0001
-    copy: 既存システムの運用、重くありませんか
-  - role: benefit
+target:
+  segment: seg-0001
+  condition: 既存システムの運用が重いと感じている情報部門の担当者
+touchpoint: lp
+tone: 丁寧で落ち着いた調子
+objective:
+  id: obj-0001
+  action: 資料請求
+messages:
+  msg-0001:
+    value: val-0001
+    rank: lead
+    type: normal
+    compares:
+    - alt-0001
+  msg-0002:
+    value: val-0003
+    rank: support
+    type: normal
+  msg-0003:
+    value: val-0001
+    rank: support
+    type: cta
+    achieves: obj-0001
+sections:
+  sec-0001:
+    order: 1
+    role: pain
+    places:
+    - msg-0001
+  sec-0002:
+    order: 2
+    role: trust
+    places:
+    - msg-0002
+  sec-0003:
+    order: 3
+    role: act
+    places:
+    - msg-0001
+    - msg-0003
+copies:
+  cpy-0001:
+    section: sec-0001
+    order: 1
     message: msg-0001
-    copy: 運用の手間が半分になります
-  - role: proof
+    text: 既存システムの運用、重くありませんか
+  cpy-0002:
+    section: sec-0001
+    order: 2
+    message: msg-0001
+    text: 運用の手間が半分になります
+  cpy-0003:
+    section: sec-0002
+    order: 1
     message: msg-0002
-    proofs:
-    - prf-0001
-    copy: 導入は{{fct-0001}}
-  - role: cta
+    text: 導入は{{fct-0001}}、止まらずに動き続けます
+  cpy-0004:
+    section: sec-0003
+    order: 1
+    message: msg-0001
+    text: 保守の要らない運用へ
+  cpy-0005:
+    section: sec-0003
+    order: 2
     message: msg-0003
-    copy: 資料請求はこちら（{{fct-0002}}）
+    text: 資料請求はこちら（{{fct-0002}}）

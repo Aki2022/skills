@@ -50,16 +50,13 @@ def test_worked_example_checks_green():
     assert proc.returncode == 0, proc.stdout
 
 
-def test_worked_example_two_audiences_share_content_and_differ_in_order():
+def test_worked_example_two_deliverables_stand_on_their_own_positioning():
+    """Each outline stands on the positioning of its target's segment and leads with one message of its own."""
     lp, deck = _example('lp-municipal'), _example('deck-smb')
-    assert lp['audience'] != deck['audience']
-    def msgs(o):
-        return [s['message'] for p in o['pages'] for s in p['sections'] if 'message' in s]
-    def text(o):
-        return ' '.join(s['copy'] for p in o['pages'] for s in p['sections'])
-    assert set(msgs(deck)) <= set(msgs(lp)) and msgs(deck)[0] != msgs(lp)[0]
-    assert '{{fct-0001}}' in text(lp) and '{{fct-0001}}' in text(deck)
+    assert lp['target']['segment'] != deck['target']['segment']
     ssot = yaml.safe_load((SKILL / 'references/examples/design/info_arch/info_arch.yaml').read_text(encoding='utf-8'))
     for o in (lp, deck):
-        first = ssot['audiences'][o['audience']]['priorities'][0]
-        assert first in msgs(o), f'{o["id"]}: the audience top message {first} is missing'
+        values = {m['value'] for m in o['messages'].values()}
+        assert all(ssot['values'][v]['segment'] == o['target']['segment'] for v in values), o['id']
+        assert [m['rank'] for m in o['messages'].values()].count('lead') == 1
+        assert any('{{fct-0001}}' in c['text'] for c in o['copies'].values())

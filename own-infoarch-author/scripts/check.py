@@ -1,4 +1,4 @@
-"""Deterministic checks of design/info_arch/ (token 0): the messaging SSOT, channel declarations, structured outlines.
+"""Deterministic checks of design/info_arch/ (token 0): the positioning SSOT, channel declarations, outlines (v6).
 
 What is checked here is structure and references, never meaning. Meaning (term variants, emphasis, whether a
 sentence is a claim) belongs to the Jev judgement ledger; rendered artifacts belong to the DOM checks.
@@ -12,13 +12,13 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import outline as ol
 import positioning as pos
 from common import INFO_ARCH_DIR, Report, YamlError, load_ref, load_yaml, validator_for
 
 # Positioning (v6): segment, job, pain, gain, alternative, category, strength, value (+ evidence in proofs).
 POSITIONING = dict(pos.ATOM_BLOCKS)
-BLOCKS = {'audiences': 'aud', 'messages': 'msg', 'proofs': 'prf', 'facts': 'fct',
-          'entities': 'ent', 'voices': 'vce', **POSITIONING}
+BLOCKS = {'proofs': 'prf', 'facts': 'fct', 'entities': 'ent', 'voices': 'vce', **POSITIONING}
 PREFIX_BLOCK = {v: k for k, v in BLOCKS.items()}
 ID_RE = re.compile(r'(' + '|'.join(BLOCKS.values()) + r')-((?!0000)[0-9]{4}|[1-9][0-9]{4,})')  # always fullmatch: $ would accept a trailing newline
 PLACEHOLDER = re.compile(r'\{\{(fct-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,}))\}\}')  # exactly {{fct-NNNN}}, no padding
@@ -79,7 +79,7 @@ def load(root, report):
         return m
     m.ssot = data
     for kind, sub, schema, store in (('channel', 'channels', 'channel.v2.schema.json', m.channels),
-                                     ('outline', 'outlines', 'outline.v2.schema.json', m.outlines)):
+                                     ('outline', 'outlines', 'outline.v3.schema.json', m.outlines)):
         d = base / sub
         validator = validator_for(schema)
         for f in sorted(d.iterdir()) if d.is_dir() else []:
@@ -111,8 +111,8 @@ def load(root, report):
 def ssot_refs(block, atom):
     """Every id an SSOT atom references, as (field, id). One table, so no field is forgotten."""
     out = []
-    single = {'audiences': ('segment',), 'proofs': ('segment',), **{b: ('segment',) for b in POSITIONING if b != 'segments'}}
-    many = {'audiences': ('priorities',), 'messages': ('addresses', 'serves'), 'proofs': ('supports',)}
+    single = {'proofs': ('segment',), **{b: ('segment',) for b in POSITIONING if b != 'segments'}}
+    many = {}
     for fld in single.get(block, ()):
         if fld in atom:
             out.append((fld, atom[fld]))
@@ -157,37 +157,34 @@ def check_ssot(m, report):
             report.add('fail', 'IA_ID_NOT_ISSUED', f'墓標 {old} は台帳が発行していない番号', path)
         if new is not None and m.atom(new) is None:
             report.add('fail', 'IA_TOMBSTONE_TARGET', f'墓標 {old} → {new} の先が無い', path)
-    check_lead_support(m, report)
     voices = [v for v, a in d['voices'].items() if a['state'] == 'proposed']
     if len(voices) > 1:
         report.add('fail', 'IA_VOICE_MULTIPLE', f'proposed の声が {len(voices)} 個ある（声はプロジェクトに 1 つ）: {voices}', path)
 
 
-NO_CLAIM_ROLES = {'cta', 'vision'}  # an invitation or an aspiration asserts nothing that needs proof
+def supported_elements(m, approved):
+    """Atoms and arrows that approved positioning evidence supports (through approved `supports` arrows)."""
+    return {e['to'] for k, e in pos.edges(m).items()
+            if e['kind'] == 'supports' and k in approved and e['from'] in approved and pos._prefix(e['from']) == 'prf'}
 
 
-def check_lead_support(m, report):
-    """Warn when an audience's lead message makes a claim that no proof supports.
+def check_lead_support(m, report, oid, rel, o, approved):
+    """Warn when the lead message's value has nothing on its positioning path that evidence supports.
 
-    Shape and references cannot tell whether a message is true, but they can tell that the one message an audience
-    hears first has nothing behind it. Only priorities[0]: later messages are often context, and warning on every
-    message would turn the warning into noise.
+    Shape cannot tell whether a claim is true, but it can tell that the one message a deliverable leads with stands
+    on nothing evidenced. Only the lead: warning on every message would turn the warning into noise.
     """
-    d = m.ssot
-    supported = {mid for p in d['proofs'].values() if p['state'] == 'proposed' for mid in p.get('supports', [])}
-    for aid, aud in d['audiences'].items():
-        if aud['state'] != 'proposed' or not aud.get('priorities'):
-            continue
-        lead = aud['priorities'][0]
-        msg = m.atom(lead)
-        if msg is None or msg['state'] != 'proposed' or msg.get('role') in NO_CLAIM_ROLES or lead in supported:
-            continue
-        report.add('warn', 'IA_PRIORITY_UNSUPPORTED',
-                   f'{aid} の 1 位のメッセージ {lead}（{msg.get("role")}）を支える証拠が無い（証拠を足すか、主張を下げる）',
-                   str(SSOT_PATH), id=lead)
+    lead = [msg for msg in o['messages'].values() if msg['rank'] == 'lead']
+    if len(lead) != 1 or lead[0]['type'] == 'cta':
+        return
+    path, _ = positioning_path(m, [lead[0]['value']], ol.segment_of(o))
+    if path and not set(path) & supported_elements(m, approved):
+        report.add('warn', 'IA_LEAD_UNSUPPORTED',
+                   f'{oid}: 一番のメッセージの提供価値 {lead[0]["value"]} の経路に、証拠が支える原子・矢印が無い（証拠を足すか、一番を替える）',
+                   rel, id=lead[0]['value'])
 
 
-# ---- positioning path (v6 requirements 2, 3 and 15; ISSUE-14 replaces the message side) ---------------------
+# ---- positioning path (v6 requirements 2, 3 and 15) -----------------------------------------------------------
 
 # How a message's positioning atoms pull in what they stand on: (atom prefix, arrow kind, direction, other end).
 _PATH_RULES = (('val', 'satisfies', 'out'), ('val', 'produces', 'in'), ('str', 'lacks', 'out'),
@@ -195,15 +192,15 @@ _PATH_RULES = (('val', 'satisfies', 'out'), ('val', 'produces', 'in'), ('str', '
 
 
 def positioning_path(m, root_ids, segment):
-    """The positioning atoms and arrows a message (or pain) stands on in one segment, and their hash.
+    """The positioning atoms and arrows a message's value stands on in one segment, and their hash.
 
     Derived from arrows alone, so a deliverable cannot leave anything out: a value pulls in the needs it satisfies
     and the strengths that produce it (with the alternatives they are compared against); a need pulls in its job;
-    a job its segment. Proposed elements only; approval is checked separately. Arrows into another segment are not
-    followed. -> (sorted keys, sha256 of their content). An empty path hashes to None.
+    a job its segment; and the evidence that supports any of those comes with its `supports` arrow (a message
+    inherits it, so it is approved and expires like the rest). Proposed elements only; approval is checked
+    separately. Arrows into another segment are not followed. -> (sorted keys, sha256 of their content).
+    An empty path hashes to None.
     """
-    if isinstance(root_ids, str):
-        root_ids = _roots(m, root_ids)
     atoms, edges, segs = pos.atoms(m), pos.edges(m), pos.segment_map(m)
     def mine(aid):
         return aid in atoms and segs.get(aid) == segment
@@ -225,12 +222,15 @@ def positioning_path(m, root_ids, segment):
                     on.add(key)
                     todo.append(end)
     on.add(segment)
+    for key, e in edges.items():
+        if e['kind'] == 'supports' and e['to'] in on and mine(e['from']):
+            on |= {key, e['from']}
     ids = sorted(on)
     body = [[k, pos.content(atoms.get(k) or edges[k])] for k in ids]
     return ids, pos.sha256(body)
 
 
-# ---- owner approval per atom and arrow (v6 requirement 3; ISSUE-13 adds prepare, the contract and the ship report) --
+# ---- owner approval per atom and arrow (v6 requirements 3 and 15) ---------------------------------------------
 
 APPROVAL_PREFIX = pos.APPROVAL_PREFIX
 
@@ -243,12 +243,9 @@ def positioning_targets(m):
         ch = m.channels.get(o['channel'])
         if not (ch and ch[1]['ship']):
             continue
-        segment = (m.atom(o['audience']) or {}).get('segment')
-        for p in o['pages']:
-            for s in p['sections']:
-                for key in ('message', 'pain'):
-                    if s.get(key) and m.atom(s[key]) is not None:
-                        must |= {APPROVAL_PREFIX + x for x in positioning_path(m, _roots(m, s[key]), segment)[0]}
+        for msg in o['messages'].values():
+            must |= {APPROVAL_PREFIX + x for x in positioning_path(m, [msg['value']], ol.segment_of(o))[0]}
+            must |= {APPROVAL_PREFIX + a for a in msg.get('compares', [])}
     return hashes, sorted(must & set(hashes))
 
 
@@ -295,14 +292,18 @@ def read_approvals(root, report):
 
 
 def positioning_dependencies(m, o):
-    """Every positioning element an outline stands on: the paths of its messages and pains, and of its chosen atoms."""
-    segment = (m.atom(o['audience']) or {}).get('segment')
-    roots = [s[k] for p in o['pages'] for s in p['sections'] for k in ('message', 'pain') if s.get(k) and m.atom(s[k])]
-    out = set()
-    for r in roots:
-        out |= set(positioning_path(m, _roots(m, r), segment)[0])
-    for x in (o.get('strategy') or {}).get('choose', []):
-        out |= set(positioning_path(m, [x], segment)[0])
+    """Every positioning element an outline stands on: the whole positioning of its target's segment. Its gaps and
+    points of parity come from every alternative and fulfillment arrow there, so evidence behind any of them, and a
+    change to any of them, reaches the outline (expiry, reverse lookup, maintenance)."""
+    seg = ol.segment_of(o)
+    if not seg:
+        return set()
+    segs = pos.segment_map(m)
+    out = {k for k, s in segs.items() if s == seg and pos._prefix(k) != 'prf'} | {seg}
+    # Evidence counts once it supports something there; an unconnected draft supports nothing yet.
+    out |= {e['from'] for e in pos.edges(m).values() if e['kind'] == 'supports' and e['to'] in out}
+    for msg in o['messages'].values():
+        out |= {a for a in msg.get('compares', []) if m.atom(a) is not None}
     return out
 
 
@@ -311,165 +312,20 @@ def outline_dependencies(m, o):
     return {x for _, x in outline_refs(o)} | positioning_dependencies(m, o)
 
 
-def _roots(m, aid):
-    atom = m.atom(aid) or {}
-    if aid.startswith('msg-'):
-        return list(atom.get('serves', [])) + list(atom.get('addresses', []))
-    return [aid]
-
-
 def element(m, key):
     """An atom or an arrow by its key (None when there is none)."""
     return m.atom(key) or pos.edges(m, proposed_only=False).get(key)
 
 
-def check_positioning_use(m, report, oid, rel, o, shipped, approved=None):
-    """Every message and pain an outline uses must stand on the audience's segment, and every element of those
-    paths must carry the owner's current approval (requirement 15)."""
-    level = 'fail' if shipped else 'warn'
-    segment = (m.atom(o['audience']) or {}).get('segment')
+def check_positioning_use(m, report, oid, rel, o, shipped, approved):
+    """Every element on the paths of an outline's values must carry the owner's current approval (requirement 15)."""
     missing = set()
-    for p in o['pages']:
-        for i, s in enumerate(p['sections']):
-            w = f'{oid}.{p["id"]}[{i}]'
-            for key in ('message', 'pain'):
-                aid = s.get(key)
-                if not aid or m.atom(aid) is None:
-                    continue
-                roots = _roots(m, aid)
-                if not roots:
-                    report.add(level, 'IA_POSITIONING_UNTRACED',
-                               f'{w}: {aid} はどの positioning の原子にも立っていない（serves で提供価値・ジョブ・痛み・得たいものを結ぶ）', rel, id=aid)
-                    continue
-                ids, _ = positioning_path(m, roots, segment)
-                if not ids:
-                    report.add(level, 'IA_POSITIONING_SEGMENT_MISMATCH',
-                               f'{w}: {aid} の positioning は対象者 {o["audience"]} のセグメント {segment} にたどり着かない', rel, id=aid)
-                if approved is not None:
-                    missing |= {x for x in ids if x not in approved}
+    for msg in o['messages'].values():
+        missing |= {x for x in positioning_path(m, [msg['value']], ol.segment_of(o))[0] if x not in approved}
     if missing:
-        report.add(level, 'IA_POSITIONING_UNAPPROVED',
+        report.add('fail' if shipped else 'warn', 'IA_POSITIONING_UNAPPROVED',
                    f'{oid}: 立っている positioning に、オーナーの承認が無いか外れた原子・矢印がある {sorted(missing)}'
                    '（design-author approve --prepare で束を作り、オーナーが記録する）', rel, atoms=sorted(missing))
-
-
-# ---- composition (steps 2-4) -----------------------------------------------------------------------------------
-
-def compose(m, audience, chosen):
-    """Messages that stand on the chosen positioning atoms for the audience's segment, in the audience's priority
-    order (then the rest, by id). The deterministic half of step 3; choosing and cutting stays with the author."""
-    aud = m.atom(audience) or {}
-    segment = aud.get('segment')
-    chosen = set(chosen)
-    picked = [mid for mid, a in sorted((m.ssot.get('messages') or {}).items())
-              if a['state'] == 'proposed' and set(positioning_path(m, _roots(m, mid), segment)[0]) & chosen]
-    order = {mid: i for i, mid in enumerate(aud.get('priorities') or [])}
-    return sorted(picked, key=lambda mid: (order.get(mid, len(order)), mid))
-
-
-def check_composition(m, report, oid, rel, o):
-    """The recorded choice must stand on the audience's segment; messages should stand on it; dropping the
-    audience's top message needs a recorded reason. (The outline field keeps the name `strategy` until ISSUE-14.)"""
-    segment = (m.atom(o['audience']) or {}).get('segment')
-    st = o['strategy']
-    bad = [x for x in st['choose'] if m.atom(x) is None or not positioning_path(m, [x], segment)[0]]
-    if bad:
-        report.add('fail', 'IA_COMPOSITION_POSITIONING_INVALID',
-                   f'{oid}: 選んだ positioning の原子 {bad} が無いか、対象者のセグメント {segment} の原子でない', rel)
-        return
-    chosen = set(st['choose'])
-    for p in o['pages']:
-        for i, s in enumerate(p['sections']):
-            mid = s.get('message')
-            if mid and m.atom(mid) is not None and _roots(m, mid):
-                if not set(positioning_path(m, _roots(m, mid), segment)[0]) & chosen:
-                    report.add('warn', 'IA_COMPOSITION_OFF_POSITIONING',
-                               f'{oid}.{p["id"]}[{i}]: {mid} は選んだ positioning の原子 {sorted(chosen)} に立っていない', rel, id=mid)
-    top = ((m.atom(o['audience']) or {}).get('priorities') or [None])[0]
-    used = {s.get('message') for p in o['pages'] for s in p['sections']}
-    cut = {m.resolve(x) for x in o['brief'].get('cut', [])} - {None}
-    if top and top not in used and top not in cut and not st.get('deviation'):
-        report.add('warn', 'IA_COMPOSITION_DEVIATION_UNEXPLAINED',
-                   f'{oid}: 対象者の 1 位のメッセージ {top} を使っていない（理由を strategy.deviation に書くか、brief.cut で削ると決める）', rel)
-
-
-# ---- frames (requirement 16) ------------------------------------------------------------
-
-def frame_types(media):
-    return (load_ref('media/frames.json')['media']).get(media)
-
-
-def check_frames(m, report, oid, rel, o):
-    """Declared frame instances: known media and type, unique ids, multiplicity, and element frames anchored once."""
-    used = [(f'{oid}.{p["id"]}[{i}]', s['frame']) for p in o['pages'] for i, s in enumerate(p['sections']) if 'frame' in s]
-    decl = o.get('frames')
-    if decl is None:
-        for w, fid in used:
-            report.add('fail', 'IA_FRAME_UNDECLARED', f'{w}: 枠 {fid} を使っているが、アウトラインに frames が無い', rel)
-        return
-    types = frame_types(decl['media'])
-    if types is None:
-        report.add('fail', 'IA_FRAME_UNKNOWN_MEDIA', f'{oid}: 枠の媒体 {decl["media"]!r} はノウハウ（media/frames.json）に無い', rel)
-        return
-    kinds, seen = {}, set()
-    for inst in decl['instances']:
-        if inst['id'] in seen:
-            report.add('fail', 'IA_FRAME_DUPLICATE_ID', f'{oid}: 枠の実体 id {inst["id"]} が重複している', rel)
-            continue
-        seen.add(inst['id'])
-        if inst['type'] not in types:
-            report.add('fail', 'IA_FRAME_UNKNOWN_TYPE', f'{oid}: 枠の種類 {inst["type"]!r} は {decl["media"]} のノウハウに無い', rel)
-            continue
-        kinds[inst['id']] = inst['type']
-    for t, rule in types.items():
-        n = sum(1 for v in kinds.values() if v == t)
-        if n < rule['min'] or (rule['max'] is not None and n > rule['max']):
-            want = f'{rule["min"]}〜{rule["max"] if rule["max"] is not None else ""}'
-            report.add('fail', 'IA_FRAME_MULTIPLICITY', f'{oid}: 枠の種類 {t} の実体が {n} 個（{want} 個）', rel)
-    counts = {}
-    for w, fid in used:
-        if fid not in kinds:
-            report.add('fail', 'IA_FRAME_UNDECLARED', f'{w}: 枠 {fid} は frames.instances で宣言されていない', rel)
-        elif types[kinds[fid]]['target'] == 'sequence':
-            report.add('fail', 'IA_FRAME_SEQUENCE_ANCHORED', f'{w}: 並びの枠 {fid} はセクションに付けない（アウトラインの上だけで持つ）', rel)
-        else:
-            counts[fid] = counts.get(fid, 0) + 1
-    for fid, t in kinds.items():
-        if types[t]['target'] != 'element':
-            continue
-        if counts.get(fid, 0) > 1:
-            report.add('fail', 'IA_FRAME_DUPLICATE_USE', f'{oid}: 枠の実体 {fid} を {counts[fid]} つのセクションに付けている（1 つだけ）', rel)
-        elif not counts.get(fid):
-            report.add('fail', 'IA_FRAME_UNUSED', f'{oid}: 宣言した枠の実体 {fid} がどのセクションにも付いていない', rel)
-
-
-def mapping(m, oid):
-    """The table an external experiment tool points at (requirement 17): version, frame instances, atoms and hashes."""
-    rel, o = m.outlines[oid]
-    def h(value):
-        return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
-    def atoms_of(s):
-        ids = [s[k] for k in ('pain', 'message') if k in s] + list(s.get('proofs', [])) + PLACEHOLDER.findall(s['copy'])
-        return {aid: h([aid, m.atom(aid)]) for aid in ids}
-    sections = [s for p in o['pages'] for s in p['sections']]
-    decl = o.get('frames') or {'instances': []}
-    rows = []
-    for inst in decl['instances']:
-        target = ((frame_types(decl.get('media')) or {}).get(inst['type']) or {}).get('target')
-        if target == 'sequence':
-            rows.append({'id': inst['id'], 'type': inst['type'],
-                         'atoms': [s[k] for s in sections for k in ('pain', 'message') if k in s]})
-        else:
-            hit = [s for s in sections if s.get('frame') == inst['id']]
-            rows.append({'id': inst['id'], 'type': inst['type'], 'atoms': atoms_of(hit[0]) if hit else {}})
-    outputs = {}
-    for out in o['outputs']:
-        f = m.root / out
-        outputs[out] = hashlib.sha256(f.read_bytes()).hexdigest() if f.is_file() else None
-    standing = {k: element(m, k) for k in sorted(positioning_dependencies(m, o))}
-    version = h({'outline': o, 'atoms': {aid: m.atom(aid) for s in sections for aid in atoms_of(s)},
-                 'positioning': standing, 'outputs': outputs})
-    return {'deliverable': oid, 'version_hash': version, 'outputs': outputs, 'strategy': o['strategy'], 'frames': rows}
 
 
 # ---- outlines ----------------------------------------------------------------------------
@@ -491,44 +347,24 @@ def _glob_re(pattern):
 
 
 def outline_refs(o):
-    """Every id an outline references, as (where, id)."""
-    out = [('audience', o['audience'])]
-    out += [('brief.cut', x) for x in o['brief'].get('cut', [])]
-    for p in o['pages']:
-        for i, s in enumerate(p['sections']):
-            w = f'{p["id"]}[{i}]'
-            for key in ('message', 'pain'):
-                if key in s:
-                    out.append((f'{w}.{key}', s[key]))
-            out += [(f'{w}.proofs', x) for x in s.get('proofs', [])]
-            out += [(f'{w}.copy', x) for x in PLACEHOLDER.findall(s['copy'])]
+    """Every SSOT id an outline references, as (where, id)."""
+    out = []
+    for mid, msg in sorted(o['messages'].items()):
+        out.append((f'messages.{mid}.value', msg['value']))
+        out += [(f'messages.{mid}.compares', a) for a in msg.get('compares', [])]
+    for where, text in outline_texts(o):
+        out += [(where, f) for f in PLACEHOLDER.findall(text)]
     return out
 
 
-TEXT_ROLES = {'navigation', 'other'}  # roles whose non-claim text is declared with a key instead of a message
-
-
-def check_text_keys(report, oid, rel, o):
-    """Declared non-claim text: a navigation / other section without a message or pain names a stable key, unique in
-    the outline, so the factory can anchor it (data-ia-text) and dom can compare it; claims stay messages."""
-    seen = {}
-    for p in o['pages']:
-        for i, s in enumerate(p['sections']):
-            w = f'{oid}.{p["id"]}[{i}]'
-            claim = 'message' in s or 'pain' in s
-            if 'key' in s:
-                if claim or s['role'] not in TEXT_ROLES:
-                    report.add('fail', 'IA_OUTLINE_TEXT_KEY_MISPLACED',
-                               f'{w}: key は message も pain も無い navigation・other のセクションだけに書く（主張はメッセージで書く）', rel)
-                elif s['key'] in seen:
-                    report.add('fail', 'IA_OUTLINE_TEXT_KEY_DUPLICATE', f'{w}: key {s["key"]!r} は {seen[s["key"]]} と重複している', rel)
-                seen.setdefault(s['key'], w)
-            elif not claim and s['role'] in TEXT_ROLES:
-                report.add('fail', 'IA_OUTLINE_TEXT_KEY_MISSING',
-                           f'{w}: 主張でない文言のセクションに key が無い（画面の印 data-ia-text を付けられない）', rel)
+def outline_texts(o):
+    """(where, text) of every piece of copy and declared text an outline writes."""
+    return ([(f'copies.{cid}', cp['text']) for cid, cp in sorted(o['copies'].items())]
+            + [(f'texts.{k}', t['text']) for k, t in sorted((o.get('texts') or {}).items())])
 
 
 def check_outline(m, report, oid, rel, o):
+    """Placement (channel and outputs), references into the SSOT, and fact placeholders in the copy."""
     ch = m.channels.get(o['channel'])
     if ch is None:
         report.add('fail', 'IA_OUTLINE_CHANNEL', f'{oid}: チャネル {o["channel"]!r} の宣言（channels/{o["channel"]}.yaml）が無い', rel)
@@ -537,28 +373,18 @@ def check_outline(m, report, oid, rel, o):
         for out in o['outputs']:
             if not any(g.match(out) for g in globs):
                 report.add('fail', 'IA_OUTLINE_OUTPUT_UNDECLARED', f'{oid}: 成果物 {out} がチャネル {o["channel"]} の outputs {ch[1]["outputs"]} に一致しない', rel)
-    check_text_keys(report, oid, rel, o)
     for where, aid in outline_refs(o):
         _ref(m, report, f'{oid}.{where}', aid, rel, from_proposed=True,
              broken_code='IA_OUTLINE_REF_BROKEN', empty_code='IA_OUTLINE_REF_EMPTY')
-    cut = {m.resolve(x) for x in o['brief'].get('cut', [])} - {None}
-    aud = m.atom(o['audience']) or {}
-    priorities = set(aud.get('priorities', []))
     facts = {fid: f['value'] for fid, f in m.ssot['facts'].items() if f['state'] == 'proposed' and f.get('value')}
-    for p in o['pages']:
-        for i, s in enumerate(p['sections']):
-            w = f'{oid}.{p["id"]}[{i}]'
-            msg = s.get('message')
-            if msg in cut:
-                report.add('fail', 'IA_OUTLINE_CUT_USED', f'{w}: 削ると決めた {msg} を使っている', rel)
-            elif msg and priorities and msg not in priorities:
-                report.add('warn', 'IA_OUTLINE_OFF_PRIORITY', f'{w}: {msg} は対象者 {o["audience"]} の優先リストに無い', rel)
-            for bad in [b for b in ANY_BRACES.findall(s['copy']) if not PLACEHOLDER.fullmatch(b)]:
-                report.add('fail', 'IA_OUTLINE_BAD_PLACEHOLDER', f'{w}: {bad} は固定値の参照 {{{{fct-NNNN}}}} の形でない', rel)
-            plain = PLACEHOLDER.sub(' ', s['copy'])
-            for fid, value in facts.items():
-                if value in plain:
-                    report.add('fail', 'IA_OUTLINE_FACT_LITERAL', f'{w}: 固定値 {fid} の値「{value}」を直接書いている（{{{{{fid}}}}} で参照する）', rel)
+    for where, text in outline_texts(o):
+        w = f'{oid}.{where}'
+        for bad in [b for b in ANY_BRACES.findall(text) if not PLACEHOLDER.fullmatch(b)]:
+            report.add('fail', 'IA_OUTLINE_BAD_PLACEHOLDER', f'{w}: {bad} は固定値の参照 {{{{fct-NNNN}}}} の形でない', rel)
+        plain = PLACEHOLDER.sub(' ', text)
+        for fid, value in facts.items():
+            if value in plain:
+                report.add('fail', 'IA_OUTLINE_FACT_LITERAL', f'{w}: 固定値 {fid} の値「{value}」を直接書いている（{{{{{fid}}}}} で参照する）', rel)
 
 
 # ---- design page inventory (ADR-20261115-design-ia-two-skills-shared-base) -------------------
@@ -612,7 +438,7 @@ def check_expiry(m, report, date):
     for oid, (rel, o) in m.outlines.items():
         ch = m.channels.get(o['channel'])
         if ch and ch[1]['ship']:
-            for _, aid in outline_refs(o):
+            for aid in outline_dependencies(m, o):
                 shipped.setdefault(aid, []).append(oid)
     for block, kind in (('proofs', 'proof'), ('facts', 'fact')):
         for aid, atom in m.ssot[block].items():
@@ -643,15 +469,16 @@ def check(root, date):
     if not m.outlines:
         report.add('fail', 'IA_NO_OUTLINES', 'outlines/*.yaml が 0 件（対象 0 件を合格にしない）', INFO_ARCH_DIR / 'outlines')
     for oid, (rel, o) in sorted(m.outlines.items()):
-        check_outline(m, report, oid, rel, o)
-        check_frames(m, report, oid, rel, o)
-        check_composition(m, report, oid, rel, o)
         ch = m.channels.get(o['channel'])
-        check_positioning_use(m, report, oid, rel, o, shipped=bool(ch and ch[1]['ship']), approved=approved)
+        shipped = bool(ch and ch[1]['ship'])
+        check_outline(m, report, oid, rel, o)
+        ol.check(m, report, oid, rel, o, shipped, approved)
+        check_positioning_use(m, report, oid, rel, o, shipped, approved)
+        check_lead_support(m, report, oid, rel, o, approved)
     check_expiry(m, report, date)
     check_pages(m, report)
     report.targets = {'channels': len(m.channels), 'outlines': len(m.outlines),
-                      'sections': sum(len(p['sections']) for _, o in m.outlines.values() for p in o['pages'])}
+                      'sections': sum(len(o['sections']) for _, o in m.outlines.values())}
     return report, m
 
 

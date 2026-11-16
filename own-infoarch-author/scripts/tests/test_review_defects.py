@@ -1,7 +1,8 @@
 """Defects found by the external review of 2026-11-15 (biz_ops docs/log/design-ia-boundary-review-20261115.md).
 
 1. Reverse lookup must follow the positioning transitively (v6 requirement 14).
-2. The mapping table's version hash must move when a positioning element the deliverable stands on changes.
+2. The set id must move when a positioning element the deliverable stands on changes (the v5 mapping table's
+   version hash became the set id in v6).
 3. A replacement written from one deliverable's run must not drop the valid IA judgments of other deliverables.
 5. The owner-approval bundle must be readable as content, and refuse a stale request (v6 requirement 3).
 """
@@ -28,19 +29,22 @@ def test_impact_follows_the_positioning(tmp_path):
     assert out['outlines'] == ['lp-municipal'], out
 
 
-def test_mapping_version_moves_with_a_positioning_dependency(tmp_path):
+def test_set_id_moves_with_a_positioning_dependency(tmp_path):
+    from test_check import confirm
     write_repo(tmp_path)
-    _, before = cli('mapping', '--root', str(tmp_path), '--outline', 'lp-municipal')
+    _, before = cli('set', '--root', str(tmp_path), '--outline', 'lp-municipal')
     changed = copy.deepcopy(SSOT)
     changed['strengths']['str-0001']['text'] = '別の強み'
     dump(tmp_path / 'design/info_arch/info_arch.yaml', changed)
-    _, after = cli('mapping', '--root', str(tmp_path), '--outline', 'lp-municipal')
-    assert after['version_hash'] != before['version_hash']
+    confirm(tmp_path, changed)  # re-approved by the owner
+    _, after = cli('set', '--root', str(tmp_path), '--outline', 'lp-municipal')
+    assert after['set'] != before['set'] and after['outline'] == before['outline']
     unrelated = copy.deepcopy(SSOT)
     unrelated['values']['val-0002']['text'] += '（改）'
     dump(tmp_path / 'design/info_arch/info_arch.yaml', unrelated)
-    _, same = cli('mapping', '--root', str(tmp_path), '--outline', 'lp-municipal')
-    assert same['version_hash'] == before['version_hash']
+    confirm(tmp_path, unrelated)
+    _, same = cli('set', '--root', str(tmp_path), '--outline', 'lp-municipal')
+    assert same['set'] == before['set']  # another segment's value
 
 
 def test_replacement_keeps_valid_judgments_of_other_deliverables():
@@ -67,7 +71,7 @@ def test_replacement_drops_superseded_and_orphaned_judgments():
     policy = jl.load_policy()
     lp = judge.outline_candidates('lp-municipal', OUTLINE, SSOT, policy, jl)
     changed = copy.deepcopy(OUTLINE)
-    changed['pages'][0]['sections'][1]['copy'] = '運用の手間がかなり減ります'
+    changed['copies']['cpy-0002']['text'] = '運用の手間がかなり減ります'
     now = judge.outline_candidates('lp-municipal', changed, SSOT, policy, jl)
     gone = jl.candidate('ia-emphasis', 'retired/x.html@mobile', '見出し', {'outline': 'retired'}, policy=policy)
     ledger = {'schema_version': jl.CURRENT_SCHEME, 'policy': policy, 'holdout': {'source': 'unmeasured'},

@@ -1,7 +1,8 @@
 // Snapshot of a rendered page for the information-architecture DOM checks.
 // Usage: node dom_snapshot.mjs <html file> <viewports JSON>
-// Prints a JSON array, one snapshot per viewport: anchors (data-ia-msg / data-ia-pain / data-ia-fact / data-ia-entity /
-// data-ia-text / data-ia-frame; a leftover v4 data-ia-problem is reported as legacy-problem) with their rendered box,
+// Prints a JSON array, one snapshot per viewport: anchors (data-ia-section / data-ia-copy / data-ia-fact /
+// data-ia-entity / data-ia-text; the v4/v5 attributes data-ia-problem / data-ia-msg / data-ia-pain / data-ia-frame are
+// reported as legacy-<name>) with their rendered box,
 // visibility, visible text (painted text nodes only, the same rule as `unanchored`) and whether a declared-text or
 // official-name anchor holds another IA anchor (`nested`), the total rendered text length, the text visible in the
 // first screen, and the visible text that belongs to no anchor (`unanchored`).
@@ -94,11 +95,13 @@ try {
       };
       // Declared text may show facts and official names; an official name holds nothing but itself.
       const NESTED = {
-        text: "[data-ia-msg],[data-ia-pain],[data-ia-text],[data-ia-frame],[data-ia-problem]",
-        entity: "[data-ia-msg],[data-ia-pain],[data-ia-text],[data-ia-frame],[data-ia-problem],[data-ia-fact],[data-ia-entity]",
+        copy: "[data-ia-section],[data-ia-copy],[data-ia-text]",
+        text: "[data-ia-section],[data-ia-copy],[data-ia-text]",
+        entity: "[data-ia-section],[data-ia-copy],[data-ia-text],[data-ia-fact],[data-ia-entity]",
       };
       const anchors = [];
-      for (const [attr, kind] of [["data-ia-msg", "msg"], ["data-ia-pain", "pain"], ["data-ia-fact", "fact"], ["data-ia-entity", "entity"], ["data-ia-text", "text"], ["data-ia-problem", "legacy-problem"], ["data-ia-frame", "frame"]]) {
+      for (const [attr, kind] of [["data-ia-section", "section"], ["data-ia-copy", "copy"], ["data-ia-fact", "fact"], ["data-ia-entity", "entity"], ["data-ia-text", "text"],
+        ["data-ia-problem", "legacy-problem"], ["data-ia-msg", "legacy-msg"], ["data-ia-pain", "legacy-pain"], ["data-ia-frame", "legacy-frame"]]) {
         for (const el of document.querySelectorAll(`[${attr}]`)) {
           const r = el.getBoundingClientRect();
           anchors.push({
@@ -111,7 +114,8 @@ try {
         }
       }
       const parts = [], loose = [];
-      const ANCHORED = "[data-ia-msg],[data-ia-pain],[data-ia-fact],[data-ia-entity],[data-ia-text]";
+      // A section is a container: its text belongs to the copy and the declared text inside it, not to the section.
+      const ANCHORED = "[data-ia-copy],[data-ia-fact],[data-ia-entity],[data-ia-text]";
       const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
       for (let n = walker.nextNode(); n; n = walker.nextNode()) {
         const t = paintedText(n);

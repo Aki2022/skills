@@ -4,7 +4,7 @@
 
 ## やること
 
-1. （v5）`infoarch-author compose --audience <aud> --strategy <選んだ原子>` で、選んだ戦略に立つメッセージを、対象者の優先順に並べた候補として受け取る。候補の外のメッセージを使うと IA_COMPOSITION_OFF_STRATEGY の警告になる。足りなければ、メッセージの追加を提案する。
+1. `infoarch-author compose --audience <aud> --positioning <選んだ原子>` で、選んだ positioning の原子に立つメッセージを、対象者の優先順に並べた候補として受け取る。候補の外のメッセージを使うと IA_COMPOSITION_OFF_POSITIONING の警告になる。足りなければ、メッセージの追加を提案する。
 2. 対象者の `priorities` の**先頭（1 位）を必ず入れる**。1 位を入れない成果物は、その対象者向けではない。比べる案などで入れないときは、理由を `strategy.deviation` に書く（書かないと IA_COMPOSITION_DEVIATION_UNEXPLAINED の警告）。
 3. 媒体の器（段 4 と `media/` のファイル）に入る数だけ、上から選ぶ。器に入らないものは、無理に詰めずに削る。
 4. 削ったメッセージを `brief.cut` に書く。削った理由が依頼にある場合は constraints に添える。

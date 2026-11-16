@@ -1,8 +1,8 @@
-"""One atomic v2 -> v3 migration (SPEC-information-architecture-standardization v5, requirement 18; Q9, Q11).
+"""One atomic v2 -> v4 migration (SPEC-information-architecture-standardization v5, requirement 18; Q9, Q11).
 
 The tool moves what is mechanical (problem -> pain, the attribute rename, audience -> segment, the module pin),
 reports what needs drafting (jobs, values, serves, outline strategy), the old -> new id map, the missed count
-(must be 0), the IA judgments the rename invalidates, and how to undo it. It is rerunnable: a v3 tree is a no-op.
+(must be 0), the IA judgments the rename invalidates, and how to undo it. It is rerunnable: a v4 tree is a no-op.
 """
 import json
 import subprocess
@@ -69,8 +69,8 @@ def test_write_moves_everything_mechanical_and_reports_the_rest(tmp_path):
     assert out['id_map'] == {'prb-0001': 'pan-0001', 'prb-0002': 'pan-0002', 'aud-0001': 'seg-0001'}
     assert out['missed'] == []
     ssot = yaml.safe_load((root / 'design/info_arch/info_arch.yaml').read_text(encoding='utf-8'))
-    assert ssot['schema_version'] == 3 and 'problems' not in ssot
-    assert ssot['pains']['pan-0001']['text'] == '判断指標がない' and ssot['pains']['pan-0001']['job'] == 'job-0001'
+    assert ssot['schema_version'] == 4 and 'problems' not in ssot and ssot['edges'] == []
+    assert ssot['pains']['pan-0001']['text'] == '判断指標がない' and ssot['pains']['pan-0001']['segment'] == 'seg-0001'
     assert ssot['audiences']['aud-0001']['segment'] == 'seg-0001'
     assert ssot['segments']['seg-0001']['qualifier'] == '人事責任者'
     assert ssot['messages']['msg-0001']['addresses'] == ['pan-0001']
@@ -91,7 +91,7 @@ def test_rerun_is_a_no_op(tmp_path):
     migrate(root, '--write')
     snapshot = {p: p.read_bytes() for p in root.rglob('*') if p.is_file()}
     rc, out = migrate(root, '--write')
-    assert rc == 0 and out['status'] == 'already-v3' and out['changes'] == 0, out
+    assert rc == 0 and out['status'] == 'already-v4' and out['changes'] == 0, out
     assert {p: p.read_bytes() for p in root.rglob('*') if p.is_file()} == snapshot
 
 
@@ -108,3 +108,14 @@ def test_an_old_id_in_an_html_comment_is_reported_not_missed(tmp_path):
     rc, out = migrate(root, '--write')
     assert rc == 0 and out['missed'] == [] and out['comment_mentions'] == ['site/index.html'], out
     assert '<!-- 課題（prb-0001） -->' in (root / 'site/index.html').read_text(encoding='utf-8')  # D5: attributes only
+
+
+def test_a_v5_tree_is_refused_not_rewritten(tmp_path):
+    root = repo(tmp_path)
+    path = root / 'design/info_arch/info_arch.yaml'
+    data = yaml.safe_load(path.read_text(encoding='utf-8'))
+    data['schema_version'] = 3
+    path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding='utf-8')
+    before = path.read_bytes()
+    rc, out = migrate(root, '--write')
+    assert rc == 2 and 'ISSUE-17' in out['error'] and path.read_bytes() == before, out

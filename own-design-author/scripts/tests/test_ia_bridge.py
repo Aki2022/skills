@@ -1,4 +1,4 @@
-"""Actual schema-3 IA checker bridge: git history, IA strategy confirmations as approval targets, stale consumers."""
+"""Actual IA checker bridge: git history, IA positioning approvals as approval targets, stale consumers."""
 import copy
 import importlib.util
 import json
@@ -38,13 +38,14 @@ def test_schema2_actual_check_has_counts_and_preserves_ds_approvals(project):
     root = attach(project)
     result = check(project, ship=True)
     assert result['exit_code'] == 0, result['errors']
-    # v5: the design targets stay exactly as they were; the IA strategy atoms are added beside them.
+    # v6: the design targets stay exactly as they were; the IA positioning atoms and arrows are added beside them.
     ds = {k: v for k, v in result['approval_targets'].items() if k.startswith('ds:')}
     assert ds == before['approval_targets']
-    ia = {k for k in result['approval_targets'] if k.startswith('ia:strategy:')}
-    assert {'ia:strategy:val-0001', 'ia:strategy:seg-0001', 'ia:strategy:str-0001'} <= ia
+    ia = {k for k in result['approval_targets'] if k.startswith('ia:positioning:')}
+    assert {'ia:positioning:val-0001', 'ia:positioning:seg-0001', 'ia:positioning:str-0001',
+            'ia:positioning:produces:str-0001:val-0001'} <= ia
     assert [k for k in result['approval_required'] if k.startswith('ds:')] == before['approval_required']
-    assert 'ia:strategy:val-0001' in result['approval_required']
+    assert 'ia:positioning:val-0001' in result['approval_required']
     resolved = result['manifest']['web']['modules']['ia']
     assert resolved['version'] == '0.3.0'
     assert resolved['resolved']['targets'] == {'channels': 2, 'outlines': 2, 'sections': 6}
@@ -113,7 +114,7 @@ def test_python_and_javascript_reject_changed_checker_and_schema(project, tmp_pa
     for consumer in (python, node):
         good = subprocess.run(consumer, capture_output=True, text=True)
         assert good.returncode == 0, good.stdout + good.stderr
-    for relative in ('scripts/check.py', 'references/schema/info_arch.v3.schema.json'):
+    for relative in ('scripts/check.py', 'references/schema/info_arch.v4.schema.json'):
         path = installed / IA.name / relative
         saved = path.read_bytes()
         path.write_bytes(saved + b'\n')
@@ -180,20 +181,20 @@ def test_absent_fixed_adapter_is_red(project, tmp_path):
     assert report['missing'][0]['id'] == 'ia'
 
 
-def test_unconfirmed_strategy_can_be_prepared_and_recorded_by_the_owner(project):
-    """An unconfirmed strategy is an approval gap, not a structural error: preparing the bundle must not be blocked
-    by the very confirmation it prepares (WS-20261114 I6, biz_ops)."""
+def test_unapproved_positioning_can_be_prepared_and_recorded_by_the_owner(project):
+    """An unapproved positioning is an approval gap, not a structural error: preparing the bundle must not be blocked
+    by the very approval it prepares (WS-20261114 I6, biz_ops)."""
     from owner_approval import approve_request, prepare
     approve(project)
     root = attach(project)
     import yaml
     ledger = root / 'design/approvals.yaml'
-    rows = [r for r in yaml.safe_load(ledger.read_text()) if not r['key'].startswith('ia:strategy:')]
-    ledger.write_text(yaml.safe_dump(rows, allow_unicode=True, sort_keys=False))  # the owner has confirmed nothing yet
+    rows = [r for r in yaml.safe_load(ledger.read_text()) if not r['key'].startswith('ia:positioning:')]
+    ledger.write_text(yaml.safe_dump(rows, allow_unicode=True, sort_keys=False))  # the owner has approved nothing yet
     blocked = check(project, ship=True)
-    assert any(e.startswith('IA_STRATEGY_UNCONFIRMED') for e in blocked['errors']), blocked['errors']
+    assert any(e.startswith('IA_POSITIONING_UNAPPROVED') for e in blocked['errors']), blocked['errors']
     request = prepare(root, project[1], all_must=True)
     keys = {r['key'] for r in request['rows']}
-    assert 'ia:strategy:val-0001' in keys and 'ia:strategy:str-0001' in keys
+    assert 'ia:positioning:val-0001' in keys and 'ia:positioning:lacks:str-0001:alt-0001' in keys
     approve_request(root, project[1], request, 'fixture-owner')
-    assert not any(e.startswith('IA_STRATEGY_UNCONFIRMED') for e in check(project, ship=True)['errors'])
+    assert not any(e.startswith('IA_POSITIONING_UNAPPROVED') for e in check(project, ship=True)['errors'])

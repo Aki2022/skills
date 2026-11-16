@@ -13,8 +13,7 @@ outputs:
 strategy:
   choose:
   - val-0001
-  - prm-0001
-  rationale: 運用の重さを感じている情報部門に、手間が減る価値と半分にする約束を先に示す
+  rationale: 運用の重さを感じている情報部門に、手間が減る価値を先に示す
 pages:
 - id: top
   label: トップ

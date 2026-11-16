@@ -130,7 +130,7 @@ IAそのものの原子・抽出・検査はこの接続口だけでは実装済
 ## IA v5との接続
 
 上記の承認対象を持つ旧resolver契約と、IA v4の承認状態を持たないSSOTは区別する。
-modules.ia: 0.3.0は、固定のia_module.pyから既存IAのcheckを同じPythonで呼ぶ。ia-git-history-v3契約では、IAの戦略の層の原子（ia:strategy:<id>）がapproval_hashesとして返り、出荷される経路の原子がmust_approval_keysになる。確定のハッシュは原子の中身と、その原子が依存する原子の中身を束縛する（媒体の解決は経ない）。記録はオーナーがapprove --prepare/--requestで行い、DS承認の必要条件は変えない。v2契約（0.2.0）は読まない。
+modules.ia: 0.3.0は、固定のia_module.pyから既存IAのcheckを同じPythonで呼ぶ。ia-git-history-v3契約では、IAの positioning の原子と矢印（ia:positioning:<原子 id> と ia:positioning:<種類>:<始点>:<終点>）がapproval_hashesとして返り、出荷される経路の原子と矢印がmust_approval_keysになる。承認のハッシュはその原子か矢印自身の中身だけを束縛する（写しの出どころは入らない。媒体の解決は経ない）。記録はオーナーがapprove --prepare/--requestで行い、DS承認の必要条件は変えない。v2契約（0.2.0）は読まない。
 入力hashと実際のチャネル・アウトライン・セクション件数を持ち、対象0件・壊れた参照・期限違反は失格。IA入力や実装のsymlink/逸脱は拒否する。
 マニフェストのIA実装digestは橋渡しファイルだけでなく、固定のscripts/references/schema全体を束縛し、Python/JS両consumerが古い結果を拒否する。
 このL0接続はIAのDOM検査や未実装の意味判定を実行済みにはしない。後段のDOMは別に実行し、意味判定の欠落も報告する。

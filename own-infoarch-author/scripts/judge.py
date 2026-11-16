@@ -7,8 +7,9 @@ Four kinds share own-design-author's judgment policy and `design/judgments.json`
   outside every anchor (`dom`'s `unanchored`) is judged the same way, with nothing on the page supporting it.
 - ia-audience-fit: the outline's order and emphasis do not suit its audience and brief.
 - ia-emphasis: a rendered first screen does not carry the audience's top-priority message.
-- ia-strategy-fit: a section's message does not actually serve the strategy atoms it stands on (v5). The input
-  carries the strategy path hash, so a changed strategy never reuses an old judgment.
+- ia-strategy-fit: a section's message does not actually serve the positioning it stands on. The input carries the
+  positioning path hash, so a changed positioning never reuses an old judgment. (The kind keeps its v5 name until
+  ISSUE-16 replaces it with copy x one value.)
 
 The gate only reads the ledger. It never calls a model: missing judgments are "uncovered", stored ones are
 "screened" (never "clean"), and a score at or above theta goes to a human as IA_JUDGE_REVIEW.
@@ -77,11 +78,11 @@ def outline_candidates(oid, outline, ssot, policy, jl):
             if 'message' in s and msg:
                 m = check.Model(root=Path('.'), ssot=ssot)
                 segment = ssot.get('audiences', {}).get(outline['audience'], {}).get('segment')
-                ids, path_hash = check.strategy_path(m, check._roots(m, s['message']), segment)
+                ids, path_hash = check.positioning_path(m, check._roots(m, s['message']), segment)
                 if ids:
                     fit = {'outline': oid, 'segment': segment, 'path_hash': path_hash,
                            'message': {'id': s['message'], 'text': msg.get('text', '')},
-                           'strategy': [{'id': a, 'text': _atom_text(m.atom(a))} for a in ids]}
+                           'positioning': [{'id': a, 'text': _element_text(check.element(m, a))} for a in ids]}
                     rows.append(jl.candidate('ia-strategy-fit', ident, text, fit, policy=policy))
     aud = ssot.get('audiences', {}).get(outline['audience'], {})
     # The priority order is what the fit is judged against, so reordering it must invalidate the judgment.
@@ -93,9 +94,12 @@ def outline_candidates(oid, outline, ssot, policy, jl):
     return rows
 
 
-def _atom_text(atom):
-    atom = atom or {}
-    return atom.get('text') or ' / '.join(str(atom[k]) for k in ('qualifier', 'situation', 'category', 'concept') if atom.get(k))
+def _element_text(element):
+    element = element or {}
+    if 'kind' in element and 'from' in element:  # an arrow
+        degree = f' ({element["degree"]})' if 'degree' in element else ''
+        return f'{element["from"]} {element["kind"]} {element["to"]}{degree}'
+    return element.get('text') or ' / '.join(str(element[k]) for k in ('qualifier', 'situation') if element.get(k))
 
 
 def emphasis_candidates(oid, outline, ssot, screens, policy, jl):

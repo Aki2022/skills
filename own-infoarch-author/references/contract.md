@@ -11,61 +11,99 @@
 
 それ以外のファイルやサブディレクトリが `channels/` `outlines/` にあると失格にする（黙って無視しない）。`.` で始まるファイル（`.DS_Store`・`.gitkeep`）だけは読まずに飛ばす。`.` で始まるサブディレクトリは失格にする。
 
-## 原子（スキーマ版 3）
+## 原子（スキーマ版 4）
 
 id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不可）か、10000 以上なら先頭を 0 にしない。`msg-00001` や末尾に改行の付いたキーのような、同じ番号の別表記は失格（id は常に全体一致で判定する）。`ledger.next` 未満でなければ「台帳が発行していない」。改名・削除は `ledger.tombstones`（旧 → 新、削除は null）。
 
 | 種別 | 接頭辞 | proposed で必須 | 参照 |
 | --- | --- | --- | --- |
 | 対象者 | `aud` | label・situation・desired_action・priorities（メッセージを優先順に。先頭が 1 位）・segment | priorities → msg、segment → seg |
-| メッセージ | `msg` | text・role（benefit / proof / how / objection / cta / vision） | addresses → pan、serves → val・prm・job・pan・gan（担う戦略の原子） |
-| 証拠 | `prf` | text・source・supports・as_of か expires | supports → msg |
+| メッセージ | `msg` | text・role（benefit / proof / how / objection / cta / vision） | addresses → pan、serves → val・job・pan・gan（立つ positioning の原子） |
+| 証拠 | `prf` | text・source・as_of か expires・supports か segment のどちらか一方 | supports → msg（outline 側）。segment があれば positioning の証拠で、支える先は矢印 `supports` |
 | 固定値 | `fct` | label・value・as_of か expires か evergreen: true（evergreen と日付は併存させない） | ― |
 | 正式名称 | `ent` | type・name | ― |
 | 声 | `vce` | traits（3〜4 個。trait・is・is_not） | proposed はプロジェクトに 1 つ |
 
-戦略の層（SPEC-information-architecture-standardization v5）。確定はオーナーが承認台帳に記録し、`state` には持たない。
+対象者とメッセージは、ISSUE-14 で outline の定数（target）と outline の原子へ移る。それまではここに残る。
 
-| 種別 | 接頭辞 | proposed で必須 | 参照 |
-| --- | --- | --- | --- |
-| セグメント | `seg` | qualifier・situation | ― |
-| ジョブ | `job` | text・segment（push・pull・anxiety・habit は任意） | segment → seg |
-| 痛み | `pan` | text・job（v2 の課題） | job → job |
-| 得たいもの | `gan` | text・job | job → job |
-| 提供価値 | `val` | text・relieves か creates の少なくとも 1 つ | relieves → pan、creates → gan |
-| 代替 | `alt` | text・segment | segment → seg |
-| 強み | `str` | text・versus・produces | versus → alt、produces → val |
-| カテゴリーとコンセプト | `cpt` | category・concept | ― |
-| 約束 | `prm` | text・values | values → val |
+### positioning（SPEC-information-architecture-standardization v6 要件 2・4・5・8）
 
-メッセージの優先順は、対象者ごとに `priorities` で持つ（同じメッセージでも、対象者によって 1 位が違ってよい）。
+原子は 1 つのセグメントにだけ属する（`segment`）。写しの出どころ（`copied_from`）と書いた人・材料（`provenance`）は中身ではないので、どの id と承認のハッシュにも入らない。別のセグメントで同じ代替などを使うときは写しを作り、出どころを `copied_from` に書く（同じ種類・別のセグメントの原子）。v5 の約束（`prm`）とカテゴリーとコンセプト（`cpt`）は持たない（スキーマ違反）。重要度は持たない。
 
-### 戦略の依存経路（`check.strategy_path`）
+| 種別 | 接頭辞 | proposed で必須 |
+| --- | --- | --- |
+| セグメント | `seg` | qualifier・situation |
+| ジョブ | `job` | text・segment |
+| 痛み | `pan` | text・segment |
+| 得たいもの | `gan` | text・segment |
+| 代替 | `alt` | text・segment |
+| カテゴリー | `cat` | text・segment |
+| 強み | `str` | text・segment |
+| 提供価値 | `val` | text・segment・kind（difference：隙間を満たす／parity：同等であるべき点を満たす） |
 
-アウトラインのメッセージ（と痛みのセクション）ごとに、対象者のセグメントへ向かう枝だけを参照からたどる。ジョブはそのセグメントのもの、痛み・得たいものはそのジョブのもの、提供価値はそれらを和らげるか生むもの、約束はその提供価値を言い切るもの。経路上の提供価値を生む強みはすべて経路に入り、その強みが比べる同じセグメントの代替も入る（成果物の側で外せない）。経路の原子の中身を正規化した JSON の SHA-256 を経路のハッシュとし、確定と判定の入力に使う。
+矢印は `edges` に 1 本ずつ書く（`kind`・`from`・`to`・`state`・`provenance`）。キーは `<kind>:<from>:<to>` で、同じキーは 1 本だけ。矢印のセグメントは始点の原子のもの。
+
+| kind | 始点 → 終点 | 意味 |
+| --- | --- | --- |
+| `has_job` | seg → job | セグメントのジョブ |
+| `need` | job → pan・gan | ジョブの周りの痛み・得たいもの |
+| `fulfills` | alt → pan・gan | 満たす度合い（`degree`：full／partial／none。この種類にだけ必ず書く） |
+| `recalls` | job → cat | この場面で思い出すカテゴリー |
+| `includes` | cat → alt | カテゴリーに入れている代替 |
+| `member_of` | seg → cat | 所属カテゴリー（ちょうど 1 本） |
+| `lacks` | str → alt | 代替に無い強み |
+| `produces` | str → val | 強みが生む提供価値 |
+| `satisfies` | val → pan・gan | 提供価値が満たす隙間か同等であるべき点 |
+| `supports` | prf → 原子・矢印のキー | 証拠が支える |
+
+**承認**：オーナーが原子 1 つ・矢印 1 本ずつ、`design/approvals.yaml` に `ia:positioning:<原子 id>`・`ia:positioning:<kind>:<from>:<to>` で記録する（AI は `design-author approve --prepare` まで）。ハッシュ（`positioning.element_hash`）はその要素自身の中身だけ（`copied_from`・`provenance` を除く）を束縛するので、1 つ直すとその要素の承認だけが外れる。承認かどうかは台帳のハッシュの一致だけで決まり、`state` には持たない。承認は採用の判断だけを表し、顧客での検証を意味しない（ISSUE-13 で、要素ごとの --prepare・契約の版・出荷の報告を足す）。
+
+**導出**（`positioning.derive`、記録しない）：positioning ＝ そのセグメントの承認済みの原子と、承認済みの原子どうしを結ぶ承認済みの矢印すべて（下書きは入らない）。隙間 ＝ 痛み・得たいもののうち、そのセグメントの承認済みの代替すべてのどれも `full` でないもの。同等であるべき点 ＝ 所属カテゴリーが `includes` で入れている代替のすべてが `full` のもの（カテゴリーの外の代替は見ない。ADR の 5）。比べる代替の一部だけが満たすものは、どちらにもならない。満たす度合いの矢印が 1 本でも欠ければ導かない（未調査を `none` とみなさない）。
+
+**id**：positioning の id は `pos-` ＋ そのセグメントの承認済みの原子と矢印の中身（`copied_from`・`provenance` を除く）を正規化した JSON の SHA-256。ファイルの中で書いた順番・写しの出どころ・provenance は入らない。証拠（`supports` の矢印）は、支える先が positioning に入っているときだけ数える。`infoarch-author positioning --root .` が、セグメントごとの id・隙間・同等であるべき点・所属カテゴリー・承認待ちの要素を出す。
+
+**失格**（承認済みの positioning だけを見る。下書きは対象外）と、形の失格（proposed の全要素）。条件と赤のフィクスチャの対応表は `fixtures/positioning-red-cases.json`（対応の無い条件 0 件をテストが確かめる）。
+
+| code | 内容 |
+| --- | --- |
+| IA_POSITIONING_ISOLATED_ATOM | 承認済みの矢印にどれも繋がらない承認済みの原子 |
+| IA_POSITIONING_JOB_WITHOUT_NEED | 痛みも得たいものも持たないジョブ |
+| IA_POSITIONING_INCOMPLETE | 承認済みのジョブ・痛みか得たいもの・提供価値のどれかが 0 件（Quality 2：中身の無い positioning を合格にしない） |
+| IA_POSITIONING_CATEGORY_COUNT | 所属カテゴリーが 0 本か 2 本以上 |
+| IA_POSITIONING_NO_ALTERNATIVES | 隙間の比較に使うセグメントの代替が 0 件 |
+| IA_POSITIONING_NO_CATEGORY_ALTERNATIVES | 同等であるべき点の比較に使う所属カテゴリーの代替が 0 件 |
+| IA_POSITIONING_FULFILLMENT_MISSING | 代替と痛み・得たいものの組で、満たす度合いの承認済みの矢印が欠ける（`detail.pairs`） |
+| IA_POSITIONING_VALUE_UNANCHORED | difference の提供価値が隙間を、parity の提供価値が同等であるべき点を 1 つも満たさない |
+| IA_POSITIONING_STRENGTH_UNCOMPARED | 代替と比べない（`lacks` の無い）強み |
+| IA_POSITIONING_EDGE_SHAPE | 矢印の始点・終点の種類が表と違う、`degree` が fulfills に無い・ほかの種類にある |
+| IA_POSITIONING_EDGE_DUPLICATE | 同じキーの矢印が 2 本 |
+| IA_POSITIONING_CROSS_SEGMENT | 矢印が別のセグメントの原子を結ぶ（共有しない。写しを作る） |
+| IA_POSITIONING_COPY_SOURCE | 写しの出どころが無い・別の種類・同じセグメント |
+
+### 立っている positioning の経路（`check.positioning_path`）
+
+アウトラインのメッセージ（と痛みのセクション）ごとに、対象者のセグメントの中だけで矢印をたどる。提供価値からは、満たす痛み・得たいもの（`satisfies`）と、それを生む強み（`produces`）とその強みが比べる代替（`lacks`）。痛み・得たいものからはジョブ（`need`）、ジョブからはセグメント（`has_job`）。経路は原子と矢印のキーで、中身を正規化した JSON の SHA-256 を経路のハッシュとし、意味の判定の入力に使う。経路の要素に承認の無いものがあれば IA_POSITIONING_UNAPPROVED（ISSUE-14 で、メッセージが提供価値ちょうど 1 つを指す形に替わる）。
 
 ### v2 からの移行（`infoarch-author migrate --root . [--write]`）
 
-猶予なしの一括移行（要件 18）。機械で決まることだけを移す：課題（prb）を同じ番号の痛み（pan）へ、対象者ごとに同じ番号のセグメント（seg）と空のジョブ（job）を作る、メッセージの addresses を追う、アウトラインを版 2 へ（problem → pain）、出荷チャネルの HTML の `data-ia-problem`・`data-ia-role="problem"` を改名、`design/design.yaml` の `modules.ia` を 0.3.0 へ。判断が要るもの（ジョブ・提供価値・約束・強み・代替・メッセージの serves・アウトラインの strategy）は `drafting_required` に並べ、作らない。報告は、旧→新の id の対応（`id_map`）・移しそこね（`missed`。0 件でなければ exit 2）・HTML のコメントに残る旧 id（`comment_mentions`。属性以外は書き換えない）・外れる IA の判定の数（`invalidated_judgments`）・戻し方（`recovery`）。`--write` が無ければ何も書かない。コミットはしない。v3 の木では何もしない（再実行できる）。
+猶予なしの一括移行。機械で決まることだけを移す：課題（prb）を同じ番号の痛み（pan。対象者のセグメントに属する）へ、対象者ごとに同じ番号のセグメント（seg）と空のジョブ（job）を作る、メッセージの addresses を追う、アウトラインを版 2 へ（problem → pain）、出荷チャネルの HTML の `data-ia-problem`・`data-ia-role="problem"` を改名、`design/design.yaml` の `modules.ia` を 0.3.0 へ。判断が要るもの（ジョブ・代替・カテゴリー・強み・提供価値・矢印・メッセージの serves・アウトラインの strategy）は `drafting_required` に並べ、作らない。報告は、旧→新の id の対応（`id_map`）・移しそこね（`missed`。0 件でなければ exit 2）・HTML のコメントに残る旧 id（`comment_mentions`。属性以外は書き換えない）・外れる IA の判定の数（`invalidated_judgments`）・戻し方（`recovery`）。`--write` が無ければ何も書かない。コミットはしない。版 4 の木では何もしない（再実行できる）。版 3（v5 の形）は断る（v5 から v6 への移行は ISSUE-17 の道具）。
 
 ### 対応表（`infoarch-author mapping --outline <id>`）
 
-外部の実験の道具が「どの版の、どこを、何に変えたか」を指すための表。成果物 id・版のハッシュ（アウトライン・使う原子の中身・成果物が立つ戦略の原子の中身・成果物のファイルから作る）・成果物ごとのファイルのハッシュ・枠の実体ごとの種類と、使う原子の id と中身のハッシュ（並びの枠は原子の並び）を出す。比べる案の管理・割り付け・実験の記録・配信・計測は持たない。
+外部の実験の道具が「どの版の、どこを、何に変えたか」を指すための表。成果物 id・版のハッシュ（アウトライン・使う原子の中身・成果物が立つ positioning の要素の中身・成果物のファイルから作る）・成果物ごとのファイルのハッシュ・枠の実体ごとの種類と、使う原子の id と中身のハッシュ（並びの枠は原子の並び）を出す。比べる案の管理・割り付け・実験の記録・配信・計測は持たない（ISSUE-14 で set の id に置き換える）。
 
-### オーナーの確定（`ia:strategy:<id>`）
+### 承認の対象（`ia:positioning:<key>`）
 
-戦略の原子の確定は、own-design-author と同じ `design/approvals.yaml` に、オーナーが記録する（AI は `design-author approve --prepare` で束を作るまで）。確定のハッシュ（`check.confirmation_hash`）は、原子の中身そのもの（媒体の解決を経ない）と、その原子が依存する原子の中身を束縛する。依存は、参照をセグメントまでたどったものと、提供価値を生む強み（とその代替）。原子か依存先のどちらが変わっても確定は外れる。確定かどうかは台帳のハッシュの一致だけで決まり、`state` には持たない。確定はオーナーの採用の判断だけを表し、顧客での検証を意味しない。
-
-- `infoarch-author review --root . --request <束>`：束が束縛する原子の中身を、種類ごとに Markdown で出す（オーナーが読む）。今のハッシュと合わない行があれば `stale` に並べて失格（作り直す）。
-- `infoarch-author targets --root .`：全部の戦略の原子の確定のハッシュ（`approval_hashes`）と、出荷チャネルのアウトラインの経路に乗る原子のキー（`must_approval_keys`）を出す。`ia_module.py`（契約 `ia-git-history-v3`、`modules.ia: 0.3.0`）がこれを own-design-author に返す。
-- 出荷の報告（`ship`）は `strategy` に、`owner_adopted`（confirmed / unconfirmed）・`semantic_fit`（意味の判定の状態。今は not-judged）・`customer_validation`（IA は判定しない：not-judged-by-ia）を分けて出す。
+- `infoarch-author review --root . --request <束>`：束が束縛する原子（種類ごと）と矢印の中身を Markdown で出す（オーナーが読む）。今のハッシュと合わない行があれば `stale` に並べて失格（作り直す）。
+- `infoarch-author targets --root .`：proposed の全部の原子と矢印の承認のハッシュ（`approval_hashes`）と、出荷チャネルのアウトラインの経路に乗る要素のキー（`must_approval_keys`）を出す。`ia_module.py`（契約 `ia-git-history-v3`、`modules.ia: 0.3.0`）がこれを own-design-author に返す。
+- 出荷の報告（`ship`）は `positioning` に、`owner_adopted`（approved / unapproved）・`semantic_fit`（意味の判定の状態。今は not-judged）・`customer_validation`（IA は判定しない：not-judged-by-ia）を分けて出す。
 
 ## 構造化アウトライン（版 2）
 
 - `brief`：purpose（目的）・action（取ってほしい行動）・medium・constraints・cut（この成果物では言わないメッセージ）。cut も参照として検査し、墓標をたどって改名先と比べる。
 - `audience`：対象者 id。
 - `outputs`：成果物のファイル（チャネルの outputs の glob に一致すること）。
-- `strategy`（必須）：段 2〜4 で選んだ戦略の原子（`choose`：job・pan・gan・val・prm）と構成の理由（`rationale`）。既定の優先順から外れる理由は `deviation`。`infoarch-author compose --audience <aud> --strategy <ids>` が、選んだ戦略に立つメッセージを対象者の優先順に並べて出す。
+- `strategy`（必須。ISSUE-14 の outline まで、この名前のまま）：段 2〜4 で選んだ positioning の原子（`choose`：job・pan・gan・val）と構成の理由（`rationale`）。既定の優先順から外れる理由は `deviation`。`infoarch-author compose --audience <aud> --positioning <ids>` が、選んだ原子に立つメッセージを対象者の優先順に並べて出す。
 - `frames`（任意）：差し替えできる枠の実体。`media`（例 lp）と `instances`（`id`・`type`）。種類と多重度は `references/media/frames.json`。実体 id は成果物の中で一意。要素の枠はセクションの `frame` で 1 つのセクションに付け、並びの枠（節の順序）はアウトラインの上だけで持つ。
 - `pages[].sections[]`：role（v1 の problem は pain）・message・pain・proofs・frame・copy（文案）。固定値は copy の中で `{{fct-NNNN}}` として参照する（括弧の中に空白や改行を入れない。入れたものは形の崩れた参照として失格）。
 
@@ -81,12 +119,13 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 | IA_ID_NOT_ISSUED / IA_ID_TOMBSTONED / IA_TOMBSTONE_TARGET | 台帳と墓標 |
 | IA_REF_BROKEN / IA_EMPTY_REFERENCED | SSOT 内の参照切れ・proposed の原子が空欄を参照（参照の表は `check.ssot_refs` の 1 か所） |
 | IA_VOICE_MULTIPLE | proposed の声が 2 つ以上 |
-| IA_STRATEGY_UNTRACED | アウトラインのメッセージが、どの戦略の原子も担っていない（出荷チャネルは失格、ほかは警告） |
-| IA_STRATEGY_SEGMENT_MISMATCH | メッセージ・痛みの戦略が、対象者のセグメントにたどり着かない（出荷チャネルは失格、ほかは警告） |
-| IA_STRATEGY_UNCONFIRMED | 経路の原子に、オーナーの確定が無いか外れたものがある（`detail.atoms`。出荷チャネルは失格、ほかは警告） |
+| IA_POSITIONING_*（要件 5・要件 2） | 上の positioning の表 |
+| IA_POSITIONING_UNTRACED | アウトラインのメッセージが、どの positioning の原子にも立っていない（出荷チャネルは失格、ほかは警告） |
+| IA_POSITIONING_SEGMENT_MISMATCH | メッセージ・痛みの positioning が、対象者のセグメントにたどり着かない（出荷チャネルは失格、ほかは警告） |
+| IA_POSITIONING_UNAPPROVED | 経路の原子・矢印に、オーナーの承認が無いか外れたものがある（`detail.atoms`。出荷チャネルは失格、ほかは警告） |
 | IA_APPROVALS_INVALID | `design/approvals.yaml` が読めない・形が違う |
-| IA_COMPOSITION_STRATEGY_INVALID | `strategy.choose` の原子が無いか、対象者のセグメントにたどり着かない |
-| IA_COMPOSITION_OFF_STRATEGY（警告） | セクションのメッセージが、選んだ戦略に立っていない |
+| IA_COMPOSITION_POSITIONING_INVALID | `strategy.choose` の原子が無いか、対象者のセグメントにたどり着かない |
+| IA_COMPOSITION_OFF_POSITIONING（警告） | セクションのメッセージが、選んだ positioning の原子に立っていない |
 | IA_COMPOSITION_DEVIATION_UNEXPLAINED（警告） | 対象者の 1 位のメッセージを使わず、`brief.cut` にも `strategy.deviation` にも理由が無い |
 | IA_FRAME_UNKNOWN_MEDIA / IA_FRAME_UNKNOWN_TYPE | 枠の媒体・種類がノウハウに無い |
 | IA_FRAME_DUPLICATE_ID / IA_FRAME_MULTIPLICITY | 枠の実体 id の重複・種類ごとの実体の数が多重度に反する |
@@ -165,7 +204,7 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 | --- | --- | --- | --- |
 | `ia-name-variant` | セクション（正式名称が 1 つ以上ある時） | 固定値を展開した文案 | 正式名称の一覧 |
 | `ia-unregistered-claim` | セクション。加えて、成果物 × 画面幅ごとのアンカーの外の文言（id の末尾が `#unanchored`） | 固定値を展開した文案。アンカーの外は `dom` の `unanchored` | メッセージ・課題・証拠・使った固定値。アンカーの外は、すべて空（支える根拠が無い） |
-| `ia-strategy-fit` | セクション（メッセージがあるもの） | 固定値を展開した文案 | メッセージと、対象者のセグメントへの戦略の経路（原子の id と文）と経路のハッシュ。戦略が変わると判定のキーが変わる。θ 以上は要確認で、出荷は止めない（最初の 50 件で精度を測るまで。D8）。`ship` の `strategy.semantic_fit` は judged / needs-review / not-judged |
+| `ia-strategy-fit`（ISSUE-16 で「文案 × 提供価値 1 件」に置き換える） | セクション（メッセージがあるもの） | 固定値を展開した文案 | メッセージと、対象者のセグメントで立っている positioning の経路（原子と矢印のキーと文）と経路のハッシュ。positioning が変わると判定のキーが変わる。θ 以上は要確認で、出荷は止めない（精度を測るまで。D8）。`ship` の `positioning.semantic_fit` は judged / needs-review / not-judged |
 | `ia-audience-fit` | アウトライン | 全セクションの役割と文案（順に） | 対象者（label・situation・desired_action・優先順位のメッセージを順に）と brief。優先順位を入れ替えると判定のキーが変わる |
 | `ia-emphasis` | 成果物 × 画面幅 | `dom` が切り出した最初の画面の文言 | 対象者と、その 1 位のメッセージ |
 

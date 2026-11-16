@@ -205,7 +205,7 @@
         "choose",
         "rationale"
       ],
-      "description": "段 2〜4 で選んだ戦略の原子と構成の理由（要件 12・15）。deviation は、SSOT の既定の優先順（1 位を入れる等）から外れる理由。",
+      "description": "段 2〜4 で選んだ positioning の原子（job・pan・gan・val）と構成の理由。名前は ISSUE-14 の outline まで strategy のまま。deviation は、SSOT の既定の優先順（1 位を入れる等）から外れる理由。",
       "properties": {
         "choose": {
           "type": "array",
@@ -213,7 +213,7 @@
           "uniqueItems": true,
           "items": {
             "type": "string",
-            "pattern": "^(job|pan|gan|val|prm)-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
+            "pattern": "^(job|pan|gan|val)-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
           }
         },
         "rationale": {

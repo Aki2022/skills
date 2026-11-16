@@ -1,10 +1,12 @@
-"""One atomic v2 -> v3 migration of design/info_arch/ (SPEC-information-architecture-standardization v5, requirement 18).
+"""One atomic v2 -> v4 migration of design/info_arch/ (SPEC-information-architecture-standardization v5 requirement 18,
+re-targeted at the v6 positioning shape; the v5 -> v6 bulk migration is ISSUE-17).
 
 Mechanical moves only: problems (prb) -> pains (pan) with the same number, each audience gets a segment (seg, same
-number) and an empty job for that segment, message addresses follow, outlines go to version 2 (problem -> pain),
+number) and an empty job for that segment, each pain belongs to its audience's segment, message addresses follow, outlines go to version 2 (problem -> pain),
 rendered HTML outputs rename data-ia-problem / data-ia-role="problem", and design.yaml pins modules.ia 0.3.0.
-What needs judgment (jobs, values, promises, strengths, message serves, outline strategy) is listed, never invented.
-Nothing is committed: undo with git (the report says how). A v3 tree is a no-op, so the tool is rerunnable.
+What needs judgment (jobs, arrows, values, strengths, alternatives, categories, message serves, outline strategy) is
+listed, never invented. Nothing is committed: undo with git (the report says how). A v4 tree is a no-op, so the tool
+is rerunnable; a v3 (v5) tree is refused here.
 """
 from __future__ import annotations
 
@@ -14,10 +16,10 @@ from pathlib import Path
 
 import yaml
 
-from check import STRATEGY, _glob_re
+from check import POSITIONING, _glob_re
 
-HEADER = ('# design/info_arch/info_arch.yaml — 伝え方の SSOT（スキーマ版 3）\n'
-          '# v2 から infoarch-author migrate で移した。戦略の層（ジョブ・提供価値・約束・強み など）は下書きが要る。\n')
+HEADER = ('# design/info_arch/info_arch.yaml — 伝え方の SSOT（スキーマ版 4）\n'
+          '# v2 から infoarch-author migrate で移した。positioning（ジョブ・代替・カテゴリー・強み・提供価値と矢印）は下書きが要る。\n')
 OLD = re.compile(r'\bprb-(\d{4,})\b')
 LEFTOVER = re.compile(r'\bprb-\d{4,}\b|data-ia-problem|^problems:', re.M)
 # In rendered HTML only the attributes are machine-read; an old id in a comment is reported, not counted as missed
@@ -39,12 +41,12 @@ def plan(root):
     base = root / 'design/info_arch'
     ssot_path = base / 'info_arch.yaml'
     ssot = yaml.safe_load(ssot_path.read_text(encoding='utf-8'))
-    if ssot.get('schema_version') == 3:
-        return {'status': 'already-v3', 'changes': 0, 'id_map': {}, 'missed': [], 'drafting_required': []}, {}
+    if ssot.get('schema_version') == 4:
+        return {'status': 'already-v4', 'changes': 0, 'id_map': {}, 'missed': [], 'drafting_required': []}, {}
     if ssot.get('schema_version') != 2:
-        raise ValueError('info_arch.yaml is neither schema 2 nor 3')
+        raise ValueError('info_arch.yaml is not schema 2 (schema 3, the v5 shape, moves to v6 with the ISSUE-17 tool)')
     id_map, drafting, writes = {}, [], {}
-    new = {'schema_version': 3, 'ledger': {}, **{b: {} for b in STRATEGY}}
+    new = {'schema_version': 4, 'ledger': {}, **{b: {} for b in POSITIONING}, 'edges': []}
     nxt = dict(ssot['ledger']['next'])
     for aid, aud in ssot.get('audiences', {}).items():
         n = aid.split('-')[1]
@@ -60,7 +62,7 @@ def plan(root):
         id_map[pid] = nid
         pain = {k: v for k, v in prb.items() if k != 'audience'}
         if prb.get('audience'):
-            pain['job'] = 'job-' + prb['audience'].split('-')[1]
+            pain['segment'] = 'seg-' + prb['audience'].split('-')[1]
         new['pains'][nid] = pain
     tomb = {}
     for old, target in (ssot['ledger'].get('tombstones') or {}).items():
@@ -69,7 +71,7 @@ def plan(root):
         tomb[_pan(old)] = _pan(target) if isinstance(target, str) else target
     new['ledger'] = {'next': {**{k: v for k, v in nxt.items() if k != 'prb'}, 'pan': nxt.get('prb', 1),
                               'seg': nxt.get('aud', 1), 'job': nxt.get('aud', 1),
-                              **{p: 1 for p in ('gan', 'val', 'alt', 'str', 'cpt', 'prm')}},
+                              **{p: 1 for p in ('gan', 'val', 'alt', 'str', 'cat')}},
                      'tombstones': tomb}
     if 'policy' in ssot:
         new['policy'] = ssot['policy']
@@ -82,7 +84,7 @@ def plan(root):
             msg['addresses'] = [_pan(x) for x in msg['addresses']]
         if msg.get('state') == 'proposed' and not msg.get('serves'):
             drafting.append(f'messages:{mid}.serves')
-    drafting.append('values/promises/strengths/alternatives/concepts: 資料から下書きする（D4）')
+    drafting.append('values/strengths/alternatives/categories と edges（has_job・need・fulfills・member_of ほか）: 資料から下書きする（D4）')
     writes[ssot_path] = HEADER + _dump(new)
     outputs = []
     for f in sorted((base / 'outlines').glob('*.yaml')):
@@ -151,7 +153,7 @@ def missed(root, writes):
 
 def run(root, write=False):
     report, writes = plan(root)
-    if report['status'] == 'already-v3':
+    if report['status'] == 'already-v4':
         return report, 0
     report['missed'], report['comment_mentions'] = missed(root, writes)
     if write:

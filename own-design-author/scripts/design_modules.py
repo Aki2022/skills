@@ -40,8 +40,8 @@ def _digest(path, full=False):
 
 def _git_contract(result):
     expected = {'contract', 'governance', 'targets', 'media', 'approval_hashes', 'must_approval_keys', 'errors', 'warnings', 'report'}
-    # v3: the strategy layer's owner confirmations are approval targets (ia:strategy:<id>); their shape is
-    # validated with every other module's approval hashes in resolve_ia.
+    # IA v6: the owner's approvals of positioning atoms and arrows are approval targets (ia:positioning:<key>);
+    # their shape is validated with every other module's approval hashes in resolve_ia.
     if set(result) != expected or not isinstance(result['approval_hashes'], dict) or not isinstance(result['must_approval_keys'], list):
         raise ValueError('invalid IA git-history contract')
     targets = result['targets']

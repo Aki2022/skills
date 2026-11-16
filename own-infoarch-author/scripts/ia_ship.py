@@ -197,8 +197,8 @@ def _evaluate(root, commit, tree, date, source, predicted):
     report, m = check.check(root, date)
     result['stages'].append(_stage('check', report))
     # Requirement 15: adoption, semantic fit and customer validation are reported apart, never as one word.
-    adopted = not any(f.code == 'IA_STRATEGY_UNCONFIRMED' and f.level == 'fail' for f in report.findings)
-    result['strategy'] = {'owner_adopted': 'confirmed' if adopted else 'unconfirmed',
+    adopted = not any(f.code == 'IA_POSITIONING_UNAPPROVED' and f.level == 'fail' for f in report.findings)
+    result['positioning'] = {'owner_adopted': 'approved' if adopted else 'unapproved',
                           'semantic_fit': 'not-judged', 'customer_validation': 'not-judged-by-ia'}
     if report.exit_code == 2:
         return finish('IA check failed')
@@ -250,7 +250,7 @@ def _evaluate(root, commit, tree, date, source, predicted):
     fit = [r for r in report.screened if r['id'].startswith('ia-strategy-fit:') and _outline_of(r['id']) in shipped]
     uncovered_fit = [u for u in report.uncovered if u['id'].startswith('ia-strategy-fit:') and _outline_of(u['id']) in shipped]
     if fit and not uncovered_fit:
-        result['strategy']['semantic_fit'] = 'needs-review' if any(r['flagged_advisory'] for r in fit) else 'judged'
+        result['positioning']['semantic_fit'] = 'needs-review' if any(r['flagged_advisory'] for r in fit) else 'judged'
     return finish('IA judgment gate failed' if report.exit_code == 2 else None)
 
 

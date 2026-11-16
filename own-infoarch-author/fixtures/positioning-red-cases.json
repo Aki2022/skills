@@ -1,0 +1,573 @@
+{
+  "version": 1,
+  "note": "positioning の失格条件（SPEC-information-architecture-standardization v6 の要件 5、と要件 2 の形）と、それを壊す赤のフィクスチャの対応表。scripts/tests/test_positioning.py が、全条件に赤のケースが 1 つ以上あること（対応の無い条件 0 件）、全ケースが既知の条件を指すこと、全ケースが終了コード 2 と条件の code を出すことを確かめる。ケースは基準のフィクスチャ（test_check.SSOT、全要素を承認済み）への操作で書く。操作の後、unapprove に書いたもの以外の proposed の原子と矢印はすべて承認される。",
+  "conditions": [
+    {
+      "id": "5-isolated-atom",
+      "requirement": "5",
+      "code": "IA_POSITIONING_ISOLATED_ATOM",
+      "text": "どの矢印にも繋がらない原子"
+    },
+    {
+      "id": "5-job-without-need",
+      "requirement": "5",
+      "code": "IA_POSITIONING_JOB_WITHOUT_NEED",
+      "text": "痛みも得たいものも持たないジョブ"
+    },
+    {
+      "id": "5-category-count",
+      "requirement": "5",
+      "code": "IA_POSITIONING_CATEGORY_COUNT",
+      "text": "所属カテゴリーが 0 本か 2 本以上"
+    },
+    {
+      "id": "5-no-segment-alternatives",
+      "requirement": "5",
+      "code": "IA_POSITIONING_NO_ALTERNATIVES",
+      "text": "隙間の比較に使うセグメントの代替が 0 件"
+    },
+    {
+      "id": "5-no-category-alternatives",
+      "requirement": "5",
+      "code": "IA_POSITIONING_NO_CATEGORY_ALTERNATIVES",
+      "text": "同等であるべき点の比較に使う所属カテゴリーの代替が 0 件"
+    },
+    {
+      "id": "5-fulfillment-missing",
+      "requirement": "5",
+      "code": "IA_POSITIONING_FULFILLMENT_MISSING",
+      "text": "代替と痛み・得たいものの組で、満たす度合いの矢印が 1 本でも欠ける"
+    },
+    {
+      "id": "5-value-unanchored",
+      "requirement": "5",
+      "code": "IA_POSITIONING_VALUE_UNANCHORED",
+      "text": "隙間も同等であるべき点も満たさない提供価値（違いは隙間を、同等は同等であるべき点を満たす）"
+    },
+    {
+      "id": "5-strength-uncompared",
+      "requirement": "5",
+      "code": "IA_POSITIONING_STRENGTH_UNCOMPARED",
+      "text": "代替と比べない強み"
+    },
+    {
+      "id": "Q2-incomplete",
+      "requirement": "Quality 2",
+      "code": "IA_POSITIONING_INCOMPLETE",
+      "text": "承認済みの positioning にジョブ・痛みか得たいもの・提供価値のどれかが 0 件（空の positioning を合格にしない）"
+    },
+    {
+      "id": "2-edge-shape",
+      "requirement": "2",
+      "code": "IA_POSITIONING_EDGE_SHAPE",
+      "text": "矢印の種類と向き（始点・終点の原子の種類）、満たす度合いの有無が要件 2 のとおりでない"
+    },
+    {
+      "id": "2-edge-duplicate",
+      "requirement": "2",
+      "code": "IA_POSITIONING_EDGE_DUPLICATE",
+      "text": "同じ種類・始点・終点の矢印が 2 本ある"
+    },
+    {
+      "id": "2-edge-ref-broken",
+      "requirement": "2",
+      "code": "IA_REF_BROKEN",
+      "text": "矢印が存在しない原子か矢印を指す"
+    },
+    {
+      "id": "2-cross-segment",
+      "requirement": "2",
+      "code": "IA_POSITIONING_CROSS_SEGMENT",
+      "text": "矢印が別のセグメントの原子を結ぶ（原子は共有しない）"
+    },
+    {
+      "id": "2-copy-source",
+      "requirement": "2",
+      "code": "IA_POSITIONING_COPY_SOURCE",
+      "text": "写しの出どころが、無い・別の種類・同じセグメントの原子"
+    },
+    {
+      "id": "2-promise-removed",
+      "requirement": "2",
+      "code": "IA_SCHEMA",
+      "text": "約束の原子（v5）とカテゴリーとコンセプトの原子（v5）は持たない"
+    },
+    {
+      "id": "2-evidence-shape",
+      "requirement": "2",
+      "code": "IA_SCHEMA",
+      "text": "positioning の証拠（segment あり）がメッセージの supports も持つ（outline の変更で positioning の id が動く）"
+    }
+  ],
+  "cases": [
+    {
+      "id": "isolated-alternative",
+      "condition": "5-isolated-atom",
+      "why": "代替を足したが、どの矢印にも繋がっていない",
+      "ops": [
+        {
+          "op": "set_atom",
+          "id": "alt-0009",
+          "atom": {
+            "state": "proposed",
+            "provenance": "owner",
+            "segment": "seg-0001",
+            "text": "紙の台帳で管理する"
+          }
+        },
+        {
+          "op": "set_next",
+          "prefix": "alt",
+          "value": 10
+        }
+      ]
+    },
+    {
+      "id": "isolated-evidence",
+      "condition": "5-isolated-atom",
+      "why": "証拠の支える矢印を外した",
+      "ops": [
+        {
+          "op": "remove_edge",
+          "key": "supports:prf-0003:str-0001"
+        },
+        {
+          "op": "remove_edge",
+          "key": "supports:prf-0003:fulfills:alt-0001:pan-0001"
+        }
+      ]
+    },
+    {
+      "id": "job-without-need",
+      "condition": "5-job-without-need",
+      "why": "ジョブから痛み・得たいものへの矢印をすべて外した（ジョブ自体はセグメントとカテゴリーに繋がっている）",
+      "ops": [
+        {
+          "op": "remove_edge",
+          "key": "need:job-0002:pan-0002"
+        }
+      ]
+    },
+    {
+      "id": "category-none",
+      "condition": "5-category-count",
+      "why": "所属カテゴリーの矢印を外した",
+      "ops": [
+        {
+          "op": "remove_edge",
+          "key": "member_of:seg-0001:cat-0001"
+        }
+      ]
+    },
+    {
+      "id": "category-two",
+      "condition": "5-category-count",
+      "why": "所属カテゴリーを 2 本にした",
+      "ops": [
+        {
+          "op": "set_atom",
+          "id": "cat-0009",
+          "atom": {
+            "state": "proposed",
+            "provenance": "owner",
+            "segment": "seg-0001",
+            "text": "自治体向けクラウド"
+          }
+        },
+        {
+          "op": "set_next",
+          "prefix": "cat",
+          "value": 10
+        },
+        {
+          "op": "add_edge",
+          "edge": {
+            "kind": "member_of",
+            "from": "seg-0001",
+            "to": "cat-0009"
+          }
+        },
+        {
+          "op": "add_edge",
+          "edge": {
+            "kind": "includes",
+            "from": "cat-0009",
+            "to": "alt-0001"
+          }
+        }
+      ]
+    },
+    {
+      "id": "no-segment-alternatives",
+      "condition": "5-no-segment-alternatives",
+      "why": "セグメントの代替が未承認の下書きだけ（承認済みの代替 0 件）",
+      "ops": [
+        {
+          "op": "unapprove",
+          "key": "alt-0003"
+        }
+      ]
+    },
+    {
+      "id": "no-category-alternatives",
+      "condition": "5-no-category-alternatives",
+      "why": "所属カテゴリーに入れている代替の矢印を外した",
+      "ops": [
+        {
+          "op": "remove_edge",
+          "key": "includes:cat-0001:alt-0001"
+        }
+      ]
+    },
+    {
+      "id": "fulfillment-missing",
+      "condition": "5-fulfillment-missing",
+      "why": "代替と痛みの組で、満たす度合いの矢印を 1 本外した（未調査を「満たさない」とみなさない）",
+      "ops": [
+        {
+          "op": "remove_edge",
+          "key": "fulfills:alt-0002:pan-0001"
+        }
+      ]
+    },
+    {
+      "id": "fulfillment-unapproved",
+      "condition": "5-fulfillment-missing",
+      "why": "満たす度合いの矢印が下書きのまま（承認済みの矢印としては欠けている）",
+      "ops": [
+        {
+          "op": "unapprove",
+          "key": "fulfills:alt-0002:gan-0001"
+        }
+      ]
+    },
+    {
+      "id": "value-satisfies-nothing",
+      "condition": "5-value-unanchored",
+      "why": "提供価値が何も満たさない",
+      "ops": [
+        {
+          "op": "remove_edge",
+          "key": "satisfies:val-0003:gan-0002"
+        },
+        {
+          "op": "add_edge",
+          "edge": {
+            "kind": "produces",
+            "from": "str-0001",
+            "to": "val-0003"
+          }
+        }
+      ]
+    },
+    {
+      "id": "difference-on-parity",
+      "condition": "5-value-unanchored",
+      "why": "違いの提供価値が、隙間でなく同等であるべき点だけを満たす",
+      "ops": [
+        {
+          "op": "set_field",
+          "id": "val-0003",
+          "field": "kind",
+          "value": "difference"
+        }
+      ]
+    },
+    {
+      "id": "parity-on-gap",
+      "condition": "5-value-unanchored",
+      "why": "同等の提供価値が、同等であるべき点でなく隙間だけを満たす",
+      "ops": [
+        {
+          "op": "set_field",
+          "id": "val-0001",
+          "field": "kind",
+          "value": "parity"
+        }
+      ]
+    },
+    {
+      "id": "value-on-shared-need",
+      "condition": "5-value-unanchored",
+      "why": "一部の代替だけが満たす痛みは、隙間にも同等であるべき点にもならない",
+      "ops": [
+        {
+          "op": "set_field_edge",
+          "key": "fulfills:alt-0002:pan-0001",
+          "field": "degree",
+          "value": "full"
+        },
+        {
+          "op": "set_field_edge",
+          "key": "fulfills:alt-0002:gan-0001",
+          "field": "degree",
+          "value": "full"
+        }
+      ]
+    },
+    {
+      "id": "strength-uncompared",
+      "condition": "5-strength-uncompared",
+      "why": "強みから代替への「代替に無い」の矢印を外した",
+      "ops": [
+        {
+          "op": "remove_edge",
+          "key": "lacks:str-0002:alt-0003"
+        }
+      ]
+    },
+    {
+      "id": "positioning-without-job-and-value",
+      "condition": "Q2-incomplete",
+      "why": "セグメント・カテゴリー・代替だけが承認済みで、ジョブ・痛み・提供価値が下書き（中身の無い positioning）",
+      "ops": [
+        {
+          "op": "unapprove",
+          "key": "job-0002"
+        },
+        {
+          "op": "unapprove",
+          "key": "pan-0002"
+        },
+        {
+          "op": "unapprove",
+          "key": "val-0002"
+        },
+        {
+          "op": "unapprove",
+          "key": "str-0002"
+        }
+      ]
+    },
+    {
+      "id": "evidence-supports-unpositioned-arrow",
+      "condition": "5-isolated-atom",
+      "why": "証拠が支える矢印は承認済みでも、その終点が下書きで positioning に入らない（証拠は何も支えていない）",
+      "ops": [
+        {
+          "op": "set_atom",
+          "id": "pan-0009",
+          "atom": {
+            "state": "proposed",
+            "provenance": "owner",
+            "segment": "seg-0001",
+            "text": "下書きの痛み"
+          }
+        },
+        {
+          "op": "set_next",
+          "prefix": "pan",
+          "value": 10
+        },
+        {
+          "op": "add_edge",
+          "edge": {
+            "kind": "fulfills",
+            "from": "alt-0001",
+            "to": "pan-0009",
+            "degree": "none"
+          }
+        },
+        {
+          "op": "add_edge",
+          "edge": {
+            "kind": "supports",
+            "from": "prf-0003",
+            "to": "fulfills:alt-0001:pan-0009"
+          }
+        },
+        {
+          "op": "remove_edge",
+          "key": "supports:prf-0003:str-0001"
+        },
+        {
+          "op": "remove_edge",
+          "key": "supports:prf-0003:fulfills:alt-0001:pan-0001"
+        },
+        {
+          "op": "unapprove",
+          "key": "pan-0009"
+        }
+      ]
+    },
+    {
+      "id": "edge-wrong-endpoint",
+      "condition": "2-edge-shape",
+      "why": "満たす度合いの矢印の始点が代替でない",
+      "ops": [
+        {
+          "op": "add_edge",
+          "edge": {
+            "kind": "fulfills",
+            "from": "str-0001",
+            "to": "pan-0001",
+            "degree": "full"
+          }
+        }
+      ]
+    },
+    {
+      "id": "edge-degree-missing",
+      "condition": "2-edge-shape",
+      "why": "満たす度合いの矢印に度合いが無い",
+      "ops": [
+        {
+          "op": "remove_field_edge",
+          "key": "fulfills:alt-0001:gan-0002",
+          "field": "degree"
+        }
+      ]
+    },
+    {
+      "id": "edge-degree-misplaced",
+      "condition": "2-edge-shape",
+      "why": "満たす度合いの矢印でないのに度合いがある",
+      "ops": [
+        {
+          "op": "set_field_edge",
+          "key": "lacks:str-0001:alt-0001",
+          "field": "degree",
+          "value": "full"
+        }
+      ]
+    },
+    {
+      "id": "edge-duplicate",
+      "condition": "2-edge-duplicate",
+      "why": "同じ矢印を 2 回書いた",
+      "ops": [
+        {
+          "op": "add_edge",
+          "edge": {
+            "kind": "lacks",
+            "from": "str-0001",
+            "to": "alt-0001"
+          }
+        }
+      ]
+    },
+    {
+      "id": "edge-to-missing-atom",
+      "condition": "2-edge-ref-broken",
+      "why": "矢印の終点の原子が無い",
+      "ops": [
+        {
+          "op": "add_edge",
+          "edge": {
+            "kind": "lacks",
+            "from": "str-0001",
+            "to": "alt-0099"
+          }
+        }
+      ]
+    },
+    {
+      "id": "evidence-to-missing-edge",
+      "condition": "2-edge-ref-broken",
+      "why": "証拠が無い矢印を支える",
+      "ops": [
+        {
+          "op": "add_edge",
+          "edge": {
+            "kind": "supports",
+            "from": "prf-0003",
+            "to": "fulfills:alt-0002:pan-0002"
+          }
+        }
+      ]
+    },
+    {
+      "id": "cross-segment-edge",
+      "condition": "2-cross-segment",
+      "why": "別のセグメントの代替を、このセグメントのカテゴリーに入れた（共有）",
+      "ops": [
+        {
+          "op": "add_edge",
+          "edge": {
+            "kind": "includes",
+            "from": "cat-0001",
+            "to": "alt-0003"
+          }
+        }
+      ]
+    },
+    {
+      "id": "copy-source-missing",
+      "condition": "2-copy-source",
+      "why": "写しの出どころが無い原子",
+      "ops": [
+        {
+          "op": "set_field",
+          "id": "alt-0003",
+          "field": "copied_from",
+          "value": "alt-0099"
+        }
+      ]
+    },
+    {
+      "id": "copy-source-same-segment",
+      "condition": "2-copy-source",
+      "why": "写しの出どころが同じセグメントの原子",
+      "ops": [
+        {
+          "op": "set_field",
+          "id": "alt-0002",
+          "field": "copied_from",
+          "value": "alt-0001"
+        }
+      ]
+    },
+    {
+      "id": "copy-source-other-kind",
+      "condition": "2-copy-source",
+      "why": "写しの出どころが別の種類の原子",
+      "ops": [
+        {
+          "op": "set_field",
+          "id": "alt-0003",
+          "field": "copied_from",
+          "value": "str-0001"
+        }
+      ]
+    },
+    {
+      "id": "promise-block",
+      "condition": "2-promise-removed",
+      "why": "v5 の約束の原子を残した",
+      "ops": [
+        {
+          "op": "set_block",
+          "block": "promises",
+          "value": {}
+        }
+      ]
+    },
+    {
+      "id": "concept-block",
+      "condition": "2-promise-removed",
+      "why": "v5 のカテゴリーとコンセプトの原子を残した",
+      "ops": [
+        {
+          "op": "set_block",
+          "block": "concepts",
+          "value": {}
+        }
+      ]
+    },
+    {
+      "id": "evidence-with-message-supports",
+      "condition": "2-evidence-shape",
+      "why": "positioning の証拠にメッセージの supports を書いた",
+      "ops": [
+        {
+          "op": "set_field",
+          "id": "prf-0003",
+          "field": "supports",
+          "value": [
+            "msg-0001"
+          ]
+        }
+      ]
+    }
+  ]
+}

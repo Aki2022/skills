@@ -15,6 +15,7 @@ import subprocess
 import sys
 
 import pytest
+import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from test_check import DECK, OUTLINE, SSOT, dump, write_repo  # noqa: E402
@@ -717,3 +718,17 @@ def test_maintain_lists_outlines_impacted_through_the_positioning(repo):  # revi
     dump(repo / 'design/info_arch/info_arch.yaml', ssot)
     code, out, _ = cli(repo, 'maintain', '--root', str(repo), '--date', TODAY)
     assert out['impacted_outlines'] == ['lp-municipal'], out
+
+
+def test_one_unapproved_element_stops_the_ship_gate_and_only_warns_in_a_draft(repo):
+    """ISSUE-13: one unapproved element under the shipped deck stops shipping; one under the draft LP only warns."""
+    rows = yaml.safe_load((repo / 'design/approvals.yaml').read_text(encoding='utf-8'))
+    kept = [r for r in rows if r['key'] not in ('ia:positioning:produces:str-0001:val-0001', 'ia:positioning:str-0002')]
+    assert len(kept) == len(rows) - 2
+    dump(repo / 'design/approvals.yaml', kept)
+    commit(repo, 'withdraw one strength of the shipped deck and one arrow of the draft LP')
+    code, out, _ = ship(repo)
+    assert code == 2 and out['positioning']['owner_adopted'] == 'unapproved', out
+    check_stage = next(s for s in out['stages'] if s['stage'] == 'check')
+    hits = [(f['level'], f['detail'].get('atoms')) for f in check_stage['findings'] if f['code'] == 'IA_POSITIONING_UNAPPROVED']
+    assert ('fail', ['str-0002']) in hits and ('warn', ['produces:str-0001:val-0001']) in hits, hits

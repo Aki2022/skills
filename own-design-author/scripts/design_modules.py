@@ -6,8 +6,8 @@ from reporting import stage
 from pathlib import Path
 
 
-IA_GIT_CONTRACT = 'ia-git-history-v3'
-IA_VERSION = '0.3.0'
+IA_GIT_CONTRACT = 'ia-git-history-v4'
+IA_VERSION = '0.4.0'
 
 
 def _digest(path, full=False):
@@ -50,7 +50,7 @@ def _git_contract(result):
         raise ValueError('zero or invalid IA check targets')
     governance = result['governance']
     if (not isinstance(governance, dict) or set(governance) != {'contract', 'method', 'schema_version', 'commit', 'input_hashes'}
-            or governance['contract'] != IA_GIT_CONTRACT or governance['method'] != 'git-history' or governance['schema_version'] != 3
+            or governance['contract'] != IA_GIT_CONTRACT or governance['method'] != 'git-history' or governance['schema_version'] != 4
             or (governance['commit'] is not None and (not isinstance(governance['commit'], str) or not re.fullmatch(r'[0-9a-f]{40}|[0-9a-f]{64}', governance['commit'])))
             or not isinstance(governance['input_hashes'], dict) or not governance['input_hashes']):
         raise ValueError('invalid IA git-history provenance')

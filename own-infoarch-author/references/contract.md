@@ -56,7 +56,7 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 | `satisfies` | val → pan・gan | 提供価値が満たす隙間か同等であるべき点 |
 | `supports` | prf → 原子・矢印のキー | 証拠が支える |
 
-**承認**：オーナーが原子 1 つ・矢印 1 本ずつ、`design/approvals.yaml` に `ia:positioning:<原子 id>`・`ia:positioning:<kind>:<from>:<to>` で記録する（AI は `design-author approve --prepare` まで）。ハッシュ（`positioning.element_hash`）はその要素自身の中身だけ（`copied_from`・`provenance` を除く）を束縛するので、1 つ直すとその要素の承認だけが外れる。承認かどうかは台帳のハッシュの一致だけで決まり、`state` には持たない。承認は採用の判断だけを表し、顧客での検証を意味しない（ISSUE-13 で、要素ごとの --prepare・契約の版・出荷の報告を足す）。
+**承認**：オーナーが原子 1 つ・矢印 1 本ずつ、`design/approvals.yaml` に `ia:positioning:<原子 id>`・`ia:positioning:<kind>:<from>:<to>` で記録する（AI は `design-author approve --prepare` まで）。ハッシュ（`positioning.element_hash`）はその要素自身の中身だけ（`copied_from`・`provenance` を除く）を束縛するので、1 つ直すとその要素の承認だけが外れる。承認かどうかは台帳のハッシュの一致だけで決まり、`state` には持たない。承認は採用の判断だけを表し、顧客での検証を意味しない。台帳は own-design-author と同じ `approvals.verify_rows` で読み（項目・キーの名前空間・ハッシュ・承認者・ISO の日付・キーの重複）、symlink も断る。どれかに反すれば IA_APPROVALS_INVALID で、何も承認済みとして数えない（片方だけが通す読み方の差を作らない）。束は `design-author approve --prepare` が要素ごとの行で作る。
 
 **導出**（`positioning.derive`、記録しない）：positioning ＝ そのセグメントの承認済みの原子と、承認済みの原子どうしを結ぶ承認済みの矢印すべて（下書きは入らない）。隙間 ＝ 痛み・得たいもののうち、そのセグメントの承認済みの代替すべてのどれも `full` でないもの。同等であるべき点 ＝ 所属カテゴリーが `includes` で入れている代替のすべてが `full` のもの（カテゴリーの外の代替は見ない。ADR の 5）。比べる代替の一部だけが満たすものは、どちらにもならない。満たす度合いの矢印が 1 本でも欠ければ導かない（未調査を `none` とみなさない）。
 
@@ -86,7 +86,7 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 
 ### v2 からの移行（`infoarch-author migrate --root . [--write]`）
 
-猶予なしの一括移行。機械で決まることだけを移す：課題（prb）を同じ番号の痛み（pan。対象者のセグメントに属する）へ、対象者ごとに同じ番号のセグメント（seg）と空のジョブ（job）を作る、メッセージの addresses を追う、アウトラインを版 2 へ（problem → pain）、出荷チャネルの HTML の `data-ia-problem`・`data-ia-role="problem"` を改名、`design/design.yaml` の `modules.ia` を 0.3.0 へ。判断が要るもの（ジョブ・代替・カテゴリー・強み・提供価値・矢印・メッセージの serves・アウトラインの strategy）は `drafting_required` に並べ、作らない。報告は、旧→新の id の対応（`id_map`）・移しそこね（`missed`。0 件でなければ exit 2）・HTML のコメントに残る旧 id（`comment_mentions`。属性以外は書き換えない）・外れる IA の判定の数（`invalidated_judgments`）・戻し方（`recovery`）。`--write` が無ければ何も書かない。コミットはしない。版 4 の木では何もしない（再実行できる）。版 3（v5 の形）は断る（v5 から v6 への移行は ISSUE-17 の道具）。
+猶予なしの一括移行。機械で決まることだけを移す：課題（prb）を同じ番号の痛み（pan。対象者のセグメントに属する）へ、対象者ごとに同じ番号のセグメント（seg）と空のジョブ（job）を作る、メッセージの addresses を追う、アウトラインを版 2 へ（problem → pain）、出荷チャネルの HTML の `data-ia-problem`・`data-ia-role="problem"` を改名、`design/design.yaml` の `modules.ia` を 0.4.0 へ。判断が要るもの（ジョブ・代替・カテゴリー・強み・提供価値・矢印・メッセージの serves・アウトラインの strategy）は `drafting_required` に並べ、作らない。報告は、旧→新の id の対応（`id_map`）・移しそこね（`missed`。0 件でなければ exit 2）・HTML のコメントに残る旧 id（`comment_mentions`。属性以外は書き換えない）・外れる IA の判定の数（`invalidated_judgments`）・戻し方（`recovery`）。`--write` が無ければ何も書かない。コミットはしない。版 4 の木では何もしない（再実行できる）。版 3（v5 の形）は断る（v5 から v6 への移行は ISSUE-17 の道具）。
 
 ### 対応表（`infoarch-author mapping --outline <id>`）
 
@@ -95,7 +95,7 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 ### 承認の対象（`ia:positioning:<key>`）
 
 - `infoarch-author review --root . --request <束>`：束が束縛する原子（種類ごと）と矢印の中身を Markdown で出す（オーナーが読む）。今のハッシュと合わない行があれば `stale` に並べて失格（作り直す）。
-- `infoarch-author targets --root .`：proposed の全部の原子と矢印の承認のハッシュ（`approval_hashes`）と、出荷チャネルのアウトラインの経路に乗る要素のキー（`must_approval_keys`）を出す。`ia_module.py`（契約 `ia-git-history-v3`、`modules.ia: 0.3.0`）がこれを own-design-author に返す。
+- `infoarch-author targets --root .`：proposed の全部の原子と矢印の承認のハッシュ（`approval_hashes`）と、出荷チャネルのアウトラインの経路に乗る要素のキー（`must_approval_keys`）を出す。`ia_module.py`（契約 `ia-git-history-v4`、`modules.ia: 0.4.0`、governance の schema_version 4）がこれを own-design-author に返す。
 - 出荷の報告（`ship`）は `positioning` に、`owner_adopted`（approved / unapproved）・`semantic_fit`（意味の判定の状態。今は not-judged）・`customer_validation`（IA は判定しない：not-judged-by-ia）を分けて出す。
 
 ## 構造化アウトライン（版 2）
@@ -123,7 +123,7 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 | IA_POSITIONING_UNTRACED | アウトラインのメッセージが、どの positioning の原子にも立っていない（出荷チャネルは失格、ほかは警告） |
 | IA_POSITIONING_SEGMENT_MISMATCH | メッセージ・痛みの positioning が、対象者のセグメントにたどり着かない（出荷チャネルは失格、ほかは警告） |
 | IA_POSITIONING_UNAPPROVED | 経路の原子・矢印に、オーナーの承認が無いか外れたものがある（`detail.atoms`。出荷チャネルは失格、ほかは警告） |
-| IA_APPROVALS_INVALID | `design/approvals.yaml` が読めない・形が違う |
+| IA_APPROVALS_INVALID | `design/approvals.yaml` が読めない・symlink・design の `verify_rows` を通らない（重複キー・項目の過不足・承認者・日付・ハッシュ）。何も承認済みとして数えない |
 | IA_COMPOSITION_POSITIONING_INVALID | `strategy.choose` の原子が無いか、対象者のセグメントにたどり着かない |
 | IA_COMPOSITION_OFF_POSITIONING（警告） | セクションのメッセージが、選んだ positioning の原子に立っていない |
 | IA_COMPOSITION_DEVIATION_UNEXPLAINED（警告） | 対象者の 1 位のメッセージを使わず、`brief.cut` にも `strategy.deviation` にも理由が無い |

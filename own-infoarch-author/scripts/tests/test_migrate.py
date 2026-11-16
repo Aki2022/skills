@@ -79,7 +79,7 @@ def test_write_moves_everything_mechanical_and_reports_the_rest(tmp_path):
     assert outline['schema_version'] == 2 and outline['pages'][0]['sections'][0] == {'role': 'pain', 'pain': 'pan-0001', 'copy': '指標がない'}
     html = (root / 'site/index.html').read_text(encoding='utf-8')
     assert 'data-ia-pain="pan-0001"' in html and 'data-ia-role="pain"' in html and 'problem' not in html
-    assert json.loads((root / 'design/design.yaml').read_text())['modules']['ia'] == '0.3.0'
+    assert json.loads((root / 'design/design.yaml').read_text())['modules']['ia'] == '0.4.0'
     assert out['invalidated_judgments'] == {'ia_rows': 1}
     drafting = set(out['drafting_required'])
     assert {'jobs:job-0001', 'messages:msg-0001.serves', 'outlines:lp-top.strategy'} <= drafting

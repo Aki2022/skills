@@ -90,7 +90,7 @@ def test_every_condition_has_a_red_case_and_every_case_names_a_condition():
 
 def test_every_requirement_5_code_is_raised_by_the_checker():
     """A condition whose code the checker never raises would sit in the table forever green."""
-    source = (SKILL / 'scripts/positioning.py').read_text(encoding='utf-8')
+    source = ''.join((SKILL / f'scripts/{n}').read_text(encoding='utf-8') for n in ('positioning.py', 'check.py'))
     for c in CONDITIONS.values():
         if c['code'].startswith('IA_POSITIONING_'):
             assert f"'{c['code']}'" in source, c

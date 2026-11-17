@@ -329,7 +329,9 @@ def main():
         if afm_code==2 and not args.report_all:
             print(json.dumps(report,ensure_ascii=False));return 2
         failed=2 if (unrendered or items_code==2 or afm_code==2) else 0
-        report['exit_code']=max(l0['exit_code'],afm_code,failed,1 if report.get('warnings') else 0)
+        # Report-all keeps going past an L2 that found problems; its code must survive into the final result.
+        l2_code=max((s['exit_code'] for s in report['stages'] if s['stage']=='L2'),default=0)
+        report['exit_code']=max(l0['exit_code'],afm_code,failed,l2_code,1 if report.get('warnings') else 0)
         report['uncovered']=sorted(uncovered)
     except AfmUnavailable as error:
         report['exit_code']=2

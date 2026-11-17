@@ -204,6 +204,7 @@ L2に渡す検査と部品のselectorは`item_checks`に入る。
 - AFM: 対象の画面に残った`afm`の項目だけを判定する。端末内のApple Foundation Models（`fm` CLI、systemモデル、従量課金・外部送信なし）へ、
   その画面の最も広いviewport・最初のschemeの安定キャプチャ（L2が測った同じ画像）を渡す。HTMLソースは渡さない。他のviewport・schemeはskippedに理由付きで残す。
   項目は文字数上限でまとめ、`--greedy`と構造化出力で`applies`・`violates`・`reason`を受け取る。
+  1項目だけでも画像と合わせてモデルの入力上限を超えた時は、画像の長辺を半分ずつ（最大3回、macOSの`sips`）縮めた写しで判定し直す。L2の証拠画像は書き換えない。縮めて判定した数はAFM段の`shrunk`に入る。縮めても入らない項目は未カバーのまま。
   結果はモデル名・OS build・プロンプト版・項目・証拠・画像のhashをキーに、repo外（`DESIGN_AFM_CACHE`、既定は利用者のcache）へ保存し、同じ入力は再判定しない。
   全判定は`.resolved/afm.json`。
 

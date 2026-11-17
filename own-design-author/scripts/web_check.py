@@ -187,7 +187,8 @@ def main():
     parser.add_argument('--repo',default='.')
     parser.add_argument('--catalog-dir',type=Path,default=CATALOG)
     parser.add_argument('--report-all',action='store_true',
-        help='render and judge every page and state, listing every failure; still exits 2 on any failure; never ship evidence')
+        help='render and judge every page and state, listing every failure; exits like the gate (2 when a page is unrendered, '
+             'items fail or AFM is unjudged; 1 when the worst is an L2 finding or a warning); never ship evidence')
     args=parser.parse_args()
     report={'exit_code':2,'stages':[],'errors':[],'report':empty_report()}
     if args.report_all:report['mode']='report-all'

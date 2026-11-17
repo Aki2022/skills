@@ -3,7 +3,7 @@
 The gate stops at the first failing page so a broken page never ships, but then a repository sees one page's
 problems at a time and the skill itself cannot be checked on the rest without fixing the site first.
 `design-check --report-all` keeps going: every page and state is rendered and judged, every failure is listed, and
-the run still exits 2 when anything failed. It is never a ship result.
+the run exits like the gate (never 0 when anything failed). It is never a ship result.
 """
 import copy
 import json
@@ -106,6 +106,14 @@ def test_report_all_judges_a_page_whose_l2_found_problems_and_names_them(rendere
     assert items(root)['unrendered'] == []
 
 
+def test_report_all_help_states_the_gate_exit_rule():
+    # Report-all exits like the gate: an L2 finding alone is exit 1, not 2. The help must not promise exit 2.
+    from test_core import SKILL
+    done = subprocess.run([sys.executable, str(SKILL / 'scripts/web_check.py'), '--help'], capture_output=True, text=True)
+    assert done.returncode == 0, done.stderr
+    text = ' '.join(done.stdout.split())
+    assert 'exits 2 on any failure' not in text, text
+    assert 'exits like the gate' in text, text
 
 
 @pytest.mark.skipif(os.environ.get('DESIGN_BROWSER_TEST') != '1', reason='explicit real browser run required')

@@ -67,6 +67,13 @@ def test_focus_rule_still_fails_a_missing_focus_ring_without_scrolling(tmp_path)
     assert out['scrollY'] == 0, out
 
 
+def never_repeats(element_id):
+    # A counter spread over 24 bits of colour: no colour comes back for about 16 million updates,
+    # so two captures can never match by landing on the same point of a repeating cycle.
+    return ('<script>let n=0;setInterval(()=>{n++;document.getElementById("%s").style.background='
+            '`rgb(${n&255},${(n>>8)&255},${(n>>16)&255})`},5)</script>' % element_id)
+
+
 CAPTURE_RUNNER = '''
 import {createRequire} from "node:module";
 import {stableCapture} from %s;
@@ -100,9 +107,7 @@ def test_region_capture_of_a_settled_page_repeats_exactly(tmp_path):
 
 
 def test_region_capture_refuses_pixels_that_never_settle(tmp_path):
-    html = ('<div id="b" style="width:100px;height:100px;background:#000"></div><script>'
-            'let n=0;setInterval(()=>{n=(n+37)%256;document.getElementById("b").style.background='
-            '`rgb(${n},${255-n},${n})`},5)</script>')
+    html = '<div id="b" style="width:100px;height:100px;background:#000"></div>' + never_repeats('b')
     out = capture(html, tmp_path)
     assert out['ok'] is False and 'stabilize' in out['error'], out
 
@@ -115,8 +120,7 @@ TALL = ("data:image/svg+xml," "%3Csvg xmlns='http://www.w3.org/2000/svg' width='
 FLICKER = ('<div style="position:relative;width:300px;height:100px">'
            '<img src="SRC" alt="chart" style="width:300px;height:100px;object-fit:FIT;display:block">'
            '<div id="f" style="position:absolute;left:0;top:0;width:60px;height:60px;background:#000"></div></div>'
-           '<script>let n=0;setInterval(()=>{n=(n+53)%256;document.getElementById("f").style.background='
-           '`rgb(${n},${255-n},${n})`},5)</script>')
+           + never_repeats('f'))
 
 
 def measure_flicker(project, src, fit):

@@ -20,6 +20,7 @@ from test_judge import write_ledger  # noqa: E402
 DESIGN = SCRIPTS.parents[1] / 'own-design-author'
 sys.path.insert(0, str(DESIGN / 'scripts'))
 import judgment_ledger as jl  # noqa: E402
+import classify  # noqa: E402
 
 
 def fake_snapshot(mutate=None):
@@ -215,7 +216,7 @@ def test_acquire_over_budget_fails_without_calling(repo, tmp_path):
     answers = tmp_path / 'answers'
     answers.mkdir()
     result = evaluate.run(repo, DATE, ['lp-municipal'], acquire={
-        'limit': 5, 'answers_dir': answers, 'execute': True, '_usage_path': usage_ledger(tmp_path, attempted=1998),
+        'limit': 5, 'answers_dir': answers, 'execute': True, '_usage_path': usage_ledger(tmp_path, attempted=classify.MAX_JUDGMENTS - 2),
         '_transport': lambda *a: pytest.fail('over budget call')})
     assert result['exit_code'] == 2 and 'IA_EVALUATE_ACQUIRE' in codes(result, 'fail')
     assert 'budget-exceeded' in result['acquisition']['error']

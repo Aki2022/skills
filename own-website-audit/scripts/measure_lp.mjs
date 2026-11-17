@@ -22,7 +22,7 @@
 
 import { writeFileSync, existsSync, realpathSync, unlinkSync } from "node:fs";
 import {dirname} from "node:path";
-import {loadEnvironment,verifyRuntime,configureFonts,trackFonts,renderEvidence,compareRepeats,fixedLaunchOptions,describeRenderFailure,parseState,applyState,settleFonts} from "../../own-design-author/scripts/fixed_render.mjs";
+import {loadEnvironment,verifyRuntime,configureFonts,trackFonts,renderEvidence,compareRepeats,fixedLaunchOptions,describeRenderFailure,parseState,applyState,settleFonts,stableCapture} from "../../own-design-author/scripts/fixed_render.mjs";
 import { loadManifest, collectDesign, collectItemChecks } from "../../own-design-author/scripts/resolved_contract.mjs";
 import { createRequire } from "node:module";
 
@@ -527,7 +527,8 @@ function collect(T) {
 
 /** 合成後のスクリーンショットから、領域の知覚明度（L*）分位を測る */
 async function measureRegion(page, region) {
-  const shot = await page.screenshot({
+  // 2 回続けて同じ画素になるまで撮る。1 回撮りでは画像のラスタ途中を拾い、同じページの 2 回の描画で値が揺れた。
+  const shot = await stableCapture(page, {
     fullPage: true, // clip はページ座標。fullPage 無しだと折り返し下が撮れず undefined になる
     clip: { x: region.x, y: region.y, width: region.w, height: region.h },
   });
@@ -763,6 +764,8 @@ for (const scheme of schemes) {
         data.imageLightness.push({
           ...region,
           skipped: String(e).slice(0, 60),
+          // 落ち着かなかった画素は「測れなかった」ではなく、描画が揺れている事実として失格にする
+          ...(e?.code === "render-unstable" ? { unstable: true } : {}),
         });
       }
     }
@@ -882,6 +885,19 @@ for (const r of report.runs) {
   if (profile === 'lp' && r.fold.primaryCtaVisible === false && !r.fold.hasStickyCta)
     fail("fold-cta", { at });
   for (const im of r.imageLightness) {
+    // 切り取り率は要素の寸法から出るので、画素が測れなくても判定する
+    if (im.croppedRatio > T.imageCropMax)
+      fail("image-over-crop", {
+        at,
+        src: im.src,
+        croppedRatio: im.croppedRatio,
+        max: T.imageCropMax,
+        note: "object-fit: cover の切り取りが大きく、意図した構図が画面に出ていない",
+      });
+    if (im.unstable) {
+      fail("image-unstable", { at, src: im.src, note: "画像領域の画素が 3 回撮っても落ち着かない" });
+      continue;
+    }
     if (im.skipped) {
       // 未検証を緑にしない。測れなかったこと自体を報告する。
       warn("image-unverified", { at, src: im.src, reason: im.skipped });
@@ -903,14 +919,6 @@ for (const r of report.runs) {
         min: T.imageStandoutArea,
         mode: im.mode,
         note: "合成後の画像に、支配的な明度から離れた画素がほとんど無い。scrim や重なりで焦点が潰れ、絵が地に沈んでいる",
-      });
-    if (im.croppedRatio > T.imageCropMax)
-      fail("image-over-crop", {
-        at,
-        src: im.src,
-        croppedRatio: im.croppedRatio,
-        max: T.imageCropMax,
-        note: "object-fit: cover の切り取りが大きく、意図した構図が画面に出ていない",
       });
   }
 }

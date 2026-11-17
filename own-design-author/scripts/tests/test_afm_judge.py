@@ -1,7 +1,10 @@
 """AFM stage: adopted items that code cannot measure are judged against each artifact by the on-device model."""
 import json
 from pathlib import Path
+import shutil
+import struct
 import sys
+import zlib
 
 import pytest
 
@@ -20,6 +23,15 @@ if sys.argv[1] == 'models':
 texts = [sys.argv[i + 1] for i, a in enumerate(sys.argv) if a == '--text']
 ids = re.findall(r'^\\[(dads-[0-9]+)\\]', texts[0], re.M)
 mode = os.environ.get('STUB_MODE', 'pass')
+if mode == 'overflow':
+    # the real CLI refuses an image whose tokens plus the prompt exceed the window: model it by image height
+    image = sys.argv[sys.argv.index('--image') + 1] if '--image' in sys.argv else None
+    if image:
+        import struct
+        with open(image, 'rb') as f: head = f.read(24)
+        if struct.unpack('>I', head[20:24])[0] > int(os.environ.get('STUB_MAX_HEIGHT', '100')):
+            sys.stderr.write("Error: The session's transcript exceeded the model's context size.\\n"); raise SystemExit(1)
+        with open(os.environ['STUB_CALLS'], 'a') as f: f.write('height ' + str(struct.unpack('>I', head[20:24])[0]) + '\\n')
 if mode == 'garbage': print('not json'); raise SystemExit(0)
 if mode == 'drop': ids = ids[1:]
 bad = set(os.environ.get('STUB_VIOLATE', '').split(','))
@@ -104,3 +116,40 @@ def test_no_artifacts_is_not_a_pass(stub):
     command, _, cache = stub
     result = judge(CANDIDATES, [], command=str(command), cache_dir=cache)
     assert result['uncovered'] and result['errors'] == ['AFM has zero artifacts to judge']
+
+
+def png(path, width, height):
+    """A real, tiny grey PNG so the shrink step (macOS sips) can read it."""
+    raw = b''.join(b'\x00' + b'\x80' * width for _ in range(height))
+    chunk = lambda kind, data: (struct.pack('>I', len(data)) + kind + data
+                                + struct.pack('>I', zlib.crc32(kind + data) & 0xffffffff))
+    path.write_bytes(b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', width, height, 8, 0, 0, 0, 0))
+                     + chunk(b'IDAT', zlib.compress(raw)) + chunk(b'IEND', b''))
+    return path
+
+
+@pytest.mark.skipif(shutil.which('sips') is None, reason='image shrinking uses macOS sips, as the fm CLI does')
+def test_image_too_large_for_the_window_is_judged_on_a_smaller_copy(stub, tmp_path, monkeypatch):
+    # A tall page plus a long rule overflowed the 4,096-token window and every pair stayed unjudged.
+    command, calls, cache = stub
+    monkeypatch.setenv('STUB_MODE', 'overflow')
+    image = png(tmp_path / 'tall.png', 40, 300)
+    before = image.read_bytes()
+    result = judge(CANDIDATES, [{'id': 'L2:DESIGN_WEB_URL:1280:light', 'kind': 'image', 'path': str(image)}],
+                   command=str(command), cache_dir=cache)
+    assert result['uncovered'] == [] and len(result['screened']) == 3, result
+    assert result['shrunk'] == 3
+    heights = [int(line.split()[1]) for line in calls.read_text().splitlines() if line.startswith('height ')]
+    assert heights and max(heights) <= 100
+    assert image.read_bytes() == before  # the L2 evidence image itself is never rewritten
+
+
+@pytest.mark.skipif(shutil.which('sips') is None, reason='image shrinking uses macOS sips, as the fm CLI does')
+def test_image_that_never_fits_stays_uncovered(stub, tmp_path, monkeypatch):
+    command, _, cache = stub
+    monkeypatch.setenv('STUB_MODE', 'overflow')
+    monkeypatch.setenv('STUB_MAX_HEIGHT', '1')
+    image = png(tmp_path / 'tall.png', 40, 300)
+    result = judge(CANDIDATES, [{'id': 'L2:DESIGN_WEB_URL:1280:light', 'kind': 'image', 'path': str(image)}],
+                   command=str(command), cache_dir=cache)
+    assert len(result['uncovered']) == 3 and result['screened'] == []

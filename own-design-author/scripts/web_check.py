@@ -148,7 +148,7 @@ def run_afm(root,l0,config,pages,afm_pairs,report):
         return 0
     candidates={row['id']:row for row in l0.get('afm_candidates',[])}
     scheme=config['schemes'][0];width=max(config['viewports'])
-    merged={'errors':[],'warnings':[],'uncovered':[],'screened':[],'calls':0,'cached':0}
+    merged={'errors':[],'warnings':[],'uncovered':[],'screened':[],'calls':0,'cached':0,'shrunk':0}
     artifacts=[]
     for page in pages:
         wanted=[candidates[i] for i,env in afm_pairs if env==page['env']]
@@ -166,10 +166,11 @@ def run_afm(root,l0,config,pages,afm_pairs,report):
                     'reason':'AFM judges the widest viewport in the first scheme'})
         result=judge(wanted,[artifact])
         for key in ('errors','warnings','uncovered','screened'):merged[key].extend(result[key])
-        for key in ('calls','cached'):merged[key]+=result[key]
+        for key in ('calls','cached','shrunk'):merged[key]+=result.get(key,0)
     code=2 if merged['errors'] or merged['uncovered'] else (1 if merged['warnings'] else 0)
     report['stages'].append({'stage':'AFM','exit_code':code,'pairs':len(afm_pairs),'artifacts':len(artifacts),
-                             'judged':len(merged['screened']),'calls':merged['calls'],'cached':merged['cached']})
+                             'judged':len(merged['screened']),'calls':merged['calls'],'cached':merged['cached'],
+                             'shrunk':merged['shrunk']})
     stage(report['report'],'AFM',code,len(artifacts))
     inside(root/'design/.resolved','afm.json').write_text(json.dumps({'schema_version':1,'pairs':afm_pairs,
         'artifacts':artifacts,'verdicts':merged['screened'],'uncovered':merged['uncovered']},ensure_ascii=False,indent=1))

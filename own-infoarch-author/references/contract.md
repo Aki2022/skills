@@ -121,6 +121,47 @@ outline のメッセージが指す提供価値のうち、target のセグメ�
 
 2 つの set の差分を、変わった要素（`messages/<id>` などの outline の要素と、経路の原子・矢印）と属性で列挙する。指す経路は提供価値の id で突き合わせ、両方にあってハッシュが違えば positioning の編集（`layer: positioning`、`path` に提供価値の id）、片方にしか無ければ outline の選択（`layer: outline`、`element: paths/<提供価値 id>`、`kind: selection`）として別々に出す。両方の文案が参照する固定値の値が違えば、IA_DIFF_UNASSIGNED で失格（固定値はどちらの id にも入らない。値は報告に出さない）。`changed_layers` で、どちらの層が変わったかが分かる（両方が変わる別案も認める）。定数か目的変数が違えば `same_experiment: false`（別の試験として扱う。失格ではない）。両方の dom の報告を渡すと、印の外の文を画面幅ごとに比べ、違えば IA_DIFF_UNASSIGNED で失格（どの要素にも割り当てられない差分）。渡さなければ `not_checked` に比べていないことを出す。A/B の実行・指標・統計は持たない。
 
+## v5 からの移行（`infoarch-author migrate-v6 --root . [--write]`。SPEC v6 要件 17）
+
+v5 の木（`info_arch.yaml` 版 3・outline 版 2・描画物の v5 の印・`modules.ia` 0.3.0）を、一括で v6 に移す。`--write` が無ければ何も書かない（見積もりだけ）。移しそこねが 1 件でもあれば終了コード 2 で、`--write` でも何も書かない（一括。半分だけ移さない）。commit はしない。v6 の木（版 4）では何もせず終了コード 0（再実行できる）。版 3 でも 4 でもなければ失格。
+
+機械で決まることだけを移す。
+
+| v5 | v6 |
+| --- | --- |
+| 約束（`prm`）・コンセプト（`cpt`） | 無くす（`dropped`）。コンセプトのカテゴリーは、カテゴリーを下書きする材料として `drafting_required` に出す |
+| ジョブの `segment`・痛みと得たいものの `job`・提供価値の `relieves` / `creates`・強みの `versus` / `produces` | 矢印 `has_job`・`need`・`satisfies`・`lacks`・`produces`。痛み・得たいもの・提供価値・強みには、たどった先のセグメントを書く。ジョブの 4 つの力は無くす |
+| 証拠の `supports`（メッセージ） | positioning の証拠。そのメッセージが担っていた提供価値・ジョブ・痛み・得たいもの（約束は `values` をたどる）への `supports`。2 つのセグメントに届く証拠は、セグメントごとに写しを作る（証拠は `copied_from` を持たないので、出どころは `provenance` の `copy of prf-…` に書く） |
+| outline の対象者（`aud`） | outline の定数 `target`（セグメントと、対象者の名前を足す条件に写す）と `tone`。`brief.action` は目的変数 `objective` |
+| outline が使うメッセージ（`msg`） | outline の原子（同じ id）。target のセグメントの提供価値をちょうど 1 つ指す。v5 の役割が cta なら CTA（`achieves: obj-0001`）。一番は対象者の `priorities` の先頭（無ければ最初の通常のメッセージ） |
+| セクション（ページの中の並び） | セクション 1 つと文案 1 つ（`sec-NNNN`・`cpy-NNNN`、並びの順）。役割は表で読み替える（pain→pain、benefit・vision→aware、proof・how→trust、objection→compare、cta→act）。痛みだけのセクションは、その痛みを扱うこの outline のメッセージ（`addresses`、無ければ提供価値の満たす先）が 1 つに決まれば置く。navigation・other の宣言（`key`）は `texts` |
+| 枠（`frames`）と対応表 | セクションの id（並びの枠は `sections.order`）と set の id（`set` で出す） |
+| 複数ページの outline | ページ数と outputs の数が同じならページごとの outline（`<id>-<ページ id>`）に分け、元のファイルを消す |
+| 描画物の `data-ia-role`＋`data-ia-msg`・`data-ia-pain`・`data-ia-frame` | セクションの要素に `data-ia-section`（と v6 の役割）。文案は、中身が要素 1 つならその要素に `data-ia-copy`、そうでなければ中身を包む（中身に段落などのブロックがあれば `<div data-ia-copy>`、無ければ `<span data-ia-copy>`。dom は文案を描かれた位置で並べるので、箱を持たない `display: contents` や style の書き足しは使わない）。印は outline のセクションと順に、数と id で突き合わせる |
+| `design/design.yaml` の `modules.ia: 0.3.0` | v6 の契約の版（`ia_module.VERSION`） |
+
+判断が要るもの（提供価値の `kind`、所属カテゴリーと `member_of`・`recalls`・`includes`、代替 × 痛み・得たいものの `fulfills` の度合い、CTA だけのセクションに置く通常のメッセージ、役割・touchpoint・target の条件の確かめ）は `drafting_required` に並べ、作らない。移した直後の木は、これを済ませるまで `check` が失格する。
+
+出力：`id_map`（旧 id → 新 id。outline の要素は `<outline>:<id>`、v5 のセクションは `<outline>:<ページ>[<番号>]`、枠は `<outline>#<枠>`。`[]` は無くしたもの。載っていない id は同じ id のまま）・`unmigrated` と `unmigrated_count`・`dropped`・`drafting_required`・`role_map`・`stops_applying`・`module_pin`・`files`（write・create・delete）・`rollback`（戻す手順）。
+
+`stops_applying` は、外れる承認と判定の一覧。`design/approvals.yaml` の `ia:` の行のうち `ia:path:` でないもの（v5 の `ia:strategy:` は経路の承認に移らない。オーナーが経路を新たに承認する。`ia:positioning:` の行は `migrate-approvals` で移せるか確かめる）と、`design/judgments.json` の IA の判定（`ia-` の種類。v6 の鍵は v6 の outline の id と文案・提供価値の中身から作るので読まれない）。どちらの台帳も読むだけで、書かない。
+
+移しそこね（`unmigrated`。条件と赤のフィクスチャの対応表は `fixtures/migrate-red-cases.json`。対応の無い条件 0 件をテストが確かめる）：
+
+| reason | 内容 |
+| --- | --- |
+| message-value-none / message-value-several | outline が使うメッセージが、target のセグメントの提供価値を 0 個か 2 個以上指す |
+| message-unused | どの outline も使わない proposed のメッセージ（移す先が無い。v5 で墓標にしてから移す） |
+| audience-without-segment | outline の対象者が無いか、セグメントを持たない |
+| atom-segment | 痛み・得たいもの・提供価値・強みのセグメントが 1 つに決まらない |
+| proof-without-target | proposed の証拠が positioning の原子に 1 つも届かない |
+| section-without-message | メッセージの決まらないセクション |
+| pages-outputs-mismatch | 複数ページで、ページ数と outputs の数が違う |
+| html-unmatched | 描画物の v5 の印が outline のセクションと合わない、書き換えた後も旧い印が残る、outline に属さない描画物に旧い印がある |
+| module-pin-unknown | `modules.ia` が 0.3.0 でも v6 の版でもない |
+
+戻す手順：commit 前なら `git restore` で `files.write` と `files.delete` を戻し、`files.create` を消す。commit 後なら移行の commit を `git revert` する。承認台帳と判定台帳は書いていないので戻すものは無い。
+
 ## 終了コード
 
 0 合格（info を含む）/ 1 警告 / 2 失格。クラッシュは必ず 2（1 は警告専用）。JSON の報告に、評価日・環境・件数・対象数を載せる。
@@ -181,7 +222,7 @@ outline のメッセージが指す提供価値のうち、target のセグメ�
 `infoarch-author dom --root . --outline <id>` は、アウトラインの outputs のうち HTML を、チャネルの viewports（無ければ 375×812 と 1280×800）でブラウザに描画し、DOM を確かめる。
 
 - 解析と描画はブラウザ（Playwright の Chromium）が行う。成果物のソースを自前のパーサで読まない。
-- 工場はアンカーを埋める：セクションは `data-ia-section`、文案は `data-ia-copy`、固定値の表示は `data-ia-fact`、正式名称（SSOT の `ent-`）の表示は `data-ia-entity`、宣言した文言は `data-ia-text`。v4・v5 の `data-ia-problem`・`data-ia-msg`・`data-ia-pain`・`data-ia-frame` が残っていれば IA_DOM_LEGACY_ATTRIBUTE で失格（互換は持たない。移行は ISSUE-17 の道具が読み替える）。
+- 工場はアンカーを埋める：セクションは `data-ia-section`、文案は `data-ia-copy`、固定値の表示は `data-ia-fact`、正式名称（SSOT の `ent-`）の表示は `data-ia-entity`、宣言した文言は `data-ia-text`。v4・v5 の `data-ia-problem`・`data-ia-msg`・`data-ia-pain`・`data-ia-frame` が残っていれば IA_DOM_LEGACY_ATTRIBUTE で失格（互換は持たない。v5 の描画物は `infoarch-author migrate-v6` が読み替える）。
 - **画面の適合（SPEC v6 要件 10）**：セクションの印は outline の順序どおりにちょうど並ぶ（IA_DOM_ORDER）。文案の印は、outline で属するセクションの印の中にあり（IA_DOM_COPY_SECTION）、セクションの中で outline の順番どおりに並ぶ（IA_DOM_COPY_ORDER）。同じ文案の印は 1 つだけ（IA_DOM_COPY_REPEATED。繰り返したい行動喚起は、outline に別の文案として置く）。条件と赤のフィクスチャの対応表は `fixtures/screen-red-cases.json`（DOM の写しと実ブラウザの両方で確かめる）。
 - Playwright は `INFOARCH_PLAYWRIGHT_DIR`、無ければ対象 repo（実行ディレクトリ）から解決する。自動では入れない。解決できなければ IA_DOM_PLAYWRIGHT で失格。
 - 読み取る前に、ページが落ち着くのを待つ：network idle の後に 1 秒（表示を始めるタイマーのため）、さらに実行中のアニメーションとトランジションが終わるまで最大 5 秒。終わらないアニメーションがあっても読み取り、2 回の描画の比較で揺れを報告する。

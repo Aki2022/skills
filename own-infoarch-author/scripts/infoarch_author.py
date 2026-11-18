@@ -298,6 +298,14 @@ def cmd_migrate_approvals(args):
     return out['exit_code']
 
 
+def cmd_migrate_v6(args):
+    """Requirement 17: one batch v5 -> v6 migration of design/info_arch/ (dry run without --write)."""
+    import migrate_v6
+    out = migrate_v6.run(args.root, write=args.write)
+    _print(out)
+    return out['exit_code']
+
+
 def cmd_targets(args):
     """Owner-approval targets for own-design-author: one row per value (the hash of its whole path), and the keys
     shipping needs."""
@@ -395,6 +403,10 @@ def main(argv=None):
     mg.add_argument('--root', default='.')
     mg.add_argument('--write', action='store_true', help='write the ledger (without it: dry run)')
     mg.set_defaults(fn=cmd_migrate_approvals)
+    m6 = sub.add_parser('migrate-v6', help='one batch v5 -> v6 migration: SSOT, outlines, rendered marks, modules.ia pin')
+    m6.add_argument('--root', default='.')
+    m6.add_argument('--write', action='store_true', help='write the migrated files (without it: dry run)')
+    m6.set_defaults(fn=cmd_migrate_v6)
     ak = sub.add_parser('answer-key', help='answer key for the meaning judgment: pairs, candidates and the labeling page, or --measure')
     ak.add_argument('--root', default='.')
     ak.add_argument('--out', default='answer-key', help='directory to write into (files are never overwritten)')

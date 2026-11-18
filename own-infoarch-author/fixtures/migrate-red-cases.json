@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "note": "v5 から v6 への一括移行（infoarch-author migrate-v6、SPEC-information-architecture-standardization v6 の要件 17）で「移しそこね」と数える条件と、それを起こす赤のフィクスチャの対応表。移しそこねが 1 件でもあれば終了コード 2 で、--write でも何も書かない。scripts/tests/test_migrate_v6.py が、全条件に赤のケースが 1 つ以上あること（対応の無い条件 0 件）、全ケースが既知の条件を指すこと、全ケースが終了コード 2・その条件の reason・書かないことを確かめる。ケースは基準の v5 フィクスチャ（test_migrate_v6 の V5_SSOT・V5_OUTLINES・V5_HTML・design.yaml）への操作で書く。file は ssot・outline:<id>・design・html:<repo 相対パス>。",
+  "conditions": [
+    {"id": "message-value-none", "reason": "message-value-none", "text": "outline が使う v5 のメッセージが、target のセグメントの提供価値を 1 つも指さない（serves と約束の values をたどっても 0 件）"},
+    {"id": "message-value-several", "reason": "message-value-several", "text": "outline が使う v5 のメッセージが、target のセグメントの提供価値を 2 つ以上指す（どれにするかは判断）"},
+    {"id": "message-unused", "reason": "message-unused", "text": "どの outline も使わない proposed のメッセージ（outline の原子に移す先が無い）"},
+    {"id": "audience-without-segment", "reason": "audience-without-segment", "text": "outline の対象者が無いか、セグメントを持たない（target を決められない）"},
+    {"id": "atom-segment", "reason": "atom-segment", "text": "痛み・得たいもの・提供価値・強みのセグメントが 1 つに決まらない（0 件か 2 件以上）"},
+    {"id": "proof-without-target", "reason": "proof-without-target", "text": "proposed の証拠が支えるメッセージから、positioning の原子に 1 つも届かない"},
+    {"id": "section-without-message", "reason": "section-without-message", "text": "メッセージを持たないセクション（痛みだけのセクションで、その痛みを扱う outline のメッセージが 1 つに決まらないものを含む）"},
+    {"id": "pages-outputs-mismatch", "reason": "pages-outputs-mismatch", "text": "複数ページの outline で、ページ数と outputs の数が違う（1 ページ＝1 outline に分けられない）"},
+    {"id": "html-unmatched", "reason": "html-unmatched", "text": "描画物の v5 の印（data-ia-role・data-ia-msg・data-ia-pain）が outline のセクションと数・id で合わない、または outline に属さない描画物に旧い印がある"},
+    {"id": "module-pin-unknown", "reason": "module-pin-unknown", "text": "design/design.yaml の modules.ia が v5（0.3.0）でも v6 の版でもない"}
+  ],
+  "cases": [
+    {"id": "message-serves-other-segment", "condition": "message-value-none",
+     "ops": [{"op": "set", "file": "ssot", "path": ["messages", "msg-0002", "serves"], "value": ["val-0002"]}]},
+    {"id": "message-serves-two-values", "condition": "message-value-several",
+     "ops": [{"op": "set", "file": "ssot", "path": ["values", "val-0003"], "value": {"state": "proposed", "provenance": "owner", "text": "職員の時間が空く", "creates": ["gan-0001"]}},
+             {"op": "set", "file": "ssot", "path": ["ledger", "next", "val"], "value": 4},
+             {"op": "set", "file": "ssot", "path": ["messages", "msg-0001", "serves"], "value": ["val-0001", "val-0003"]}]},
+    {"id": "message-in-no-outline", "condition": "message-unused",
+     "ops": [{"op": "set", "file": "ssot", "path": ["messages", "msg-0005"], "value": {"state": "proposed", "provenance": "owner", "text": "誰も使わない", "role": "benefit", "serves": ["val-0001"]}},
+             {"op": "set", "file": "ssot", "path": ["ledger", "next", "msg"], "value": 6}]},
+    {"id": "audience-segment-removed", "condition": "audience-without-segment",
+     "ops": [{"op": "delete", "file": "ssot", "path": ["audiences", "aud-0002", "segment"]}]},
+    {"id": "value-relieves-two-segments", "condition": "atom-segment",
+     "ops": [{"op": "set", "file": "ssot", "path": ["values", "val-0001", "relieves"], "value": ["pan-0001", "pan-0002"]}]},
+    {"id": "proof-supports-nothing", "condition": "proof-without-target",
+     "ops": [{"op": "set", "file": "ssot", "path": ["proofs", "prf-0002", "supports"], "value": []}]},
+    {"id": "pain-section-of-other-segment", "condition": "section-without-message",
+     "ops": [{"op": "set", "file": "outline:lp-municipal", "path": ["pages", 0, "sections", 0, "pain"], "value": "pan-0002"}]},
+    {"id": "two-pages-one-output", "condition": "pages-outputs-mismatch",
+     "ops": [{"op": "append", "file": "outline:lp-municipal", "path": ["pages"], "value": {"id": "more", "sections": [{"role": "benefit", "message": "msg-0001", "copy": "もう一度"}]}}]},
+    {"id": "html-message-swapped", "condition": "html-unmatched",
+     "ops": [{"op": "replace", "file": "html:site/index.html", "old": "data-ia-msg=\"msg-0002\"", "new": "data-ia-msg=\"msg-0001\""}]},
+    {"id": "module-pin-old", "condition": "module-pin-unknown",
+     "ops": [{"op": "set", "file": "design", "path": ["modules", "ia"], "value": "0.1.0"}]}
+  ]
+}

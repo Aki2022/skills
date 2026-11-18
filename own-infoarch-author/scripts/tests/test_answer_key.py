@@ -9,6 +9,8 @@ All tests use a fake Jev: ledger rows with chosen scores. No model is called.
 """
 import copy
 import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -102,6 +104,50 @@ def test_page_lists_every_pair_and_works_offline():
     assert all(i['id'] in html for i in its)
     assert '<script src' not in html and 'http' not in html.split('</style>')[-1].lower().replace('http-equiv', '')
     assert answer_key.key_hash(its) in html  # the labels file is bound to this key
+
+
+PW_DIR = os.environ.get('INFOARCH_TEST_PLAYWRIGHT_DIR')
+CLICK = r"""
+const { chromium } = require(require('path').join(process.env.PW_DIR, 'node_modules', 'playwright'));
+(async () => {
+  const b = await chromium.launch();
+  const p = await b.newPage();
+  await p.goto('file://' + process.argv[2]);
+  const rows = await p.$$('tr[data-id]');
+  const picks = {};
+  for (let n = 0; n < rows.length; n++) {
+    const v = n % 3 === 0 ? 'true' : (n % 3 === 1 ? 'false' : 'null');
+    await rows[n].$eval('input[value="' + v + '"]', e => e.click());
+    picks[await rows[n].getAttribute('data-id')] = v === 'null' ? null : v === 'true';
+  }
+  const shown = await p.$eval('#labels-json', e => e.value);
+  console.log(JSON.stringify({ picks, shown }));
+  await b.close();
+})();
+"""
+
+
+def test_page_shows_the_labels_as_copyable_json():
+    """The download alone left no file on the owner's Mac (I16): the page also shows labels.json to copy."""
+    html = answer_key.page(items())
+    assert 'id="labels-json"' in html and 'readonly' in html and 'id="copy"' in html
+
+
+@pytest.mark.skipif(not PW_DIR, reason='INFOARCH_TEST_PLAYWRIGHT_DIR is not set: real-browser test not run (skipped, not passed)')
+def test_copyable_json_follows_the_choices_and_measures(tmp_path):
+    its = items()
+    page = tmp_path / 'page.html'
+    page.write_text(answer_key.page(its), encoding='utf-8')
+    script = tmp_path / 'click.cjs'
+    script.write_text(CLICK, encoding='utf-8')
+    proc = subprocess.run(['node', str(script), str(page)], capture_output=True, text=True, check=True,
+                          env={**os.environ, 'PW_DIR': PW_DIR})
+    out = json.loads(proc.stdout)
+    shown = json.loads(out['shown'])
+    assert shown == {'answer_key': answer_key.key_hash(its), 'labels': out['picks']}
+    theta = jl.load_policy()['theta']
+    result = answer_key.measure(its, shown, ledger(its, {i['id']: 0.0 for i in its}), theta)
+    assert result['status'] == 'measured'
 
 
 # ---- measuring (fake Jev) ----------------------------------------------------------------------------------------

@@ -14,9 +14,15 @@ Four kinds share own-design-author's judgment policy and `design/judgments.json`
 
 The gate only reads the ledger. It never calls a model: missing judgments are "uncovered", stored ones are
 "screened" (never "clean"), and a score at or above theta goes to a human as IA_JUDGE_REVIEW.
+
+A review the owner read and accepted is recorded, with the owner's words, in `design/info_arch/accepted_reviews.yaml`
+bound to the judgment hash (ADR-20261118-ai-records-owner-approvals, biz_ops). It is then reported as
+IA_JUDGE_ACCEPTED (info) instead of a warning. Changing the copy or its context changes the hash, so the record stops
+applying (IA_JUDGE_ACCEPTED_STALE, info) and the review comes back. A broken or symlinked record fails closed.
 """
 from __future__ import annotations
 
+import datetime as dt
 import json
 import os
 import sys
@@ -29,6 +35,7 @@ from common import Report
 
 DESIGN_SCRIPTS = Path(__file__).resolve().parents[2] / 'own-design-author/scripts'
 LEDGER = Path('design/judgments.json')
+ACCEPTED = Path('design/info_arch/accepted_reviews.yaml')
 IA_PREFIX = 'ia-'
 
 
@@ -196,7 +203,36 @@ def read_ledger(root):
     return json.loads(path.read_text(encoding='utf-8'))
 
 
-def evaluate(rows, ledger, *, missing, policy=None, jl=None):
+def read_accepted(root):
+    """-> {judgment hash: row} of reviews the owner accepted; {} when there is no record. Raises on any damage."""
+    path = Path(root) / ACCEPTED
+    if any(p.is_symlink() for p in (path, path.parent)):
+        raise ValueError(f'{ACCEPTED} が symlink')
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding='utf-8'))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f'{ACCEPTED} が読めない: {exc}') from None
+    if not isinstance(data, dict) or set(data) != {'schema_version', 'rows'} or data['schema_version'] != 1 \
+            or not isinstance(data['rows'], list):
+        raise ValueError(f'{ACCEPTED} の形が違う（schema_version 1 と rows だけ）')
+    out = {}
+    for row in data['rows']:
+        if not isinstance(row, dict) or set(row) != {'judgment_hash', 'id', 'approver', 'date'} \
+                or not all(isinstance(row[k], str) and row[k].strip() for k in row):
+            raise ValueError(f'{ACCEPTED} の行は judgment_hash・id・approver・date だけ')
+        try:
+            ok = dt.date.fromisoformat(row['date']).isoformat() == row['date']
+        except ValueError:
+            ok = False
+        if not ok or row['judgment_hash'] in out:
+            raise ValueError(f'{ACCEPTED} の行の日付が ISO でない・同じ判定が 2 行ある')
+        out[row['judgment_hash']] = row
+    return out
+
+
+def evaluate(rows, ledger, *, missing, policy=None, jl=None, accepted=None):
     report = Report(level='judge', evaluated_on='')
     report.screened, report.missing = [], list(missing)
     if not rows:
@@ -208,9 +244,21 @@ def evaluate(rows, ledger, *, missing, policy=None, jl=None):
     report.screened = result['screened']
     if result['uncovered']:
         report.add('warn', 'IA_JUDGE_UNCOVERED', f'{len(result["uncovered"])} 件の判定が台帳に無い（未カバー。Jev で取得して記録する）')
+    accepted = accepted or {}
+    taken = []
     for w in result['warnings']:
+        if w['judgment_hash'] in accepted:
+            taken.append(w)
+            continue
         report.add('warn', 'IA_JUDGE_REVIEW', f'要確認: {w["id"]} の score {w["score"]} が θ {w["theta"]} 以上。原文を人が確かめる',
                    id=w['id'], judgment_hash=w['judgment_hash'], score=w['score'])
+    if taken:
+        report.add('info', 'IA_JUDGE_ACCEPTED', f'{len(taken)} 件の要確認は、オーナーが原文を見て認めた（{ACCEPTED}）',
+                   ids=[w['id'] for w in taken], judgment_hashes=[w['judgment_hash'] for w in taken])
+    stale = sorted(r['id'] for h, r in accepted.items() if h not in {w['judgment_hash'] for w in result['warnings']})
+    if stale:
+        report.add('info', 'IA_JUDGE_ACCEPTED_STALE', f'{len(stale)} 件の「認めた」記録は今の判定に当たらない（文案・文脈が変わったか、θ 未満になった）',
+                   ids=stale)
     for m in report.missing:
         # A shipped HTML outline without its first screen is a gap (warn); other media are reported as missing only.
         where = f'{m["outline"]}/{m["file"]}@{m["viewport"]}' if 'viewport' in m else m['outline']
@@ -317,8 +365,13 @@ def run(root, date, dom_reports=(), answers=None, replacement_out=None):
             missing.append({'kind': 'ia-emphasis', 'outline': oid, 'shipped_html': shipped and bool(expected[oid]),
                             'reason': 'dom の報告（first_screens）が渡されていない'})
     try:
+        accepted = read_accepted(root)
+    except (ValueError, OSError) as exc:
+        accepted = {}  # a broken record never hides a review
+        pre.add('fail', 'IA_JUDGE_ACCEPTED_FILE', f'認めた要確認の記録が読めない: {exc}', ACCEPTED)
+    try:
         ledger = read_ledger(root)
-        report = evaluate(rows, ledger, missing=missing, policy=policy, jl=jl)
+        report = evaluate(rows, ledger, missing=missing, policy=policy, jl=jl, accepted=accepted)
     except (ValueError, KeyError, TypeError) as exc:
         report = Report(level='judge', evaluated_on=date)
         report.screened, report.missing, ledger = [], missing, None
@@ -332,3 +385,40 @@ def run(root, date, dom_reports=(), answers=None, replacement_out=None):
         out, summary = replacement(ledger, rows, read_answers(answers, policy), policy, jl, outlines=set(m.outlines))
         write_new(replacement_out, json.dumps(out, ensure_ascii=False, indent=2) + '\n')
     return report, rows, summary
+
+
+def accept_reviews(root, date, dom_reports, ids, owner_words, approved_on, write=False):
+    """Record reviews the owner accepted. Only a review judge reports now can be accepted; nothing is written without
+    the owner's words and the ISO date they were given, nor without `write`."""
+    _design_path()
+    from owner_approval import _owner_approval
+    owner = _owner_approval(owner_words, approved_on)
+    if not ids:
+        raise ValueError('認める要確認の id を 1 つ以上渡す')
+    report, _, _ = run(root, date, dom_reports)
+    if report.exit_code == 2:
+        raise ValueError('judge が失格しているので記録しない（先に直す）: ' + ', '.join(report.codes('fail')))
+    current = {}
+    for f in report.findings:
+        if f.code == 'IA_JUDGE_REVIEW':
+            current[f.detail['id']] = f.detail['judgment_hash']
+        elif f.code == 'IA_JUDGE_ACCEPTED':
+            current.update(zip(f.detail['ids'], f.detail['judgment_hashes']))
+    unknown = sorted(set(ids) - set(current))
+    if unknown:
+        raise ValueError(f'今の要確認に無い id は認められない: {unknown}')
+    rows = read_accepted(root)
+    new = [{'judgment_hash': current[i], 'id': i, 'approver': 'owner', 'date': owner['date']}
+           for i in dict.fromkeys(ids) if current[i] not in rows]
+    out = {'exit_code': 0, 'status': 'recorded' if write else 'preview', 'recorded': len(new) if write else 0,
+           'ids': list(dict.fromkeys(ids)), 'owner_approval': owner,
+           'commit_trailer': f'Owner-Approval: 「{owner["words"]}」 ({owner["date"]})'}
+    if write and new:
+        path = Path(root) / ACCEPTED
+        data = {'schema_version': 1, 'rows': sorted(list(rows.values()) + new, key=lambda r: (r['id'], r['judgment_hash']))}
+        tmp = path.with_name(path.name + '.tmp')
+        if tmp.is_symlink() or tmp.exists():
+            raise ValueError(f'一時ファイルが既にある: {tmp}')
+        tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+        os.replace(tmp, path)
+    return out

@@ -327,6 +327,12 @@ def migrate_outline(ssot, seg_of, o, r, used):
 
 # ---- rendered HTML ---------------------------------------------------------------------------------------------------
 
+# A wrapper is a div only around block content inside a container that may hold one; otherwise a span. No inline
+# style: `display: contents` would leave the copy without a box, and dom orders copies by where they are drawn.
+BLOCK = {'address', 'article', 'aside', 'blockquote', 'details', 'div', 'dl', 'fieldset', 'figure', 'footer', 'form',
+         'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'header', 'hr', 'li', 'main', 'nav', 'ol', 'p', 'pre', 'section', 'table',
+         'ul'}
+PHRASING = {'a', 'b', 'button', 'em', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'i', 'label', 'p', 'small', 'span', 'strong'}
 VOID = {'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'source', 'track', 'wbr'}
 
 
@@ -407,9 +413,10 @@ def rewrite_html(text, placed):
         if len(kids) == 1 and kids[0]['end'] is not None and not rest.strip():
             k = kids[0]
             edits.append((k['start'], k['start_end'], _start_tag(text, k, [('data-ia-copy', cid)])))
-        else:  # the copy is bare text or several elements: wrap it without changing the layout
-            edits.append((e['start_end'], e['start_end'], f'<span data-ia-copy="{cid}" style="display:contents">'))
-            edits.append((e['end'], e['end'], '</span>'))
+        else:  # bare text or several elements: wrap them in an element with a real box, where dom reads its position
+            tag = 'div' if e['tag'] not in PHRASING and any(c['tag'] in BLOCK for c in kids) else 'span'
+            edits.append((e['start_end'], e['start_end'], f'<{tag} data-ia-copy="{cid}">'))
+            edits.append((e['end'], e['end'], f'</{tag}>'))
     for start, end, repl in sorted(edits, key=lambda x: (-x[0], -x[1])):
         text = text[:start] + repl + text[end:]
     if LEGACY_RE.search(text):

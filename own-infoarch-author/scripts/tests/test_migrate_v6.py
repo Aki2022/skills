@@ -9,6 +9,7 @@ the rollback steps. Dry run by default; it never writes design/approvals.yaml or
 import copy
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -324,6 +325,50 @@ def test_rewritten_marks_pass_the_real_browser_screen_check(tmp_path):
     page.write_text(page.read_text(encoding='utf-8').replace('data-ia-copy="cpy-0002"', 'data-ia-msg="msg-0001"'),
                     encoding='utf-8')
     assert 'IA_DOM_LEGACY_ATTRIBUTE' in dom()  # the same check is red on a mark the migration left behind
+
+
+@pytest.mark.skipif(not PW_DIR, reason='INFOARCH_TEST_PLAYWRIGHT_DIR is not set: real-browser integration not run (reported as skipped, not passed)')
+def test_wrapped_copy_keeps_its_place_when_a_section_holds_two_copies(tmp_path):
+    """A copy the migration wrapped (bare text in the v5 section) must have a real box where it is drawn: dom sorts
+    the copies of a section by position, so a wrapper drawn at the top-left would read as the first copy. Here the
+    drafting moves the wrapped copy behind another copy in the same section; dom must keep the outline's order."""
+    write_v5(tmp_path)
+    rc, out = migrate(tmp_path, '--write')
+    assert rc == 0, out
+    base = tmp_path / 'design/info_arch'
+    draft_ssot(base)
+    o = load(base / 'outlines/lp-municipal.yaml')
+    del o['sections']['sec-0003']
+    o['copies']['cpy-0003'].update(section='sec-0002', order=2, message='msg-0001')
+    dump(base / 'outlines/lp-municipal.yaml', o)
+    page = tmp_path / 'site/index.html'
+    html = page.read_text(encoding='utf-8')
+    moved = re.search(r'<section data-ia-section="sec-0003"[^>]*>(.*?)</section>', html, re.S)
+    html = html.replace(moved.group(0), '')
+    html = html.replace('運用の手間が半分になります</h2>', '運用の手間が半分になります</h2>\n    ' + moved.group(1))
+    page.write_text(html, encoding='utf-8')
+    env = dict(os.environ, INFOARCH_PLAYWRIGHT_DIR=PW_DIR)
+    proc = subprocess.run([sys.executable, str(SCRIPTS / 'infoarch_author.py'), 'dom', '--root', str(tmp_path),
+                           '--outline', 'lp-municipal', '--date', '2026-10-23'], capture_output=True, text=True,
+                          env=env, check=False)
+    report = json.loads(proc.stdout)
+    assert report['targets'].get('viewports') == 2, report  # the browser really ran
+    assert [c for c in codes(report) if c.startswith('IA_DOM_')] == [], report['findings']
+    assert 'style=' not in html.split('</style>', 1)[1]  # no inline style (design checks may flag it)
+
+
+@pytest.mark.parametrize('inner,wrapper', [
+    ('導入は<b>100</b>件', 'span'),                  # inline content: an inline span has a real box
+    ('<p>導入は</p><p>100件</p>', 'div'),             # block content in a container: a div
+])
+def test_wrapper_has_a_box_and_no_inline_style(inner, wrapper):
+    import migrate_v6
+    html = f'<main><section data-ia-role="proof" data-ia-msg="msg-0002">{inner}</section></main>'
+    placed = [({'role': 'proof', 'message': 'msg-0002'}, 'sec-0001', 'cpy-0001', 'msg-0002')]
+    out, error = migrate_v6.rewrite_html(html, placed)
+    assert error is None
+    assert out == (f'<main><section data-ia-section="sec-0001" data-ia-role="trust"><{wrapper} data-ia-copy="cpy-0001">'
+                   f'{inner}</{wrapper}></section></main>')
 
 
 # ---- refusals and no-ops -----------------------------------------------------------------------------------------

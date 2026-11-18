@@ -137,7 +137,7 @@ v5 の木（`info_arch.yaml` 版 3・outline 版 2・描画物の v5 の印・`m
 | セクション（ページの中の並び） | セクション 1 つと文案 1 つ（`sec-NNNN`・`cpy-NNNN`、並びの順）。役割は表で読み替える（pain→pain、benefit・vision→aware、proof・how→trust、objection→compare、cta→act）。痛みだけのセクションは、その痛みを扱うこの outline のメッセージ（`addresses`、無ければ提供価値の満たす先）が 1 つに決まれば置く。navigation・other の宣言（`key`）は `texts` |
 | 枠（`frames`）と対応表 | セクションの id（並びの枠は `sections.order`）と set の id（`set` で出す） |
 | 複数ページの outline | ページ数と outputs の数が同じならページごとの outline（`<id>-<ページ id>`）に分け、元のファイルを消す |
-| 描画物の `data-ia-role`＋`data-ia-msg`・`data-ia-pain`・`data-ia-frame` | セクションの要素に `data-ia-section`（と v6 の役割）。文案は、中身が要素 1 つならその要素に `data-ia-copy`、そうでなければ中身を `<span data-ia-copy style="display:contents">` で包む（見た目を変えない）。印は outline のセクションと順に、数と id で突き合わせる |
+| 描画物の `data-ia-role`＋`data-ia-msg`・`data-ia-pain`・`data-ia-frame` | セクションの要素に `data-ia-section`（と v6 の役割）。文案は、中身が要素 1 つならその要素に `data-ia-copy`、そうでなければ中身を包む（中身に段落などのブロックがあれば `<div data-ia-copy>`、無ければ `<span data-ia-copy>`。dom は文案を描かれた位置で並べるので、箱を持たない `display: contents` や style の書き足しは使わない）。印は outline のセクションと順に、数と id で突き合わせる |
 | `design/design.yaml` の `modules.ia: 0.3.0` | v6 の契約の版（`ia_module.VERSION`） |
 
 判断が要るもの（提供価値の `kind`、所属カテゴリーと `member_of`・`recalls`・`includes`、代替 × 痛み・得たいものの `fulfills` の度合い、CTA だけのセクションに置く通常のメッセージ、役割・touchpoint・target の条件の確かめ）は `drafting_required` に並べ、作らない。移した直後の木は、これを済ませるまで `check` が失格する。

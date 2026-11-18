@@ -34,7 +34,7 @@ design-author check --repo <repo>
 
 ## 承認と検査
 
-`approvals.yaml` は人間が確認した対象のkey・hash・承認者・日付を記録する。オーナー自身が確認後に記録し、AIは実台帳を書かない。署名は要求せず、承認者の真正性やAIによる偽造防止は保証しない。`approve --prepare` は対象hashの確認用リクエストだけを返す。値・理由・散文・alias先・媒体profileの変更は失効する。確認・記録の手順と運用上の限界は `references/approval-upgrade.md`。
+`approvals.yaml` はオーナーが承認した対象のkey・hash・承認者・日付を記録する。承認の判断はオーナー、記録はAI（ADR-20261118-ai-records-owner-approvals、biz_ops）。AIが記録してよいのは、会話やPRにオーナー自身の承認の言葉がある時だけで、`approve --request` に `--owner-words`（言葉の引用）と `--approved-on`（その日付）が無ければ記録しない。言葉と日付は、結果の `commit_trailer` として commit メッセージと PR 本文に書く。署名は要求せず、承認者の真正性やAIによる偽造防止は保証しない。`approve --prepare` は対象hashの確認用リクエストだけを返す。positioning は outline より先に承認するので、outline 0 件でも prepare できる。design.yaml の無い IA だけの repo でも prepare と記録ができる。値・理由・散文・alias先・媒体profileの変更は失効する。確認・記録の手順と運用上の限界は `references/approval-upgrade.md`。
 
 ```sh
 design-author check --repo <repo>

@@ -8,6 +8,10 @@ from test_core import project,check,approve,approve_rows,write,SKILL
 from resolved_contract import load_manifest
 
 
+def OWNER(request):
+    return {'owner_words':'fixture: approve','approved_on':request['rows'][0]['date']}
+
+
 def cli(root,catalogs,*args):
     return subprocess.run([sys.executable,str(SKILL/'scripts/design_author.py'),'approve',
         '--repo',str(root),'--catalog-dir',str(catalogs),*args],capture_output=True,text=True)
@@ -55,7 +59,8 @@ def test_prepare_and_record_cli_keeps_review_boundary(project,tmp_path):
     assert request['approval_scheme']=='hash-jcs-v1' and len(request['rows'])==1
     assert (root/'design/approvals.yaml').read_bytes()==before
     path=tmp_path/'review.json';write(path,request)
-    recorded=cli(root,catalogs,'--request',str(path),'--approver','fixture-owner')
+    recorded=cli(root,catalogs,'--request',str(path),'--approver','fixture-owner',
+        '--owner-words','fixture: approve','--approved-on',request['rows'][0]['date'])
     assert recorded.returncode==0,recorded.stdout+recorded.stderr
     assert json.loads(recorded.stdout)['recorded_rows']==1
     assert check(project,ship=True)['exit_code']==0
@@ -68,12 +73,12 @@ def test_reviewed_change_and_wrong_repo_are_rejected_before_write(project,tmp_pa
     root,catalogs=project
     request=prepare(root,catalogs,all_must=True)
     with pytest.raises(ValueError,match='another repository'):
-        approve_request(root,catalogs,{**request,'repo_id':'wrong'},'fixture-owner')
+        approve_request(root,catalogs,{**request,'repo_id':'wrong'},'fixture-owner',**OWNER(request))
     data=json.loads((root/'design/tokens/brand.tokens.json').read_text())
     data['color']['primary']['$value']={'colorSpace':'srgb','components':[1,1,1],'hex':'#ffffff'}
     write(root/'design/tokens/brand.tokens.json',data)
     with pytest.raises(ValueError,match='reviewed inputs changed'):
-        approve_request(root,catalogs,request,'fixture-owner')
+        approve_request(root,catalogs,request,'fixture-owner',**OWNER(request))
     assert json.loads((root/'design/approvals.yaml').read_text())==[]
 
 
@@ -92,7 +97,7 @@ def test_recording_race_preserves_ledger(project,monkeypatch):
         return snapshot(*args)
     monkeypatch.setattr(owner_approval,'_snapshot',changed)
     with pytest.raises(ValueError,match='changed during recording'):
-        owner_approval.approve_request(root,catalogs,request,'fixture-owner')
+        owner_approval.approve_request(root,catalogs,request,'fixture-owner',**OWNER(request))
     assert json.loads((root/'design/approvals.yaml').read_text())==[]
 
 

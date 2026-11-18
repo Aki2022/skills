@@ -35,16 +35,23 @@ def test_older_ssot_is_rejected_without_compatibility(tmp_path, version):
 
 def test_path_follows_only_the_audience_segment_and_pulls_in_strengths_and_arrows():
     ids = path_ids(SSOT, ['val-0001'], 'seg-0001')
-    assert ids == ['alt-0001', 'gan-0001', 'has_job:seg-0001:job-0001', 'job-0001',
-                   'lacks:str-0001:alt-0001', 'need:job-0001:gan-0001', 'need:job-0001:pan-0001', 'pan-0001',
+    assert ids == ['alt-0001', 'alt-0002', 'cat-0001',
+                   'fulfills:alt-0001:gan-0001', 'fulfills:alt-0001:pan-0001',  # the comparison set and its degrees
+                   'fulfills:alt-0002:gan-0001', 'fulfills:alt-0002:pan-0001',
+                   'gan-0001', 'has_job:seg-0001:job-0001', 'job-0001',
+                   'lacks:str-0001:alt-0001', 'member_of:seg-0001:cat-0001',
+                   'need:job-0001:gan-0001', 'need:job-0001:pan-0001', 'pan-0001',
                    'prf-0001', 'prf-0003',  # evidence a message inherits, with its supports arrows
-                   'produces:str-0001:val-0001', 'satisfies:val-0001:gan-0001', 'satisfies:val-0001:pan-0001',
-                   'seg-0001', 'str-0001', 'supports:prf-0001:val-0001', 'supports:prf-0003:str-0001', 'val-0001']
+                   'produces:str-0001:val-0001', 'recalls:job-0001:cat-0001',
+                   'satisfies:val-0001:gan-0001', 'satisfies:val-0001:pan-0001',
+                   'seg-0001', 'str-0001', 'supports:prf-0001:val-0001',
+                   'supports:prf-0003:fulfills:alt-0001:pan-0001', 'supports:prf-0003:str-0001', 'val-0001']
     # each segment's value sees only its own branch
     assert path_ids(SSOT, ['val-0002'], 'seg-0002') == [
-        'alt-0003', 'has_job:seg-0002:job-0002', 'job-0002', 'lacks:str-0002:alt-0003', 'need:job-0002:pan-0002',
-        'pan-0002', 'prf-0002', 'produces:str-0002:val-0002', 'satisfies:val-0002:pan-0002', 'seg-0002', 'str-0002',
-        'supports:prf-0002:val-0002', 'val-0002']
+        'alt-0003', 'cat-0002', 'fulfills:alt-0003:pan-0002', 'has_job:seg-0002:job-0002', 'job-0002',
+        'lacks:str-0002:alt-0003', 'member_of:seg-0002:cat-0002', 'need:job-0002:pan-0002', 'pan-0002', 'prf-0002',
+        'produces:str-0002:val-0002', 'recalls:job-0002:cat-0002', 'satisfies:val-0002:pan-0002', 'seg-0002',
+        'str-0002', 'supports:prf-0002:val-0002', 'val-0002']
 
 
 def test_strength_for_an_off_path_value_is_not_on_the_path():
@@ -67,7 +74,8 @@ def test_path_hash_moves_with_any_path_element_and_ignores_others():
     ssot = copy.deepcopy(SSOT)
     ssot['strengths']['str-0001']['provenance'] = 'extracted:docs/plan.md'  # who wrote it is not what it says
     assert ia_check.positioning_path(model(ssot), ['val-0001'], 'seg-0001')[1] == base, 'provenance'
-    for block, aid in (('values', 'val-0002'), ('values', 'val-0003'), ('alternatives', 'alt-0002')):
+    # alt-0002 is in val-0001's comparison set (a gap compares every alternative), so it is not in this list
+    for block, aid in (('values', 'val-0002'), ('values', 'val-0003'), ('gains', 'gan-0002')):
         ssot = copy.deepcopy(SSOT)
         ssot[block][aid]['text'] += '（改）'
         assert ia_check.positioning_path(model(ssot), ['val-0001'], 'seg-0001')[1] == base, aid

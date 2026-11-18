@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "own-infoarch-author/info_arch.v4.schema.json",
   "title": "design/info_arch/info_arch.yaml schema version 4 (positioning atoms and arrows + messaging SSOT)",
-  "description": "伝え方の SSOT のうち、人が保守するもの：positioning（SPEC-information-architecture-standardization v6 要件 2）の原子（セグメント・ジョブ・痛み・得たいもの・代替・カテゴリー・強み・提供価値・証拠）と矢印（edges）、固定値・正式名称・声。原子は 1 つのセグメントにだけ属し（segment）、別のセグメントで使うときは写しを作って出どころ（copied_from）を書く。対象者とメッセージは outline（outlines/*.yaml、版 3）の target とメッセージに移った。state に approved は無い：承認はハッシュ束縛の承認台帳（ia:positioning:<原子 id か矢印のキー>）が持つ。",
+  "description": "伝え方の SSOT のうち、人が保守するもの：positioning（SPEC-information-architecture-standardization v6 要件 2）の原子（セグメント・ジョブ・痛み・得たいもの・代替・カテゴリー・強み・提供価値・証拠）と矢印（edges）、固定値・正式名称・声。原子は 1 つのセグメントにだけ属し（segment）、別のセグメントで使うときは写しを作って出どころ（copied_from）を書く。対象者とメッセージは outline（outlines/*.yaml、版 3）の target とメッセージに移った。state に approved は無い：承認はハッシュ束縛の承認台帳（ia:path:<提供価値 id>。経路の原子と矢印すべてを束縛する）が持つ。",
   "type": "object",
   "additionalProperties": false,
   "required": [

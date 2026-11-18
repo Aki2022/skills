@@ -8,16 +8,17 @@ from approvals import SCHEME,repository_id,verify_rows
 
 
 # Approval gaps, not structural errors: preparing that very approval must not be refused because of them.
-# IA_POSITIONING_UNAPPROVED (a positioning atom or arrow without the owner's current approval) and
-# IA_OUTLINE_VALUE_UNAPPROVED / IA_OUTLINE_COMPARE_UNAPPROVED (a shipped message pointing at such a value or
-# alternative) are approval gaps like the two design ones (IA v6, biz_ops WS-20261114). Positioning is approved before
+# IA_POSITIONING_UNAPPROVED (a value path without the owner's current approval) and IA_OUTLINE_VALUE_UNAPPROVED (a
+# shipped message pointing at such a value) are approval gaps like the two design ones (IA v6, biz_ops WS-20261114;
+# ADR-20261118-ia-approval-per-value-path). IA_OUTLINE_COMPARE_UNAPPROVED no longer exists: a compared alternative
+# is approved with the path it belongs to. Positioning is approved before
 # any outline is written, so "no outlines yet" (IA_NO_OUTLINES, zero IA check targets) is the expected state of a
 # positioning approval, not damage (ADR-20261118-ai-records-owner-approvals, biz_ops).
 ALLOWED=('must n-a approval hash missing/mismatch:','approval hash mismatch:','IA_POSITIONING_UNAPPROVED:',
          'IA_OUTLINE_VALUE_UNAPPROVED:','IA_OUTLINE_COMPARE_UNAPPROVED:','IA_NO_OUTLINES:','zero IA check targets',
-         # A positioning approved in parts is incomplete until the rest is approved: these are derived from the approved
-         # subset only, and approving the rest is how they are fixed. Damage to the draft itself (EDGE_SHAPE,
-         # EDGE_DUPLICATE, CROSS_SEGMENT, COPY_SOURCE, references, schema) still refuses.
+         # A disqualified path that a shipped outline points at fails; the owner may still be asked to approve it (the
+         # request page lists what keeps it from passing). Damage to the data itself (EDGE_SHAPE, EDGE_DUPLICATE,
+         # CROSS_SEGMENT, COPY_SOURCE, references, schema, COMPARE_OUTSIDE_SET) still refuses.
          'IA_POSITIONING_ISOLATED_ATOM:','IA_POSITIONING_JOB_WITHOUT_NEED:','IA_POSITIONING_STRENGTH_UNCOMPARED:',
          'IA_POSITIONING_INCOMPLETE:','IA_POSITIONING_CATEGORY_COUNT:','IA_POSITIONING_NO_ALTERNATIVES:',
          'IA_POSITIONING_NO_CATEGORY_ALTERNATIVES:','IA_POSITIONING_FULFILLMENT_MISSING:','IA_POSITIONING_VALUE_UNANCHORED:')

@@ -111,10 +111,10 @@
       "text": "比べる相手が、立っている positioning（target のセグメント）の代替でない"
     },
     {
-      "id": "6-compares-unapproved",
-      "requirement": "6",
-      "code": "IA_OUTLINE_COMPARE_UNAPPROVED",
-      "text": "比べる相手の代替にオーナーの承認が無い（出荷チャネルは失格、制作中は警告）"
+      "id": "7-compare-outside-set",
+      "requirement": "7",
+      "code": "IA_OUTLINE_COMPARE_OUTSIDE_SET",
+      "text": "メッセージが比べる相手に指す代替が、その提供価値の経路の比べる集合に入っていない"
     },
     {
       "id": "9-unassigned-difference",
@@ -553,13 +553,20 @@
       ]
     },
     {
-      "id": "compares-unapproved",
-      "condition": "6-compares-unapproved",
-      "why": "LP（出荷）の一番のメッセージが比べる代替を承認していない",
+      "id": "compares-outside-parity-set",
+      "condition": "7-compare-outside-set",
+      "why": "LP の通常のメッセージ（同等であるべき点の提供価値）が、所属カテゴリーに入っていない代替と比べる",
       "ops": [
         {
-          "op": "unapprove",
-          "key": "alt-0001"
+          "op": "set",
+          "path": [
+            "messages",
+            "msg-0002",
+            "compares"
+          ],
+          "value": [
+            "alt-0002"
+          ]
         }
       ]
     },

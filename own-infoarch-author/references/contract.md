@@ -54,40 +54,52 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 | `satisfies` | val → pan・gan | 提供価値が満たす隙間か同等であるべき点 |
 | `supports` | prf → 原子・矢印のキー | 証拠が支える |
 
-**承認**：オーナーが原子 1 つ・矢印 1 本ずつ、`design/approvals.yaml` に `ia:positioning:<原子 id>`・`ia:positioning:<kind>:<from>:<to>` で記録する。承認の判断はオーナー、記録は AI（`design-author approve --request --owner-words --approved-on`。オーナー自身の承認の言葉が無ければ道具が断る。ADR-20261118-ai-records-owner-approvals、biz_ops）。positioning は outline より先に承認するので、outline 0 件でも束を作れる。design.yaml の無い IA だけの repo でも記録できる。ハッシュ（`positioning.element_hash`）はその要素自身の中身だけ（`copied_from`・`provenance` を除く）を束縛するので、1 つ直すとその要素の承認だけが外れる。承認かどうかは台帳のハッシュの一致だけで決まり、`state` には持たない。承認は採用の判断だけを表し、顧客での検証を意味しない。台帳は own-design-author と同じ `approvals.verify_rows` で読み（項目・キーの名前空間・ハッシュ・承認者・ISO の日付・キーの重複）、symlink も断る。どれかに反すれば IA_APPROVALS_INVALID で、何も承認済みとして数えない（片方だけが通す読み方の差を作らない）。束は `design-author approve --prepare` が要素ごとの行で作る。
+**承認**：オーナーが提供価値ごとに、その経路をまとめて承認する（ADR-20261118-ia-approval-per-value-path、biz_ops）。`design/approvals.yaml` の行のキーは `ia:path:<提供価値 id>`、ハッシュは経路の原子と矢印すべての中身（`copied_from`・`provenance` を除く）を id でそろえ重複を除いて正規化した JSON の SHA-256（`positioning.extract`）。経路は次の 4 つの役からなり、下書きを含む proposed の全要素から毎回抜き出す（承認済みのものだけから抜き出さない。代替や度合いの矢印の追加・削除が必ずハッシュに映る）。
 
-**導出**（`positioning.derive`、記録しない）：positioning ＝ そのセグメントの承認済みの原子と、承認済みの原子どうしを結ぶ承認済みの矢印すべて（下書きは入らない）。隙間 ＝ 痛み・得たいもののうち、そのセグメントの承認済みの代替すべてのどれも `full` でないもの。同等であるべき点 ＝ 所属カテゴリーが `includes` で入れている代替のすべてが `full` のもの（カテゴリーの外の代替は見ない。ADR の 5）。比べる代替の一部だけが満たすものは、どちらにもならない。満たす度合いの矢印が 1 本でも欠ければ導かない（未調査を `none` とみなさない）。
+| 役 | 原子と矢印 |
+| --- | --- |
+| 主張（claim） | その提供価値、それを生む強みと `produces`、その強みの `lacks` とその先の代替 |
+| 差別化の根拠（basis） | `satisfies` とその先の痛み・得たいもの、比べる集合の代替すべてと、その代替から満たす先への `fulfills` すべて。比べる集合は difference ならセグメントの代替すべて、parity なら所属カテゴリーが `includes` で入れている代替すべて（`includes` の矢印も入る） |
+| 前提（premise） | セグメント、満たす先を持つジョブと `need`・`has_job`、所属カテゴリーと `member_of`、そのジョブの `recalls` とその先のカテゴリー |
+| 証拠（evidence） | 上のどれかを `supports` する証拠とその矢印（`supports` を支える `supports` もたどる） |
 
-**id**：positioning の id は `pos-` ＋ そのセグメントの承認済みの原子と矢印の中身（`copied_from`・`provenance` を除く）を正規化した JSON の SHA-256。ファイルの中で書いた順番・写しの出どころ・provenance は入らない。証拠（`supports` の矢印）は、支える先が positioning に入っているときだけ数える。`infoarch-author positioning --root .` が、セグメントごとの id・隙間・同等であるべき点・所属カテゴリー・承認待ちの要素を出す。
+経路の中身が 1 つでも変わると、その経路の承認が外れる。経路どうしで共有する原子（セグメント・ジョブ・所属カテゴリー・思い出す場面など）を直すと、それを含む経路の承認がまとめて外れる。ある経路の承認は別の経路に使い回せない（キーが提供価値を名指す）。原子と矢印ごとの旧い行（`ia:positioning:`）は承認として数えず、IA だけの repo では IA_APPROVALS_LEGACY（警告）、design.yaml のある repo では design の検査が「approval target absent」で止まる。旧い行は `infoarch-author migrate-approvals` で一度だけ経路の行へ移す（下）。承認の判断はオーナー、記録は AI（`design-author approve --request --owner-words --approved-on`。オーナー自身の承認の言葉が無ければ道具が断る。ADR-20261118-ai-records-owner-approvals、biz_ops）。positioning は outline より先に承認するので、outline 0 件でも束を作れる。design.yaml の無い IA だけの repo でも記録できる。承認かどうかは台帳のハッシュの一致だけで決まり、`state` には持たない。承認は採用の判断だけを表し、顧客での検証を意味しない。台帳は own-design-author と同じ `approvals.verify_rows` で読み（項目・キーの名前空間・ハッシュ・承認者・ISO の日付・キーの重複）、symlink も断る。どれかに反すれば IA_APPROVALS_INVALID で、何も承認済みとして数えない。束は `design-author approve --prepare` が経路ごとの行で作る。
 
-**失格**（承認済みの positioning だけを見る。下書きは対象外）と、形の失格（proposed の全要素）。条件と赤のフィクスチャの対応表は `fixtures/positioning-red-cases.json`（対応の無い条件 0 件をテストが確かめる）。
+**移行**（`infoarch-author migrate-approvals --root . [--write]`）：経路の原子と矢印がすべて旧い行とハッシュ（`positioning.element_hash`）一致で承認済みのときだけ、経路の行を作る。日付は元の行の日付、承認者は元の承認者（1 人でなければ作らない）。根拠のオーナーの言葉は、台帳を書いた commit の `Owner-Approval:` trailer から機械で読み、出力の `commit_trailers`（`Owner-Approval-Migrated: 「…」 (日付)`）に引用する。言葉が見つからない経路は作らない（`no-owner-words`）。1 つでも欠ける経路は未承認のまま（`unmigrated` に理由と欠けたキー）。`--write` で旧い行をすべて消し、経路の行と ds: などほかの行を残す（旧い行は git の履歴に残り、移行の commit を revert すれば戻る）。`--write` が無ければ書かない。言葉の使い回しはこの移行に限る。
+
+**導出**（`positioning.derive`、記録しない）：positioning ＝ そのセグメントで承認済みの経路をすべて合わせたもの。どの承認済みの経路にも入らない原子と矢印は下書きのままで、positioning に入らず、outline から指せない。隙間と同等であるべき点は経路ごとに導く。隙間 ＝ 満たす先のうち、比べる集合（セグメントの代替すべて）のどれも `full` でないもの。同等であるべき点 ＝ 比べる集合（所属カテゴリーの代替）のすべてが `full` のもの。一部の代替だけが満たすものは、どちらにもならない。比べる集合の度合いの矢印が 1 本でも欠ければ導かない（未調査を `none` とみなさない）。
+
+**id**：経路の id は `pth-` ＋ 経路のハッシュ。positioning の id は `pos-` ＋ そのセグメントで承認済みの経路の原子と矢印を合わせた中身の SHA-256（報告にだけ使い、set の id には入れない）。ファイルの中で書いた順番・写しの出どころ・provenance は入らない。`infoarch-author positioning --root .` が、セグメントごとの positioning（承認済みの経路・承認待ちの提供価値・隙間・同等であるべき点・所属カテゴリー）と、提供価値ごとの経路（`paths`：比べる集合・満たす先・失格・承認済みか）を出す。
+
+**失格**は経路ごとに見る（要件 3・5）。出荷チャネルの outline が指す経路は失格（fail）、下書きの outline が指すか承認済みの経路は警告、どちらでもない下書きの経路は見ない。形の失格は proposed の全要素。条件と赤のフィクスチャの対応表は `fixtures/positioning-red-cases.json`（対応の無い条件 0 件をテストが確かめる）。
 
 | code | 内容 |
 | --- | --- |
-| IA_POSITIONING_ISOLATED_ATOM | 承認済みの矢印にどれも繋がらない承認済みの原子 |
-| IA_POSITIONING_JOB_WITHOUT_NEED | 痛みも得たいものも持たないジョブ |
-| IA_POSITIONING_INCOMPLETE | 承認済みのジョブ・痛みか得たいもの・提供価値のどれかが 0 件（Quality 2：中身の無い positioning を合格にしない） |
+| IA_POSITIONING_ISOLATED_ATOM | 経路の矢印にどれも繋がらない経路の原子（矢印の無い代替、何にも繋がらない提供価値） |
+| IA_POSITIONING_JOB_WITHOUT_NEED | 満たす先の痛み・得たいものを持つジョブが無い（ジョブ→痛み・得たいものの矢印が無い） |
+| IA_POSITIONING_INCOMPLETE | 経路のジョブか痛み・得たいものが 0 件、またはジョブがセグメントに `has_job` で繋がらない（Quality 2：中身の無い経路を合格にしない） |
 | IA_POSITIONING_CATEGORY_COUNT | 所属カテゴリーが 0 本か 2 本以上 |
 | IA_POSITIONING_NO_ALTERNATIVES | 隙間の比較に使うセグメントの代替が 0 件 |
 | IA_POSITIONING_NO_CATEGORY_ALTERNATIVES | 同等であるべき点の比較に使う所属カテゴリーの代替が 0 件 |
-| IA_POSITIONING_FULFILLMENT_MISSING | 代替と痛み・得たいものの組で、満たす度合いの承認済みの矢印が欠ける（`detail.pairs`） |
+| IA_POSITIONING_FULFILLMENT_MISSING | 比べる集合の代替と満たす先の組で、満たす度合いの矢印が欠ける（`detail.pairs`）。比べる集合の外の組は見ない |
 | IA_POSITIONING_VALUE_UNANCHORED | difference の提供価値が隙間を、parity の提供価値が同等であるべき点を 1 つも満たさない |
 | IA_POSITIONING_STRENGTH_UNCOMPARED | 代替と比べない（`lacks` の無い）強み |
 | IA_POSITIONING_EDGE_SHAPE | 矢印の始点・終点の種類が表と違う、`degree` が fulfills に無い・ほかの種類にある |
 | IA_POSITIONING_EDGE_DUPLICATE | 同じキーの矢印が 2 本 |
 | IA_POSITIONING_CROSS_SEGMENT | 矢印が別のセグメントの原子を結ぶ（共有しない。写しを作る） |
 | IA_POSITIONING_COPY_SOURCE | 写しの出どころが無い・別の種類・同じセグメント |
+| IA_POSITIONING_PATH_PENDING | 承認済みの経路があるセグメントに、どの outline も指さない未承認の経路が残る（警告。止めない） |
 
-### 立っている positioning の経路（`check.positioning_path`）
+### outline が指す経路（`check.referenced_values`・`check.positioning_path`）
 
-outline のメッセージが指す提供価値ごとに、target のセグメントの中だけで矢印をたどる。提供価値からは、満たす痛み・得たいもの（`satisfies`）と、それを生む強み（`produces`）とその強みが比べる代替（`lacks`）。痛み・得たいものからはジョブ（`need`）、ジョブからはセグメント（`has_job`）。経路の要素を `supports` する証拠も、その矢印とともに経路に入る（メッセージは独自の証拠を持たず、経路の証拠を受け継ぐ。承認が要り、未登録の主張の判定の入力になる）。経路は原子と矢印のキーで、中身を正規化した JSON の SHA-256 を経路のハッシュとし、意味の判定の入力に使う。経路の要素（証拠を含む）と比べる代替に承認の無いものがあれば、出荷を止める（IA_POSITIONING_UNAPPROVED・IA_OUTLINE_COMPARE_UNAPPROVED。`targets` の `must_approval_keys` に入る）。一番のメッセージが支えられているか（IA_LEAD_UNSUPPORTED）は、承認済みの証拠だけで数える。
+outline のメッセージが指す提供価値のうち、target のセグメントのものが、その outline の指す経路。出荷チャネルの outline が指す経路が 1 つでも承認されていない（ハッシュが合わない）と出荷で止まる（IA_POSITIONING_UNAPPROVED、`detail.values`。下書きは警告）。比べる相手（`compares`）は、その提供価値の経路の比べる集合の中に無ければ失格（IA_OUTLINE_COMPARE_OUTSIDE_SET）。比べる代替は経路と一緒に承認される。指していない経路が未承認でも止めない（IA_POSITIONING_PATH_PENDING の警告）。`check.positioning_path` は提供価値の経路を合わせたキーとハッシュを返し、意味の判定（未登録の主張）の証拠の入力にも使う。一番のメッセージの経路に証拠が 1 つも無ければ警告（IA_LEAD_UNSUPPORTED）。
 
-成果物が立つもの（期限・逆引き・maintain の影響）は、target のセグメントの positioning 全体：隙間と同等であるべき点は、そこにあるすべての代替と満たす度合いの矢印から決まるので、その証拠の期限切れや変更も成果物に届く。
+成果物が立つもの（期限・逆引き・maintain の影響）は、指す経路の原子と矢印すべて：隙間と同等であるべき点は経路の比べる集合の代替と度合いの矢印から決まるので、その証拠の期限切れや変更も成果物に届く。
 
-### 承認の対象（`ia:positioning:<key>`）
+### 承認の対象（`ia:path:<提供価値 id>`）
 
-- `infoarch-author review --root . --request <束>`：束が束縛する原子（種類ごと）と矢印の中身を Markdown で出す（オーナーが読む）。今のハッシュと合わない行があれば `stale` に並べて失格（作り直す）。
-- `infoarch-author targets --root .`：proposed の全部の原子と矢印の承認のハッシュ（`approval_hashes`）と、出荷チャネルのアウトラインの経路に乗る要素のキー（`must_approval_keys`）を出す。`ia_module.py`（契約 `ia-git-history-v4`、`modules.ia: 0.4.0`、governance の schema_version 4）がこれを own-design-author に返す。
+- `infoarch-author review --root . --request <束>`：束が束縛する経路を、経路ごとに全部（主張→差別化の根拠→前提→証拠の順、比べる集合・満たす先・失格つき）Markdown で出す（オーナーが読む）。見せる範囲とハッシュの範囲は同じ。今のハッシュと合わない行があれば `stale` に並べて失格（作り直す）。
+- `infoarch-author targets --root .`：proposed の全部の提供価値の経路のハッシュ（`approval_hashes`）と、出荷チャネルの outline が指す経路のキー（`must_approval_keys`）を出す。`ia_module.py`（契約 `ia-git-history-v4`、`modules.ia: 0.4.0`、governance の schema_version 4）がこれを own-design-author に返す。キーの形は `ia:path:val-NNNN` だけ。
 - 出荷の報告（`ship`）は `positioning` に、`owner_adopted`（approved / unapproved）・`semantic_fit`（意味の判定の状態。今は not-judged）・`customer_validation`（IA は判定しない：not-judged-by-ia）を分けて出す。
 
 ## outline（版 3。SPEC v6 要件 6〜9・13）
@@ -103,11 +115,11 @@ outline のメッセージが指す提供価値ごとに、target のセグメ�
 ### id と set（`infoarch-author set --outline <id>`）
 
 - outline の id：`out-` ＋ outline の中身（定数・目的変数・`no_cta`・メッセージ・セクションの順序と置き方・文案の順番と文言・`texts`）を正規化した JSON の SHA-256。立つ positioning の id は入れない。メッセージは提供価値を原子の id で指すので、提供価値の文面だけを直しても outline の id は変わらない。
-- set の id：`<positioning の id>+<outline の id>`。立つ positioning に承認済みの要素が無ければ、positioning と set の id は無い（None）。`set` は、要素（messages・sections・copies・texts）ごとの中身のハッシュも出す。v5 の対応表（mapping）はこれに置き換えた。
+- set の id：`<outline の id>+<経路の id>+…`（outline が指す経路の id を提供価値の id の順に並べる）。中身から決まり、承認の有無では変わらない（承認は出荷ゲートが見る）。指していない経路の手直しでは変わらず、指している経路の中（共有する原子を含む）を直すと変わる。指す経路が無ければ None。`set` は `paths`（提供価値 → 経路の id）、報告用の positioning の id、要素（messages・sections・copies・texts）ごとの中身のハッシュも出す。v5 の対応表（mapping）はこれに置き換えた。
 
 ### 差分（`infoarch-author diff --a <id> --b <id> [--root-b DIR] [--dom-a A --dom-b B]`）
 
-2 つの set の差分を、変わった要素（`messages/<id>` などの outline の要素と、positioning の原子・矢印）と属性で列挙する。両方の文案が参照する固定値の値が違えば、IA_DIFF_UNASSIGNED で失格（固定値はどちらの id にも入らない。値は報告に出さない）。`changed_layers` で、どちらの層が変わったかが分かる（両方が変わる別案も認める）。定数か目的変数が違えば `same_experiment: false`（別の試験として扱う。失格ではない）。両方の dom の報告を渡すと、印の外の文を画面幅ごとに比べ、違えば IA_DIFF_UNASSIGNED で失格（どの要素にも割り当てられない差分）。渡さなければ `not_checked` に比べていないことを出す。A/B の実行・指標・統計は持たない。
+2 つの set の差分を、変わった要素（`messages/<id>` などの outline の要素と、経路の原子・矢印）と属性で列挙する。指す経路は提供価値の id で突き合わせ、両方にあってハッシュが違えば positioning の編集（`layer: positioning`、`path` に提供価値の id）、片方にしか無ければ outline の選択（`layer: outline`、`element: paths/<提供価値 id>`、`kind: selection`）として別々に出す。両方の文案が参照する固定値の値が違えば、IA_DIFF_UNASSIGNED で失格（固定値はどちらの id にも入らない。値は報告に出さない）。`changed_layers` で、どちらの層が変わったかが分かる（両方が変わる別案も認める）。定数か目的変数が違えば `same_experiment: false`（別の試験として扱う。失格ではない）。両方の dom の報告を渡すと、印の外の文を画面幅ごとに比べ、違えば IA_DIFF_UNASSIGNED で失格（どの要素にも割り当てられない差分）。渡さなければ `not_checked` に比べていないことを出す。A/B の実行・指標・統計は持たない。
 
 ## 終了コード
 
@@ -122,7 +134,8 @@ outline のメッセージが指す提供価値ごとに、target のセグメ�
 | IA_REF_BROKEN / IA_EMPTY_REFERENCED | SSOT 内の参照切れ・proposed の原子が空欄を参照（参照の表は `check.ssot_refs` の 1 か所） |
 | IA_VOICE_MULTIPLE | proposed の声が 2 つ以上 |
 | IA_POSITIONING_*（要件 5・要件 2） | 上の positioning の表 |
-| IA_POSITIONING_UNAPPROVED | 立っている positioning の経路の原子・矢印に、オーナーの承認が無いか外れたものがある（`detail.atoms`。出荷チャネルは失格、ほかは警告） |
+| IA_POSITIONING_UNAPPROVED | outline が指す経路に、オーナーの承認が無いか外れたものがある（`detail.values`。出荷チャネルは失格、ほかは警告） |
+| IA_APPROVALS_LEGACY | 承認台帳に原子と矢印ごとの旧い行（`ia:positioning:`）がある。数えない（警告。`migrate-approvals` で移す） |
 | IA_APPROVALS_INVALID | `design/approvals.yaml` が読めない・symlink・design の `verify_rows` を通らない（重複キー・項目の過不足・承認者・日付・ハッシュ）。何も承認済みとして数えない |
 | IA_PAGES_OUTPUT_NOT_INVENTORIED（警告） | 出荷チャネルの HTML の成果物が、design/validation.json の pages（covered・excluded）に無い（design の検査が見ていない） |
 | IA_PAGES_OUTPUT_EXCLUDED_BY_DESIGN（info） | design が対象外にした成果物。IA の検査は続ける（ページの宣言は一本化しない。ADR-20261115-design-ia-two-skills-shared-base） |
@@ -132,9 +145,10 @@ outline のメッセージが指す提供価値ごとに、target のセグメ�
 | IA_OUTLINE_BAD_PLACEHOLDER / IA_OUTLINE_FACT_LITERAL | `{{fct-NNNN}}` の形でない `{{…}}`（改行をまたぐものを含む）・固定値の値を参照せず直接書いた |
 | IA_IMPACT_UNKNOWN_ID | `impact --id` に SSOT にも墓標にも無い id を渡した（空の結果を合格にしない） |
 | IA_OUTLINE_TARGET | target のセグメントが無いか空欄（target が無い・形が違うのは IA_SCHEMA） |
-| IA_OUTLINE_VALUE_UNAPPROVED | メッセージが承認の無い提供価値を指す（出荷チャネルは失格、ほかは警告） |
-| IA_OUTLINE_VALUE_OTHER_POSITIONING | メッセージが立っていない positioning の提供価値を指す |
-| IA_OUTLINE_COMPARE_INVALID / IA_OUTLINE_COMPARE_UNAPPROVED | 比べる相手が立っている positioning の代替でない・承認の無い代替（出荷チャネルは失格、ほかは警告） |
+| IA_OUTLINE_VALUE_UNAPPROVED | メッセージが、経路の承認が無いか外れた提供価値を指す（出荷チャネルは失格、ほかは警告） |
+| IA_OUTLINE_VALUE_OTHER_POSITIONING | メッセージが指す提供価値の経路のセグメントが、target のセグメントと違う |
+| IA_OUTLINE_COMPARE_INVALID | 比べる相手が立っている positioning の代替でない |
+| IA_OUTLINE_COMPARE_OUTSIDE_SET | 比べる相手が、その提供価値の経路の比べる集合に無い（parity なら所属カテゴリーの代替だけ） |
 | IA_OUTLINE_LEAD_COUNT / IA_OUTLINE_LEAD_UNPLACED | 一番のメッセージが 1 つでない・どのセクションにも置かれていない |
 | IA_OUTLINE_CTA_MISSING / IA_OUTLINE_CTA_CONTRADICTS / IA_OUTLINE_CTA_NO_ACTION | 宣言なしで CTA を置いていない・`no_cta` と書いたのに CTA がある・CTA が目的変数を指さない |
 | IA_OUTLINE_NO_SECTIONS / IA_OUTLINE_SECTION_NO_MESSAGE / IA_OUTLINE_SECTION_OVERLOADED | セクションが 0 件・通常のメッセージを置かないセクション・通常 2 つ以上か CTA 2 つ以上のセクション |

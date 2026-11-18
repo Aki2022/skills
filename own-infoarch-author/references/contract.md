@@ -237,6 +237,7 @@ outline のメッセージが指す提供価値のうち、target のセグメ�
 - モデルは呼ばない。本物の Jev は `judgment_run.py`（上限つき、`--execute` のときだけ）で取る。
 
 score は「問題がある確率」。θ 以上は IA_JUDGE_REVIEW（要確認）として人に回し、score だけで失格にしない。
+オーナーが原文を見て認めた要確認は、`accept-reviews` でオーナーの言葉と日付を付けて `design/info_arch/accepted_reviews.yaml`（`schema_version` 1、行は `judgment_hash`・`id`・`approver`・`date`）に記録する。記録は判定のハッシュに結び付くので、文案か文脈が変われば当たらなくなり、要確認に戻る。今の要確認に無い id・言葉や ISO の日付が無いものは記録しない。`--write` が無ければ書かない。共有の判定台帳の形は変えない。
 強調の判定でゲートを止めるかは、最初の実回答で精度を測ってから決める（spec）。
 
 ```sh
@@ -259,6 +260,9 @@ holdout はそのまま引き継ぐ。回答の policy が今の共有 policy �
 | IA_JUDGE_DOM_FAILED / IA_JUDGE_DOM_REPORT | 失格した（終了コード 0・1 以外の）描画を判定に使おうとした・最初の画面の行が無いか読めない・`first_screens` か `unanchored` に、アウトラインの成果物と画面幅に無い行か重複がある（行の本文は報告に出さない）。警告だけの描画（アンカーの外の文言など）は判定に使う |
 | IA_JUDGE_UNCOVERED（warn） | 台帳に無い判定がある（未カバー） |
 | IA_JUDGE_REVIEW（warn） | score が θ 以上（要確認） |
+| IA_JUDGE_ACCEPTED（info） | θ 以上だが、オーナーが原文を見て認めた（`design/info_arch/accepted_reviews.yaml` に判定のハッシュで記録がある） |
+| IA_JUDGE_ACCEPTED_STALE（info） | 「認めた」記録が今の判定に当たらない（文案・文脈が変わったか、θ 未満になった）。要確認は記録が当たらない限り戻る |
+| IA_JUDGE_ACCEPTED_FILE | 認めた要確認の記録が読めない・形が違う・symlink。要確認は隠さずに全部出す |
 | IA_JUDGE_EMPHASIS_MISSING（出荷される HTML なら warn、他は info） | 最初の画面の入力が無く、強調を判定していない。dom の報告が一部の成果物・画面幅だけなら、足りない組ごとに出る |
 
 報告は `uncovered`（未カバー）・`screened`（台帳にあり。「問題なし」の保証ではない）・`missing`（入力が無く判定していない）を分けて出す。

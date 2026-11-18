@@ -50,6 +50,7 @@ infoarch-author impact --root . --id fct-0001  # その原子に立つアウト�
 infoarch-author skeleton --root . --outline lp-xxx [--out DIR]  # アウトラインから骨組みの HTML（アンカー・順序・固定値）を出す。工場はこれを崩さずにスタイリングする
 infoarch-author dom --root . --outline lp-xxx # 描画物をブラウザで開き、アンカー・順序・固定値の表示を確かめる
 infoarch-author judge --root . [--dom-report dom.json]  # 意味の判定（表記ゆれ・強調・未登録の主張・文案 × 提供価値・妥当性）を共有の判定台帳から読む。Jev は呼ばない
+infoarch-author accept-reviews --root . --id <判定の id> --owner-words '<オーナーの言葉>' --approved-on YYYY-MM-DD [--write]  # オーナーが原文を見て認めた要確認を記録する（言葉が無ければ書かない）
 infoarch-author evaluate --root . [--outline lp-xxx]   # 作った物の評価の入口。check → dom → judge を順に走らせ、報告と終了コードを 1 つにする（工場は描画後に必ず走らせる）
 infoarch-author evaluate --root . --outline lp-xxx --acquire --answers-dir DIR --limit 50 [--execute]  # 足りない Jev 判定を上限つきで取って台帳に記録し、評価し直す（--execute が無ければ見積もりだけ）
 infoarch-author ship --root . --channel web   # 出荷の正式の入口。出荷されるコミット（git の中身）で tree → check → dom → judge が緑の時だけ ship_command を実行する

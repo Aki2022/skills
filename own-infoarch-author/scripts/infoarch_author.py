@@ -58,6 +58,14 @@ def cmd_judge(args):
     return report.exit_code
 
 
+def cmd_accept_reviews(args):
+    date = args.date or dt.date.today().isoformat()
+    dt.date.fromisoformat(date)
+    _print(judge.accept_reviews(args.root, date, args.dom_report or [], args.id or [], args.owner_words,
+                                args.approved_on, write=args.write))
+    return 0
+
+
 def cmd_evaluate(args):
     """check -> dom -> judge in one report; --acquire fetches missing Jev judgments (preview unless --execute)."""
     date = args.date or dt.date.today().isoformat()
@@ -323,6 +331,15 @@ def main(argv=None):
     j.add_argument('--answers', help='judgment-answers.json from judgment_run.py')
     j.add_argument('--replacement-out', help='write the shared-ledger replacement here (never overwrites)')
     j.set_defaults(fn=cmd_judge)
+    ar = sub.add_parser('accept-reviews', help="record reviews (IA_JUDGE_REVIEW) the owner read and accepted, with the owner's words")
+    ar.add_argument('--root', default='.')
+    ar.add_argument('--date', help='evaluation date YYYY-MM-DD (default: today)')
+    ar.add_argument('--dom-report', action='append', help='the same dom reports judge reads (for emphasis reviews)')
+    ar.add_argument('--id', action='append', help='judgment id of a current review (repeatable)')
+    ar.add_argument('--owner-words', help="the owner's own words accepting them (quoted exactly)")
+    ar.add_argument('--approved-on', help='the ISO date the owner said them')
+    ar.add_argument('--write', action='store_true', help='write design/info_arch/accepted_reviews.yaml (without it: preview)')
+    ar.set_defaults(fn=cmd_accept_reviews)
     e = sub.add_parser('evaluate', help='evaluate generated creatives: check, then dom, then judge, one report and one exit code')
     e.add_argument('--root', default='.')
     e.add_argument('--date', help='evaluation date YYYY-MM-DD (default: today)')

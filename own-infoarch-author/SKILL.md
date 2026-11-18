@@ -62,6 +62,7 @@ infoarch-author answer-key --root . --measure labels.json --key DIR/answer-key.j
 infoarch-author positioning --root .           # セグメントごとの positioning と、提供価値ごとの経路（比べる集合・失格・承認済みか）
 infoarch-author targets --root .               # 承認の対象（ia:path:<提供価値 id> と経路のハッシュ）と、出荷が要るキー
 infoarch-author migrate-approvals --root . [--write]  # 原子と矢印ごとの旧い承認の行を、経路の行へ一度だけ移す
+infoarch-author migrate-v6 --root . [--write]  # v5 の木（SSOT・outline・描画物の印・modules.ia）を一括で v6 に移す。旧→新の id・移しそこね（1 件でも終了コード 2、何も書かない）・外れる承認と判定・戻す手順を出す
 infoarch-author review --root . --request design/approval-request-ia-positioning.json  # 承認の束の中身を読める形で。古い束は失格
 ```
 
@@ -79,4 +80,4 @@ push される各コミットそのものと、その予測マージ木で止ま
 - `references/contract.md` — ディレクトリ・原子・アウトラインの契約、検査の code 一覧、期限の扱い、描画物の確認（工場が埋めるアンカー）、意味の判定（判定台帳）。
 - `references/schema/` — `info_arch.yaml`（版 4）・`channels/*.yaml`（版 2）・`outlines/*.yaml`（版 3）の JSON Schema。
 - `references/expiry.json` — 証拠・固定値の期限の初期値。
-- `fixtures/red-cases.json`・`positioning-red-cases.json`・`outline-red-cases.json` — 必須の赤ケースと、失格条件との対応表。自己テストは `uv run --no-project --with-requirements <skill>/scripts/tests/requirements.txt -- pytest -q <skill>/scripts/tests`。
+- `fixtures/red-cases.json`・`positioning-red-cases.json`・`outline-red-cases.json`・`migrate-red-cases.json` — 必須の赤ケースと、失格条件（移行では移しそこねの条件）との対応表。自己テストは `uv run --no-project --with-requirements <skill>/scripts/tests/requirements.txt -- pytest -q <skill>/scripts/tests`。

@@ -22,7 +22,7 @@
 
 import { writeFileSync, existsSync, realpathSync, unlinkSync } from "node:fs";
 import {dirname} from "node:path";
-import {loadEnvironment,verifyRuntime,configureFonts,trackFonts,renderEvidence,compareRepeats,fixedLaunchOptions,describeRenderFailure,parseState,applyState,settleFonts} from "../../own-design-author/scripts/fixed_render.mjs";
+import {loadEnvironment,verifyRuntime,configureFonts,trackFonts,renderEvidence,compareRepeats,fixedLaunchOptions,describeRenderFailure,parseState,applyState,settleFonts,stableCapture} from "../../own-design-author/scripts/fixed_render.mjs";
 import { loadManifest, collectDesign, collectItemChecks } from "../../own-design-author/scripts/resolved_contract.mjs";
 import { createRequire } from "node:module";
 
@@ -155,6 +155,36 @@ function collect(T) {
     const c = srgb(getComputedStyle(document.body).backgroundColor);
     return c && c.a > 0.95 ? c : { r: 255, g: 255, b: 255, a: 1 };
   };
+  // SVG の文字の背後の色。同じ <svg> の中で文字より前に描かれる図形のうち、点を塗りで覆うものを
+  // 描画順に重ねる（線は細いので数えない）。単色でない塗りがあれば null（未検証）。
+  // 一番下は <svg> を置いた HTML 側の背景。それが画像なら undefined を返し、画素の評価へ回す。
+  const svgBackgroundAt = (text, x, y) => {
+    const svg = text.closest("svg");
+    let bg = effectiveBg(svg);
+    if (!bg) return undefined;
+    const shapes = [...svg.querySelectorAll("rect,circle,ellipse,path,polygon")]
+      .filter((shape) => shape.compareDocumentPosition(text) & Node.DOCUMENT_POSITION_FOLLOWING)
+      // defs・clipPath などの中の図形は描かれない。描かれない図形を背景に数えると判定が狂う。
+      .filter((shape) => !shape.closest("defs,clipPath,mask,pattern,symbol,marker"))
+      .filter((shape) => shape.checkVisibility({ visibilityProperty: true, opacityProperty: true }));
+    for (const shape of shapes) {
+      const st = getComputedStyle(shape);
+      if (st.fill === "none") continue;
+      const matrix = shape.getScreenCTM();
+      if (!matrix) continue;
+      const local = new DOMPoint(x, y).matrixTransform(matrix.inverse());
+      if (!shape.isPointInFill(local)) continue;
+      if (!/^rgba?\(/.test(st.fill)) return null;
+      const c = srgb(st.fill);
+      const alpha = (c.a ?? 1) * Number(st.fillOpacity) * Number(st.opacity);
+      bg = { r: c.r * alpha + bg.r * (1 - alpha), g: c.g * alpha + bg.g * (1 - alpha),
+        b: c.b * alpha + bg.b * (1 - alpha), a: 1 };
+    }
+    return bg;
+  };
+  const isSvgText = (el) =>
+    el instanceof SVGElement && ["text", "tspan", "textPath"].includes(el.localName) && !!el.closest("svg");
+  let svgTextMeasured = 0;
   const hasText = (el) =>
     [...el.childNodes].some(
       (n) => n.nodeType === 3 && n.textContent.trim().length > 0,
@@ -261,7 +291,63 @@ function collect(T) {
         }
       }
 
-      const fg = srgb(s.color);
+      // SVG の文字は fill で塗られ、背後は SVG 内の図形が決める。CSS の color と外側の背景で
+      // 比べると、黒地に黒字でも合格してしまう。塗りの色を取り、背後は実画素で測る。
+      const svgText = isSvgText(el);
+      if (svgText) {
+        svgTextMeasured++;
+        const paint = /^rgba?\(/.test(s.fill) ? srgb(s.fill) : null;
+        const opaque = paint && paint.a > 0.95 && Number(s.fillOpacity) > 0.95 && Number(s.opacity) > 0.95;
+        const rect = el.getBoundingClientRect();
+        if (!opaque || rect.width < 1 || rect.height < 1) {
+          contrastFails.push({
+            tag: el.tagName.toLowerCase(),
+            text: el.textContent.trim().slice(0, 28),
+            skipped: "SVG の文字の塗りが不透明な単色でなく未検証（緑にはしない）",
+          });
+        } else {
+          // 文字の箱の中心と四隅寄りの 5 点で背後を求め、最も低い比で判定する。
+          const points = [[0.5, 0.5], [0.25, 0.25], [0.75, 0.25], [0.25, 0.75], [0.75, 0.75]]
+            .map(([fx, fy]) => svgBackgroundAt(el, rect.left + rect.width * fx, rect.top + rect.height * fy));
+          const large = size >= 24 || (size >= 18.66 && Number(s.fontWeight) >= 700);
+          const min = large ? T.largeContrastMin : T.contrastMin;
+          if (points.some((bg) => bg === null)) {
+            contrastFails.push({
+              tag: el.tagName.toLowerCase(),
+              text: el.textContent.trim().slice(0, 28),
+              skipped: "SVG の文字の背後に単色でない塗りがあり未検証（緑にはしない）",
+            });
+          } else if (points.some((bg) => bg === undefined)) {
+            // <svg> が画像の上にある: 背後は画素でしか分からない
+            pendingContrast.push({
+              tag: el.tagName.toLowerCase(),
+              text: el.textContent.trim().slice(0, 28),
+              fg: [paint.r, paint.g, paint.b],
+              fontSize: size,
+              bold: Number(s.fontWeight) >= 700,
+              svg: true,
+              x: Math.round(rect.left + window.scrollX),
+              y: Math.round(rect.top + window.scrollY),
+              w: Math.round(rect.width),
+              h: Math.round(rect.height),
+            });
+          } else {
+            const r = Math.min(...points.map((bg) => ratio(paint, bg)));
+            if (r < min) {
+              contrastFails.push({
+                tag: el.tagName.toLowerCase(),
+                text: el.textContent.trim().slice(0, 28),
+                ratio: Number(r.toFixed(2)),
+                min,
+                fontSize: size,
+                measuredBy: "svg-fill",
+              });
+            }
+          }
+        }
+      }
+
+      const fg = svgText ? null : srgb(s.color);
       const bg = effectiveBg(el);
       if (fg && !bg) {
         const rect = el.getBoundingClientRect();
@@ -496,6 +582,7 @@ function collect(T) {
     spacingOutliers,
     contrastFails,
     pendingContrast,
+    svgTextMeasured,
     tapFails,
     overflow,
     tooSmall,
@@ -527,7 +614,8 @@ function collect(T) {
 
 /** 合成後のスクリーンショットから、領域の知覚明度（L*）分位を測る */
 async function measureRegion(page, region) {
-  const shot = await page.screenshot({
+  // 2 回続けて同じ画素になるまで撮る。1 回撮りでは画像のラスタ途中を拾い、同じページの 2 回の描画で値が揺れた。
+  const shot = await stableCapture(page, {
     fullPage: true, // clip はページ座標。fullPage 無しだと折り返し下が撮れず undefined になる
     clip: { x: region.x, y: region.y, width: region.w, height: region.h },
   });
@@ -679,9 +767,26 @@ for (const scheme of schemes) {
       await page.addScriptTag({path:axePath});
       data.axe = await page.evaluate(async () => {
         const result = await window.axe.run(document, {runOnly:{type:'rule', values:['color-contrast']}});
+        // axe は <svg> の中の背景を決められず incomplete にする。その文字は上の自前の計測が受け持つ。
+        const svgText = node => {
+          const target = node.target.length === 1 && typeof node.target[0] === 'string' ? document.querySelector(node.target[0]) : null;
+          return !!target && target instanceof SVGElement && ['text', 'tspan', 'textPath'].includes(target.localName) && !!target.closest('svg');
+        };
+        let svgTextDelegated = 0;
+        const incomplete = [];
+        for (const v of result.incomplete) {
+          const kept = v.id === 'color-contrast' ? v.nodes.filter(node => !svgText(node)) : v.nodes;
+          svgTextDelegated += v.nodes.length - kept.length;
+          if (kept.length) incomplete.push({id:v.id, count:kept.length});
+        }
         return {violations:result.violations.map(v => ({id:v.id, count:v.nodes.length})),
-          incomplete:result.incomplete.map(v => ({id:v.id, count:v.nodes.length})), unavailable:false};
+          incomplete, svgTextDelegated, unavailable:false};
       });
+      // 自前で測った SVG の文字が axe から預かった数に届かなければ、預かった分は未検証のまま残す。
+      if (data.axe.svgTextDelegated > data.svgTextMeasured) {
+        data.axe.incomplete.push({id:'color-contrast', count:data.axe.svgTextDelegated - data.svgTextMeasured,
+          note:'svg text not measured by the pixel check'});
+      }
       // Item-enforced axe rules: measured here, judged per adopted item by design-check, never an L2 failure.
       const axeItems = {'axe:button-name':['button-name'], 'axe:list':['list','listitem'],
         'axe:label':['label','select-name'], 'axe:link-name':['link-name']};
@@ -731,7 +836,8 @@ for (const scheme of schemes) {
             ratio: Number(ratio.toFixed(2)),
             min,
             fontSize: t.fontSize,
-            measuredBy: "pixel",
+            // SVG の文字の背後は平らな図形で、画像の上の近似とは違い失格に数える。
+            measuredBy: t.svg ? "svg-pixel" : "pixel",
           });
         }
       } catch {
@@ -763,6 +869,8 @@ for (const scheme of schemes) {
         data.imageLightness.push({
           ...region,
           skipped: String(e).slice(0, 60),
+          // 落ち着かなかった画素は「測れなかった」ではなく、描画が揺れている事実として失格にする
+          ...(e?.code === "render-unstable" ? { unstable: true } : {}),
         });
       }
     }
@@ -882,6 +990,19 @@ for (const r of report.runs) {
   if (profile === 'lp' && r.fold.primaryCtaVisible === false && !r.fold.hasStickyCta)
     fail("fold-cta", { at });
   for (const im of r.imageLightness) {
+    // 切り取り率は要素の寸法から出るので、画素が測れなくても判定する
+    if (im.croppedRatio > T.imageCropMax)
+      fail("image-over-crop", {
+        at,
+        src: im.src,
+        croppedRatio: im.croppedRatio,
+        max: T.imageCropMax,
+        note: "object-fit: cover の切り取りが大きく、意図した構図が画面に出ていない",
+      });
+    if (im.unstable) {
+      fail("image-unstable", { at, src: im.src, note: "画像領域の画素が 3 回撮っても落ち着かない" });
+      continue;
+    }
     if (im.skipped) {
       // 未検証を緑にしない。測れなかったこと自体を報告する。
       warn("image-unverified", { at, src: im.src, reason: im.skipped });
@@ -903,14 +1024,6 @@ for (const r of report.runs) {
         min: T.imageStandoutArea,
         mode: im.mode,
         note: "合成後の画像に、支配的な明度から離れた画素がほとんど無い。scrim や重なりで焦点が潰れ、絵が地に沈んでいる",
-      });
-    if (im.croppedRatio > T.imageCropMax)
-      fail("image-over-crop", {
-        at,
-        src: im.src,
-        croppedRatio: im.croppedRatio,
-        max: T.imageCropMax,
-        note: "object-fit: cover の切り取りが大きく、意図した構図が画面に出ていない",
       });
   }
 }

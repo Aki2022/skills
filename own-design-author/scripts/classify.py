@@ -23,7 +23,10 @@ import urllib.request
 ENDPOINT = "https://api.typesafe.ai/v1/systemone"
 POLICY = Path(__file__).resolve().parents[1] / "references/classification-policy.json"
 PRESETS = ["lp", "product-ui", "presentation"]
-MAX_JUDGMENTS = 2000
+# Shared across every repository's catalog classification AND judgment_run.py's
+# na-rationale/doc-relevance judgments (same ledger, catalog/classification-usage.json).
+# Raised from 2000: officeohana_company alone needs ~535 on top of 1861 already attempted.
+MAX_JUDGMENTS = 5000
 MAX_BATCH = 10
 MAX_SOURCE_CHARS = 16000
 

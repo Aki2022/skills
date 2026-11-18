@@ -61,7 +61,7 @@ group `$extends`、カスタムdash配列のstrokeStyle、srgb以外のCSS変換
 keyはds:web:item:<id> またはds:web:token:<path>。IAのキーは固定の信頼されたIA resolverが現在hashを返した場合だけ登録対象に含める。実装がないIA入力は失格。
 旧token_path/item_id行や署名行を自動移行しない。現在のJCS hashを確認して新しい記録を作る。
 署名・鍵・allowed_signersは要求しない。承認者の真正性は技術的に証明せず、人間の明示承認を運用上の根拠とする。
-AIは提案までを自律で行い、実台帳は書かない。オーナー自身が確認後に記録する。詳細はapproval-upgrade.md。
+承認の判断はオーナー、記録はAI。AIはオーナー自身の承認の言葉（引用と日付）がある時だけ `approve --request --owner-words --approved-on` で記録する。自分の判断では記録しない。詳細はapproval-upgrade.md。
 consumerはapproval_schemeと全入力hashを検査し、承認台帳の削除・変更後の古いmanifestも拒否する。
 
 一致するdefined item行は直接参照するtokenの承認にもなる。散文内のtoken文字列だけでは伝播しない。

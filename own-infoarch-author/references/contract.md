@@ -54,7 +54,7 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 | `satisfies` | val → pan・gan | 提供価値が満たす隙間か同等であるべき点 |
 | `supports` | prf → 原子・矢印のキー | 証拠が支える |
 
-**承認**：オーナーが原子 1 つ・矢印 1 本ずつ、`design/approvals.yaml` に `ia:positioning:<原子 id>`・`ia:positioning:<kind>:<from>:<to>` で記録する（AI は `design-author approve --prepare` まで）。ハッシュ（`positioning.element_hash`）はその要素自身の中身だけ（`copied_from`・`provenance` を除く）を束縛するので、1 つ直すとその要素の承認だけが外れる。承認かどうかは台帳のハッシュの一致だけで決まり、`state` には持たない。承認は採用の判断だけを表し、顧客での検証を意味しない。台帳は own-design-author と同じ `approvals.verify_rows` で読み（項目・キーの名前空間・ハッシュ・承認者・ISO の日付・キーの重複）、symlink も断る。どれかに反すれば IA_APPROVALS_INVALID で、何も承認済みとして数えない（片方だけが通す読み方の差を作らない）。束は `design-author approve --prepare` が要素ごとの行で作る。
+**承認**：オーナーが原子 1 つ・矢印 1 本ずつ、`design/approvals.yaml` に `ia:positioning:<原子 id>`・`ia:positioning:<kind>:<from>:<to>` で記録する。承認の判断はオーナー、記録は AI（`design-author approve --request --owner-words --approved-on`。オーナー自身の承認の言葉が無ければ道具が断る。ADR-20261118-ai-records-owner-approvals、biz_ops）。positioning は outline より先に承認するので、outline 0 件でも束を作れる。design.yaml の無い IA だけの repo でも記録できる。ハッシュ（`positioning.element_hash`）はその要素自身の中身だけ（`copied_from`・`provenance` を除く）を束縛するので、1 つ直すとその要素の承認だけが外れる。承認かどうかは台帳のハッシュの一致だけで決まり、`state` には持たない。承認は採用の判断だけを表し、顧客での検証を意味しない。台帳は own-design-author と同じ `approvals.verify_rows` で読み（項目・キーの名前空間・ハッシュ・承認者・ISO の日付・キーの重複）、symlink も断る。どれかに反すれば IA_APPROVALS_INVALID で、何も承認済みとして数えない（片方だけが通す読み方の差を作らない）。束は `design-author approve --prepare` が要素ごとの行で作る。
 
 **導出**（`positioning.derive`、記録しない）：positioning ＝ そのセグメントの承認済みの原子と、承認済みの原子どうしを結ぶ承認済みの矢印すべて（下書きは入らない）。隙間 ＝ 痛み・得たいもののうち、そのセグメントの承認済みの代替すべてのどれも `full` でないもの。同等であるべき点 ＝ 所属カテゴリーが `includes` で入れている代替のすべてが `full` のもの（カテゴリーの外の代替は見ない。ADR の 5）。比べる代替の一部だけが満たすものは、どちらにもならない。満たす度合いの矢印が 1 本でも欠ければ導かない（未調査を `none` とみなさない）。
 

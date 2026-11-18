@@ -198,7 +198,8 @@ def test_unapproved_positioning_can_be_prepared_and_recorded_by_the_owner(projec
     request = prepare(root, project[1], all_must=True)
     keys = {r['key'] for r in request['rows']}
     assert 'ia:positioning:val-0001' in keys and 'ia:positioning:lacks:str-0001:alt-0001' in keys
-    approve_request(root, project[1], request, 'fixture-owner')
+    approve_request(root, project[1], request, 'fixture-owner', owner_words='fixture: approve',
+                    approved_on=request['rows'][0]['date'])
     assert not any(e.startswith('IA_POSITIONING_UNAPPROVED') for e in check(project, ship=True)['errors'])
 
 

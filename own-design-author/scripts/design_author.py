@@ -818,6 +818,9 @@ def main(argv=None):
             p.add_argument('--target',action='append',default=[])
             p.add_argument('--request',type=Path)
             p.add_argument('--approver',default='owner')
+            p.add_argument('--owner-words')
+            p.add_argument('--approved-on')
+            p.add_argument('--date')
     args = parser.parse_args(argv)
     try:
         root = git_root(args.repo)
@@ -830,11 +833,13 @@ def main(argv=None):
             from owner_approval import prepare,approve_request
             if args.prepare:
                 if args.request:raise ValueError('prepare does not use a request')
-                result=prepare(root,args.catalog_dir,args.target,args.must)
+                if args.owner_words or args.approved_on:raise ValueError('prepare does not take the owner approval')
+                result=prepare(root,args.catalog_dir,args.target,args.must,args.date)
             else:
-                if not args.request or args.must or args.target:
-                    raise ValueError('approval recording requires only --request and --approver')
-                result=approve_request(root,args.catalog_dir,read_data(args.request),args.approver)
+                if not args.request or args.must or args.target or args.date:
+                    raise ValueError('approval recording takes --request, --approver, --owner-words and --approved-on')
+                result=approve_request(root,args.catalog_dir,read_data(args.request),args.approver,
+                                       owner_words=args.owner_words,approved_on=args.approved_on)
             print(json.dumps(result,ensure_ascii=False,sort_keys=True))
             return result.get('exit_code',0)
         if args.command in ('check','sync'):

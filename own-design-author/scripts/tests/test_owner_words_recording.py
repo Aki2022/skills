@@ -144,3 +144,29 @@ def test_ia_only_refuses_a_structural_error(tmp_path):
     (root / 'design/info_arch/info_arch.yaml').write_text('schema_version: [', encoding='utf-8')
     with pytest.raises(ValueError, match='repair structural'):
         prepare(root, None, targets=['ia:positioning:val-0001'], when=DAY)
+
+
+# ---- approving a positioning in parts --------------------------------------------------------------------------
+
+def test_a_partly_approved_positioning_does_not_block_approving_the_rest(tmp_path):
+    """After the first part is recorded the positioning is incomplete (no alternatives yet). Incomplete is fixed by
+    approving the rest, so it must not refuse preparing and recording that rest (officeohana pilot, 2026-11-18)."""
+    root = ia_only(tmp_path)
+    keys = ia_keys(root)
+    later = [k for k in keys if 'alt-' in k]
+    first = [k for k in keys if k not in later]
+    assert later and first
+    approve_request(root, None, prepare(root, None, targets=first, when=DAY), 'owner', owner_words=WORDS, approved_on=DAY)
+    rest = prepare(root, None, targets=later, when=DAY)
+    out = approve_request(root, None, rest, 'owner', owner_words='代替の案は承認する', approved_on=DAY)
+    assert out['recorded_rows'] == len(later) and {r['key'] for r in ledger(root)} == set(keys)
+    assert [e for e in out['errors'] if not e.startswith(('IA_NO_OUTLINES', 'zero IA'))] == [], out['errors']
+
+
+def test_a_broken_arrow_still_refuses_prepare(tmp_path):
+    root = ia_only(tmp_path)
+    broken = ssot()
+    broken['edges'].append(copy.deepcopy(broken['edges'][0]))  # the same arrow twice is damage, not an approval gap
+    FIXTURE['dump'](root / 'design/info_arch/info_arch.yaml', broken)
+    with pytest.raises(ValueError, match='repair structural'):
+        prepare(root, None, targets=ia_keys(root)[:1], when=DAY)

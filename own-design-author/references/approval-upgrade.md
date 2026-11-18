@@ -31,6 +31,7 @@ design-author approve --request request.json --approver owner \
 
 結果の `commit_trailer`（`Owner-Approval: 「…」 (日付)`）を commit メッセージと PR 本文に書く。
 positioning は outline より先に承認するので、`IA_NO_OUTLINES` と `zero IA check targets` は prepare を止めない。
+positioning を分けて承認する途中の「まだ足りない」（代替が 0 件・強みの比べ先が無い・満たす度合いの欠けなど、承認済みの部分から導く失格）も prepare を止めない。残りを承認すれば直るから。矢印の形・重複・セグメントをまたぐ矢印・参照の切れなど、下書きそのものの壊れは止める。
 design/design.yaml の無い repo（IA だけ）では、IA の解決だけで対象を作り、記録する。
 
 確認用データはorigin URLのdigestでrepositoryを識別し、URLそのものを出力しない。

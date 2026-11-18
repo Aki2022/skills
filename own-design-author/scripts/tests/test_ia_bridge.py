@@ -38,14 +38,13 @@ def test_schema2_actual_check_has_counts_and_preserves_ds_approvals(project):
     root = attach(project)
     result = check(project, ship=True)
     assert result['exit_code'] == 0, result['errors']
-    # v6: the design targets stay exactly as they were; the IA positioning atoms and arrows are added beside them.
+    # The design targets stay exactly as they were; one IA row per value path is added beside them.
     ds = {k: v for k, v in result['approval_targets'].items() if k.startswith('ds:')}
     assert ds == before['approval_targets']
-    ia = {k for k in result['approval_targets'] if k.startswith('ia:positioning:')}
-    assert {'ia:positioning:val-0001', 'ia:positioning:seg-0001', 'ia:positioning:str-0001',
-            'ia:positioning:produces:str-0001:val-0001'} <= ia
+    ia = sorted(k for k in result['approval_targets'] if k.startswith('ia:'))
+    assert ia == ['ia:path:val-0001', 'ia:path:val-0002', 'ia:path:val-0003']
     assert [k for k in result['approval_required'] if k.startswith('ds:')] == before['approval_required']
-    assert 'ia:positioning:val-0001' in result['approval_required']
+    assert 'ia:path:val-0001' in result['approval_required']
     resolved = result['manifest']['web']['modules']['ia']
     assert resolved['version'] == '0.4.0'
     assert resolved['resolved']['governance']['contract'] == 'ia-git-history-v4'
@@ -191,20 +190,20 @@ def test_unapproved_positioning_can_be_prepared_and_recorded_by_the_owner(projec
     root = attach(project)
     import yaml
     ledger = root / 'design/approvals.yaml'
-    rows = [r for r in yaml.safe_load(ledger.read_text()) if not r['key'].startswith('ia:positioning:')]
+    rows = [r for r in yaml.safe_load(ledger.read_text()) if not r['key'].startswith('ia:')]
     ledger.write_text(yaml.safe_dump(rows, allow_unicode=True, sort_keys=False))  # the owner has approved nothing yet
     blocked = check(project, ship=True)
     assert any(e.startswith('IA_POSITIONING_UNAPPROVED') for e in blocked['errors']), blocked['errors']
     request = prepare(root, project[1], all_must=True)
     keys = {r['key'] for r in request['rows']}
-    assert 'ia:positioning:val-0001' in keys and 'ia:positioning:lacks:str-0001:alt-0001' in keys
+    assert 'ia:path:val-0001' in keys and 'ia:path:val-0003' in keys
     approve_request(root, project[1], request, 'fixture-owner', owner_words='fixture: approve',
                     approved_on=request['rows'][0]['date'])
     assert not any(e.startswith('IA_POSITIONING_UNAPPROVED') for e in check(project, ship=True)['errors'])
 
 
-def test_changing_one_positioning_element_withdraws_only_its_approval(project):
-    """ISSUE-13: per-element approval through the design bridge; ds: approvals and the other ia: rows stay."""
+def test_changing_one_positioning_element_withdraws_only_the_paths_it_is_on(project):
+    """Per-path approval through the design bridge; ds: approvals and the other paths' rows stay."""
     approve(project)
     before = check(project, ship=True)
     root = attach(project)
@@ -217,6 +216,20 @@ def test_changing_one_positioning_element_withdraws_only_its_approval(project):
     FIXTURE['dump'](root / 'design/info_arch/info_arch.yaml', ssot)
     after = check(project, ship=True)
     moved = sorted(k for k, v in approved['approval_targets'].items() if after['approval_targets'].get(k) != v)
-    assert moved == ['ia:positioning:str-0001'], moved
+    assert moved == ['ia:path:val-0001'], moved  # str-0001 produces val-0001 only
     assert {k: v for k, v in after['approval_targets'].items() if k.startswith('ds:')} == before['approval_targets']
-    assert any(e.startswith('IA_POSITIONING_UNAPPROVED') and 'str-0001' in e for e in after['errors']), after['errors']
+    assert any(e.startswith('IA_POSITIONING_UNAPPROVED') and 'val-0001' in e for e in after['errors']), after['errors']
+
+
+def test_legacy_per_element_rows_are_refused_until_migrated(project):
+    """An ia:positioning row is no target any more: the design check stops on it instead of reading it (fail closed),
+    and migrate-approvals is the way out. The ds: approvals are untouched by either."""
+    import yaml
+    approve(project)
+    root = attach(project)
+    ledger = root / 'design/approvals.yaml'
+    rows = yaml.safe_load(ledger.read_text())
+    rows.append({'key': 'ia:positioning:val-0001', 'value_hash': 'b' * 64, 'approver': 'fixture-owner', 'date': '2026-11-16'})
+    ledger.write_text(yaml.safe_dump(rows, allow_unicode=True, sort_keys=False))
+    result = check(project, ship=True)
+    assert result['exit_code'] == 2 and result['errors'] == ['approval target absent from catalog/tokens'], result['errors']

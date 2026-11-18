@@ -1,4 +1,4 @@
-"""Bridge to the deterministic IA checker; the owner's approvals of positioning atoms and arrows are approval targets."""
+"""Bridge to the deterministic IA checker; the owner's approval of each value path is an approval target."""
 from __future__ import annotations
 
 import datetime as dt
@@ -11,9 +11,9 @@ import sys
 
 VERSION = '0.4.0'
 CONTRACT = 'ia-git-history-v4'
-_ID = r'[a-z]{3}-[0-9]{4,}'
-# ia:positioning:<atom id> or ia:positioning:<kind>:<from>:<to> (a supports arrow may point at another arrow's key)
-KEY = re.compile(rf'ia:positioning:(?:{_ID}|[a-z_]+:{_ID}:(?:{_ID}|[a-z_]+:{_ID}:{_ID}))')
+# ia:path:<value id>: one row per value, its hash binding the whole path (ADR-20261118-ia-approval-per-value-path).
+# Per-element keys (ia:positioning:...) are not targets: a ledger row with one is not counted as an approval.
+KEY = re.compile(r'ia:path:val-[0-9]{4,}')
 CATEGORIES = ('executed', 'skipped', 'missing', 'uncovered', 'screened')
 
 
@@ -77,7 +77,7 @@ def resolve(*, root, approvals, profiles):
     warnings = [f['code'] + ': ' + f['message'] for f in findings if f['level'] == 'warn']
     if any(n == 0 for n in targets.values()):
         errors.append('zero IA check targets')
-    # Owner approvals of positioning atoms and arrows (SPEC-information-architecture-standardization v6 requirement 18).
+    # Owner approvals per value path (SPEC-information-architecture-standardization requirement 18).
     targets_run = subprocess.run([sys.executable, str(cli), 'targets', '--root', str(root)], cwd=root,
                                  capture_output=True, text=True, timeout=60)
     approval_hashes, must = {}, []

@@ -57,6 +57,9 @@ def apply(ops, ssot=SSOT):
                 del edge[op['field']]
         elif kind == 'set_block':
             ssot[op['block']] = op['value']
+        elif kind == 'remove_atom':
+            del ssot[blocks[op['id'].split('-')[0]]][op['id']]
+            ssot['edges'] = [e for e in ssot['edges'] if op['id'] not in (e['from'], e['to'])]
         elif kind == 'unapprove':
             unapproved.append(op['key'])
         else:
@@ -64,11 +67,20 @@ def apply(ops, ssot=SSOT):
     return ssot, tuple(unapproved)
 
 
+SHIPPED_DECK = {'schema_version': 2, 'media': 'deck', 'outputs': ['decks/*.pptx'], 'ship': True,
+                'ship_command': 'mise run deploy-deck'}
+
+
 def write_case(root, case):
+    """Both outlines ship, so a disqualified path either one points at fails (requirement 5). `after` ops change
+    the data once the owner has approved it (the approval then no longer matches)."""
+    from test_check import CHANNEL, confirm
     ssot, unapproved = apply(case['ops'])
-    write_repo(root, ssot, confirmed=False)
-    from test_check import confirm
+    write_repo(root, ssot, channels=(CHANNEL, SHIPPED_DECK), confirmed=False)
     confirm(root, ssot, skip=unapproved)
+    if case.get('after'):
+        changed, _ = apply(case['after'], ssot)
+        dump(root / 'design/info_arch/info_arch.yaml', changed)
 
 
 def model(ssot=SSOT, approve_all=True, skip=()):
@@ -116,39 +128,44 @@ def test_unknown_operation_is_rejected():
         apply([{'op': 'not-an-op'}])
 
 
-# ---- only approved content is checked (requirement 5) ---------------------------------------------------------------
+# ---- only the paths that matter are judged (requirement 5) ----------------------------------------------------
 
-def test_drafts_are_not_disqualified(tmp_path):
-    """A broken positioning nobody approved is a draft: requirement 5 does not look at it."""
-    ssot, _ = apply([{'op': 'remove_edge', 'key': 'member_of:seg-0001:cat-0001'},
-                     {'op': 'remove_edge', 'key': 'fulfills:alt-0002:pan-0001'}])
+BARE = [{'op': 'set_atom', 'id': 'val-0009', 'atom': {'state': 'proposed', 'provenance': 'proposal',
+                                                      'segment': 'seg-0001', 'kind': 'difference', 'text': '下書き'}},
+        {'op': 'set_next', 'prefix': 'val', 'value': 10}]
+
+
+def test_a_draft_path_nobody_points_at_is_not_disqualified(tmp_path):
+    """A broken path nobody approved and no outline points at is a draft: requirement 5 does not look at it."""
+    ssot, _ = apply(BARE)
     write_repo(tmp_path, ssot, confirmed=False)
+    from test_check import confirm
+    confirm(tmp_path, ssot, skip=('val-0009',))
     rc, report = check(tmp_path)
-    assert not [f for f in report['findings'] if f['code'].startswith('IA_POSITIONING_') and f['level'] == 'fail'
-                and f['code'] != 'IA_POSITIONING_UNAPPROVED'], report['findings']
+    judged = [f for f in report['findings'] if f['code'].startswith('IA_POSITIONING_')
+              and f['code'] != 'IA_POSITIONING_PATH_PENDING']
+    assert rc == 1 and judged == [], report['findings']
 
 
-def test_unapproved_isolated_atom_is_ignored_and_leaves_the_id(tmp_path):
-    case = next(c for c in CASES if c['id'] == 'isolated-alternative')
-    ssot, _ = apply(case['ops'])
-    m, keys = model(ssot, skip=('alt-0009',))
+def test_a_draft_path_leaves_the_positioning_id():
+    ssot, _ = apply(BARE)
+    m, keys = model(ssot, skip=('val-0009',))
     base_m, base_keys = model()
     assert positioning.derive(m, keys)['seg-0001'].id == positioning.derive(base_m, base_keys)['seg-0001'].id
     report = ia_check.Report('check', '2026-11-16')
     positioning.check_positioning(m, report, keys)
-    assert 'IA_POSITIONING_ISOLATED_ATOM' not in report.codes('fail')
+    assert report.findings == [] or {f.code for f in report.findings} == {'IA_POSITIONING_PATH_PENDING'}
 
 
-def test_approval_follows_the_content_of_each_element():
+def test_approval_follows_the_content_of_each_path():
     m, _ = model()
     targets = positioning.approval_targets(m)
     changed = copy.deepcopy(SSOT)
     changed['values']['val-0001']['text'] = '運用の手間がなくなる'
     after = positioning.approval_targets(ia_check.Model(root=Path('.'), ssot=changed))
     moved = sorted(k for k in targets if targets[k] != after.get(k))
-    assert moved == ['ia:positioning:val-0001']  # one atom changed; its arrows and neighbours keep their approval
-    assert positioning.approved_keys(ia_check.Model(root=Path('.'), ssot=changed), targets) == set(
-        k[len(positioning.APPROVAL_PREFIX):] for k in targets) - {'val-0001'}
+    assert moved == ['ia:path:val-0001']  # the other paths do not hold val-0001
+    assert positioning.approved_keys(ia_check.Model(root=Path('.'), ssot=changed), targets) == {'val-0002', 'val-0003'}
 
 
 # ---- derivation (requirement 4) -----------------------------------------------------------------------------------
@@ -158,9 +175,10 @@ def test_gaps_and_points_of_parity_are_derived():
     pos = positioning.derive(m, keys)
     assert sorted(pos) == ['seg-0001', 'seg-0002']
     one = pos['seg-0001']
-    assert one.category == 'cat-0001'
-    assert one.alternatives == ['alt-0001', 'alt-0002'] and one.category_alternatives == ['alt-0001']
+    assert one.category == 'cat-0001' and sorted(one.paths) == ['val-0001', 'val-0003']
     assert one.gaps == ['gan-0001', 'pan-0001'] and one.parity == ['gan-0002']
+    ps = positioning.paths(m)
+    assert ps['val-0001'].comparison == ['alt-0001', 'alt-0002'] and ps['val-0003'].comparison == ['alt-0001']
     two = pos['seg-0002']
     assert two.gaps == ['pan-0002'] and two.parity == []
 
@@ -175,16 +193,16 @@ def test_gap_compares_every_alternative_of_the_segment_not_only_the_category():
 
 def test_missing_fulfillment_is_not_derived_as_none():
     ssot, _ = apply([{'op': 'remove_edge', 'key': 'fulfills:alt-0002:pan-0001'}])
-    m, keys = model(ssot)
-    one = positioning.derive(m, keys)['seg-0001']
-    assert one.gaps is None and one.parity is None  # not derived; the checker disqualifies instead
-    assert one.missing_fulfillment == [['alt-0002', 'pan-0001']]
+    p = positioning.paths(ia_check.Model(root=Path('.'), ssot=ssot))['val-0001']
+    assert p.points is None  # not derived; the path is disqualified instead
+    assert p.missing_fulfillment == [['alt-0002', 'pan-0001']]
 
 
-def test_positioning_contains_only_its_segment_and_only_approved_elements():
-    m, keys = model(skip=('val-0003', 'satisfies:val-0003:gan-0002'))
+def test_positioning_contains_only_its_segment_and_only_approved_paths():
+    m, keys = model(skip=('val-0003',))
     one = positioning.derive(m, keys)['seg-0001']
     assert 'val-0003' not in one.atoms and 'satisfies:val-0003:gan-0002' not in one.edges
+    assert one.unapproved == ['val-0003']
     assert not any(a.startswith(('job-0002', 'alt-0003', 'seg-0002')) for a in one.atoms)
 
 
@@ -245,12 +263,15 @@ def test_provenance_does_not_move_the_id_or_the_approval():
     assert positioning.approval_targets(ia_check.Model(root=Path('.'), ssot=changed)) == positioning.approval_targets(m)
 
 
-def test_supports_counts_only_when_its_target_arrow_is_in_the_positioning():
-    case = next(c for c in CASES if c['id'] == 'evidence-supports-unpositioned-arrow')
-    ssot, skip = apply(case['ops'])
-    m, keys = model(ssot, skip=skip)
+def test_evidence_counts_only_when_what_it_supports_is_on_a_path():
+    ssot, _ = apply([{'op': 'set_atom', 'id': 'pan-0009', 'atom': {'state': 'proposed', 'provenance': 'owner',
+                                                                   'segment': 'seg-0001', 'text': '下書きの痛み'}},
+                     {'op': 'set_next', 'prefix': 'pan', 'value': 10},
+                     {'op': 'add_edge', 'edge': {'kind': 'fulfills', 'from': 'alt-0001', 'to': 'pan-0009', 'degree': 'none'}},
+                     {'op': 'add_edge', 'edge': {'kind': 'supports', 'from': 'prf-0003', 'to': 'fulfills:alt-0001:pan-0009'}}])
+    m, keys = model(ssot)
     one = positioning.derive(m, keys)['seg-0001']
-    assert 'supports:prf-0003:fulfills:alt-0001:pan-0009' not in one.edges
+    assert 'supports:prf-0003:fulfills:alt-0001:pan-0009' not in one.edges and 'pan-0009' not in one.atoms
 
 
 def test_unapproved_draft_does_not_move_the_id():
@@ -281,4 +302,4 @@ def test_cli_ids_through_files_ignore_order_and_copy_provenance(tmp_path):
     dump(path, data)
     rc, c = cli('positioning', '--root', str(tmp_path / 'b'))
     assert c['positionings']['seg-0001']['id'] == a['positionings']['seg-0001']['id']
-    assert 'val-0002' in c['positionings']['seg-0002']['unapproved']  # the edit withdrew its approval
+    assert 'seg-0002' not in c['positionings'] and c['paths']['val-0002']['approved'] is False  # the edit withdrew it

@@ -12,7 +12,7 @@
       "id": "5-job-without-need",
       "requirement": "5",
       "code": "IA_POSITIONING_JOB_WITHOUT_NEED",
-      "text": "痛みも得たいものも持たないジョブ"
+      "text": "痛みも得たいものも持たないジョブ（経路では、満たす先の痛み・得たいものを持つジョブが無いこと）"
     },
     {
       "id": "5-category-count",
@@ -129,21 +129,6 @@
       ]
     },
     {
-      "id": "isolated-evidence",
-      "condition": "5-isolated-atom",
-      "why": "証拠の支える矢印を外した",
-      "ops": [
-        {
-          "op": "remove_edge",
-          "key": "supports:prf-0003:str-0001"
-        },
-        {
-          "op": "remove_edge",
-          "key": "supports:prf-0003:fulfills:alt-0001:pan-0001"
-        }
-      ]
-    },
-    {
       "id": "job-without-need",
       "condition": "5-job-without-need",
       "why": "ジョブから痛み・得たいものへの矢印をすべて外した（ジョブ自体はセグメントとカテゴリーに繋がっている）",
@@ -206,11 +191,11 @@
     {
       "id": "no-segment-alternatives",
       "condition": "5-no-segment-alternatives",
-      "why": "セグメントの代替が未承認の下書きだけ（承認済みの代替 0 件）",
+      "why": "中小企業のセグメントの代替を消す（隙間の経路の比べる集合が空）",
       "ops": [
         {
-          "op": "unapprove",
-          "key": "alt-0003"
+          "op": "remove_atom",
+          "id": "alt-0003"
         }
       ]
     },
@@ -233,17 +218,6 @@
         {
           "op": "remove_edge",
           "key": "fulfills:alt-0002:pan-0001"
-        }
-      ]
-    },
-    {
-      "id": "fulfillment-unapproved",
-      "condition": "5-fulfillment-missing",
-      "why": "満たす度合いの矢印が下書きのまま（承認済みの矢印としては欠けている）",
-      "ops": [
-        {
-          "op": "unapprove",
-          "key": "fulfills:alt-0002:gan-0001"
         }
       ]
     },
@@ -325,74 +299,11 @@
     {
       "id": "positioning-without-job-and-value",
       "condition": "Q2-incomplete",
-      "why": "セグメント・カテゴリー・代替だけが承認済みで、ジョブ・痛み・提供価値が下書き（中身の無い positioning）",
+      "why": "提供価値が何も満たさない経路（ジョブも痛み・得たいものも経路に入らない）",
       "ops": [
         {
-          "op": "unapprove",
-          "key": "job-0002"
-        },
-        {
-          "op": "unapprove",
-          "key": "pan-0002"
-        },
-        {
-          "op": "unapprove",
-          "key": "val-0002"
-        },
-        {
-          "op": "unapprove",
-          "key": "str-0002"
-        }
-      ]
-    },
-    {
-      "id": "evidence-supports-unpositioned-arrow",
-      "condition": "5-isolated-atom",
-      "why": "証拠が支える矢印は承認済みでも、その終点が下書きで positioning に入らない（証拠は何も支えていない）",
-      "ops": [
-        {
-          "op": "set_atom",
-          "id": "pan-0009",
-          "atom": {
-            "state": "proposed",
-            "provenance": "owner",
-            "segment": "seg-0001",
-            "text": "下書きの痛み"
-          }
-        },
-        {
-          "op": "set_next",
-          "prefix": "pan",
-          "value": 10
-        },
-        {
-          "op": "add_edge",
-          "edge": {
-            "kind": "fulfills",
-            "from": "alt-0001",
-            "to": "pan-0009",
-            "degree": "none"
-          }
-        },
-        {
-          "op": "add_edge",
-          "edge": {
-            "kind": "supports",
-            "from": "prf-0003",
-            "to": "fulfills:alt-0001:pan-0009"
-          }
-        },
-        {
           "op": "remove_edge",
-          "key": "supports:prf-0003:str-0001"
-        },
-        {
-          "op": "remove_edge",
-          "key": "supports:prf-0003:fulfills:alt-0001:pan-0001"
-        },
-        {
-          "op": "unapprove",
-          "key": "pan-0009"
+          "key": "satisfies:val-0002:pan-0002"
         }
       ]
     },
@@ -587,13 +498,16 @@
       ]
     },
     {
-      "id": "shipped-on-unapproved-arrow",
+      "id": "shipped-on-changed-arrow",
       "condition": "15-unapproved-shipped",
-      "why": "LP が立つ矢印（強み→提供価値）を 1 本だけ承認していない",
-      "ops": [
+      "why": "承認した後に、経路の度合いの矢印を書き換えた（経路の承認が外れる）",
+      "ops": [],
+      "after": [
         {
-          "op": "unapprove",
-          "key": "produces:str-0001:val-0001"
+          "op": "set_field_edge",
+          "key": "fulfills:alt-0002:pan-0001",
+          "field": "degree",
+          "value": "none"
         }
       ]
     }

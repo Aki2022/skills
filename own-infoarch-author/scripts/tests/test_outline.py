@@ -64,7 +64,7 @@ def test_every_condition_has_a_red_case_and_every_case_names_a_condition():
     assert sorted(covered - set(CONDITIONS)) == []
     ids = [c['id'] for c in CASES + DIFF_CASES]
     assert len(set(ids)) == len(ids)
-    assert len([c for c in CONDITIONS.values() if c['requirement'] == '7']) == 16  # spec v6 requirement 7, split by code
+    assert len([c for c in CONDITIONS.values() if c['requirement'] == '7']) == 17  # spec requirement 7 (2026-11-18), split by code
     assert [c['id'] for c in CONDITIONS.values() if c['requirement'] == '9'] == ['9-unassigned-difference']
 
 
@@ -162,7 +162,8 @@ def test_ids_are_reproducible_and_shaped():
     a, b = ids_of(), ids_of()
     assert a == b
     assert a['outline'].startswith('out-') and a['positioning'].startswith('pos-')
-    assert a['set'] == f'{a["positioning"]}+{a["outline"]}'
+    assert sorted(a['paths']) == ['val-0001', 'val-0003'] and all(p.startswith('pth-') for p in a['paths'].values())
+    assert a['set'] == a['outline'] + ''.join('+' + a['paths'][v] for v in sorted(a['paths']))  # no positioning id
 
 
 def test_section_order_moves_outline_and_set_not_positioning():
@@ -202,17 +203,16 @@ def test_deliverable_id_does_not_move_the_outline_id():
     assert ia_outline.outline_id(renamed) == ia_outline.outline_id(OUTLINE)
 
 
-def test_unapproved_positioning_has_no_set_id():
-    out = ids_of(skip=('val-0001', 'val-0003', 'job-0001', 'pan-0001', 'gan-0001', 'gan-0002', 'seg-0001',
-                       'alt-0001', 'alt-0002', 'cat-0001', 'str-0001', 'prf-0001', 'prf-0003'))
-    assert out['positioning'] is None and out['set'] is None and out['outline'].startswith('out-')
+def test_set_id_hashes_content_whether_or_not_the_paths_are_approved():
+    out = ids_of(skip=('val-0001', 'val-0003'))
+    assert out['positioning'] is None and out['set'] == ids_of()['set']  # approval is the ship gate's, not the id's
 
 
 def test_set_cli_reports_ids_and_elements(tmp_path):
     write_repo(tmp_path)
     rc, out = cli('set', '--root', str(tmp_path), '--outline', 'lp-municipal')
     assert rc == 0, out
-    assert out['set'] == f'{out["positioning"]}+{out["outline"]}'
+    assert out['set'] == out['outline'] + ''.join('+' + out['paths'][v] for v in sorted(out['paths']))
     assert sorted(out['elements']['copies']) == ['cpy-0001', 'cpy-0002', 'cpy-0003', 'cpy-0004', 'cpy-0005']
     assert all(len(h) == 64 for h in out['elements']['messages'].values())
 
@@ -261,7 +261,8 @@ def test_positioning_and_outline_may_change_together():
     b['copies']['cpy-0001']['text'] = '運用、重くないですか'
     out = diff(OUTLINE, b, ssot_b=ssot_b)
     assert out['changed_layers'] == ['outline', 'positioning']
-    assert {'layer': 'positioning', 'element': 'fulfills:alt-0002:pan-0001', 'change': 'changed', 'attributes': ['degree']} in out['changes']
+    assert {'layer': 'positioning', 'element': 'fulfills:alt-0002:pan-0001', 'change': 'changed', 'attributes': ['degree'],
+            'path': 'val-0001'} in out['changes']
 
 
 def test_different_constants_or_objective_is_another_experiment():
@@ -290,18 +291,21 @@ def test_diff_cli_passes_on_a_clean_variant(tmp_path):
 
 # ---- external review of 2026-11-17 --------------------------------------------------------------------------------
 
-def test_unapproved_evidence_of_a_shipped_value_stops_shipping(tmp_path):
-    """Evidence a shipped message inherits is something the outline stands on: it needs the owner's approval."""
-    write_repo(tmp_path, confirmed=False)
-    confirm(tmp_path, SSOT, skip=('supports:prf-0001:val-0001',))
+def test_changed_evidence_of_a_shipped_value_stops_shipping(tmp_path):
+    """Evidence a shipped message inherits is on its path: changing it withdraws the path's approval."""
+    write_repo(tmp_path)
+    changed = copy.deepcopy(SSOT)
+    changed['proofs']['prf-0001']['text'] = '導入自治体の数（改）'
+    dump(tmp_path / 'design/info_arch/info_arch.yaml', changed)
     rc, report = check(tmp_path)
     hits = [f for f in report['findings'] if f['code'] == 'IA_POSITIONING_UNAPPROVED' and f['level'] == 'fail']
-    assert rc == 2 and hits and 'supports:prf-0001:val-0001' in hits[0]['detail']['atoms'], report['findings']
+    assert rc == 2 and hits and hits[0]['detail']['values'] == ['val-0001'], report['findings']
 
 
-def test_unapproved_evidence_does_not_count_as_support_for_the_lead(tmp_path):
-    write_repo(tmp_path, confirmed=False)
-    confirm(tmp_path, SSOT, skip=('prf-0002', 'supports:prf-0002:val-0002'))
+def test_lead_without_evidence_on_its_path_warns(tmp_path):
+    ssot = copy.deepcopy(SSOT)
+    ssot['edges'] = [e for e in ssot['edges'] if not (e['kind'] == 'supports' and e['from'] == 'prf-0002')]
+    write_repo(tmp_path, ssot)
     rc, report = check(tmp_path)
     assert 'IA_LEAD_UNSUPPORTED' in codes(report, 'warn'), report['findings']
 
@@ -317,11 +321,13 @@ def test_expired_evidence_of_a_gap_arrow_stops_a_shipped_outline(tmp_path):
     assert rc == 2 and 'IA_EXPIRED_SHIPPED' in codes(report), report['findings']
 
 
-def test_compared_alternatives_are_approval_targets(tmp_path):
+def test_compared_alternatives_are_approved_with_the_path(tmp_path):
     outline, _ = apply([{'op': 'set', 'path': ['messages', 'msg-0001', 'compares'], 'value': ['alt-0002']}])
     write_repo(tmp_path, outlines=(outline, DECK))
     rc, out = cli('targets', '--root', str(tmp_path))
-    assert 'ia:positioning:alt-0002' in out['must_approval_keys'], out
+    assert out['must_approval_keys'] == ['ia:path:val-0001', 'ia:path:val-0003'], out
+    m = ia_check.Model(root=Path('.'), ssot=SSOT)
+    assert 'alt-0002' in positioning.paths(m)['val-0001'].roles  # every alternative of the segment is on a gap path
 
 
 def test_unanchored_text_is_compared_regardless_of_output_order():

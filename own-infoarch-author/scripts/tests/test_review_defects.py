@@ -97,8 +97,12 @@ def test_review_bundle_shows_content_and_refuses_a_stale_request(tmp_path):
     text = out['markdown']
     assert '自動更新で保守が要らない' in text and 'str-0001' in text and 'str-0001 → alt-0001：代替に無い' in text
     assert 'alt-0001 → pan-0001：満たす度合い（none）' in text and '写しの出どころ：alt-0001' in text
+    # each path whole, claim -> basis -> premises -> evidence, with the hash that binds it
+    one = text[text.index('## 提供価値 val-0001'):text.index('## 提供価値 val-0002')]
+    order = [one.index(f'### {name}') for name in ('主張', '差別化の根拠', '前提', '証拠')]
+    assert order == sorted(order) and hashes['ia:path:val-0001'][:12] in one
     changed = copy.deepcopy(SSOT)
     changed['strengths']['str-0001']['text'] = '別の強み'
     dump(tmp_path / 'design/info_arch/info_arch.yaml', changed)
     rc, out = cli('review', '--root', str(tmp_path), '--request', str(req))
-    assert rc == 2 and out['stale'] == ['ia:positioning:str-0001'], out  # its arrows keep their approval
+    assert rc == 2 and out['stale'] == ['ia:path:val-0001'], out  # only the path the strength is on

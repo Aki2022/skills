@@ -162,14 +162,8 @@ def check_ssot(m, report):
         report.add('fail', 'IA_VOICE_MULTIPLE', f'proposed の声が {len(voices)} 個ある（声はプロジェクトに 1 つ）: {voices}', path)
 
 
-def supported_elements(m, approved):
-    """Atoms and arrows that approved positioning evidence supports (through approved `supports` arrows)."""
-    return {e['to'] for k, e in pos.edges(m).items()
-            if e['kind'] == 'supports' and k in approved and e['from'] in approved and pos._prefix(e['from']) == 'prf'}
-
-
-def check_lead_support(m, report, oid, rel, o, approved):
-    """Warn when the lead message's value has nothing on its positioning path that evidence supports.
+def check_lead_support(m, report, oid, rel, o, all_paths):
+    """Warn when the lead message's value has nothing on its path that evidence supports.
 
     Shape cannot tell whether a claim is true, but it can tell that the one message a deliverable leads with stands
     on nothing evidenced. Only the lead: warning on every message would turn the warning into noise.
@@ -177,75 +171,59 @@ def check_lead_support(m, report, oid, rel, o, approved):
     lead = [msg for msg in o['messages'].values() if msg['rank'] == 'lead']
     if len(lead) != 1 or lead[0]['type'] == 'cta':
         return
-    path, _ = positioning_path(m, [lead[0]['value']], ol.segment_of(o))
-    if path and not set(path) & supported_elements(m, approved):
+    p = all_paths.get(lead[0]['value'])
+    if p is not None and p.segment == ol.segment_of(o) and 'evidence' not in p.roles.values():
         report.add('warn', 'IA_LEAD_UNSUPPORTED',
                    f'{oid}: 一番のメッセージの提供価値 {lead[0]["value"]} の経路に、証拠が支える原子・矢印が無い（証拠を足すか、一番を替える）',
                    rel, id=lead[0]['value'])
 
 
-# ---- positioning path (v6 requirements 2, 3 and 15) -----------------------------------------------------------
+# ---- the paths an outline points at (v6 requirements 3, 8 and 15) ---------------------------------------------
 
-# How a message's positioning atoms pull in what they stand on: (atom prefix, arrow kind, direction, other end).
-_PATH_RULES = (('val', 'satisfies', 'out'), ('val', 'produces', 'in'), ('str', 'lacks', 'out'),
-               ('pan', 'need', 'in'), ('gan', 'need', 'in'), ('job', 'has_job', 'in'))
+def referenced_values(m, o):
+    """The values an outline's messages point at, inside its target's segment (a value of another segment is
+    IA_OUTLINE_VALUE_OTHER_POSITIONING, and points at no path)."""
+    seg, values = ol.segment_of(o), pos.atoms(m)
+    return sorted({msg['value'] for msg in o['messages'].values()
+                   if pos._prefix(msg['value']) == 'val' and (values.get(msg['value']) or {}).get('segment') == seg})
+
+
+def referenced_paths(m):
+    """{value id: True when a shipped outline points at its path, False when only draft outlines do}."""
+    out = {}
+    for _, (_, o) in m.outlines.items():
+        ch = m.channels.get(o['channel'])
+        shipped = bool(ch and ch[1]['ship'])
+        for v in referenced_values(m, o):
+            out[v] = out.get(v, False) or shipped
+    return out
 
 
 def positioning_path(m, root_ids, segment):
-    """The positioning atoms and arrows a message's value stands on in one segment, and their hash.
-
-    Derived from arrows alone, so a deliverable cannot leave anything out: a value pulls in the needs it satisfies
-    and the strengths that produce it (with the alternatives they are compared against); a need pulls in its job;
-    a job its segment; and the evidence that supports any of those comes with its `supports` arrow (a message
-    inherits it, so it is approved and expires like the rest). Proposed elements only; approval is checked
-    separately. Arrows into another segment are not followed. -> (sorted keys, sha256 of their content).
-    An empty path hashes to None.
-    """
-    atoms, edges, segs = pos.atoms(m), pos.edges(m), pos.segment_map(m)
-    def mine(aid):
-        return aid in atoms and segs.get(aid) == segment
-    roots = [r for r in root_ids if mine(r) and pos._prefix(r) in ('val', 'job', 'pan', 'gan')]
-    if not roots:
+    """The atoms and arrows the given values stand on in one segment, and the hash of their union. A value's path is
+    its whole approval unit (requirement 3). -> (sorted keys, sha256 of their content); no value -> ([], None)."""
+    ps = pos.paths(m)
+    on = {}
+    for v in root_ids:
+        p = ps.get(v)
+        if p is not None and p.segment == segment:
+            on.update(p.roles)
+    if not on:
         return [], None
-    on, todo = set(), list(roots)
-    while todo:
-        cur = todo.pop()
-        if cur in on:
-            continue
-        on.add(cur)
-        for prefix, kind, direction in _PATH_RULES:
-            if pos._prefix(cur) != prefix:
-                continue
-            for key, e in edges.items():
-                end = e['to'] if direction == 'out' else e['from']
-                if e['kind'] == kind and (e['from'] if direction == 'out' else e['to']) == cur and mine(end):
-                    on.add(key)
-                    todo.append(end)
-    on.add(segment)
-    for key, e in edges.items():
-        if e['kind'] == 'supports' and e['to'] in on and mine(e['from']):
-            on |= {key, e['from']}
+    A, E = pos.atoms(m), pos.edges(m)
     ids = sorted(on)
-    body = [[k, pos.content(atoms.get(k) or edges[k])] for k in ids]
-    return ids, pos.sha256(body)
+    return ids, pos.sha256([[k, pos.content(A.get(k) or E[k])] for k in ids])
 
 
-# ---- owner approval per atom and arrow (v6 requirements 3 and 15) ---------------------------------------------
+# ---- owner approval per value path (v6 requirements 3 and 15) -------------------------------------------------
 
-APPROVAL_PREFIX = pos.APPROVAL_PREFIX
+APPROVAL_PREFIX = pos.PATH_PREFIX
 
 
 def positioning_targets(m):
-    """-> ({ia:positioning:<key>: hash} for every proposed atom and arrow, sorted keys the shipped paths stand on)."""
+    """-> ({ia:path:<value>: path hash} for every proposed value, sorted keys of the paths shipped outlines use)."""
     hashes = pos.approval_targets(m)
-    must = set()
-    for _, (_, o) in m.outlines.items():
-        ch = m.channels.get(o['channel'])
-        if not (ch and ch[1]['ship']):
-            continue
-        for msg in o['messages'].values():
-            must |= {APPROVAL_PREFIX + x for x in positioning_path(m, [msg['value']], ol.segment_of(o))[0]}
-            must |= {APPROVAL_PREFIX + a for a in msg.get('compares', [])}
+    must = {APPROVAL_PREFIX + v for v, shipped in referenced_paths(m).items() if shipped}
     return hashes, sorted(must & set(hashes))
 
 
@@ -256,52 +234,58 @@ REVIEW_FIELDS = {'text': '', 'qualifier': '見分ける条件', 'situation': '�
 EDGE_NAMES = {'has_job': 'ジョブを持つ', 'need': '痛み・得たいものを持つ', 'fulfills': '満たす度合い', 'recalls': '思い出す',
               'includes': '入れている', 'member_of': '所属', 'lacks': '代替に無い', 'produces': '生む',
               'satisfies': '満たす', 'supports': '支える'}
+ROLE_NAMES = {'claim': '主張', 'basis': '差別化の根拠', 'premise': '前提', 'evidence': '証拠'}
 
 
 def review_markdown(m, keys, hashes):
-    """Markdown of the atoms and arrows an approval request binds, grouped by kind, with each binding hash."""
-    lines, chosen = [], sorted(k[len(APPROVAL_PREFIX):] for k in keys)
+    """Markdown of the paths an approval request binds: each path whole, claim -> basis -> premises -> evidence, with
+    the hash that binds it. What is shown is exactly what the hash covers (ADR-20261118-ia-approval-per-value-path)."""
+    lines, ps = [], pos.paths(m)
     atoms, edges = pos.atoms(m, proposed_only=False), pos.edges(m, proposed_only=False)
-    for prefix, name in REVIEW_NAMES.items():
-        ids = [k for k in chosen if pos._prefix(k) == prefix and k in atoms]
-        if not ids:
+    for key in sorted(keys):
+        vid = key[len(APPROVAL_PREFIX):]
+        p = ps.get(vid)
+        if p is None:
             continue
-        lines.append(f'## {name}（{len(ids)}）')
-        for aid in ids:
-            lines.append(f'### {aid}　`{(hashes.get(APPROVAL_PREFIX + aid) or "")[:12]}`')
-            for fld, label in REVIEW_FIELDS.items():
-                v = atoms[aid].get(fld)
-                if v:
-                    lines.append(f'- {label + "：" if label else ""}{"、".join(v) if isinstance(v, list) else v}')
-        lines.append('')
-    arrows = [k for k in chosen if k in edges]
-    if arrows:
-        lines.append(f'## 矢印（{len(arrows)}）')
-        for k in arrows:
-            e = edges[k]
-            degree = f'（{e["degree"]}）' if 'degree' in e else ''
-            lines.append(f'- {e["from"]} → {e["to"]}：{EDGE_NAMES.get(e["kind"], e["kind"])}{degree}　'
-                         f'`{(hashes.get(APPROVAL_PREFIX + k) or "")[:12]}`')
+        lines.append(f'## 提供価値 {vid}（{p.segment}・{p.kind}）　`{(hashes.get(key) or "")[:12]}`')
+        lines.append(f'- 比べる集合：{"、".join(p.comparison) or "なし"}　満たす先：{"、".join(p.targets) or "なし"}')
+        for code, message in p.problems:
+            lines.append(f'- 失格：{code} {message}')
+        for role in pos.ROLES:
+            members = [k for k in p.members if p.roles[k] == role]
+            if not members:
+                continue
+            lines.append(f'### {ROLE_NAMES[role]}（{len(members)}）')
+            for k in members:
+                if k in atoms:
+                    a = atoms[k]
+                    body = '／'.join(f'{label + "：" if label else ""}{"、".join(v) if isinstance(v, list) else v}'
+                                    for fld, label in REVIEW_FIELDS.items() if (v := a.get(fld)) and fld != 'provenance')
+                    lines.append(f'- {REVIEW_NAMES.get(pos._prefix(k), k)} {k}：{body}')
+                else:
+                    e = edges[k]
+                    degree = f'（{e["degree"]}）' if 'degree' in e else ''
+                    lines.append(f'- 矢印 {e["from"]} → {e["to"]}：{EDGE_NAMES.get(e["kind"], e["kind"])}{degree}')
         lines.append('')
     return '\n'.join(lines)
 
 
 def read_approvals(root, report):
-    """The owner's ia:positioning rows of design/approvals.yaml. Its full validation belongs to own-design-author."""
+    """The owner's ia:path rows of design/approvals.yaml. Its full validation belongs to own-design-author."""
     return pos.read_approvals(Path(root), report, load_yaml, YamlError)
 
 
 def positioning_dependencies(m, o):
-    """Every positioning element an outline stands on: the whole positioning of its target's segment. Its gaps and
-    points of parity come from every alternative and fulfillment arrow there, so evidence behind any of them, and a
-    change to any of them, reaches the outline (expiry, reverse lookup, maintenance)."""
+    """Every positioning element an outline stands on: the paths of the values its messages point at (their gaps
+    and points of parity come from the alternatives and degree arrows on those paths), so evidence behind any of
+    them, and a change to any of them, reaches the outline (expiry, reverse lookup, maintenance)."""
     seg = ol.segment_of(o)
     if not seg:
         return set()
-    segs = pos.segment_map(m)
-    out = {k for k, s in segs.items() if s == seg and pos._prefix(k) != 'prf'} | {seg}
-    # Evidence counts once it supports something there; an unconnected draft supports nothing yet.
-    out |= {e['from'] for e in pos.edges(m).values() if e['kind'] == 'supports' and e['to'] in out}
+    ps = pos.paths(m)
+    out = {seg}
+    for v in referenced_values(m, o):
+        out |= set(ps[v].roles)
     for msg in o['messages'].values():
         out |= {a for a in msg.get('compares', []) if m.atom(a) is not None}
     return out
@@ -318,14 +302,12 @@ def element(m, key):
 
 
 def check_positioning_use(m, report, oid, rel, o, shipped, approved):
-    """Every element on the paths of an outline's values must carry the owner's current approval (requirement 15)."""
-    missing = set()
-    for msg in o['messages'].values():
-        missing |= {x for x in positioning_path(m, [msg['value']], ol.segment_of(o))[0] if x not in approved}
+    """Every path an outline's messages point at must carry the owner's current approval (requirement 15)."""
+    missing = [v for v in referenced_values(m, o) if v not in approved]
     if missing:
         report.add('fail' if shipped else 'warn', 'IA_POSITIONING_UNAPPROVED',
-                   f'{oid}: 立っている positioning に、オーナーの承認が無いか外れた原子・矢印がある {sorted(missing)}'
-                   '（design-author approve --prepare で束を作り、オーナーが記録する）', rel, atoms=sorted(missing))
+                   f'{oid}: 指している提供価値 {missing} の経路に、オーナーの承認が無いか外れている'
+                   '（design-author approve --prepare で束を作り、オーナーの承認の言葉で記録する）', rel, values=missing)
 
 
 # ---- outlines ----------------------------------------------------------------------------
@@ -463,7 +445,7 @@ def check(root, date):
         return report, m
     check_ssot(m, report)
     approved = pos.approved_keys(m, read_approvals(root, report))
-    pos.check_positioning(m, report, approved, str(SSOT_PATH))
+    _, all_paths = pos.check_positioning(m, report, approved, referenced_paths(m), str(SSOT_PATH))
     if not m.channels:
         report.add('fail', 'IA_NO_CHANNELS', 'channels/*.yaml が 0 件（対象 0 件を合格にしない）', INFO_ARCH_DIR / 'channels')
     if not m.outlines:
@@ -474,7 +456,7 @@ def check(root, date):
         check_outline(m, report, oid, rel, o)
         ol.check(m, report, oid, rel, o, shipped, approved)
         check_positioning_use(m, report, oid, rel, o, shipped, approved)
-        check_lead_support(m, report, oid, rel, o, approved)
+        check_lead_support(m, report, oid, rel, o, all_paths)
     check_expiry(m, report, date)
     check_pages(m, report)
     report.targets = {'channels': len(m.channels), 'outlines': len(m.outlines),

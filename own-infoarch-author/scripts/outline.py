@@ -7,7 +7,8 @@ SPEC-information-architecture-standardization v6, requirements 6 (atoms and arro
   objective are held fixed; messages (what), sections (where and in which order) and copy (in which words) vary.
 - Order is the `order` field, never the order things are written in. The deliverable id, channel and outputs say
   where the outline is written and shipped, not what it says: they are not part of the outline id.
-- The set id is the pair of the positioning id and the outline id.
+- The set id is the outline id with the ids of the value paths its messages point at (requirement 8). The
+  positioning id is reported, not part of the set id: editing a path nobody points at never moves it.
 """
 from __future__ import annotations
 
@@ -50,12 +51,25 @@ def segment_of(o):
     return target.get('segment') if isinstance(target, dict) else None
 
 
+def referenced_paths(m, o, all_paths=None):
+    """{value id: ValuePath} of the values the outline's messages point at, inside its target's segment."""
+    import check
+    ps = pos.paths(m) if all_paths is None else all_paths
+    return {v: ps[v] for v in check.referenced_values(m, o)}
+
+
 def set_ids(m, oid, approved):
-    """{'positioning', 'outline', 'set'} of one deliverable. No approved positioning -> positioning and set are None."""
+    """{'positioning', 'outline', 'paths', 'set'} of one deliverable (requirement 8). The set id is the outline id
+    with the path ids of the values it points at, sorted by value id; it hashes content, so it is the same whether or
+    not the owner has approved yet (approval is the ship gate's, not the id's). No path pointed at -> set is None.
+    The positioning id (every approved path of the segment) is for reporting only."""
     _, o = m.outlines[oid]
-    p = pos.derive(m, approved).get(segment_of(o))
-    pid, out = (p.id if p else None), outline_id(o)
-    return {'positioning': pid, 'outline': out, 'set': f'{pid}+{out}' if pid else None}
+    ps = pos.paths(m)
+    p = pos.derive(m, approved, ps).get(segment_of(o))
+    out = outline_id(o)
+    refs = {v: q.id for v, q in referenced_paths(m, o, ps).items()}
+    return {'positioning': p.id if p else None, 'outline': out, 'paths': refs,
+            'set': out + ''.join('+' + refs[v] for v in sorted(refs)) if refs else None}
 
 
 def ordered_sections(o):
@@ -78,12 +92,26 @@ def elements(o):
     return out
 
 
-def positioning_elements(m, approved, segment):
-    p = pos.derive(m, approved).get(segment)
-    if p is None:
-        return {}
-    atoms, edges = pos.atoms(m), pos.edges(m)
-    return {k: pos.content(atoms.get(k) or edges[k]) for k in p.atoms + p.edges}
+def path_elements(m, p):
+    """{element key: content} of one path, for the difference between two sets."""
+    A, E = pos.atoms(m), pos.edges(m)
+    return {k: pos.content(A.get(k) or E[k]) for k in p.members}
+
+
+def path_changes(ma, a, mb, b):
+    """Requirement 9: paths are matched by value id. The same value with another hash is a positioning edit (listed
+    element by element); a value on one side only is an outline selection."""
+    pa, pb = referenced_paths(ma, a), referenced_paths(mb, b)
+    out = []
+    for v in sorted(set(pa) | set(pb)):
+        if v in pa and v in pb:
+            if pa[v].hash != pb[v].hash:
+                out += [{**c, 'path': v} for c in _changes('positioning', path_elements(ma, pa[v]),
+                                                            path_elements(mb, pb[v]))]
+        else:
+            out.append({'layer': 'outline', 'element': f'paths/{v}', 'change': 'added' if v in pb else 'removed',
+                        'kind': 'selection'})
+    return out
 
 
 def _changes(layer, a, b):
@@ -125,8 +153,7 @@ def diff(ma, oid_a, approved_a, mb, oid_b, approved_b, dom_a=None, dom_b=None):
     _, b = mb.outlines[oid_b]
     ids = {'a': set_ids(ma, oid_a, approved_a), 'b': set_ids(mb, oid_b, approved_b)}
     changes = _changes('outline', elements(a), elements(b))
-    changes += _changes('positioning', positioning_elements(ma, approved_a, segment_of(a)),
-                        positioning_elements(mb, approved_b, segment_of(b)))
+    changes += path_changes(ma, a, mb, b)
     layers = sorted({c['layer'] for c in changes})
     differs = []
     for key in CONSTANT_KEYS:
@@ -163,16 +190,18 @@ def check(m, report, oid, rel, o, shipped, approved):
         report.add('fail', 'IA_OUTLINE_TARGET', f'{oid}: target のセグメント {seg} が無いか空欄', rel)
         seg = None
     msgs, secs, copies = o['messages'], o['sections'], o['copies']
-    values = pos.atoms(m)
+    values, ps = pos.atoms(m), pos.paths(m)
     for mid, msg in sorted(msgs.items()):
         v = values.get(msg['value'])
+        p = ps.get(msg['value'])
         if v is not None and seg is not None:
             if v.get('segment') != seg:
                 report.add('fail', 'IA_OUTLINE_VALUE_OTHER_POSITIONING',
-                           f'{oid}.{mid}: 提供価値 {msg["value"]} は立っている positioning（{seg}）のものでない', rel, id=mid)
+                           f'{oid}.{mid}: 提供価値 {msg["value"]} の経路のセグメントは {v.get("segment")}、target は {seg}', rel, id=mid)
+                p = None
             elif msg['value'] not in approved:
                 report.add('fail' if shipped else 'warn', 'IA_OUTLINE_VALUE_UNAPPROVED',
-                           f'{oid}.{mid}: 提供価値 {msg["value"]} にオーナーの承認が無い', rel, id=mid)
+                           f'{oid}.{mid}: 提供価値 {msg["value"]} の経路にオーナーの承認が無い', rel, id=mid)
         for alt in msg.get('compares', []):
             a = values.get(alt)
             if a is None or seg is None:
@@ -180,9 +209,9 @@ def check(m, report, oid, rel, o, shipped, approved):
             if pos._prefix(alt) != 'alt' or a.get('segment') != seg:
                 report.add('fail', 'IA_OUTLINE_COMPARE_INVALID',
                            f'{oid}.{mid}: 比べる相手 {alt} は立っている positioning（{seg}）の代替でない', rel, id=mid)
-            elif alt not in approved:
-                report.add('fail' if shipped else 'warn', 'IA_OUTLINE_COMPARE_UNAPPROVED',
-                           f'{oid}.{mid}: 比べる相手 {alt} にオーナーの承認が無い', rel, id=mid)
+            elif p is not None and alt not in p.comparison:
+                report.add('fail', 'IA_OUTLINE_COMPARE_OUTSIDE_SET',
+                           f'{oid}.{mid}: 比べる相手 {alt} は提供価値 {msg["value"]} の経路の比べる集合 {p.comparison} に無い', rel, id=mid)
         if msg['type'] == 'cta' and msg.get('achieves') != o['objective']['id']:
             report.add('fail', 'IA_OUTLINE_CTA_NO_ACTION',
                        f'{oid}.{mid}: CTA が取ってほしい行動 {o["objective"]["id"]} を指さない（achieves）', rel, id=mid)

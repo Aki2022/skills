@@ -1,18 +1,20 @@
-"""Positioning: atoms and arrows per segment, owner approval per element, derived gaps and parity, ids (token 0).
+"""Positioning: atoms and arrows per segment, owner approval per value path, derived gaps and parity, ids (token 0).
 
-SPEC-information-architecture-standardization v6, requirements 2 (atoms and arrows), 4 (derivation),
-5 (disqualification of an approved positioning) and 8 (ids); ADR-20261116-ia-v6-positioning-and-outline.
+SPEC-information-architecture-standardization v6, requirements 2 (atoms and arrows), 3 (approval per value path),
+4 (derivation), 5 (disqualification) and 8 (ids); ADR-20261116-ia-v6-positioning-and-outline and
+ADR-20261118-ia-approval-per-value-path (biz_ops).
 
 - An element is an atom (positioning blocks, and proofs that belong to a segment) or an arrow. An arrow's key is
   `<kind>:<from>:<to>`; a `supports` arrow may point at another arrow's key.
-- Approval is per element: design/approvals.yaml rows `ia:positioning:<key>` whose value_hash is the element's own
-  content hash. Changing one element withdraws only its own approval.
-- A positioning is every approved atom of one segment and every approved arrow between approved atoms of it.
-  Drafts (proposed, not approved) are never part of it and are never disqualified.
-- Gaps and points of parity are derived, never recorded. Ids hash content only: the order things are written in,
-  where a copy came from (`copied_from`) and who wrote an element (`provenance`) never move an id or an approval.
-- Points of parity compare the alternatives of the member category only, gaps every alternative of the segment
-  (ADR item 5), so a need every category alternative meets is parity even when an outside alternative does not.
+- Approval is per value: design/approvals.yaml rows `ia:path:<value id>` whose value_hash is the hash of every atom
+  and arrow on that value's path (claim, basis of the difference, premises, evidence). The path is extracted from
+  every proposed element, so adding or removing an alternative or a degree arrow moves it. Per-element rows
+  (`ia:positioning:`) are not read; `migrate-approvals` replaces them once.
+- A positioning is every approved path of one segment taken together. Elements on no approved path stay drafts.
+- Gaps and points of parity are derived per path, never recorded: a gap compares every alternative of the segment,
+  a point of parity the alternatives of the member category only (ADR item 5).
+- Ids hash content only: the order things are written in, where a copy came from (`copied_from`) and who wrote an
+  element (`provenance`) never move an id or an approval.
 """
 from __future__ import annotations
 
@@ -38,8 +40,11 @@ EDGE_KINDS = {  # kind -> (allowed `from` prefixes, allowed `to` prefixes; 'edge
     'supports': ({'prf'}, (ATOM_PREFIXES - {'prf', 'seg'}) | {'edge'}),
 }
 DEGREES = ('full', 'partial', 'none')
-APPROVAL_PREFIX = 'ia:positioning:'
+PATH_PREFIX = 'ia:path:'             # one approval row per value: its key names the value, its hash binds the path
+LEGACY_PREFIX = 'ia:positioning:'    # the per-element rows before ADR-20261118-ia-approval-per-value-path
+APPROVAL_PREFIX = PATH_PREFIX
 ID_PREFIX = 'pos-'
+PATH_ID_PREFIX = 'pth-'
 
 
 def canonical(value):
@@ -104,30 +109,201 @@ def segment_of(m, key):
     return segment_map(m).get(key)
 
 
+# ---- the path of one value (requirement 3) ---------------------------------------------------------------------
+
+ROLES = ('claim', 'basis', 'premise', 'evidence')  # the order an approval request shows them in
+
+
+@dataclass
+class ValuePath:
+    """The atoms and arrows one value stands on, extracted from all current data (drafts included)."""
+    value: str
+    segment: str | None
+    kind: str | None
+    roles: dict = field(default_factory=dict)        # {member key: claim | basis | premise | evidence}
+    targets: list = field(default_factory=list)      # the pains and gains the value satisfies
+    comparison: list = field(default_factory=list)   # the alternatives it is compared against
+    categories: list = field(default_factory=list)   # member_of targets (exactly one is required)
+    missing_fulfillment: list = field(default_factory=list)  # [alternative, need] pairs with no degree arrow
+    points: list | None = None                       # the gaps (difference) or points of parity (parity) it can meet
+    problems: list = field(default_factory=list)     # [(code, message)] that disqualify the path
+    hash: str = ''
+
+    @property
+    def id(self):
+        return PATH_ID_PREFIX + self.hash
+
+    @property
+    def members(self):
+        return sorted(self.roles)
+
+    def to_dict(self):
+        return {'id': self.id, 'segment': self.segment, 'kind': self.kind, 'targets': self.targets,
+                'comparison': self.comparison, 'points': self.points, 'members': self.members,
+                'missing_fulfillment': self.missing_fulfillment, 'problems': [c for c, _ in self.problems]}
+
+
+def extract(m, vid, all_atoms=None, all_edges=None, segs=None):
+    """Requirement 3: the path of value `vid`. Read from every proposed element, never from the approved ones only,
+    so adding or removing an alternative, a degree arrow or a recalled category always moves the hash."""
+    A = atoms(m) if all_atoms is None else all_atoms
+    E = edges(m) if all_edges is None else all_edges
+    segs = segment_map(m) if segs is None else segs
+    v = A[vid]
+    seg, kind = v.get('segment'), v.get('kind')
+    p = ValuePath(vid, seg, kind)
+
+    def mine(x):
+        return x in A and segs.get(x) == seg
+
+    def add(key, role):
+        p.roles.setdefault(key, role)
+
+    def arrows(kind_, frm=None, to=None):
+        return [(k, e) for k, e in sorted(E.items()) if e['kind'] == kind_
+                and (frm is None or e['from'] in frm) and (to is None or e['to'] in to)]
+
+    # The claim: the value, the strengths that produce it and what those strengths have that alternatives lack.
+    add(vid, 'claim')
+    strengths = set()
+    for k, e in arrows('produces', to={vid}):
+        if mine(e['from']):
+            strengths.add(e['from'])
+            add(k, 'claim'), add(e['from'], 'claim')
+    lacked = []
+    for k, e in arrows('lacks', frm=strengths):
+        if mine(e['to']):
+            add(k, 'claim')
+            lacked.append(e['to'])  # the alternative itself is shown with the basis when it is compared there
+    # The basis of the difference: what it satisfies, and every alternative of the comparison set with its degrees.
+    for k, e in arrows('satisfies', frm={vid}):
+        if mine(e['to']):
+            p.targets.append(e['to'])
+            add(k, 'basis'), add(e['to'], 'basis')
+    p.targets.sort()
+    member_of = [(k, e) for k, e in arrows('member_of', frm={seg}) if mine(e['to'])]
+    p.categories = sorted(e['to'] for _, e in member_of)
+    if kind == 'parity':
+        includes = [(k, e) for k, e in arrows('includes', frm=set(p.categories)) if mine(e['to'])]
+        for k, _ in includes:
+            add(k, 'basis')
+        p.comparison = sorted({e['to'] for _, e in includes})
+    else:
+        p.comparison = sorted(a for a in A if _prefix(a) == 'alt' and segs.get(a) == seg)
+    degree = {}
+    for alt in p.comparison:
+        add(alt, 'basis')
+        for need in p.targets:
+            k = f'fulfills:{alt}:{need}'
+            if k in E:
+                add(k, 'basis')
+                degree[(alt, need)] = E[k].get('degree')
+            else:
+                p.missing_fulfillment.append([alt, need])
+    for alt in lacked:
+        add(alt, 'claim')
+    # The premises: the segment, the jobs behind what the value satisfies, the member category and what the jobs recall.
+    if seg in A:  # a value whose segment is missing is IA_REF_BROKEN; its path holds what is there
+        add(seg, 'premise')
+    jobs, has_need = set(), set()
+    for k, e in arrows('need', to=set(p.targets)):
+        if mine(e['from']):
+            jobs.add(e['from'])
+            has_need.add(e['to'])
+            add(k, 'premise'), add(e['from'], 'premise')
+    for k, e in arrows('has_job', frm={seg}, to=jobs):
+        add(k, 'premise')
+    for k, e in member_of:
+        add(k, 'premise'), add(e['to'], 'premise')
+    for k, e in arrows('recalls', frm=jobs):
+        if mine(e['to']):
+            add(k, 'premise'), add(e['to'], 'premise')
+    # Evidence on anything above (a supports arrow may support another supports arrow: follow until nothing is added).
+    grew = True
+    while grew:
+        grew = False
+        for k, e in arrows('supports'):
+            if k not in p.roles and e['to'] in p.roles and mine(e['from']):
+                add(k, 'evidence'), add(e['from'], 'evidence')
+                grew = True
+    _disqualify(p, A, E, strengths, jobs, has_need, degree)
+    p.hash = sha256([[k, content(A.get(k) or E[k])] for k in p.members])
+    return p
+
+
+def _disqualify(p, A, E, strengths, jobs, has_need, degree):
+    """Requirements 3 and 5 for one path. A missing input is reported, never read as "does not meet"."""
+    seg, vid = p.segment, p.value
+    on = [E[k] for k in p.roles if k in E]
+    touched = {e['from'] for e in on} | {e['to'] for e in on}
+    for aid in sorted(k for k in p.roles if k in A):
+        if aid not in touched:
+            p.problems.append(('IA_POSITIONING_ISOLATED_ATOM', f'{vid}: 経路の {aid} がどの矢印にも繋がらない'))
+    for need in p.targets:
+        if need not in has_need:
+            p.problems.append(('IA_POSITIONING_JOB_WITHOUT_NEED',
+                               f'{vid}: 満たす先の {need} を持つジョブが無い（ジョブ→痛み・得たいもの の矢印が要る）'))
+    unjobbed = sorted(j for j in jobs if f'has_job:{seg}:{j}' not in E)
+    missing = [name for name, ok in (('ジョブ', jobs), ('痛みか得たいもの', p.targets)) if not ok]
+    if missing or unjobbed:
+        why = f'{"・".join(missing)} が 0 件' if missing else f'ジョブ {unjobbed} がセグメントに繋がらない（has_job）'
+        p.problems.append(('IA_POSITIONING_INCOMPLETE', f'{vid}: 経路の{why}（中身の無い経路を合格にしない）'))
+    if len(p.categories) != 1:
+        p.problems.append(('IA_POSITIONING_CATEGORY_COUNT',
+                           f'{seg}: 所属カテゴリー（member_of）が {len(p.categories)} 本 {p.categories}（ちょうど 1 本）'))
+    if not p.comparison:
+        if p.kind == 'parity':
+            if len(p.categories) == 1:
+                p.problems.append(('IA_POSITIONING_NO_CATEGORY_ALTERNATIVES',
+                                   f'{vid}: 所属カテゴリー {p.categories[0]} に入っている代替が 0 件（同等であるべき点を導けない）'))
+        else:
+            p.problems.append(('IA_POSITIONING_NO_ALTERNATIVES', f'{vid}: 隙間の比較に使う {seg} の代替が 0 件'))
+    if p.missing_fulfillment:
+        p.problems.append(('IA_POSITIONING_FULFILLMENT_MISSING',
+                           f'{vid}: 比べる集合の満たす度合いの矢印が無い組がある {p.missing_fulfillment}（未調査を「満たさない」とみなさない）'))
+    for s in sorted(strengths):
+        if not any(e['kind'] == 'lacks' and e['from'] == s for e in on):
+            p.problems.append(('IA_POSITIONING_STRENGTH_UNCOMPARED',
+                               f'{vid}: 強み {s} がどの代替とも比べていない（lacks の矢印が無い）'))
+    if p.comparison and not p.missing_fulfillment:
+        if p.kind == 'parity':
+            p.points = [n for n in p.targets if all(degree[(a, n)] == 'full' for a in p.comparison)]
+        else:
+            p.points = [n for n in p.targets if all(degree[(a, n)] != 'full' for a in p.comparison)]
+        if not p.points:
+            name = '同等であるべき点' if p.kind == 'parity' else '隙間'
+            p.problems.append(('IA_POSITIONING_VALUE_UNANCHORED',
+                               f'{vid}: 提供価値（{p.kind}）がどの{name}も満たさない（満たす先: {p.targets}）'))
+
+
+def paths(m):
+    """{value id: ValuePath} for every proposed value."""
+    A, E, segs = atoms(m), edges(m), segment_map(m)
+    return {vid: extract(m, vid, A, E, segs) for vid in sorted(A) if _prefix(vid) == 'val'}
+
+
 def approval_targets(m):
-    """{ia:positioning:<key>: content hash} for every proposed atom and arrow."""
-    out = {APPROVAL_PREFIX + aid: element_hash(aid, a) for aid, a in atoms(m).items()}
-    out.update({APPROVAL_PREFIX + k: element_hash(k, e) for k, e in edges(m).items()})
-    return dict(sorted(out.items()))
+    """{ia:path:<value id>: path hash} for every proposed value (requirement 3)."""
+    return {PATH_PREFIX + v: p.hash for v, p in paths(m).items()}
 
 
 def approved_keys(m, rows):
-    """Keys whose current content hash matches the owner's recorded row. `rows`: {approval key: value_hash}."""
-    return {k[len(APPROVAL_PREFIX):] for k, h in approval_targets(m).items() if rows.get(k) == h}
+    """Value ids whose path hash matches the owner's recorded row. `rows`: {approval key: value_hash}. A row of one
+    path never approves another (its key names the value), and per-element rows (ia:positioning:) are not read."""
+    return {k[len(PATH_PREFIX):] for k, h in approval_targets(m).items() if rows.get(k) == h}
 
 
 @dataclass
 class Positioning:
+    """Requirement 4: every approved path of one segment, taken together."""
     segment: str
-    atoms: list = field(default_factory=list)          # approved atom ids of the segment, sorted
-    edges: list = field(default_factory=list)          # approved arrow keys between approved atoms, sorted
-    unapproved: list = field(default_factory=list)     # proposed elements of the segment waiting for the owner
-    alternatives: list = field(default_factory=list)
-    categories: list = field(default_factory=list)     # member_of targets (requirement 5 wants exactly one)
-    category_alternatives: list = field(default_factory=list)
-    missing_fulfillment: list = field(default_factory=list)  # [alternative, need] pairs without an approved arrow
-    gaps: list | None = None
-    parity: list | None = None
+    paths: dict = field(default_factory=dict)        # {value id: path id} of the approved paths
+    unapproved: list = field(default_factory=list)   # values of the segment whose path waits for the owner
+    atoms: list = field(default_factory=list)
+    edges: list = field(default_factory=list)
+    categories: list = field(default_factory=list)   # member_of targets on the approved paths
+    gaps: list = field(default_factory=list)
+    parity: list = field(default_factory=list)
     id: str = ''
 
     @property
@@ -135,61 +311,34 @@ class Positioning:
         return self.categories[0] if len(self.categories) == 1 else None
 
     def to_dict(self):
-        return {'id': self.id, 'atoms': self.atoms, 'edges': self.edges, 'unapproved': self.unapproved,
-                'alternatives': self.alternatives, 'category': self.category, 'categories': self.categories,
-                'category_alternatives': self.category_alternatives, 'gaps': self.gaps, 'parity': self.parity,
-                'missing_fulfillment': self.missing_fulfillment}
+        return {'id': self.id, 'paths': self.paths, 'unapproved': self.unapproved, 'atoms': self.atoms,
+                'edges': self.edges, 'category': self.category, 'gaps': self.gaps, 'parity': self.parity}
 
 
-def derive(m, approved):
-    """{segment: Positioning} for every segment with at least one approved element (requirement 4)."""
-    all_atoms, all_edges = atoms(m), edges(m)
-    ok_atoms = {aid for aid in all_atoms if aid in approved}
-    ok_edges = {k for k, e in all_edges.items() if k in approved and e['kind'] != 'supports'
-                and e['from'] in ok_atoms and e['to'] in ok_atoms}
-    # A supports arrow counts only when what it supports is itself in the positioning (an atom or an arrow).
-    ok_edges |= {k for k, e in all_edges.items() if k in approved and e['kind'] == 'supports'
-                 and e['from'] in ok_atoms and (e['to'] in ok_atoms or e['to'] in ok_edges)}
-    out, segs = {}, segment_map(m)
-    for key in sorted(set(all_atoms) | set(all_edges)):
-        seg = segs.get(key)
-        if seg is None:
+def derive(m, approved, all_paths=None):
+    """{segment: Positioning} for every segment with at least one approved path. Elements on no approved path stay
+    drafts: they are not part of any positioning and an outline cannot stand on them."""
+    ps = paths(m) if all_paths is None else all_paths
+    A, E = atoms(m), edges(m)
+    out = {}
+    for vid, p in ps.items():
+        if p.segment is None:
             continue
-        p = out.setdefault(seg, Positioning(seg))
-        if key in ok_atoms:
-            p.atoms.append(key)
-        elif key in ok_edges:
-            p.edges.append(key)
-        else:
-            p.unapproved.append(key)
-    out = {s: p for s, p in out.items() if p.atoms or p.edges}
-    for seg, p in out.items():
-        _derive_one(m, p, all_atoms, all_edges)
+        if vid not in approved:
+            out.setdefault(p.segment, Positioning(p.segment)).unapproved.append(vid)
+            continue
+        q = out.setdefault(p.segment, Positioning(p.segment))
+        q.paths[vid] = p.id
+        q.atoms = sorted(set(q.atoms) | {k for k in p.roles if k in A})
+        q.edges = sorted(set(q.edges) | {k for k in p.roles if k in E})
+        q.categories = sorted(set(q.categories) | set(p.categories))
+        if p.points:
+            target = q.parity if p.kind == 'parity' else q.gaps
+            target[:] = sorted(set(target) | set(p.points))
+    out = {s: q for s, q in out.items() if q.paths}
+    for q in out.values():
+        q.id = ID_PREFIX + sha256([[k, content(A.get(k) or E[k])] for k in q.atoms + q.edges])
     return out
-
-
-def _derive_one(m, p, all_atoms, all_edges):
-    on = set(p.edges)
-    by_kind = {}
-    for k in sorted(on):
-        e = all_edges[k]
-        by_kind.setdefault(e['kind'], []).append(e)
-    p.alternatives = sorted(a for a in p.atoms if _prefix(a) == 'alt')
-    p.categories = sorted(e['to'] for e in by_kind.get('member_of', []) if e['from'] == p.segment)
-    p.category_alternatives = sorted({e['to'] for e in by_kind.get('includes', []) if e['from'] == p.category}
-                                     & set(p.alternatives)) if p.category else []
-    needs = sorted(a for a in p.atoms if _prefix(a) in NEEDS)
-    degree = {(e['from'], e['to']): e.get('degree') for e in by_kind.get('fulfills', [])}
-    p.missing_fulfillment = [[alt, need] for alt in p.alternatives for need in needs if (alt, need) not in degree]
-    if p.missing_fulfillment or not p.alternatives:
-        p.gaps = p.parity = None  # not derived: an unknown degree is never read as "does not meet"
-    else:
-        p.gaps = [n for n in needs if all(degree[(a, n)] != 'full' for a in p.alternatives)]
-        p.parity = ([n for n in needs if all(degree[(a, n)] == 'full' for a in p.category_alternatives)]
-                    if p.category_alternatives else None)
-    body = {'atoms': {a: content(all_atoms[a]) for a in p.atoms},
-            'edges': {k: content(all_edges[k]) for k in p.edges}}
-    p.id = ID_PREFIX + sha256(body)
 
 
 # ---- checks ----------------------------------------------------------------------------------------------------
@@ -247,51 +396,30 @@ def check_shape(m, report, path=SSOT_REL):
             report.add('fail', 'IA_POSITIONING_COPY_SOURCE', f'{aid} の写しの出どころ {src} {why}', path, id=aid)
 
 
-def check_positioning(m, report, approved, path=SSOT_REL):
-    """Requirement 2 (shape) and requirement 5 (every approved positioning). -> {segment: Positioning}."""
+def check_positioning(m, report, approved, referenced=None, path=SSOT_REL):
+    """Requirement 2 (shape, every element) and requirements 3 and 5 (per path). -> ({segment: Positioning}, paths).
+
+    `referenced` is {value id: True when a shipped outline points at it, False for a draft outline}. A disqualified
+    path fails only when a shipped outline points at it; otherwise it warns when it is approved or pointed at, and a
+    draft nobody points at is not judged (requirement 5: only the outlines that point at a path stop)."""
+    referenced = referenced or {}
     check_shape(m, report, path)
-    derived = derive(m, approved)
-    all_edges = edges(m)
-    for seg, p in derived.items():
-        on = [all_edges[k] for k in p.edges]
-        touched = {e['from'] for e in on} | {e['to'] for e in on}
-        for aid in p.atoms:
-            if aid not in touched:
-                report.add('fail', 'IA_POSITIONING_ISOLATED_ATOM', f'{seg}: 承認済みの {aid} がどの承認済みの矢印にも繋がらない', path, id=aid)
-            if _prefix(aid) == 'job' and not any(e['kind'] == 'need' and e['from'] == aid for e in on):
-                report.add('fail', 'IA_POSITIONING_JOB_WITHOUT_NEED', f'{seg}: ジョブ {aid} が痛みも得たいものも持たない', path, id=aid)
-            if _prefix(aid) == 'str' and not any(e['kind'] == 'lacks' and e['from'] == aid for e in on):
-                report.add('fail', 'IA_POSITIONING_STRENGTH_UNCOMPARED', f'{seg}: 強み {aid} がどの代替とも比べていない（lacks の矢印が無い）', path, id=aid)
-        missing = [name for name, prefixes in (('ジョブ', {'job'}), ('痛みか得たいもの', NEEDS), ('提供価値', {'val'}))
-                   if not any(_prefix(a) in prefixes for a in p.atoms)]
-        if missing:
-            report.add('fail', 'IA_POSITIONING_INCOMPLETE',
-                       f'{seg}: 承認済みの {"・".join(missing)} が 0 件（中身の無い positioning を合格にしない）', path, segment=seg)
-        if len(p.categories) != 1:
-            report.add('fail', 'IA_POSITIONING_CATEGORY_COUNT',
-                       f'{seg}: 所属カテゴリー（member_of）が {len(p.categories)} 本 {p.categories}（ちょうど 1 本）', path, segment=seg)
-        if not p.alternatives:
-            report.add('fail', 'IA_POSITIONING_NO_ALTERNATIVES', f'{seg}: 隙間の比較に使う承認済みの代替が 0 件', path, segment=seg)
-        if p.category and not p.category_alternatives:
-            report.add('fail', 'IA_POSITIONING_NO_CATEGORY_ALTERNATIVES',
-                       f'{seg}: 所属カテゴリー {p.category} に入っている承認済みの代替が 0 件（同等であるべき点を導けない）', path, segment=seg)
-        if p.missing_fulfillment:
-            report.add('fail', 'IA_POSITIONING_FULFILLMENT_MISSING',
-                       f'{seg}: 満たす度合いの承認済みの矢印が無い組がある {p.missing_fulfillment}（未調査を「満たさない」とみなさない）',
-                       path, segment=seg, pairs=p.missing_fulfillment)
-        for aid in p.atoms:
-            if _prefix(aid) != 'val':
-                continue
-            kind = atoms(m)[aid].get('kind')
-            points = p.gaps if kind == 'difference' else p.parity
-            if points is None:
-                continue  # not derivable: the missing input is reported above
-            hit = sorted(e['to'] for e in on if e['kind'] == 'satisfies' and e['from'] == aid and e['to'] in points)
-            if not hit:
-                name = '隙間' if kind == 'difference' else '同等であるべき点'
-                report.add('fail', 'IA_POSITIONING_VALUE_UNANCHORED',
-                           f'{seg}: 提供価値 {aid}（{kind}）がどの{name}も満たさない（{name}: {points}）', path, id=aid)
-    return derived
+    ps = paths(m)
+    derived = derive(m, approved, ps)
+    for vid, p in ps.items():
+        if vid not in referenced and vid not in approved:
+            continue
+        level = 'fail' if referenced.get(vid) else 'warn'
+        for code, message in p.problems:
+            report.add(level, code, message, path, id=vid, path_id=p.id,
+                       **({'pairs': p.missing_fulfillment} if code == 'IA_POSITIONING_FULFILLMENT_MISSING' else {}))
+    for seg, q in derived.items():
+        pending = [v for v in q.unapproved if v not in referenced]
+        if pending:
+            report.add('warn', 'IA_POSITIONING_PATH_PENDING',
+                       f'{seg}: 提供価値 {pending} の経路が未承認（どの outline も指していないので止めない）', path,
+                       segment=seg, values=pending)
+    return derived, ps
 
 
 def _verify_rows():
@@ -308,7 +436,7 @@ def _verify_rows():
 
 
 def read_approvals(root, report, load_yaml, yaml_error):
-    """The owner's ia:positioning rows of design/approvals.yaml: {key: value_hash}.
+    """The owner's ia:path rows of design/approvals.yaml: {key: value_hash}.
 
     Validated by own-design-author's verify_rows (fields, key namespace, hash, approver, ISO date, no duplicate key)
     plus a symlink refusal. Any violation fails closed: IA_APPROVALS_INVALID and nothing counts as approved.
@@ -332,4 +460,9 @@ def read_approvals(root, report, load_yaml, yaml_error):
     except ValueError as exc:
         report.add('fail', 'IA_APPROVALS_INVALID', f'{rel} が承認台帳の形でない: {exc}（何も承認済みとして数えない）', rel)
         return {}
-    return {k: v for k, v in approved.items() if k.startswith(APPROVAL_PREFIX)}
+    legacy = sorted(k for k in approved if k.startswith(LEGACY_PREFIX))
+    if legacy:
+        report.add('warn', 'IA_APPROVALS_LEGACY',
+                   f'{rel} に原子と矢印ごとの旧い行が {len(legacy)} 件ある（承認として数えない。infoarch-author migrate-approvals で経路の行へ移す）',
+                   rel, rows=len(legacy))
+    return {k: v for k, v in approved.items() if k.startswith(PATH_PREFIX)}

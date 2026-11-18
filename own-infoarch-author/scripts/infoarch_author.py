@@ -221,7 +221,9 @@ def cmd_positioning(args):
     if report.exit_code == 2:
         _print(report.to_dict())
         return 2
-    _print({'positionings': {seg: p.to_dict() for seg, p in positioning.derive(m, approved).items()}})
+    ps = positioning.paths(m)
+    _print({'positionings': {seg: p.to_dict() for seg, p in positioning.derive(m, approved, ps).items()},
+            'paths': {v: {**p.to_dict(), 'approved': v in approved} for v, p in ps.items()}})
     return 0
 
 
@@ -264,8 +266,32 @@ def cmd_answer_key(args):
     return 0
 
 
+def cmd_migrate_approvals(args):
+    """Requirement 17: replace the per-element ia:positioning rows by ia:path rows, once (dry run without --write)."""
+    import approval_migration
+    import positioning
+    report = check.Report('migrate-approvals', dt.date.today().isoformat())
+    m = check.load(args.root, report)
+    if m.ssot is None or report.exit_code == 2:
+        _print(report.to_dict())
+        return 2
+    path = Path(args.root) / approval_migration.LEDGER
+    if path.is_symlink() or not path.is_file():
+        _print({'exit_code': 2, 'written': False, 'error': f'{approval_migration.LEDGER} が無いか symlink'})
+        return 2
+    rows = check.load_yaml(path) or []
+    try:
+        positioning._verify_rows()(rows, Path(args.root))
+    except ValueError as exc:
+        _print({'exit_code': 2, 'written': False, 'error': f'承認台帳の形でない: {exc}'})
+        return 2
+    out = approval_migration.migrate(args.root, m, rows, write=args.write)
+    _print(out)
+    return out['exit_code']
+
+
 def cmd_targets(args):
-    """Owner-approval targets for own-design-author: every positioning atom's and arrow's hash, and the keys
+    """Owner-approval targets for own-design-author: one row per value (the hash of its whole path), and the keys
     shipping needs."""
     report = check.Report('targets', dt.date.today().isoformat())
     m = check.load(args.root, report)
@@ -345,9 +371,13 @@ def main(argv=None):
     df.add_argument('--dom-a', help='dom report of the first deliverable (compares text outside anchors)')
     df.add_argument('--dom-b', help='dom report of the second deliverable')
     df.set_defaults(fn=cmd_diff)
-    t = sub.add_parser('targets', help='owner-approval targets (ia:positioning keys and hashes) for own-design-author approvals')
+    t = sub.add_parser('targets', help='owner-approval targets (ia:path keys and path hashes) for own-design-author approvals')
     t.add_argument('--root', default='.')
     t.set_defaults(fn=cmd_targets)
+    mg = sub.add_parser('migrate-approvals', help='replace per-element ia:positioning approval rows by ia:path rows once')
+    mg.add_argument('--root', default='.')
+    mg.add_argument('--write', action='store_true', help='write the ledger (without it: dry run)')
+    mg.set_defaults(fn=cmd_migrate_approvals)
     ak = sub.add_parser('answer-key', help='answer key for the meaning judgment: pairs, candidates and the labeling page, or --measure')
     ak.add_argument('--root', default='.')
     ak.add_argument('--out', default='answer-key', help='directory to write into (files are never overwritten)')

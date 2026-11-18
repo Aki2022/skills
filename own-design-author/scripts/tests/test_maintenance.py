@@ -190,7 +190,8 @@ def _attach_ia(root, proof_as_of):
     ssot['facts']['fct-0001']['as_of'] = '2026-10-01'
     fixture['write_repo'](root, ssot)
     config = json.loads((root / 'design/design.yaml').read_text())
-    config['modules'] = {'ia': '0.2.0'}
+    from design_modules import IA_VERSION
+    config['modules'] = {'ia': IA_VERSION}  # the IA contract this design-author speaks
     write(root / 'design/design.yaml', config)
 
 

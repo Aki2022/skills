@@ -2,11 +2,15 @@
 
 Four kinds share own-design-author's judgment policy and `design/judgments.json`
 (ADR-20261111-ia-judgments-share-design-policy-and-ledger, biz_ops):
-- ia-name-variant: a section's copy writes an official name in another notation.
-- ia-unregistered-claim: a section's copy claims something its message / proofs / facts do not support. Rendered text
-  outside every anchor (`dom`'s `unanchored`) is judged the same way, with nothing on the page supporting it.
-- ia-audience-fit: the outline's order and emphasis do not suit its audience and brief.
-- ia-emphasis: a rendered first screen does not carry the audience's top-priority message.
+- ia-name-variant: a piece of copy writes an official name in another notation.
+- ia-unregistered-claim: a piece of copy claims something its message's value, the evidence on that value's path and
+  its facts do not support. Rendered text outside every anchor (`dom`'s `unanchored`) is judged the same way, with
+  nothing on the page supporting it.
+- ia-audience-fit: the outline's order and emphasis do not suit its target, touchpoint, tone and objective.
+- ia-emphasis: a rendered first screen does not carry the lead message's value.
+- ia-value-fit: a piece of copy does not convey the one value its message points to (v6 requirement 11). The input
+  carries the copy and the value's content, so changing either never reuses an old judgment. It is advisory until
+  its accuracy is measured with the owner's answer key (answer_key.py); it replaced v5's ia-strategy-fit.
 
 The gate only reads the ledger. It never calls a model: missing judgments are "uncovered", stored ones are
 "screened" (never "clean"), and a score at or above theta goes to a human as IA_JUDGE_REVIEW.
@@ -20,6 +24,7 @@ from pathlib import Path
 
 import check
 import dom
+import outline as ol
 from common import Report
 
 DESIGN_SCRIPTS = Path(__file__).resolve().parents[2] / 'own-design-author/scripts'
@@ -51,51 +56,72 @@ def _expand(copy, facts):
     return check.PLACEHOLDER.sub(lambda m: str(facts.get(m.group(1), {}).get('value', m.group(0))), copy)
 
 
+def _segment_model(outline, ssot):
+    return check.Model(root=Path('.'), ssot=ssot), ol.segment_of(outline)
+
+
+def _value(ssot, vid):
+    return {'id': vid, 'text': (ssot.get('values', {}).get(vid) or {}).get('text', '')}
+
+
+def _evidence(m, path):
+    """Positioning evidence that supports any element of a value's path: what a message inherits (v6)."""
+    on = set(path)
+    ev = sorted({e['from'] for e in check.pos.edges(m).values() if e['kind'] == 'supports' and e['to'] in on})
+    return [{'id': p, 'text': (m.ssot.get('proofs', {}).get(p) or {}).get('text', '')} for p in ev]
+
+
 def outline_candidates(oid, outline, ssot, policy, jl):
     facts = ssot.get('facts', {})
     entities = [{'id': eid, 'name': e['name']} for eid, e in sorted(ssot.get('entities', {}).items()) if e.get('name')]
+    m, segment = _segment_model(outline, ssot)
     rows, lines = [], []
-    for page in outline['pages']:
-        for i, s in enumerate(page['sections']):
-            text = _expand(s.get('copy', ''), facts)
-            lines.append(f"{s['role']}: {text}")
+    for sid, sec, copies in ol.ordered_sections(outline):
+        for cid, c in copies:
+            text = _expand(c['text'], facts)
+            lines.append(f"{sec['role']}: {text}")
             if not text.strip():
                 continue
-            ident = f"{oid}/{page['id']}/{i}"
+            ident = f'{oid}/{sid}/{cid}'
             if entities:
                 rows.append(jl.candidate('ia-name-variant', ident, text, {'outline': oid, 'entities': entities}, policy=policy))
-            msg = ssot.get('messages', {}).get(s.get('message'), {})
-            ctx = {'outline': oid, 'role': s['role'],
-                   'message': {'id': s['message'], 'text': msg.get('text', '')} if 'message' in s else None,
-                   'problem': ssot.get('problems', {}).get(s.get('problem'), {}).get('text') if 'problem' in s else None,
-                   'proofs': [{'id': p, 'text': ssot.get('proofs', {}).get(p, {}).get('text', '')} for p in s.get('proofs', [])],
+            msg = outline['messages'].get(c['message']) or {}
+            ids, _ = check.positioning_path(m, [msg['value']], segment) if msg else ([], None)
+            message = {'id': c['message'], 'value': _value(ssot, msg.get('value'))} if msg else None
+            ctx = {'outline': oid, 'role': sec['role'], 'message': message, 'evidence': _evidence(m, ids),
                    'facts': [{'id': f, 'label': facts.get(f, {}).get('label', ''), 'value': facts.get(f, {}).get('value', '')}
-                             for f in dict.fromkeys(check.PLACEHOLDER.findall(s.get('copy', '')))]}
+                             for f in dict.fromkeys(check.PLACEHOLDER.findall(c['text']))]}
             rows.append(jl.candidate('ia-unregistered-claim', ident, text, ctx, policy=policy))
-    aud = ssot.get('audiences', {}).get(outline['audience'], {})
-    # The priority order is what the fit is judged against, so reordering it must invalidate the judgment.
-    priorities = [{'id': p, 'text': ssot.get('messages', {}).get(p, {}).get('text', '')} for p in aud.get('priorities') or []]
-    fit_ctx = {'outline': oid, 'audience': {**{k: aud.get(k) for k in ('label', 'situation', 'desired_action')},
-                                            'priorities': priorities},
-               'brief': outline.get('brief', {})}
+            if msg and (ssot.get('values', {}).get(msg['value']) or {}).get('text'):
+                rows.append(value_fit(jl, policy, ident, text, oid, c['message'], _value(ssot, msg['value'])))
+    # The order of the copy is what the fit is judged against, so reordering it must invalidate the judgment.
+    fit_ctx = {'outline': oid, 'target': outline['target'], 'touchpoint': outline['touchpoint'], 'tone': outline['tone'],
+               'objective': outline['objective'], 'lead': _lead(outline, ssot)}
     rows.append(jl.candidate('ia-audience-fit', oid, '\n'.join(lines), fit_ctx, policy=policy))
     return rows
 
 
+def value_fit(jl, policy, ident, text, oid, message, value):
+    """The one question Jev is asked about meaning: does this copy convey this value (v6 requirement 11)."""
+    return jl.candidate('ia-value-fit', ident, text, {'outline': oid, 'message': message, 'value': value}, policy=policy)
+
+
+def _lead(outline, ssot):
+    lead = [(mid, msg) for mid, msg in sorted(outline['messages'].items()) if msg['rank'] == 'lead']
+    return {'id': lead[0][0], 'value': _value(ssot, lead[0][1]['value'])} if len(lead) == 1 else None
+
+
 def emphasis_candidates(oid, outline, ssot, screens, policy, jl):
-    aud = ssot.get('audiences', {}).get(outline['audience'], {})
-    top = (aud.get('priorities') or [None])[0]
-    top_msg = {'id': top, 'text': ssot.get('messages', {}).get(top, {}).get('text', '')}
     return [jl.candidate('ia-emphasis', f"{oid}/{s['file']}@{s['viewport']}", s['text'],
                          {'outline': oid, 'file': s['file'], 'viewport': s['viewport'],
-                          'audience': aud.get('label'), 'top_message': top_msg}, policy=policy)
+                          'target': outline['target'], 'lead': _lead(outline, ssot)}, policy=policy)
             for s in screens]
 
 
 def unanchored_candidates(oid, rows, policy, jl):
     """Text the page shows outside every section: a claim with no message, proof or fact behind it."""
     return [jl.candidate('ia-unregistered-claim', f"{oid}/{r['file']}@{r['viewport']}#unanchored", r['text'],
-                         {'outline': oid, 'role': 'unanchored', 'message': None, 'problem': None, 'proofs': [], 'facts': []},
+                         {'outline': oid, 'role': 'unanchored', 'message': None, 'evidence': [], 'facts': []},
                          policy=policy)
             for r in rows]
 
@@ -218,8 +244,13 @@ def write_new(target, text):
         f.write(text)
 
 
-def replacement(ledger, rows, answers, policy, jl):
-    """Shared-ledger replacement: keep every non-IA row, take answered current IA candidates, drop stale IA rows."""
+def replacement(ledger, rows, answers, policy, jl, outlines=None):
+    """Shared-ledger replacement: keep every non-IA row, take answered current IA candidates, keep IA rows that are
+    still valid, drop only superseded ones and those of outlines that no longer exist.
+
+    A run may cover part of the IA (one deliverable's render): a row whose candidate id this run did not produce
+    belongs to work outside the run and stays while its outline exists. A row whose id the run produced with a
+    different hash is superseded."""
     if answers.get('policy') != policy or answers.get('status') != 'model-answers-unlabeled':
         raise ValueError('回答の policy が現在の共有 policy と違う（migrate が要る）')
     if ledger is not None and ledger.get('schema_version') != jl.CURRENT_SCHEME:
@@ -232,12 +263,25 @@ def replacement(ledger, rows, answers, policy, jl):
             answered[c['judgment_hash']] = {'candidate': c, 'score': jl.probability(a['score'])}
     old = (ledger or {}).get('rows', [])
     design = [r for r in old if not r['candidate']['input']['kind'].startswith(IA_PREFIX)]
-    dropped = sum(1 for r in old if r['candidate']['input']['kind'].startswith(IA_PREFIX)
-                  and r['candidate']['judgment_hash'] not in answered)
-    out = {'schema_version': jl.CURRENT_SCHEME, 'policy': policy, 'rows': design + list(answered.values()),
+    current_ids = {r['id']: r['judgment_hash'] for r in rows}
+    kept, dropped = [], 0
+    for r in old:
+        c = r['candidate']
+        if not c['input']['kind'].startswith(IA_PREFIX) or c['judgment_hash'] in answered:
+            continue
+        if c['id'] in current_ids:
+            valid = current_ids[c['id']] == c['judgment_hash']
+        else:
+            outline = c['id'].split(':', 1)[1].split('/', 1)[0].split('@', 1)[0]
+            valid = outlines is not None and outline in outlines
+        if valid:
+            kept.append(r)
+        else:
+            dropped += 1
+    out = {'schema_version': jl.CURRENT_SCHEME, 'policy': policy, 'rows': design + kept + list(answered.values()),
            'holdout': (ledger or {}).get('holdout', {'source': 'unmeasured'})}
     jl.validate_ledger(out, policy)
-    summary = {'design_rows': len(design), 'ia_rows': len(answered),
+    summary = {'design_rows': len(design), 'ia_rows': len(answered), 'kept_ia_rows': len(kept),
                'unanswered': len(current) - len(answered), 'dropped_ia_rows': dropped}
     return out, summary
 
@@ -285,6 +329,6 @@ def run(root, date, dom_reports=(), answers=None, replacement_out=None):
                       'by_kind': {k: sum(r['input']['kind'] == k for r in rows) for k in sorted({r['input']['kind'] for r in rows})}}
     summary = None
     if answers is not None and report.exit_code < 2:
-        out, summary = replacement(ledger, rows, read_answers(answers, policy), policy, jl)
+        out, summary = replacement(ledger, rows, read_answers(answers, policy), policy, jl, outlines=set(m.outlines))
         write_new(replacement_out, json.dumps(out, ensure_ascii=False, indent=2) + '\n')
     return report, rows, summary

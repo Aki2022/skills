@@ -6,7 +6,8 @@ from reporting import stage
 from pathlib import Path
 
 
-IA_GIT_CONTRACT = 'ia-git-history-v2'
+IA_GIT_CONTRACT = 'ia-git-history-v4'
+IA_VERSION = '0.4.0'
 
 
 def _digest(path, full=False):
@@ -39,7 +40,9 @@ def _digest(path, full=False):
 
 def _git_contract(result):
     expected = {'contract', 'governance', 'targets', 'media', 'approval_hashes', 'must_approval_keys', 'errors', 'warnings', 'report'}
-    if set(result) != expected or result['approval_hashes'] != {} or result['must_approval_keys'] != []:
+    # IA v6: the owner's approvals of positioning atoms and arrows are approval targets (ia:positioning:<key>);
+    # their shape is validated with every other module's approval hashes in resolve_ia.
+    if set(result) != expected or not isinstance(result['approval_hashes'], dict) or not isinstance(result['must_approval_keys'], list):
         raise ValueError('invalid IA git-history contract')
     targets = result['targets']
     if not isinstance(targets, dict) or set(targets) != {'channels', 'outlines', 'sections'} or any(
@@ -47,7 +50,7 @@ def _git_contract(result):
         raise ValueError('zero or invalid IA check targets')
     governance = result['governance']
     if (not isinstance(governance, dict) or set(governance) != {'contract', 'method', 'schema_version', 'commit', 'input_hashes'}
-            or governance['contract'] != IA_GIT_CONTRACT or governance['method'] != 'git-history' or governance['schema_version'] != 2
+            or governance['contract'] != IA_GIT_CONTRACT or governance['method'] != 'git-history' or governance['schema_version'] != 4
             or (governance['commit'] is not None and (not isinstance(governance['commit'], str) or not re.fullmatch(r'[0-9a-f]{40}|[0-9a-f]{64}', governance['commit'])))
             or not isinstance(governance['input_hashes'], dict) or not governance['input_hashes']):
         raise ValueError('invalid IA git-history provenance')
@@ -77,7 +80,7 @@ def resolve_ia(root,config,approvals,profiles,report):
     if not implementation.is_file() or implementation.is_symlink() or implementation.parent.is_symlink() or implementation.parent.parent.is_symlink():
         report['missing'].append({'id':'ia','reason':'trusted IA resolver is not installed'})
         raise ValueError('IA module is unavailable')
-    implementation_sha256=_digest(implementation, declared['ia']=='0.2.0')
+    implementation_sha256=_digest(implementation, declared['ia']==IA_VERSION)
     spec=importlib.util.spec_from_file_location('design_ia_module',implementation)
     module=importlib.util.module_from_spec(spec)
     try:spec.loader.exec_module(module)
@@ -90,7 +93,7 @@ def resolve_ia(root,config,approvals,profiles,report):
         raise ValueError('invalid IA resolution contract')
     git_contract=result.get('contract')==IA_GIT_CONTRACT
     if git_contract:
-        if declared['ia']!='0.2.0':raise ValueError('IA git-history version mismatch')
+        if declared['ia']!=IA_VERSION:raise ValueError('IA git-history version mismatch')
         _git_contract(result)
     elif set(result)!={'media','approval_hashes','must_approval_keys','errors','warnings','report'}:
         raise ValueError('invalid IA resolution contract')

@@ -1,4 +1,4 @@
-"""Schema-2 bridge to the existing deterministic IA checker; IA has no approvals."""
+"""Bridge to the deterministic IA checker; the owner's approval of each value path is an approval target."""
 from __future__ import annotations
 
 import datetime as dt
@@ -9,8 +9,11 @@ import re
 import subprocess
 import sys
 
-VERSION = '0.2.0'
-CONTRACT = 'ia-git-history-v2'
+VERSION = '0.4.0'
+CONTRACT = 'ia-git-history-v4'
+# ia:path:<value id>: one row per value, its hash binding the whole path (ADR-20261118-ia-approval-per-value-path).
+# Per-element keys (ia:positioning:...) are not targets: a ledger row with one is not counted as an approval.
+KEY = re.compile(r'ia:path:val-[0-9]{4,}')
 CATEGORIES = ('executed', 'skipped', 'missing', 'uncovered', 'screened')
 
 
@@ -74,6 +77,21 @@ def resolve(*, root, approvals, profiles):
     warnings = [f['code'] + ': ' + f['message'] for f in findings if f['level'] == 'warn']
     if any(n == 0 for n in targets.values()):
         errors.append('zero IA check targets')
+    # Owner approvals per value path (SPEC-information-architecture-standardization requirement 18).
+    targets_run = subprocess.run([sys.executable, str(cli), 'targets', '--root', str(root)], cwd=root,
+                                 capture_output=True, text=True, timeout=60)
+    approval_hashes, must = {}, []
+    if targets_run.returncode == 0:
+        t = json.loads(targets_run.stdout, object_pairs_hook=_unique)
+        if (not isinstance(t, dict) or set(t) != {'approval_hashes', 'must_approval_keys'}
+                or not isinstance(t['approval_hashes'], dict) or not isinstance(t['must_approval_keys'], list)
+                or any(not isinstance(k, str) or not KEY.fullmatch(k) or not isinstance(v, str)
+                       or not re.fullmatch(r'[0-9a-f]{64}', v) for k, v in t['approval_hashes'].items())
+                or any(k not in t['approval_hashes'] for k in t['must_approval_keys'])):
+            raise ValueError('invalid upstream IA approval targets')
+        approval_hashes, must = t['approval_hashes'], t['must_approval_keys']
+    elif run.returncode != 2:
+        raise ValueError('IA approval targets failed on a loadable SSOT')
     now = {p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
            for p in sorted(base.rglob('*')) if p.is_file() and not p.is_symlink()}
     if now != inputs:
@@ -82,7 +100,7 @@ def resolve(*, root, approvals, profiles):
     commit = head.stdout.strip() if head.returncode == 0 else None
     if commit is not None and not re.fullmatch(r'[0-9a-f]{40}|[0-9a-f]{64}', commit):
         raise ValueError('invalid IA git commit')
-    governance = {'contract': CONTRACT, 'method': 'git-history', 'schema_version': 2,
+    governance = {'contract': CONTRACT, 'method': 'git-history', 'schema_version': 4,
                   'commit': commit, 'input_hashes': inputs}
     report = {key: [] for key in CATEGORIES}
     report['executed'].append({'id': 'ia-deterministic', 'exit_code': 2 if errors else run.returncode,
@@ -91,4 +109,5 @@ def resolve(*, root, approvals, profiles):
     report['skipped'].append({'id': 'ia-dom', 'reason': 'design L0 does not render; the IA ship gate (infoarch-author ship) runs dom on shipped HTML outputs'})
     return {'contract': CONTRACT, 'governance': governance, 'targets': targets,
             'media': {medium: {'governance': governance, 'targets': targets} for medium in profiles},
-            'approval_hashes': {}, 'must_approval_keys': [], 'errors': errors, 'warnings': warnings, 'report': report}
+            'approval_hashes': approval_hashes, 'must_approval_keys': must, 'errors': errors, 'warnings': warnings,
+            'report': report}

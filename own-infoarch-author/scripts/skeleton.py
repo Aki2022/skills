@@ -1,24 +1,16 @@
-"""Structured outline -> semantic HTML skeleton (ISSUE-06).
+"""outline -> semantic HTML skeleton (v6: one page = one outline).
 
-The factory (own-web-design) styles this skeleton with the design system. It must not change the text, the
-order of sections or the data-ia-* attributes: those carry the information design, and `dom` checks them
-after rendering. Facts are expanded to their SSOT value inside <span data-ia-fact>.
+The factory (own-web-design) styles this skeleton with the design system. It must not change the text, the order
+of sections and copy, or the data-ia-* attributes: those carry the information design, and `dom` checks them after
+rendering. Each section is `data-ia-section`, each piece of copy `data-ia-copy`, in their `order`. Facts are
+expanded to their SSOT value inside <span data-ia-fact>. Declared non-claim text is `data-ia-text`.
 """
 from __future__ import annotations
 
 import html
 
 import check
-
-ROLE_TAG = {'cta': 'p', 'navigation': 'nav'}
-
-
-def pages_for_outputs(outline):
-    """{output: [pages]} — one page per output when the counts match, else every page in every output."""
-    pages, outputs = outline['pages'], outline['outputs']
-    if len(pages) == len(outputs):
-        return {out: [p] for out, p in zip(outputs, pages)}
-    return {out: list(pages) for out in outputs}
+import outline as ol
 
 
 def _copy(text, facts):
@@ -32,27 +24,25 @@ def _copy(text, facts):
     return ''.join(out)
 
 
-def _section(s, facts):
-    attrs = [f'data-ia-role="{s["role"]}"']
-    if 'problem' in s:
-        attrs.append(f'data-ia-problem="{s["problem"]}"')
-    if 'message' in s:
-        attrs.append(f'data-ia-msg="{s["message"]}"')
-    tag = ROLE_TAG.get(s['role'], 'p')
-    return f'  <section {" ".join(attrs)}>\n    <{tag}>{_copy(s["copy"], facts)}</{tag}>\n  </section>'
-
-
-def render(outline, ssot):
+def body(o, ssot):
     facts = {fid: f['value'] for fid, f in ssot['facts'].items() if f.get('value')}
-    out = {}
-    for path, pages in pages_for_outputs(outline).items():
-        body = []
-        for p in pages:
-            label = f' aria-label="{html.escape(p["label"])}"' if p.get('label') else ''
-            body.append(f' <main data-ia-page="{p["id"]}"{label}>')
-            body += [_section(s, facts) for s in p['sections']]
-            body.append(' </main>')
-        out[path] = ('<!doctype html>\n<html lang="ja">\n<head><meta charset="utf-8">'
-                     f'<meta name="viewport" content="width=device-width, initial-scale=1"><title>{html.escape(outline["id"])}</title></head>\n'
-                     '<body data-ia-outline="' + html.escape(outline['id']) + '">\n' + '\n'.join(body) + '\n</body>\n</html>\n')
-    return out
+    texts = o.get('texts') or {}
+    lines = [f'  <nav data-ia-text="{k}">{_copy(t["text"], facts)}</nav>'
+             for k, t in sorted(texts.items()) if t['kind'] == 'navigation']
+    lines.append(' <main>')
+    for sid, sec, copies in ol.ordered_sections(o):
+        lines.append(f'  <section data-ia-section="{sid}" data-ia-role="{sec["role"]}">')
+        lines += [f'    <h2 data-ia-text="{k}">{_copy(t["text"], facts)}</h2>'
+                  for k, t in sorted(texts.items()) if t['kind'] == 'label' and t.get('section') == sid]
+        lines += [f'    <p data-ia-copy="{cid}">{_copy(c["text"], facts)}</p>' for cid, c in copies]
+        lines.append('  </section>')
+    lines.append(' </main>')
+    return '\n'.join(lines)
+
+
+def render(o, ssot):
+    """{output path: HTML} — every output shows the whole outline (one page = one outline)."""
+    page = ('<!doctype html>\n<html lang="ja">\n<head><meta charset="utf-8">'
+            f'<meta name="viewport" content="width=device-width, initial-scale=1"><title>{html.escape(o["id"])}</title></head>\n'
+            '<body data-ia-outline="' + html.escape(o['id']) + '">\n' + body(o, ssot) + '\n</body>\n</html>\n')
+    return {out: page for out in o['outputs']}

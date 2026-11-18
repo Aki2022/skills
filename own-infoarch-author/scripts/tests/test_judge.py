@@ -19,8 +19,9 @@ sys.path.insert(0, str(DESIGN_SCRIPTS))
 import judgment_ledger as jl  # noqa: E402
 
 IA_KINDS = ('ia-name-variant', 'ia-emphasis', 'ia-unregistered-claim', 'ia-audience-fit')
-# OUTLINE has 4 sections and DECK 2; SSOT has one official name, so every section gets a name and a claim candidate.
-SECTIONS = len(OUTLINE['pages'][0]['sections']) + len(DECK['pages'][0]['sections'])
+# OUTLINE has 5 pieces of copy and DECK 3; SSOT has one official name, so every piece of copy gets a name and a claim
+# candidate.
+SECTIONS = len(OUTLINE['copies']) + len(DECK['copies'])
 
 
 def cli(*args):
@@ -97,10 +98,15 @@ def test_candidates_are_reproducible_by_the_shared_reader_and_expand_facts(repo)
     for row in rows:
         data = row['input']
         assert row == jl.candidate(data['kind'], data['catalog_id'], data['text'], data['context'], policy=policy)
-    claim = next(r for r in rows if r['id'] == 'ia-unregistered-claim:lp-municipal/top/2')
-    assert claim['input']['text'] == '導入は100社以上'
-    assert claim['input']['context']['proofs'] == [{'id': 'prf-0001', 'text': '導入自治体の数'}]
-    names = next(r for r in rows if r['id'] == 'ia-name-variant:lp-municipal/top/0')
+    claim = next(r for r in rows if r['id'] == 'ia-unregistered-claim:lp-municipal/sec-0002/cpy-0003')
+    assert claim['input']['text'] == '導入は100社以上、止まらずに動き続けます'
+    ctx = claim['input']['context']
+    assert ctx['message'] == {'id': 'msg-0002', 'value': {'id': 'val-0003', 'text': '止まらずに動く'}}
+    assert ctx['evidence'] == []  # nothing supports the parity value's path
+    lead = next(r for r in rows if r['id'] == 'ia-unregistered-claim:lp-municipal/sec-0001/cpy-0002')
+    # a message inherits the evidence of its value's path (v6): prf-0001 backs val-0001, prf-0003 backs str-0001
+    assert [e['id'] for e in lead['input']['context']['evidence']] == ['prf-0001', 'prf-0003']
+    names = next(r for r in rows if r['id'] == 'ia-name-variant:lp-municipal/sec-0001/cpy-0001')
     assert names['input']['context']['entities'] == [{'id': 'ent-0001', 'name': 'Webサーバー'}]
 
 
@@ -111,8 +117,8 @@ def test_emphasis_candidates_come_from_the_rendered_first_screen(repo, tmp_path)
     assert [r['id'] for r in emphasis] == ['ia-emphasis:lp-municipal/site/index.html@mobile',
                                           'ia-emphasis:lp-municipal/site/index.html@desktop']
     ctx = emphasis[0]['input']['context']
-    assert ctx['top_message'] == {'id': 'msg-0001', 'text': '運用の手間が半分になる'}
-    assert ctx['audience'] == '自治体の情報部門'
+    assert ctx['lead'] == {'id': 'msg-0001', 'value': {'id': 'val-0001', 'text': '運用の手間が減る'}}
+    assert ctx['target'] == OUTLINE['target']
     assert not any(m['kind'] == 'ia-emphasis' and m.get('outline') == 'lp-municipal' for m in out['missing'])
 
 
@@ -145,7 +151,7 @@ def test_at_or_above_theta_goes_to_human_review(repo, tmp_path):
     report = dom_report(tmp_path / 'dom.json')
     _, _, rows = candidates(repo, '--dom-report', str(report))
     theta = jl.load_policy()['theta']
-    flagged = 'ia-name-variant:lp-municipal/top/1'
+    flagged = 'ia-name-variant:lp-municipal/sec-0001/cpy-0002'
     write_ledger(repo, [{'candidate': r, 'score': theta if r['id'] == flagged else 0.0} for r in rows])
     code, out = cli('judge', '--root', str(repo), '--date', DATE, '--dom-report', str(report))
     assert code == 1
@@ -158,14 +164,15 @@ def test_changed_copy_invalidates_only_its_own_judgments(repo, tmp_path):
     _, _, rows = candidates(repo, '--dom-report', str(report))
     write_ledger(repo, [{'candidate': r, 'score': 0.0} for r in rows])
     changed = copy.deepcopy(OUTLINE)
-    changed['pages'][0]['sections'][1]['copy'] = '運用の手間がかなり減ります'
+    changed['copies']['cpy-0002']['text'] = '運用の手間がかなり減ります'
     dump(repo / 'design/info_arch/outlines/lp-municipal.yaml', changed)
     code, out = cli('judge', '--root', str(repo), '--date', DATE, '--dom-report', str(report))
     assert code == 1
-    # The section itself, plus the outline-level fit that reads every section.
+    # The copy itself (its name, claim and value fit), plus the outline-level fit that reads every piece of copy.
     assert sorted(u['id'] for u in out['uncovered']) == ['ia-audience-fit:lp-municipal',
-                                                          'ia-name-variant:lp-municipal/top/1',
-                                                          'ia-unregistered-claim:lp-municipal/top/1']
+                                                          'ia-name-variant:lp-municipal/sec-0001/cpy-0002',
+                                                          'ia-unregistered-claim:lp-municipal/sec-0001/cpy-0002',
+                                                          'ia-value-fit:lp-municipal/sec-0001/cpy-0002']
 
 
 def test_design_rows_in_the_shared_ledger_do_not_disturb_ia(repo):
@@ -203,7 +210,7 @@ def test_shipped_html_without_first_screen_is_a_gap_other_media_are_only_reporte
 
 def test_failing_check_refuses_to_judge(repo):
     broken = copy.deepcopy(OUTLINE)
-    broken['pages'][0]['sections'][1]['message'] = 'msg-0099'
+    broken['sections']['sec-0002']['places'] = ['msg-0099']
     dump(repo / 'design/info_arch/outlines/lp-municipal.yaml', broken)
     code, out = cli('judge', '--root', str(repo), '--date', DATE)
     assert code == 2 and 'IA_JUDGE_REFUSED' in [f['code'] for f in out['findings']]
@@ -230,7 +237,7 @@ def test_replacement_keeps_design_rows_and_takes_only_current_ia_answers(repo, t
                     '--answers', str(tmp_path / 'judgment-answers.json'), '--replacement-out', str(out_path))
     # Judged against the ledger as it is now: the IA candidates are still uncovered there.
     assert code == 1, out
-    assert out['replacement'] == {'design_rows': 1, 'ia_rows': len(rows) - 1, 'unanswered': 1, 'dropped_ia_rows': 1}
+    assert out['replacement'] == {'design_rows': 1, 'ia_rows': len(rows) - 1, 'kept_ia_rows': 0, 'unanswered': 1, 'dropped_ia_rows': 1}
     replacement = json.loads(out_path.read_text(encoding='utf-8'))
     ids = [r['candidate']['id'] for r in replacement['rows']]
     assert design['id'] in ids and stale['id'] not in ids
@@ -285,19 +292,21 @@ def test_invalid_dom_row_text_does_not_leak_into_findings(repo, tmp_path):
     assert code == 2 and secret not in json.dumps(out, ensure_ascii=False)
 
 
-def test_priority_order_is_part_of_the_audience_fit_and_emphasis_keys(repo):
-    _, _, before = candidates(repo)
-    ssot = __import__('yaml').safe_load((repo / 'design/info_arch/info_arch.yaml').read_text(encoding='utf-8'))
-    p = ssot['audiences']['aud-0001']['priorities']
-    p[1], p[2] = p[2], p[1]
-    dump(repo / 'design/info_arch/info_arch.yaml', ssot)
-    _, _, after = candidates(repo)
-    fit = lambda rows: {r['id']: r['judgment_hash'] for r in rows if r['input']['kind'] == 'ia-audience-fit'}
-    assert fit(before)['ia-audience-fit:lp-municipal'] != fit(after)['ia-audience-fit:lp-municipal']
-    # The other audience's outline is untouched.
-    assert fit(before)['ia-audience-fit:deck-smb'] == fit(after)['ia-audience-fit:deck-smb']
-    ctx = next(r for r in after if r['id'] == 'ia-audience-fit:lp-municipal')['input']['context']
-    assert [m['id'] for m in ctx['audience']['priorities']] == p
+def test_section_order_and_lead_are_part_of_the_audience_fit_and_emphasis_keys(repo, tmp_path):
+    report = dom_report(tmp_path / 'dom.json')
+    _, _, before = candidates(repo, '--dom-report', str(report))
+    changed = copy.deepcopy(OUTLINE)
+    changed['sections']['sec-0001']['order'], changed['sections']['sec-0002']['order'] = 2, 1
+    dump(repo / 'design/info_arch/outlines/lp-municipal.yaml', changed)
+    _, _, after = candidates(repo, '--dom-report', str(report))
+    keys = lambda rows, kind: {r['id']: r['judgment_hash'] for r in rows if r['input']['kind'] == kind}
+    assert keys(before, 'ia-audience-fit')['ia-audience-fit:lp-municipal'] != keys(after, 'ia-audience-fit')['ia-audience-fit:lp-municipal']
+    # The other deliverable is untouched.
+    assert keys(before, 'ia-audience-fit')['ia-audience-fit:deck-smb'] == keys(after, 'ia-audience-fit')['ia-audience-fit:deck-smb']
+    changed['messages']['msg-0001']['rank'], changed['messages']['msg-0002']['rank'] = 'support', 'lead'
+    dump(repo / 'design/info_arch/outlines/lp-municipal.yaml', changed)
+    _, _, lead = candidates(repo, '--dom-report', str(report))
+    assert keys(lead, 'ia-emphasis') and all(keys(lead, 'ia-emphasis')[k] != v for k, v in keys(after, 'ia-emphasis').items())
 
 
 def _answers_file(tmp_path, rows, patch=None):
@@ -358,8 +367,8 @@ def test_unanchored_text_becomes_an_unregistered_claim_candidate_per_screen(repo
     assert [r['input']['catalog_id'] for r in extra] == ['lp-municipal/site/index.html@mobile#unanchored',
                                                          'lp-municipal/site/index.html@desktop#unanchored'], extra
     assert all(r['input']['kind'] == 'ia-unregistered-claim' and r['input']['text'] == '業界No.1 の実績' for r in extra)
-    # Nothing on the page supports it: the context carries no message, proof or fact.
-    assert all(r['input']['context']['message'] is None and r['input']['context']['proofs'] == [] for r in extra)
+    # Nothing on the page supports it: the context carries no message, evidence or fact.
+    assert all(r['input']['context']['message'] is None and r['input']['context']['evidence'] == [] for r in extra)
     assert code == 1 and any(u['id'].endswith('#unanchored') for u in out['uncovered'])
 
 

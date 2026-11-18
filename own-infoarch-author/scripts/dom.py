@@ -1,11 +1,14 @@
-"""Rendered DOM vs structured outline (ISSUE-03).
+"""Rendered DOM vs outline: screen conformance (SPEC-information-architecture-standardization v6, requirement 10).
 
-The browser does the parsing and rendering; this module only compares its snapshot with the outline:
-every message / problem the outline uses has a visible anchor, the anchors appear in the outline's order
-(as a subsequence of the rendered order, so a repeated call to action is fine), each section's visible text is
-the outline's copy (facts expanded), every fact the copy refers to is shown with the SSOT value, and two runs give
-the same snapshot. Visible text outside every anchor is reported, and passed on to the judgement ledger as a claim. The first-screen text is passed on to
-the Jev judgement ledger (ISSUE-04); nothing here judges meaning.
+The browser does the parsing and rendering; this module only compares its snapshot with the outline: every section
+and every piece of copy has exactly one visible mark (data-ia-section / data-ia-copy), the sections appear exactly in
+the outline's order, each piece of copy is drawn inside its own section and in the section's order, each copy mark
+shows the outline's copy word for word (facts expanded; width and whitespace folded), every fact the copy refers to
+is shown with the SSOT value, and two runs give the same snapshot. A repeat is another piece of copy in the outline.
+Declared non-claim text (data-ia-text) must show its text on every occurrence, and an official name (data-ia-entity)
+must show exactly the SSOT name. A v4/v5 attribute (data-ia-problem / -msg / -pain / -frame) left on the page fails.
+Visible text outside every mark is text nobody manages: it fails (requirement 10) without echoing the text.
+dom exit 0 means the page shows what the outline declares; it does not judge whether the claims are true.
 """
 from __future__ import annotations
 
@@ -15,50 +18,44 @@ import unicodedata
 from pathlib import Path
 
 import check
+import outline as ol
 
 DEFAULT_VIEWPORTS = [{'name': 'mobile', 'width': 375, 'height': 812}, {'name': 'desktop', 'width': 1280, 'height': 800}]
 HTML_SUFFIXES = {'.html', '.htm'}
-
-
-def expected_for(outline, output):
-    """Anchors and facts one output file must show: its own page when pages and outputs pair up 1:1."""
-    pages = outline['pages']
-    if len(pages) == len(outline['outputs']):
-        pages = [pages[outline['outputs'].index(output)]]
-    return expected({'pages': pages})
+LEGACY = {'legacy-problem': 'data-ia-problem', 'legacy-msg': 'data-ia-msg', 'legacy-pain': 'data-ia-pain',
+          'legacy-frame': 'data-ia-frame'}
 
 
 def expected(outline):
+    """-> ([(kind, id)] in the outline's order, [fact ids the copy refers to])."""
     seq, facts = [], []
-    for p in outline['pages']:
-        for s in p['sections']:
-            if 'problem' in s:
-                seq.append(('problem', s['problem']))
-            if 'message' in s:
-                seq.append(('msg', s['message']))
-            facts += [f for f in check.PLACEHOLDER.findall(s['copy']) if f not in facts]
+    for sid, _, copies in ol.ordered_sections(outline):
+        seq.append(('section', sid))
+        for cid, c in copies:
+            seq.append(('copy', cid))
+            facts += [f for f in check.PLACEHOLDER.findall(c['text']) if f not in facts]
+    for t in (outline.get('texts') or {}).values():
+        facts += [f for f in check.PLACEHOLDER.findall(t['text']) if f not in facts]
     return seq, facts
 
 
-def _section_pages(outline, output):
-    pages = outline['pages']
-    if output and len(pages) == len(outline['outputs']):
-        pages = [pages[outline['outputs'].index(output)]]
-    return pages
-
-
-def expected_copy(outline, ssot, output=None):
-    """{(kind, id): {normalized copy}} — the text each anchor must show, facts expanded to their SSOT value."""
+def _expand(text, ssot):
     values = {fid: str(f.get('value', '')) for fid, f in ssot['facts'].items()}
-    out = {}
-    for p in _section_pages(outline, output):
-        for s in p['sections']:
-            text = _copy_norm(check.PLACEHOLDER.sub(lambda m: values.get(m.group(1), m.group(0)), s['copy']))
-            # Every anchor the section carries shows the same copy (skeleton puts both attributes on one element).
-            for kind, field in (('problem', 'problem'), ('msg', 'message')):
-                if field in s:
-                    out.setdefault((kind, s[field]), set()).add(text)
-    return out
+    return _copy_norm(check.PLACEHOLDER.sub(lambda m: values.get(m.group(1), m.group(0)), text))
+
+
+def expected_copy(outline, ssot):
+    """{copy id: normalized copy} — the text each copy anchor must show, facts expanded to their SSOT value."""
+    return {cid: _expand(c['text'], ssot) for cid, c in outline['copies'].items()}
+
+
+def declared_text(outline, ssot):
+    """{key: normalized text} — declared non-claim text (navigation and labels)."""
+    return {k: _expand(t['text'], ssot) for k, t in (outline.get('texts') or {}).items()}
+
+
+def navigation_keys(outline):
+    return {k for k, t in (outline.get('texts') or {}).items() if t['kind'] == 'navigation'}
 
 
 def _norm(text):
@@ -70,48 +67,81 @@ def _copy_norm(text):
     return ''.join(unicodedata.normalize('NFKC', text or '').split())
 
 
-def _is_subsequence(want, have):
-    it = iter(have)
-    return all(any(w == h for h in it) for w in want)
-
-
 def compare(outline, ssot, snap, output=None):
     """-> [(code, level, message)] for one snapshot (one file, one viewport)."""
     out = []
     vp = snap['viewport']['name']
     if not snap.get('text_chars'):
         return [('IA_DOM_NO_TARGETS', 'fail', f'{vp}: 描画されたテキストが 0 件（対象 0 件を合格にしない）')]
-    seq, facts = expected_for(outline, output) if output else expected(outline)
+    seq, facts = expected(outline)
     anchors = snap['anchors']
     wanted = set(seq)
+    for kind, attr in LEGACY.items():
+        legacy = sorted({a['id'] for a in anchors if a['kind'] == kind})
+        if legacy:
+            out.append(('IA_DOM_LEGACY_ATTRIBUTE', 'fail', f'{vp}: 旧属性 {attr} が残っている {legacy}（v6 では data-ia-section・data-ia-copy）'))
+    texts = declared_text(outline, ssot)
     for a in anchors:
-        if a['kind'] in ('msg', 'problem') and (a['kind'], a['id']) not in wanted:
+        if a['kind'] in ('section', 'copy') and (a['kind'], a['id']) not in wanted:
             out.append(('IA_DOM_ANCHOR_UNKNOWN', 'fail', f'{vp}: アンカー {a["id"]} はアウトラインに無い'))
+        elif a['kind'] == 'text' and a['id'] not in texts:
+            out.append(('IA_DOM_ANCHOR_UNKNOWN', 'fail', f'{vp}: 宣言した文言の印 {a["id"]} はこのアウトラインに無い'))
+        if a.get('nested'):
+            out.append(('IA_DOM_ANCHOR_NESTED', 'fail',
+                        f'{vp}: {a["id"]} の印（{a["kind"]}）の中にほかの IA の印がある（文案・宣言した文言・正式名称は、セクションや文案を包めない）'))
     rendered = [(a['kind'], a['id']) for a in sorted(anchors, key=lambda a: (a['top'], a['left']))
-                if a['visible'] and a['kind'] in ('msg', 'problem')]
-    for key in dict.fromkeys(seq):
+                if a['visible'] and a['kind'] in ('section', 'copy')]
+    nav = navigation_keys(outline)
+    for key in dict.fromkeys(seq + [('text', k) for k in texts]):
         found = [a for a in anchors if (a['kind'], a['id']) == key]
         if not found:
             out.append(('IA_DOM_ANCHOR_MISSING', 'fail', f'{vp}: アウトラインの {key[1]} のアンカーが描画物に無い'))
+        elif key[0] == 'text' and key[1] in nav:
+            continue  # navigation may be collapsed at a viewport (a menu); it must exist, and what shows must match
         elif not any(a['visible'] for a in found):
             out.append(('IA_DOM_ANCHOR_HIDDEN', 'fail', f'{vp}: {key[1]} のアンカーが見えていない（display / visibility / opacity / 大きさ 0）'))
-    present = [k for k in seq if k in set(rendered)]
-    if not _is_subsequence(present, rendered):
-        out.append(('IA_DOM_ORDER', 'fail', f'{vp}: 描画の順 {[k[1] for k in rendered]} がアウトラインの順 {[k[1] for k in seq]} と違う'))
-    for key, copies in expected_copy(outline, ssot, output).items():
-        shown = [a for a in anchors if (a['kind'], a['id']) == key and a['visible']]
-        if not shown:
-            continue  # missing or hidden is reported above
-        matches = [a for a in shown if _copy_norm(a['text']) in copies]
+    have = [k[1] for k in rendered if k[0] == 'section']
+    want = [sid for kind, sid in seq if kind == 'section' and sid in have]
+    if have != want:
+        out.append(('IA_DOM_ORDER', 'fail', f'{vp}: セクションの描画の順 {have} が outline の順 {want} と違う'))
+    owner = {cid: c['section'] for cid, c in outline['copies'].items()}
+    for cid in sorted(owner):
+        marks = [a for a in anchors if (a['kind'], a['id']) == ('copy', cid)]
+        if len(marks) > 1:
+            out.append(('IA_DOM_COPY_REPEATED', 'fail', f'{vp}: 文案 {cid} の印が {len(marks)} つある（繰り返すなら outline に別の文案を置く）'))
+        for a in marks:
+            if a.get('section') != owner[cid]:
+                out.append(('IA_DOM_COPY_SECTION', 'fail', f'{vp}: 文案 {cid} が {a.get("section")} の中にある（outline では {owner[cid]}）'))
+    for sid, _, copies in ol.ordered_sections(outline):
+        drawn = [a['id'] for a in sorted(anchors, key=lambda a: (a['top'], a['left']))
+                 if a['kind'] == 'copy' and a['visible'] and a.get('section') == sid and owner.get(a['id']) == sid]
+        expected_order = [cid for cid, _ in copies if cid in drawn]
+        if list(dict.fromkeys(drawn)) != expected_order:
+            out.append(('IA_DOM_COPY_ORDER', 'fail', f'{vp}: {sid} の文案の描画の順 {drawn} が outline の順 {expected_order} と違う'))
+    for cid, copy_ in expected_copy(outline, ssot).items():
+        shown = [a for a in anchors if (a['kind'], a['id']) == ('copy', cid) and a['visible']]
         # The text itself is not echoed: it is unpublished copy and may be long.
-        if not matches:
-            out.append(('IA_DOM_COPY_DRIFT', 'fail', f'{vp}: {key[1]} の表示がアウトラインの文案と違う（文言を変えずにスタイリングする）'))
-        elif len(matches) < len(shown):
-            out.append(('IA_DOM_COPY_EXTRA', 'warn', f'{vp}: {key[1]} の繰り返し {len(shown) - len(matches)} か所が文案と違う'))
+        if any(_copy_norm(a['text']) != copy_ for a in shown):
+            out.append(('IA_DOM_COPY_DRIFT', 'fail', f'{vp}: {cid} の表示が outline の文案と一字一句同じでない（文言を変えずにスタイリングする）'))
+    for k, copy_ in texts.items():
+        shown = [a for a in anchors if a['kind'] == 'text' and a['id'] == k and a['visible']]
+        # Declared text has no repeat leniency: every visible occurrence is the declared text.
+        if any(_copy_norm(a['text']) != copy_ for a in shown):
+            out.append(('IA_DOM_COPY_DRIFT', 'fail', f'{vp}: 宣言した文言 {k} の表示がアウトラインの文案と違う（全出現で一致させる）'))
+    entities = ssot.get('entities') or {}
+    for a in anchors:
+        if a['kind'] != 'entity':
+            continue
+        name = (entities.get(a['id']) or {}).get('name')
+        if not name:
+            out.append(('IA_DOM_ANCHOR_UNKNOWN', 'fail', f'{vp}: 正式名称の印 {a["id"]} は SSOT に無い'))
+        elif a['visible'] and _copy_norm(a['text']) != _copy_norm(name):
+            out.append(('IA_DOM_ENTITY_NAME', 'fail', f'{vp}: 正式名称 {a["id"]} の表示が SSOT の名前「{name}」と違う（名前だけを包む）'))
     unanchored = _norm(snap.get('unanchored'))
     if unanchored:
-        out.append(('IA_DOM_UNANCHORED_TEXT', 'warn',
-                    f'{vp}: どのアンカーにも属さない表示の文言が {len(unanchored)} 文字ある（判定台帳で主張として判定する）'))
+        out.append(('IA_DOM_UNANCHORED_TEXT', 'fail',
+                    f'{vp}: どの印にも属さない文言が {len(unanchored)} 文字ある（主張なら outline のメッセージと文案に、主張でなければ'
+                    ' texts に宣言する）'))
     values = {fid: f.get('value') for fid, f in ssot['facts'].items()}
     for a in anchors:
         # A fact anchor this page does not refer to may only show a registered value; otherwise it would wrap
@@ -136,9 +166,9 @@ def unjudged_text(outline, ssot, snap, output=None):
     """Visible text no deterministic check vouches for: text outside every anchor, and repeats of an anchor whose
     text is not the outline's copy. Both go to the judgment ledger as claims with nothing behind them."""
     parts = [_norm(snap.get('unanchored'))]
-    for key, copies in expected_copy(outline, ssot, output).items():
+    for cid, copy_ in expected_copy(outline, ssot).items():
         parts += [_norm(a['text']) for a in snap['anchors']
-                  if (a['kind'], a['id']) == key and a['visible'] and _copy_norm(a['text']) not in copies]
+                  if (a['kind'], a['id']) == ('copy', cid) and a['visible'] and _copy_norm(a['text']) != copy_]
     return ' '.join(p for p in parts if p)
 
 

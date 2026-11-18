@@ -1,0 +1,260 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "own-infoarch-author/outline.v3.schema.json",
+  "title": "design/info_arch/outlines/<deliverable id>.yaml schema version 3 (outline)",
+  "description": "outline（SPEC-information-architecture-standardization v6 要件 6）。positioning 1 つ（target のセグメント）に立ち、定数（target・touchpoint・tone）と目的変数（objective）を置いて、独立変数のメッセージ・セクション・文案を組み立てる。1 ページ＝1 outline。AI が作り、人は保守しない。並びは order で持ち、ファイルの中で書いた順番は意味を持たない。id・channel・outputs は置き場所の宣言で、outline の id に入らない。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "id",
+    "channel",
+    "outputs",
+    "target",
+    "touchpoint",
+    "tone",
+    "objective",
+    "messages",
+    "sections",
+    "copies"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 3
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]*$"
+    },
+    "channel": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]*$"
+    },
+    "outputs": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "not": {
+          "pattern": "^(/|~)|(^|/)\\.\\.(/|$)"
+        }
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "segment",
+        "condition"
+      ],
+      "description": "意図した相手：セグメント（id）＋足す条件。outline はこのセグメントの positioning に立つ",
+      "properties": {
+        "segment": {
+          "type": "string",
+          "pattern": "^seg-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
+        },
+        "condition": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "touchpoint": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]*$",
+      "description": "接点（lp・ad・flyer・deck など）"
+    },
+    "tone": {
+      "type": "string",
+      "minLength": 1
+    },
+    "objective": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "action"
+      ],
+      "description": "目的変数：取ってほしい行動。CTA のメッセージが achieves で指す",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^obj-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
+        },
+        "action": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "no_cta": {
+      "type": "boolean",
+      "description": "CTA を置かない宣言（true のときだけ書く）。報告に「CTA なし（意図）」を出す"
+    },
+    "messages": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^msg-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/message"
+      }
+    },
+    "sections": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^sec-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/section"
+      }
+    },
+    "copies": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^cpy-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/copy"
+      }
+    },
+    "texts": {
+      "type": "object",
+      "description": "主張でない文言の宣言（ナビ・見出しのラベル。D12）。key は outline の中で一意",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_-]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/text_decl"
+      }
+    }
+  },
+  "$defs": {
+    "message": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "rank",
+        "type"
+      ],
+      "description": "何を言うか。提供価値をちょうど 1 つ指す（CTA も、その行動で何が得られるかとして指す）",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "^val-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
+        },
+        "rank": {
+          "enum": [
+            "lead",
+            "support"
+          ]
+        },
+        "type": {
+          "enum": [
+            "normal",
+            "cta"
+          ]
+        },
+        "compares": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^alt-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
+          },
+          "description": "比べる代替（0 個以上）"
+        },
+        "achieves": {
+          "type": "string",
+          "pattern": "^obj-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
+        }
+      }
+    },
+    "section": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "order",
+        "role",
+        "places"
+      ],
+      "description": "どこで何番目に言うか。通常のメッセージ 1 つと CTA 0〜1 つを置く",
+      "properties": {
+        "order": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "role": {
+          "enum": [
+            "aware",
+            "pain",
+            "compare",
+            "trust",
+            "act"
+          ]
+        },
+        "places": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "copy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "section",
+        "order",
+        "message",
+        "text"
+      ],
+      "description": "どんな言葉で言うか。セクションに属し、同じセクションに置かれたメッセージを 1 つ伝える。固定値は {{fct-NNNN}} で参照する",
+      "properties": {
+        "section": {
+          "type": "string"
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "message": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "text_decl": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "text"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "navigation",
+            "label"
+          ]
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "section": {
+          "type": "string",
+          "description": "label を置くセクション"
+        }
+      }
+    }
+  }
+}

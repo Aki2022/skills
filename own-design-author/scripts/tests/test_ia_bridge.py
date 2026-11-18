@@ -1,4 +1,4 @@
-"""Actual schema-2 IA checker bridge: git history, no IA approval rows, stale consumers."""
+"""Actual IA checker bridge: git history, IA positioning approvals as approval targets, stale consumers."""
 import copy
 import importlib.util
 import json
@@ -27,7 +27,7 @@ def attach(project):
     ssot['facts']['fct-0001']['as_of'] = '2099-01-01'
     FIXTURE['write_repo'](root, ssot)
     config = json.loads((root / 'design/design.yaml').read_text())
-    config['modules'] = {'ia': '0.2.0'}
+    config['modules'] = {'ia': '0.4.0'}
     write(root / 'design/design.yaml', config)
     return root
 
@@ -38,14 +38,21 @@ def test_schema2_actual_check_has_counts_and_preserves_ds_approvals(project):
     root = attach(project)
     result = check(project, ship=True)
     assert result['exit_code'] == 0, result['errors']
-    assert result['approval_targets'] == before['approval_targets']
-    assert result['approval_required'] == before['approval_required']
+    # The design targets stay exactly as they were; one IA row per value path is added beside them.
+    ds = {k: v for k, v in result['approval_targets'].items() if k.startswith('ds:')}
+    assert ds == before['approval_targets']
+    ia = sorted(k for k in result['approval_targets'] if k.startswith('ia:'))
+    assert ia == ['ia:path:val-0001', 'ia:path:val-0002', 'ia:path:val-0003']
+    assert [k for k in result['approval_required'] if k.startswith('ds:')] == before['approval_required']
+    assert 'ia:path:val-0001' in result['approval_required']
     resolved = result['manifest']['web']['modules']['ia']
-    assert resolved['version'] == '0.2.0'
-    assert resolved['resolved']['targets'] == {'channels': 2, 'outlines': 2, 'sections': 6}
+    assert resolved['version'] == '0.4.0'
+    assert resolved['resolved']['governance']['contract'] == 'ia-git-history-v4'
+    assert resolved['resolved']['governance']['schema_version'] == 4
+    assert resolved['resolved']['targets'] == {'channels': 2, 'outlines': 2, 'sections': 5}
     assert resolved['resolved']['governance']['method'] == 'git-history'
     assert resolved['resolved']['governance']['input_hashes']
-    assert any(row['id'] == 'ia-deterministic' and row['targets'] == 6 for row in result['report']['executed'])
+    assert any(row['id'] == 'ia-deterministic' and row['targets'] == 5 for row in result['report']['executed'])
     assert any(row['id'] == 'ia-semantic-judgments' for row in result['report']['missing'])
     assert any(row['id'] == 'ia-dom' for row in result['report']['skipped'])
     validate_module_state(result['manifest']['web']['modules'])
@@ -57,7 +64,7 @@ def test_actual_ia_bad_inputs_make_l0_red(project, broken):
     base = root / 'design/info_arch'
     if broken == 'ref':
         data = copy.deepcopy(FIXTURE['OUTLINE'])
-        data['pages'][0]['sections'][1]['message'] = 'msg-9999'
+        data['sections']['sec-0002']['places'] = ['msg-9999']
         FIXTURE['dump'](base / 'outlines/lp-municipal.yaml', data)
     elif broken == 'expiry':
         data = copy.deepcopy(FIXTURE['SSOT'])
@@ -82,7 +89,7 @@ def test_actual_ia_bad_inputs_make_l0_red(project, broken):
         assert any(expected in error for error in result['errors']), result['errors']
 
 
-@pytest.mark.parametrize('version', [None, '0.1.0'])
+@pytest.mark.parametrize('version', [None, '0.1.0', '0.3.0'])
 def test_missing_or_wrong_pin_stays_red(project, version):
     root = attach(project)
     config = json.loads((root / 'design/design.yaml').read_text())
@@ -108,7 +115,7 @@ def test_python_and_javascript_reject_changed_checker_and_schema(project, tmp_pa
     for consumer in (python, node):
         good = subprocess.run(consumer, capture_output=True, text=True)
         assert good.returncode == 0, good.stdout + good.stderr
-    for relative in ('scripts/check.py', 'references/schema/info_arch.v2.schema.json'):
+    for relative in ('scripts/check.py', 'references/schema/info_arch.v4.schema.json'):
         path = installed / IA.name / relative
         saved = path.read_bytes()
         path.write_bytes(saved + b'\n')
@@ -171,5 +178,58 @@ def test_absent_fixed_adapter_is_red(project, tmp_path):
     spec.loader.exec_module(module)
     report = empty_report()
     with pytest.raises(ValueError, match='IA module is unavailable'):
-        module.resolve_ia(project[0], {'modules': {'ia': '0.2.0'}}, {}, {'web': {}}, report)
+        module.resolve_ia(project[0], {'modules': {'ia': '0.4.0'}}, {}, {'web': {}}, report)
     assert report['missing'][0]['id'] == 'ia'
+
+
+def test_unapproved_positioning_can_be_prepared_and_recorded_by_the_owner(project):
+    """An unapproved positioning is an approval gap, not a structural error: preparing the bundle must not be blocked
+    by the very approval it prepares (WS-20261114 I6, biz_ops)."""
+    from owner_approval import approve_request, prepare
+    approve(project)
+    root = attach(project)
+    import yaml
+    ledger = root / 'design/approvals.yaml'
+    rows = [r for r in yaml.safe_load(ledger.read_text()) if not r['key'].startswith('ia:')]
+    ledger.write_text(yaml.safe_dump(rows, allow_unicode=True, sort_keys=False))  # the owner has approved nothing yet
+    blocked = check(project, ship=True)
+    assert any(e.startswith('IA_POSITIONING_UNAPPROVED') for e in blocked['errors']), blocked['errors']
+    request = prepare(root, project[1], all_must=True)
+    keys = {r['key'] for r in request['rows']}
+    assert 'ia:path:val-0001' in keys and 'ia:path:val-0003' in keys
+    approve_request(root, project[1], request, 'fixture-owner', owner_words='fixture: approve',
+                    approved_on=request['rows'][0]['date'])
+    assert not any(e.startswith('IA_POSITIONING_UNAPPROVED') for e in check(project, ship=True)['errors'])
+
+
+def test_changing_one_positioning_element_withdraws_only_the_paths_it_is_on(project):
+    """Per-path approval through the design bridge; ds: approvals and the other paths' rows stay."""
+    approve(project)
+    before = check(project, ship=True)
+    root = attach(project)
+    approved = check(project, ship=True)
+    assert approved['exit_code'] == 0, approved['errors']
+    ssot = copy.deepcopy(FIXTURE['SSOT'])
+    ssot['proofs']['prf-0001']['as_of'] = '2099-01-01'
+    ssot['facts']['fct-0001']['as_of'] = '2099-01-01'
+    ssot['strengths']['str-0001']['text'] = '自動更新で保守がほぼ要らない'
+    FIXTURE['dump'](root / 'design/info_arch/info_arch.yaml', ssot)
+    after = check(project, ship=True)
+    moved = sorted(k for k, v in approved['approval_targets'].items() if after['approval_targets'].get(k) != v)
+    assert moved == ['ia:path:val-0001'], moved  # str-0001 produces val-0001 only
+    assert {k: v for k, v in after['approval_targets'].items() if k.startswith('ds:')} == before['approval_targets']
+    assert any(e.startswith('IA_POSITIONING_UNAPPROVED') and 'val-0001' in e for e in after['errors']), after['errors']
+
+
+def test_legacy_per_element_rows_are_refused_until_migrated(project):
+    """An ia:positioning row is no target any more: the design check stops on it instead of reading it (fail closed),
+    and migrate-approvals is the way out. The ds: approvals are untouched by either."""
+    import yaml
+    approve(project)
+    root = attach(project)
+    ledger = root / 'design/approvals.yaml'
+    rows = yaml.safe_load(ledger.read_text())
+    rows.append({'key': 'ia:positioning:val-0001', 'value_hash': 'b' * 64, 'approver': 'fixture-owner', 'date': '2026-11-16'})
+    ledger.write_text(yaml.safe_dump(rows, allow_unicode=True, sort_keys=False))
+    result = check(project, ship=True)
+    assert result['exit_code'] == 2 and result['errors'] == ['approval target absent from catalog/tokens'], result['errors']

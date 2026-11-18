@@ -1,23 +1,52 @@
-schema_version: 1
+# 例：seg-0002 の positioning に立つ資料。同じ固定値を使い、別の一番のメッセージと並びで話す。
+schema_version: 3
 id: deck-smb
 channel: deck
-brief:
-  purpose: 中小企業向けの説明
-  action: 問い合わせ
-  medium: 資料
-  cut:
-  - msg-0001
-audience: aud-0002
 outputs:
 - decks/smb.pptx
-pages:
-- id: s1
-  sections:
-  - role: proof
+target:
+  segment: seg-0002
+  condition: 人手が足りない中小企業の経営者
+touchpoint: deck
+tone: 端的で親しみやすい調子
+objective:
+  id: obj-0001
+  action: 問い合わせ
+messages:
+  msg-0001:
+    value: val-0002
+    rank: lead
+    type: normal
+  msg-0002:
+    value: val-0002
+    rank: support
+    type: cta
+    achieves: obj-0001
+sections:
+  sec-0001:
+    order: 1
+    role: aware
+    places:
+    - msg-0001
+  sec-0002:
+    order: 2
+    role: act
+    places:
+    - msg-0001
+    - msg-0002
+copies:
+  cpy-0001:
+    section: sec-0001
+    order: 1
+    message: msg-0001
+    text: '{{fct-0001}}が導入、少人数でも回ります'
+  cpy-0002:
+    section: sec-0002
+    order: 1
+    message: msg-0001
+    text: 少人数で回す仕組みを
+  cpy-0003:
+    section: sec-0002
+    order: 2
     message: msg-0002
-    proofs:
-    - prf-0001
-    copy: '{{fct-0001}}が導入'
-  - role: cta
-    message: msg-0003
-    copy: お問い合わせ {{fct-0002}}
+    text: お問い合わせ {{fct-0002}}

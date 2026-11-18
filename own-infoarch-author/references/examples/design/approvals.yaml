@@ -1,0 +1,13 @@
+# 例：オーナーが提供価値ごとに経路をまとめて承認した記録（キーは ia:path:<提供価値 id>、ハッシュは経路の原子と矢印すべて。記録は AI がオーナーの承認の言葉で行う）
+- key: ia:path:val-0001
+  value_hash: 0ae233b9d4324a8648b8c8d271b173f0d4531962365c4ebdc2158e8f9d14d86d
+  approver: example-owner
+  date: '2026-11-16'
+- key: ia:path:val-0002
+  value_hash: 4554b07e2c87eebcefc4eda55e9ce0431d98887fc90a900704b697f4124a3646
+  approver: example-owner
+  date: '2026-11-16'
+- key: ia:path:val-0003
+  value_hash: 6bc1320de70cd7f85a748a6937fddb8d3945ac5bc574a3a02ac78eb95002bcec
+  approver: example-owner
+  date: '2026-11-16'

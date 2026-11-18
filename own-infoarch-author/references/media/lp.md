@@ -5,9 +5,10 @@
 | 型 | 並び | 使う時 |
 | --- | --- | --- |
 | 結論から | benefit → proof → how → objection → cta | 読み手が自分の課題に気づいている |
-| 課題から | problem → benefit → proof → how → cta | 読み手が課題に気づいていない |
+| 課題から | pain → benefit → proof → how → cta | 読み手が課題に気づいていない |
 
-- 最初の画面に、対象者の 1 位のメッセージと行動喚起の入口を置く。
+- A/B で差し替えるのは outline の要素：一番のメッセージ・セクションの順序・文案など。別案は別の outline にし、`infoarch-author diff` で変わった要素を、`infoarch-author set` で set の id を確かめる。
+- 最初の画面（順序 1 のセクション）に、一番のメッセージと行動喚起の入口を置く。
 - 行動喚起は最後に加え、長いページでは途中にも置いてよい。
 - 証拠は効用の直後に置く。
 

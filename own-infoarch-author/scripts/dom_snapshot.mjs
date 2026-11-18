@@ -1,8 +1,11 @@
 // Snapshot of a rendered page for the information-architecture DOM checks.
 // Usage: node dom_snapshot.mjs <html file> <viewports JSON>
-// Prints a JSON array, one snapshot per viewport: anchors (data-ia-msg / data-ia-problem / data-ia-fact) with
-// their rendered box, visibility and text, the total rendered text length, the text visible in the first screen,
-// and the visible text that belongs to no message / problem / fact anchor (`unanchored`).
+// Prints a JSON array, one snapshot per viewport: anchors (data-ia-section / data-ia-copy / data-ia-fact /
+// data-ia-entity / data-ia-text; the v4/v5 attributes data-ia-problem / data-ia-msg / data-ia-pain / data-ia-frame are
+// reported as legacy-<name>) with their rendered box,
+// visibility, visible text (painted text nodes only, the same rule as `unanchored`) and whether a declared-text or
+// official-name anchor holds another IA anchor (`nested`), the total rendered text length, the text visible in the
+// first screen, and the visible text that belongs to no anchor (`unanchored`).
 // Playwright is resolved from INFOARCH_PLAYWRIGHT_DIR, else from the current directory (the target repo).
 // It is never installed automatically; when it cannot be resolved this exits 2.
 import { createRequire } from "node:module";
@@ -75,24 +78,50 @@ try {
         }
         return false;
       };
+      const paintedText = (n) => {
+        const t = n.textContent.trim();
+        return t && n.parentElement && shown(n.parentElement) && textPainted(n) ? t : "";
+      };
+      // Anchor text is what is painted, read the same way as the unanchored text: a hidden child cannot make an
+      // anchor read as its copy (innerText keeps opacity: 0 text), and the two never disagree.
+      const visibleText = (el) => {
+        const out = [];
+        const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+        for (let n = w.nextNode(); n; n = w.nextNode()) {
+          const t = paintedText(n);
+          if (t) out.push(t);
+        }
+        return out.join(" ");
+      };
+      // Declared text may show facts and official names; an official name holds nothing but itself.
+      const NESTED = {
+        copy: "[data-ia-section],[data-ia-copy],[data-ia-text]",
+        text: "[data-ia-section],[data-ia-copy],[data-ia-text]",
+        entity: "[data-ia-section],[data-ia-copy],[data-ia-text],[data-ia-fact],[data-ia-entity]",
+      };
       const anchors = [];
-      for (const [attr, kind] of [["data-ia-msg", "msg"], ["data-ia-problem", "problem"], ["data-ia-fact", "fact"]]) {
+      for (const [attr, kind] of [["data-ia-section", "section"], ["data-ia-copy", "copy"], ["data-ia-fact", "fact"], ["data-ia-entity", "entity"], ["data-ia-text", "text"],
+        ["data-ia-problem", "legacy-problem"], ["data-ia-msg", "legacy-msg"], ["data-ia-pain", "legacy-pain"], ["data-ia-frame", "legacy-frame"]]) {
         for (const el of document.querySelectorAll(`[${attr}]`)) {
           const r = el.getBoundingClientRect();
           anchors.push({
             kind, id: el.getAttribute(attr),
             top: Math.round(r.top + scrollY), left: Math.round(r.left + scrollX),
             width: Math.round(r.width), height: Math.round(r.height),
-            visible: visible(el), text: el.innerText,
+            visible: visible(el), text: visibleText(el),
+            nested: NESTED[kind] ? el.querySelector(NESTED[kind]) !== null : false,
+            // the section a mark is drawn inside (screen conformance: a copy belongs to its own section)
+            section: el.parentElement?.closest("[data-ia-section]")?.getAttribute("data-ia-section") ?? null,
           });
         }
       }
       const parts = [], loose = [];
-      const ANCHORED = "[data-ia-msg],[data-ia-problem],[data-ia-fact]";
+      // A section is a container: its text belongs to the copy and the declared text inside it, not to the section.
+      const ANCHORED = "[data-ia-copy],[data-ia-fact],[data-ia-entity],[data-ia-text]";
       const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
       for (let n = walker.nextNode(); n; n = walker.nextNode()) {
-        const t = n.textContent.trim();
-        if (!t || !n.parentElement || !shown(n.parentElement) || !textPainted(n)) continue;
+        const t = paintedText(n);
+        if (!t) continue;
         if (!n.parentElement.closest(ANCHORED)) loose.push(t);
         const range = document.createRange();
         range.selectNodeContents(n);

@@ -70,6 +70,9 @@ def shipped_outlines(m):
                   if (ch := m.channels.get(o['channel'])) and ch[1]['ship'])
 
 
+ADVISORY = ('ia-value-fit:',)
+
+
 def _outline_of(judgment_id):
     ident = judgment_id.split(':', 1)[1]
     return ident.split('/', 1)[0].split('@', 1)[0]
@@ -196,6 +199,10 @@ def _evaluate(root, commit, tree, date, source, predicted):
         return finish('IA ship inputs are not committed files')
     report, m = check.check(root, date)
     result['stages'].append(_stage('check', report))
+    # Requirement 15: adoption, semantic fit and customer validation are reported apart, never as one word.
+    adopted = not any(f.code == 'IA_POSITIONING_UNAPPROVED' and f.level == 'fail' for f in report.findings)
+    result['positioning'] = {'owner_adopted': 'approved' if adopted else 'unapproved',
+                          'semantic_fit': 'not-judged', 'customer_validation': 'not-judged-by-ia'}
     if report.exit_code == 2:
         return finish('IA check failed')
     channels = sorted(name for name, (_, row) in m.channels.items() if row['ship'])
@@ -237,12 +244,17 @@ def _evaluate(root, commit, tree, date, source, predicted):
             return finish('IA rendered DOM check failed')
         report, _, _ = judge.run(root, date, dom_paths)
 
-    blocking = [u for u in report.uncovered if _outline_of(u['id']) in shipped]
+    # ia-value-fit is advisory until the owner's answer key has measured it (v6 requirement 11): reported, never blocking.
+    blocking = [u for u in report.uncovered if _outline_of(u['id']) in shipped and not u['id'].startswith(ADVISORY)]
     if blocking:
         report.add('fail', 'IA_SHIP_UNCOVERED',
                    f'出荷される成果物の判定 {len(blocking)} 件が台帳に無い（Jev で取得して記録してから出荷する）',
                    ids=sorted(u['id'] for u in blocking))
     result['stages'].append(_stage('judge', report, uncovered=report.uncovered, screened=len(report.screened)))
+    fit = [r for r in report.screened if r['id'].startswith('ia-value-fit:') and _outline_of(r['id']) in shipped]
+    uncovered_fit = [u for u in report.uncovered if u['id'].startswith('ia-value-fit:') and _outline_of(u['id']) in shipped]
+    if fit and not uncovered_fit:
+        result['positioning']['semantic_fit'] = 'needs-review' if any(r['flagged_advisory'] for r in fit) else 'judged'
     return finish('IA judgment gate failed' if report.exit_code == 2 else None)
 
 
@@ -463,8 +475,11 @@ def _dirty(root):
 def _atoms(ssot):
     if not isinstance(ssot, dict):
         return {}
-    return {aid: atom for block in list(check.BLOCKS) + ['entities', 'voices']
-            for aid, atom in (ssot.get(block) or {}).items()}
+    out = {aid: atom for block in list(check.BLOCKS) + ['entities', 'voices']
+           for aid, atom in (ssot.get(block) or {}).items()}
+    # Arrows are positioning elements too: a changed degree or a new `supports` moves the outlines standing on it.
+    out.update({f'{e.get("kind")}:{e.get("from")}:{e.get("to")}': e for e in ssot.get('edges') or [] if isinstance(e, dict)})
+    return out
 
 
 def maintain(root, date, within_days=None):
@@ -485,7 +500,7 @@ def maintain(root, date, within_days=None):
         result['exit_code'] = 2
         return result
     shipped = set(shipped_outlines(m))
-    refs = {oid: {x for _, x in check.outline_refs(o)} for oid, (_, o) in m.outlines.items()}
+    refs = {oid: check.outline_dependencies(m, o) for oid, (_, o) in m.outlines.items()}
     days = {**expiry['expiry_days'], **((m.ssot.get('policy') or {}).get('expiry_days') or {})}
     for block, kind in (('proofs', 'proof'), ('facts', 'fact')):
         for aid, atom in sorted(m.ssot[block].items()):

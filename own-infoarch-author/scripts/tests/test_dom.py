@@ -1,4 +1,4 @@
-"""ISSUE-03: rendered DOM vs structured outline.
+"""Rendered DOM vs outline (v6 anchors: data-ia-section and data-ia-copy).
 
 Unit tests compare DOM snapshots (the JSON dom_snapshot.mjs writes) with the outline; they always run.
 The integration test drives a real Chromium through Playwright and runs only when
@@ -23,18 +23,29 @@ SCRIPTS = Path(__file__).resolve().parents[1]
 VP = {'name': 'mobile', 'width': 375, 'height': 812}
 
 
-def anchor(kind, aid, top, text='x', visible=True, left=0, height=40):
-    return {'kind': kind, 'id': aid, 'top': top, 'left': left, 'width': 300, 'height': height, 'visible': visible, 'text': text}
+def anchor(kind, aid, top, text='x', visible=True, left=0, height=40, nested=False, section=None):
+    return {'kind': kind, 'id': aid, 'top': top, 'left': left, 'width': 300, 'height': height, 'visible': visible, 'text': text,
+            'nested': nested, 'section': section}
+
+
+C1, C2 = '既存システムの運用、重くありませんか', '運用の手間が半分になります'
+C3, C4, C5 = '導入は100社以上、止まらずに動き続けます', '保守の要らない運用へ', '資料請求はこちら（03-1234-5678）'
 
 
 def green_snapshot():
-    return {'viewport': VP, 'text_chars': 400, 'first_screen': '既存システムの運用、重くありませんか 運用の手間が半分になります', 'anchors': [
-        anchor('problem', 'prb-0001', 10, '既存システムの運用、重くありませんか'),
-        anchor('msg', 'msg-0001', 120, '運用の手間が半分になります'),
-        anchor('msg', 'msg-0002', 900, '導入は100社以上'),
-        anchor('fact', 'fct-0001', 905, '100社以上', height=20),
-        anchor('msg', 'msg-0003', 1500, '資料請求はこちら（03-1234-5678）'),
-        anchor('fact', 'fct-0002', 1505, '03-1234-5678', height=20),
+    # index:        0 sec-0001, 1 cpy-0001, 2 cpy-0002, 3 sec-0002, 4 cpy-0003, 5 fct-0001, 6 sec-0003, 7 cpy-0004,
+    #               8 cpy-0005, 9 fct-0002
+    return {'viewport': VP, 'text_chars': 400, 'first_screen': f'{C1} {C2}', 'anchors': [
+        anchor('section', 'sec-0001', 0, f'{C1} {C2}', height=200),
+        anchor('copy', 'cpy-0001', 10, C1, section='sec-0001'),
+        anchor('copy', 'cpy-0002', 120, C2, section='sec-0001'),
+        anchor('section', 'sec-0002', 880, C3, height=200),
+        anchor('copy', 'cpy-0003', 900, C3, section='sec-0002'),
+        anchor('fact', 'fct-0001', 905, '100社以上', height=20, section='sec-0002'),
+        anchor('section', 'sec-0003', 1480, f'{C4} {C5}', height=200),
+        anchor('copy', 'cpy-0004', 1490, C4, section='sec-0003'),
+        anchor('copy', 'cpy-0005', 1500, C5, section='sec-0003'),
+        anchor('fact', 'fct-0002', 1505, '03-1234-5678', height=20, section='sec-0003'),
     ]}
 
 
@@ -51,13 +62,22 @@ def test_green_snapshot_passes():
 
 
 @pytest.mark.parametrize('mutation,code', [
-    (lambda s: s['anchors'].pop(1), 'IA_DOM_ANCHOR_MISSING'),
-    (lambda s: s['anchors'][1].update(visible=False), 'IA_DOM_ANCHOR_HIDDEN'),
-    (lambda s: s['anchors'][1].update(top=1600), 'IA_DOM_ORDER'),
-    (lambda s: s['anchors'][3].update(text='120社以上'), 'IA_DOM_FACT_VALUE'),
-    (lambda s: s['anchors'].pop(3), 'IA_DOM_FACT_MISSING'),
+    (lambda s: s['anchors'].pop(2), 'IA_DOM_ANCHOR_MISSING'),
+    (lambda s: s['anchors'].pop(3), 'IA_DOM_ANCHOR_MISSING'),
+    (lambda s: s['anchors'][2].update(visible=False), 'IA_DOM_ANCHOR_HIDDEN'),
+    (lambda s: s['anchors'][2].update(top=5), 'IA_DOM_COPY_ORDER'),
+    (lambda s: s['anchors'][3].update(top=1700), 'IA_DOM_ORDER'),
+    (lambda s: s['anchors'][5].update(text='120社以上'), 'IA_DOM_FACT_VALUE'),
+    (lambda s: s['anchors'].pop(5), 'IA_DOM_FACT_MISSING'),
     (lambda s: s.update(text_chars=0, anchors=[], first_screen=''), 'IA_DOM_NO_TARGETS'),
-    (lambda s: s['anchors'].append(anchor('msg', 'msg-0099', 2000)), 'IA_DOM_ANCHOR_UNKNOWN'),
+    (lambda s: s['anchors'].append(anchor('copy', 'cpy-0099', 2000)), 'IA_DOM_ANCHOR_UNKNOWN'),
+    (lambda s: s['anchors'].append(anchor('section', 'sec-0099', 2000)), 'IA_DOM_ANCHOR_UNKNOWN'),
+    # v4/v5 attributes left on a page must not pass silently
+    (lambda s: s['anchors'].append(anchor('legacy-problem', 'prb-0001', 5)), 'IA_DOM_LEGACY_ATTRIBUTE'),
+    (lambda s: s['anchors'].append(anchor('legacy-msg', 'msg-0001', 5)), 'IA_DOM_LEGACY_ATTRIBUTE'),
+    (lambda s: s['anchors'].append(anchor('legacy-pain', 'pan-0001', 5)), 'IA_DOM_LEGACY_ATTRIBUTE'),
+    (lambda s: s['anchors'].append(anchor('legacy-frame', 'hero', 5)), 'IA_DOM_LEGACY_ATTRIBUTE'),
+    (lambda s: s['anchors'][2].update(nested=True), 'IA_DOM_ANCHOR_NESTED'),
 ])
 def test_red_snapshots_fail(mutation, code):
     snap = green_snapshot()
@@ -65,19 +85,18 @@ def test_red_snapshots_fail(mutation, code):
     assert code in codes(run(snap)), run(snap)
 
 
-def test_cta_may_repeat_without_breaking_order():
+def test_a_repeated_call_to_action_is_another_copy_in_the_outline():
+    """v6: a repeat on the page is a repeat in the outline (another copy of the CTA message in another section)."""
     snap = green_snapshot()
-    snap['anchors'].insert(2, anchor('msg', 'msg-0003', 300, '資料請求'))
-    assert codes(run(snap)) == []
-    # The repeat does not carry the outline's copy: reported, but the section itself still matches.
-    assert 'IA_DOM_COPY_EXTRA' in codes(run(snap), 'warn'), run(snap)
+    snap['anchors'].insert(3, anchor('copy', 'cpy-0005', 300, '資料請求', section='sec-0001'))
+    assert {'IA_DOM_COPY_REPEATED', 'IA_DOM_COPY_SECTION', 'IA_DOM_COPY_DRIFT'} <= set(codes(run(snap))), run(snap)
 
 
 # --- rendered copy must be the outline's copy (2026-11-12) ---
 
 def test_rewritten_copy_fails():
     snap = green_snapshot()
-    snap['anchors'][1]['text'] = '運用の手間がゼロになります'
+    snap['anchors'][2]['text'] = '運用の手間がゼロになります'
     found = run(snap)
     assert 'IA_DOM_COPY_DRIFT' in codes(found), found
     assert not any('ゼロ' in f[2] for f in found), 'rendered copy is not echoed into findings'
@@ -85,47 +104,47 @@ def test_rewritten_copy_fails():
 
 def test_copy_with_an_added_claim_fails():
     snap = green_snapshot()
-    snap['anchors'][2]['text'] = '導入は100社以上。業界No.1'
+    snap['anchors'][4]['text'] = '導入は100社以上、止まらずに動き続けます。業界No.1'
     assert 'IA_DOM_COPY_DRIFT' in codes(run(snap))
 
 
 def test_copy_comparison_ignores_whitespace_and_width():
     snap = green_snapshot()
-    snap['anchors'][1]['text'] = '運用の手間が\n半分に なります'
-    snap['anchors'][2]['text'] = '導入は１００社以上'
-    assert codes(run(snap)) == [] and 'IA_DOM_COPY_EXTRA' not in codes(run(snap), 'warn')
+    snap['anchors'][2]['text'] = '運用の手間が\n半分に なります'
+    snap['anchors'][4]['text'] = '導入は１００社以上、止まらずに 動き続けます'
+    assert codes(run(snap)) == []
 
 
 def test_hidden_copy_does_not_count_as_the_section():
     snap = green_snapshot()
-    snap['anchors'][1]['text'] = '別の文'
-    snap['anchors'].append(anchor('msg', 'msg-0001', 130, '運用の手間が半分になります', visible=False))
+    snap['anchors'][2]['text'] = '別の文'
+    snap['anchors'].append(anchor('copy', 'cpy-0002', 130, C2, visible=False))
     assert 'IA_DOM_COPY_DRIFT' in codes(run(snap))
 
 
-def test_text_outside_every_anchor_is_a_warning_without_echo():
+def test_text_outside_every_anchor_fails_without_echo():
     snap = green_snapshot()
     snap['unanchored'] = '業界No.1 の実績'
     found = run(snap)
-    assert codes(found) == [] and 'IA_DOM_UNANCHORED_TEXT' in codes(found, 'warn'), found
+    assert codes(found) == ['IA_DOM_UNANCHORED_TEXT'], found
     assert not any('業界' in f[2] for f in found)
 
 
 def test_no_unanchored_text_is_quiet():
     snap = green_snapshot()
     snap['unanchored'] = ''
-    assert 'IA_DOM_UNANCHORED_TEXT' not in codes(run(snap), 'warn')
+    assert 'IA_DOM_UNANCHORED_TEXT' not in codes(run(snap))
 
 
 def test_fact_whitespace_is_normalized_but_value_must_match():
     snap = green_snapshot()
-    snap['anchors'][3]['text'] = ' 100社以上\n'
+    snap['anchors'][5]['text'] = ' 100社以上\n'
     assert codes(run(snap)) == []
 
 
 def test_two_runs_must_be_identical():
     a, b = green_snapshot(), green_snapshot()
-    b['anchors'][1]['top'] = 121
+    b['anchors'][2]['top'] = 121
     assert 'IA_DOM_UNSTABLE' in codes(dom.compare_runs([a, b]))
     assert codes(dom.compare_runs([a, copy.deepcopy(a)])) == []
 
@@ -133,15 +152,14 @@ def test_two_runs_must_be_identical():
 PW_DIR = os.environ.get('INFOARCH_TEST_PLAYWRIGHT_DIR')
 
 HTML = '''<!doctype html><html><head><meta charset="utf-8"><style>body{{font:16px sans-serif;margin:0}} section{{min-height:200px}}</style></head><body>
-<section data-ia-problem="prb-0001"><h1>既存システムの運用、重くありませんか</h1></section>
-<section data-ia-msg="msg-0001"><h2>運用の手間が半分になります</h2></section>
-<section data-ia-msg="msg-0002" style="margin-top:600px"><p>導入は<span data-ia-fact="fct-0001">100社以上</span></p></section>
-<section data-ia-msg="msg-0003"{hidden}><a href="#">資料請求はこちら（<span data-ia-fact="fct-0002">03-1234-5678</span>）</a></section>
+<section data-ia-section="sec-0001" data-ia-role="pain"><h1 data-ia-copy="cpy-0001">既存システムの運用、重くありませんか</h1><h2 data-ia-copy="cpy-0002">運用の手間が半分になります</h2></section>
+<section data-ia-section="sec-0002" data-ia-role="trust" style="margin-top:600px"><p data-ia-copy="cpy-0003">導入は<span data-ia-fact="fct-0001">100社以上</span>、止まらずに動き続けます</p></section>
+<section data-ia-section="sec-0003" data-ia-role="act"{hidden}><p data-ia-copy="cpy-0004">保守の要らない運用へ</p><a href="#" data-ia-copy="cpy-0005">資料請求はこちら（<span data-ia-fact="fct-0002">03-1234-5678</span>）</a></section>
 </body></html>'''
 
 
 @pytest.mark.skipif(not PW_DIR, reason='INFOARCH_TEST_PLAYWRIGHT_DIR is not set: real-browser integration not run (reported as skipped, not passed)')
-@pytest.mark.parametrize('hidden,expect', [('', 0), (' style="opacity:0"', 2)])
+@pytest.mark.parametrize('hidden,expect', [('', 0), (' style="opacity:0"', 2), (' data-ia-problem="prb-0001"', 2)])
 def test_real_browser_end_to_end(tmp_path, hidden, expect):
     from test_check import write_repo
     write_repo(tmp_path)
@@ -176,10 +194,9 @@ ANIMATED = '''<!doctype html><html><head><meta charset="utf-8"><style>
 body{{margin:0;font:16px sans-serif}} section{{min-height:200px}}
 @keyframes up{{from{{opacity:0}}to{{opacity:1}}}} .anim{{animation:up .6s ease-out forwards}}
 </style></head><body>
-<section data-ia-problem="prb-0001" class="hero" style="opacity:0">既存システムの運用、重くありませんか</section>
-<section data-ia-msg="msg-0001" class="anim">運用の手間が半分になります</section>
-<section data-ia-msg="msg-0002" class="anim">導入は<span data-ia-fact="fct-0001">100社以上</span></section>
-<section data-ia-msg="msg-0003" class="anim">資料請求はこちら（<span data-ia-fact="fct-0002">03-1234-5678</span>）</section>
+<section data-ia-section="sec-0001" class="hero" style="opacity:0"><p data-ia-copy="cpy-0001">既存システムの運用、重くありませんか</p><p data-ia-copy="cpy-0002" class="anim">運用の手間が半分になります</p></section>
+<section data-ia-section="sec-0002" class="anim"><p data-ia-copy="cpy-0003">導入は<span data-ia-fact="fct-0001">100社以上</span>、止まらずに動き続けます</p></section>
+<section data-ia-section="sec-0003" class="anim"><p data-ia-copy="cpy-0004">保守の要らない運用へ</p><p data-ia-copy="cpy-0005">資料請求はこちら（<span data-ia-fact="fct-0002">03-1234-5678</span>）</p></section>
 <script>document.addEventListener('DOMContentLoaded',function(){{setTimeout(function(){{var h=document.querySelector('.hero');h.style.transition='opacity .8s ease-out .2s';h.style.opacity='1';}},100);}});</script>
 </body></html>'''
 
@@ -223,7 +240,7 @@ EXTRA = HTML.replace('</body>', '<footer><p>業界No.1 の実績</p></footer></b
 
 
 @pytest.mark.skipif(not PW_DIR, reason='INFOARCH_TEST_PLAYWRIGHT_DIR is not set: real-browser integration not run (reported as skipped, not passed)')
-@pytest.mark.parametrize('page,expect,code', [(DRIFT, 2, 'IA_DOM_COPY_DRIFT'), (EXTRA, 1, 'IA_DOM_UNANCHORED_TEXT')])
+@pytest.mark.parametrize('page,expect,code', [(DRIFT, 2, 'IA_DOM_COPY_DRIFT'), (EXTRA, 2, 'IA_DOM_UNANCHORED_TEXT')])
 def test_real_browser_reads_copy_and_unanchored_text(tmp_path, page, expect, code):
     from test_check import write_repo
     write_repo(tmp_path)
@@ -249,12 +266,12 @@ def test_fact_anchor_with_an_unknown_id_fails():
 
 def test_fact_anchor_for_a_fact_this_page_does_not_use_must_show_its_value():
     outline = copy.deepcopy(OUTLINE)
-    outline['pages'][0]['sections'][3]['copy'] = '資料請求はこちら'  # the page no longer refers to fct-0002
+    outline['copies']['cpy-0005']['text'] = '資料請求はこちら'  # the page no longer refers to fct-0002
     snap = green_snapshot()
-    snap['anchors'][4]['text'] = '資料請求はこちら'
-    snap['anchors'][5]['text'] = '業界No.1'  # a registered fact id wrapped around other text
+    snap['anchors'][8]['text'] = '資料請求はこちら'
+    snap['anchors'][9]['text'] = '業界No.1'  # a registered fact id wrapped around other text
     assert 'IA_DOM_FACT_VALUE' in codes(run(snap, outline=outline)), run(snap, outline=outline)
-    snap['anchors'][5]['text'] = '03-1234-5678'  # showing the registered value is fine
+    snap['anchors'][9]['text'] = '03-1234-5678'  # showing the registered value is fine
     assert codes(run(snap, outline=outline)) == []
 
 
@@ -269,7 +286,7 @@ def test_drifted_repeats_are_sent_to_judgment(monkeypatch, tmp_path):
         for v in vps:
             s = green_snapshot()
             s['viewport'] = v
-            s['anchors'].insert(2, anchor('msg', 'msg-0003', 300, '業界No.1 の資料を請求'))
+            s['anchors'].insert(3, anchor('copy', 'cpy-0005', 300, '業界No.1 の資料を請求'))
             out.append(s)
         return out
     monkeypatch.setattr(dom, 'snapshot', snap)
@@ -277,7 +294,7 @@ def test_drifted_repeats_are_sent_to_judgment(monkeypatch, tmp_path):
     assert report.unanchored and all('業界No.1 の資料を請求' in r['text'] for r in report.unanchored), report.unanchored
 
 
-ZERO_SIZE = HTML.replace('</body>', '<section data-ia-msg="msg-0001" style="height:0;min-height:0;overflow:visible">業界No.1 の実績</section></body>')
+ZERO_SIZE = HTML.replace('</body>', '<p data-ia-copy="cpy-0002" style="height:0;min-height:0;overflow:visible">業界No.1 の実績</p></body>')
 
 
 @pytest.mark.skipif(not PW_DIR, reason='INFOARCH_TEST_PLAYWRIGHT_DIR is not set: real-browser integration not run (reported as skipped, not passed)')
@@ -290,8 +307,8 @@ def test_real_browser_zero_size_anchor_that_paints_text_is_checked(tmp_path):
     proc = subprocess.run([sys.executable, str(SCRIPTS / 'infoarch_author.py'), 'dom', '--root', str(tmp_path),
                            '--outline', 'lp-municipal'], capture_output=True, text=True, env=env, check=False)
     report = json.loads(proc.stdout)
-    # The second msg-0001 has no box but its text is painted: it is a repeat with other copy, and its text is judged.
-    assert 'IA_DOM_COPY_EXTRA' in [f['code'] for f in report['findings']], report['findings']
+    # The second cpy-0002 has no box but its text is painted: it is a repeated mark, and its text is still collected.
+    assert 'IA_DOM_COPY_REPEATED' in [f['code'] for f in report['findings']], report['findings']
     assert report['unanchored'] and all('業界No.1' in r['text'] for r in report['unanchored'])
 
 
@@ -312,27 +329,161 @@ def test_real_browser_text_painted_from_a_zero_size_box_is_unanchored(tmp_path):
     assert report['unanchored'] and all('業界No.1' in r['text'] for r in report['unanchored'])
 
 
-# --- a section may carry both a problem and a message (security review of #100) ---
+# --- declared text and official names (the unanchored warning means "text nobody manages", 2026-11-15) ---
 
-def _both():
-    outline = copy.deepcopy(OUTLINE)
-    outline['pages'][0]['sections'][0]['message'] = 'msg-0001'  # problem section that also carries the benefit
-    outline['pages'][0]['sections'].pop(1)
-    snap = green_snapshot()
-    snap['anchors'].pop(1)
-    # skeleton puts both attributes on one element, so the snapshot holds two anchors with the same text
-    snap['anchors'].insert(1, anchor('msg', 'msg-0001', 10, '既存システムの運用、重くありませんか'))
-    return outline, snap
+def declared_outline():
+    """OUTLINE plus a navigation bar, a section label and the product's official name on the page."""
+    o = copy.deepcopy(OUTLINE)
+    o['texts'] = {'nav': {'kind': 'navigation', 'text': 'サービス 使い方'},
+                  'label-proof': {'kind': 'label', 'text': 'EVIDENCE', 'section': 'sec-0002'}}
+    return o
 
 
-def test_section_with_problem_and_message_checks_both_anchors():
-    outline, snap = _both()
-    assert codes(run(snap, outline=outline)) == [], run(snap, outline=outline)
-    snap['anchors'][1]['text'] = '業界No.1'
-    assert 'IA_DOM_COPY_DRIFT' in codes(run(snap, outline=outline)), run(snap, outline=outline)
+def declared_snapshot():
+    s = green_snapshot()
+    s['anchors'] += [anchor('text', 'nav', 0, 'サービス 使い方', height=20),
+                     anchor('text', 'label-proof', 880, 'EVIDENCE', height=20),
+                     anchor('entity', 'ent-0001', 1700, 'Webサーバー', height=20)]
+    s['unanchored'] = ''
+    return s
 
 
-def test_drifted_message_of_a_problem_section_is_sent_to_judgment():
-    outline, snap = _both()
-    snap['anchors'].insert(2, anchor('msg', 'msg-0001', 20, '業界No.1 の実績'))
-    assert '業界No.1 の実績' in dom.unjudged_text(outline, SSOT, snap)
+def drun(snap, outline=None):
+    return dom.compare(outline or declared_outline(), SSOT, snap)
+
+
+def test_declared_text_and_official_name_pass_with_no_warning():
+    found = drun(declared_snapshot())
+    assert codes(found) == [] and codes(found, 'warn') == [], found
+
+
+@pytest.mark.parametrize('mutation,code', [
+    # the official name must be the whole text of its anchor, everywhere
+    (lambda s: s['anchors'][-1].update(text='Web サーバー Pro'), 'IA_DOM_ENTITY_NAME'),
+    (lambda s: s['anchors'][-1].update(text='Webサーバー 業界No.1'), 'IA_DOM_ENTITY_NAME'),
+    (lambda s: s['anchors'].append(anchor('entity', 'ent-0001', 1800, 'Webサーバー2')), 'IA_DOM_ENTITY_NAME'),
+    (lambda s: s['anchors'].append(anchor('entity', 'ent-0099', 1800, 'Webサーバー')), 'IA_DOM_ANCHOR_UNKNOWN'),
+    # declared text must match on every visible occurrence (no COPY_EXTRA leniency)
+    (lambda s: s['anchors'][-2].update(text='EVIDENCE 業界No.1'), 'IA_DOM_COPY_DRIFT'),
+    (lambda s: s['anchors'].append(anchor('text', 'nav', 1900, 'サービス 料金')), 'IA_DOM_COPY_DRIFT'),
+    (lambda s: s['anchors'].append(anchor('text', 'undeclared', 1900, '業界No.1')), 'IA_DOM_ANCHOR_UNKNOWN'),
+    (lambda s: s['anchors'].pop(-3), 'IA_DOM_ANCHOR_MISSING'),   # navigation is still required on its page
+    (lambda s: s['anchors'].pop(-2), 'IA_DOM_ANCHOR_MISSING'),
+    (lambda s: s['anchors'][-2].update(visible=False), 'IA_DOM_ANCHOR_HIDDEN'),
+    # declared text and names cannot carry other IA anchors inside them
+    (lambda s: s['anchors'][-2].update(nested=True), 'IA_DOM_ANCHOR_NESTED'),
+    (lambda s: s['anchors'][-1].update(nested=True), 'IA_DOM_ANCHOR_NESTED'),
+])
+def test_declared_text_and_name_red(mutation, code):
+    snap = declared_snapshot()
+    mutation(snap)
+    assert code in codes(drun(snap)), drun(snap)
+
+
+def test_navigation_may_move_without_breaking_order():
+    snap = declared_snapshot()
+    snap['anchors'][-3]['top'] = 3000  # e.g. a footer navigation
+    assert codes(drun(snap)) == [], drun(snap)
+
+
+def test_navigation_may_be_collapsed_at_a_viewport_but_must_exist():
+    snap = declared_snapshot()
+    snap['anchors'][-3]['visible'] = False  # e.g. a header menu hidden on mobile
+    assert codes(drun(snap)) == [], drun(snap)
+    snap['anchors'].pop(-3)
+    assert 'IA_DOM_ANCHOR_MISSING' in codes(drun(snap))
+
+
+def test_declared_text_with_a_fact_shows_the_value():
+    o = declared_outline()
+    o['texts']['nav']['text'] = 'サービス {{fct-0002}}'
+    snap = declared_snapshot()
+    snap['anchors'][-3]['text'] = 'サービス 03-1234-5678'
+    assert codes(drun(snap, o)) == [], drun(snap, o)
+
+
+def test_unanchored_warning_points_at_declaring_the_text():
+    snap = declared_snapshot()
+    snap['unanchored'] = '業界No.1'
+    found = [f for f in drun(snap) if f[0] == 'IA_DOM_UNANCHORED_TEXT']
+    assert found and found[0][1] == 'fail' and '宣言' in found[0][2], found
+
+
+DECLARED = '''<!doctype html><html><head><meta charset="utf-8"><style>body{{font:16px sans-serif;margin:0}} section{{min-height:200px}}</style></head><body>
+<nav data-ia-text="nav">サービス 使い方</nav>
+<section data-ia-section="sec-0001"><h1 data-ia-copy="cpy-0001">既存システムの運用、重くありませんか</h1><h2 data-ia-copy="cpy-0002">運用の手間が半分になります</h2></section>
+<section data-ia-section="sec-0002" style="margin-top:600px"><p data-ia-text="label-proof">{label}</p><p data-ia-copy="cpy-0003">導入は<span data-ia-fact="fct-0001">100社以上</span>、止まらずに動き続けます</p></section>
+<section data-ia-section="sec-0003"><p data-ia-copy="cpy-0004">保守の要らない運用へ</p><a href="#" data-ia-copy="cpy-0005">資料請求はこちら（<span data-ia-fact="fct-0002">03-1234-5678</span>）</a></section>
+<footer><span data-ia-entity="ent-0001">{name}</span></footer>
+</body></html>'''
+
+
+@pytest.mark.skipif(not PW_DIR, reason='INFOARCH_TEST_PLAYWRIGHT_DIR is not set: real-browser integration not run (reported as skipped, not passed)')
+@pytest.mark.parametrize('label,name,expect,code', [
+    ('EVIDENCE', 'Webサーバー', 0, None),
+    ('EVIDENCE 業界No.1', 'Webサーバー', 2, 'IA_DOM_COPY_DRIFT'),
+    ('EVIDENCE', 'Webサーバー Pro', 2, 'IA_DOM_ENTITY_NAME'),
+    # reads as the right label, but nothing is painted: the anchor text is the visible text, not innerText
+    ('<span style="opacity:0">EVIDENCE</span>', 'Webサーバー', 2, 'IA_DOM_COPY_DRIFT'),
+    ('EVIDENCE<span data-ia-copy="cpy-0003">導入は100社以上</span>', 'Webサーバー', 2, 'IA_DOM_ANCHOR_NESTED'),
+])
+def test_real_browser_declared_text_and_names(tmp_path, label, name, expect, code):
+    from test_check import write_repo, CHANNEL, DRAFT, DECK
+    write_repo(tmp_path, outlines=(declared_outline(), DECK))
+    (tmp_path / 'site').mkdir(exist_ok=True)
+    (tmp_path / 'site/index.html').write_text(DECLARED.format(label=label, name=name), encoding='utf-8')
+    env = dict(os.environ, INFOARCH_PLAYWRIGHT_DIR=PW_DIR)
+    proc = subprocess.run([sys.executable, str(SCRIPTS / 'infoarch_author.py'), 'dom', '--root', str(tmp_path),
+                           '--outline', 'lp-municipal'], capture_output=True, text=True, env=env, check=False)
+    report = json.loads(proc.stdout)
+    found = [f['code'] for f in report['findings']]
+    assert proc.returncode == expect, report['findings']
+    if code:
+        assert code in found, report['findings']
+    else:
+        assert 'IA_DOM_UNANCHORED_TEXT' not in found and not report['unanchored'], report
+
+
+# --- screen conformance with a real browser (requirement 10; fixtures/screen-red-cases.json) ---
+
+SEC1 = '<section data-ia-section="sec-0001" data-ia-role="pain"><h1 data-ia-copy="cpy-0001">既存システムの運用、重くありませんか</h1><h2 data-ia-copy="cpy-0002">運用の手間が半分になります</h2></section>'
+SEC2 = '<section data-ia-section="sec-0002" data-ia-role="trust"><p data-ia-copy="cpy-0003">導入は<span data-ia-fact="fct-0001">100社以上</span>、止まらずに動き続けます</p></section>'
+SEC3 = '<section data-ia-section="sec-0003" data-ia-role="act"><p data-ia-copy="cpy-0004">保守の要らない運用へ</p><a href="#" data-ia-copy="cpy-0005">資料請求はこちら（<span data-ia-fact="fct-0002">03-1234-5678</span>）</a></section>'
+PAGE = ('<!doctype html><html><head><meta charset="utf-8"><style>body{{font:16px sans-serif;margin:0}} section{{min-height:200px}}</style>'
+        '</head><body>{body}</body></html>')
+SCREEN_RED = [
+    ('sections-swapped', SEC1 + SEC3 + SEC2, 'IA_DOM_ORDER'),
+    ('copy-one-character', (SEC1 + SEC2 + SEC3).replace('半分になります', '半分になりました'), 'IA_DOM_COPY_DRIFT'),
+    ('copies-swapped', SEC1.replace('<h1 data-ia-copy="cpy-0001">既存システムの運用、重くありませんか</h1><h2 data-ia-copy="cpy-0002">運用の手間が半分になります</h2>',
+                                    '<h2 data-ia-copy="cpy-0002">運用の手間が半分になります</h2><h1 data-ia-copy="cpy-0001">既存システムの運用、重くありませんか</h1>') + SEC2 + SEC3,
+     'IA_DOM_COPY_ORDER'),
+    ('copy-in-other-section', SEC1.replace('<h2 data-ia-copy="cpy-0002">運用の手間が半分になります</h2>', '')
+     + SEC2.replace('</section>', '<p data-ia-copy="cpy-0002">運用の手間が半分になります</p></section>') + SEC3, 'IA_DOM_COPY_SECTION'),
+    ('text-added-outside', SEC1 + SEC2 + SEC3 + '<footer><p>いまだけ無料</p></footer>', 'IA_DOM_UNANCHORED_TEXT'),
+]
+
+
+@pytest.mark.skipif(not PW_DIR, reason='INFOARCH_TEST_PLAYWRIGHT_DIR is not set: real-browser integration not run (reported as skipped, not passed)')
+@pytest.mark.parametrize('name,body,code', [('conforming', SEC1 + SEC2 + SEC3, None)] + SCREEN_RED, ids=lambda v: v if isinstance(v, str) and len(v) < 30 else None)
+def test_real_browser_screen_conformance(tmp_path, name, body, code):
+    from test_check import write_repo
+    write_repo(tmp_path)
+    (tmp_path / 'site').mkdir(exist_ok=True)
+    (tmp_path / 'site/index.html').write_text(PAGE.format(body=body), encoding='utf-8')
+    env = dict(os.environ, INFOARCH_PLAYWRIGHT_DIR=PW_DIR)
+    proc = subprocess.run([sys.executable, str(SCRIPTS / 'infoarch_author.py'), 'dom', '--root', str(tmp_path),
+                           '--outline', 'lp-municipal'], capture_output=True, text=True, env=env, check=False)
+    report = json.loads(proc.stdout)
+    found = [f['code'] for f in report['findings'] if f['level'] == 'fail']
+    if code is None:
+        assert proc.returncode == 0 and found == [], report['findings']
+    else:
+        assert proc.returncode == 2 and code in found, report['findings']
+
+
+def test_every_screen_condition_has_a_real_browser_fixture():
+    import json as _json
+    table = _json.loads((SCRIPTS.parent / 'fixtures/screen-red-cases.json').read_text(encoding='utf-8'))
+    required = {'IA_DOM_ORDER', 'IA_DOM_COPY_DRIFT', 'IA_DOM_COPY_ORDER', 'IA_DOM_COPY_SECTION', 'IA_DOM_UNANCHORED_TEXT'}
+    assert required <= {c['code'] for c in table['conditions']}
+    assert {code for _, _, code in SCREEN_RED} == required

@@ -1,7 +1,8 @@
 # 人間確認とハッシュに基づく承認
 
 正典はbiz_opsのSPEC-design-system-standardizationと
-ADR-20261111-defer-approval-signatures。署名必須のDeferredは2026-10-22から実装済みで、所有者が2026-11-11に承認して記録した。
+ADR-20261111-defer-approval-signatures・ADR-20261118-ai-records-owner-approvals。署名必須のDeferredは2026-10-22から実装済みで、所有者が2026-11-11に承認して記録した。
+「記録はオーナー自身」は2026-11-18にオーナーの指示で「承認の判断はオーナー、記録はAI」に置き換えた。
 
 ## 実装と境界
 
@@ -9,7 +10,8 @@ L0はkey・value_hash・approver・ISO dateを持つ行と媒体別JCS hashを�
 値/理由/散文/alias先/profileが変われば承認が失効する。
 署名・鍵・agent・allowed_signersの設定は不要。承認者名と日付は記録であり、本人性の証明ではない。
 同じ権限のAIによる台帳の偽造を技術的に防ぐ保証は持たない。
-AIは実台帳を書かない。オーナー自身が対象を確認して記録する。
+承認の判断はオーナーがする。記録はAIがする。AIが記録してよいのは、会話やPRにオーナー自身の承認の言葉がある時だけ。
+言葉の無い記録は道具が断る（`--owner-words` と `--approved-on` が必須）。言葉は記録の正しさを機械で証明しない。引用と日付を commit と PR に残し、後から人が辿れるようにする。
 承認方式の簡素化への同意は、個別のデザイン値への承認ではない。
 
 ## 確認と記録
@@ -20,11 +22,17 @@ design-author approve --prepare --must --repo . > request.json
 
 prepareはschema_version 2 / approval_scheme hash-jcs-v1の確認用データだけを返す。
 値・理由・散文と対象hashを人間が確認する。部分承認は--target ds:web:item:<id>で絞る。
-対象への明示承認後、オーナー自身が次を実行する。AIが記録操作を代行しない。
+オーナーが会話やPRで対象を承認したら、AIが次を実行する。`--approved-on` は確認用データの各行の date と同じ日でなければ断る（違う日の承認は `prepare --date` で作り直す）。
 
 ```sh
-design-author approve --request request.json --approver owner --repo .
+design-author approve --request request.json --approver owner \
+  --owner-words '<オーナーの承認の言葉をそのまま>' --approved-on <YYYY-MM-DD> --repo .
 ```
+
+結果の `commit_trailer`（`Owner-Approval: 「…」 (日付)`）を commit メッセージと PR 本文に書く。
+positioning は outline より先に承認するので、`IA_NO_OUTLINES` と `zero IA check targets` は prepare を止めない。
+positioning を分けて承認する途中の「まだ足りない」（代替が 0 件・強みの比べ先が無い・満たす度合いの欠けなど、承認済みの部分から導く失格）も prepare を止めない。残りを承認すれば直るから。矢印の形・重複・セグメントをまたぐ矢印・参照の切れなど、下書きそのものの壊れは止める。
+design/design.yaml の無い repo（IA だけ）では、IA の解決だけで対象を作り、記録する。
 
 確認用データはorigin URLのdigestでrepositoryを識別し、URLそのものを出力しない。
 記録前・記録中に現在のhashとrepositoryを照合し、変更されていれば拒否する。

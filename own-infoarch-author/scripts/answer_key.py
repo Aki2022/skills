@@ -67,24 +67,39 @@ body{{margin:0;padding:16px;font:15px/1.6 system-ui,sans-serif;color:var(--fg);b
 table{{border-collapse:collapse;width:100%}} td,th{{border-bottom:1px solid var(--line);padding:8px;vertical-align:top;text-align:left}}
 .id{{font:12px ui-monospace,monospace;color:var(--muted)}} .choice label{{display:block;white-space:nowrap}}
 button{{font:inherit;padding:8px 16px;margin:16px 0}}
+textarea{{width:100%;box-sizing:border-box;font:12px ui-monospace,monospace;color:var(--fg);background:var(--bg);border:1px solid var(--line)}}
 </style></head><body>
 <h1>正解表のラベル付け</h1>
 <p>文案を読んだ人に、その提供価値が伝わるかを選んでください。分からないものは「分からない」のままにします（数えません）。
-選び終わったら「ラベルを保存」で labels.json を保存し、AI に渡してください。</p>
+選び終わったら「ラベルを保存」で labels.json を保存するか、「ラベルをコピー」で中身をコピーして、AI に渡してください。</p>
 <p class="id">answer key: {key}（{len(items)} 組）</p>
 <table><thead><tr><th>組</th><th>文案</th><th>提供価値</th><th>伝わるか</th></tr></thead><tbody>
 {chr(10).join(rows)}
 </tbody></table>
-<button id="save">ラベルを保存</button>
+<button id="save">ラベルを保存</button> <button id="copy">ラベルをコピー</button>
+<p>保存したファイルが見つからないときは、下の欄の中身をそのままコピーして AI に渡してください（選ぶたびに更新されます）。</p>
+<textarea id="labels-json" readonly rows="8" aria-label="labels.json の中身"></textarea>
 <script>
-document.getElementById('save').addEventListener('click', function () {{
+function current() {{
   var labels = {{}};
   document.querySelectorAll('tr[data-id]').forEach(function (tr) {{
     var v = tr.querySelector('input:checked').value;
     labels[tr.getAttribute('data-id')] = v === 'null' ? null : v === 'true';
   }});
-  var blob = new Blob([JSON.stringify({{answer_key: '{key}', labels: labels}}, null, 2)], {{type: 'application/json'}});
+  return JSON.stringify({{answer_key: '{key}', labels: labels}}, null, 2);
+}}
+var box = document.getElementById('labels-json');
+function show() {{ box.value = current(); }}
+document.querySelectorAll('input[type=radio]').forEach(function (r) {{ r.addEventListener('change', show); }});
+show();
+document.getElementById('save').addEventListener('click', function () {{
+  var blob = new Blob([current()], {{type: 'application/json'}});
   var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'labels.json'; a.click();
+}});
+document.getElementById('copy').addEventListener('click', function () {{
+  show(); box.select();
+  if (navigator.clipboard) {{ navigator.clipboard.writeText(box.value).catch(function () {{ document.execCommand('copy'); }}); }}
+  else {{ document.execCommand('copy'); }}
 }});
 </script></body></html>
 '''

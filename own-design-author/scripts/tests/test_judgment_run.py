@@ -60,7 +60,7 @@ def test_reserve_shared_budget_resume_and_preserve_unlabeled_answers(tmp_path,mo
 
 def test_budget_and_missing_usage_fail_before_auth(tmp_path,monkeypatch):
     paths=setup(tmp_path);monkeypatch.setattr(classify,'read_api_key',lambda:pytest.fail('auth'))
-    paths[2].write_text(json.dumps({'schema_version':1,'attempted_judgments':1999,'batches':[]}))
+    paths[2].write_text(json.dumps({'schema_version':1,'attempted_judgments':classify.MAX_JUDGMENTS,'batches':[]}))
     with pytest.raises(classify.ClassificationError,match='budget'):run(paths)
     paths[2].unlink()
     with pytest.raises(classify.ClassificationError,match='usage-ledger-required'):run(paths,dry_run=True)

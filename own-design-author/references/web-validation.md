@@ -124,7 +124,7 @@ ruleがある状態でだけ合うことは、画面では対象外（n/a）・�
 - L2 が問題を見つけた画面（exit 1、描画はできている）も ITEMS で判定し、L2 が見つけた検査の id と件数を `L2 <env> found: ...` として errors に並べる。
 - 描けなかった画面・状態（描画の失敗、状態に到達できない等）は判定せず、`items.json` の `unrendered` に残す。合格にはしない。
 - ITEMS が外れても、描けた画面の AFM 段を実行する。
-- 終了コードはゲートと同じ規則で、外れが1つでもあれば exit 2。結果と `items.json` は `mode: report-all` を持つ。
+- 終了コードはゲートと同じ規則。描けない画面・ITEMS の外れ・AFM の欠落があれば exit 2、最も重いものが L2 の指摘（exit 1）や警告なら exit 1。外れがあれば 0 にはならない。結果と `items.json` は `mode: report-all` を持つ。
 - 診断のための実行で、出荷の証拠にはならない。`design-ship` は `mode` を持つ結果・`items.json` を拒む。
 
 ### 画面を並べて描く
@@ -204,6 +204,7 @@ L2に渡す検査と部品のselectorは`item_checks`に入る。
 - AFM: 対象の画面に残った`afm`の項目だけを判定する。端末内のApple Foundation Models（`fm` CLI、systemモデル、従量課金・外部送信なし）へ、
   その画面の最も広いviewport・最初のschemeの安定キャプチャ（L2が測った同じ画像）を渡す。HTMLソースは渡さない。他のviewport・schemeはskippedに理由付きで残す。
   項目は文字数上限でまとめ、`--greedy`と構造化出力で`applies`・`violates`・`reason`を受け取る。
+  1項目だけでも画像と合わせてモデルの入力上限を超えた時は、画像の長辺を半分ずつ（最大3回、macOSの`sips`）縮めた写しで判定し直す。L2の証拠画像は書き換えない。縮めて判定した数はAFM段の`shrunk`に入る。縮めても入らない項目は未カバーのまま。
   結果はモデル名・OS build・プロンプト版・項目・証拠・画像のhashをキーに、repo外（`DESIGN_AFM_CACHE`、既定は利用者のcache）へ保存し、同じ入力は再判定しない。
   全判定は`.resolved/afm.json`。
 

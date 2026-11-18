@@ -3,11 +3,13 @@
 The gate stops at the first failing page so a broken page never ships, but then a repository sees one page's
 problems at a time and the skill itself cannot be checked on the rest without fixing the site first.
 `design-check --report-all` keeps going: every page and state is rendered and judged, every failure is listed, and
-the run still exits 2 when anything failed. It is never a ship result.
+the run exits like the gate (never 0 when anything failed). It is never a ship result.
 """
 import copy
 import json
+import os
 import subprocess
+import sys
 
 import pytest
 
@@ -102,3 +104,66 @@ def test_report_all_judges_a_page_whose_l2_found_problems_and_names_them(rendere
     assert any(e.startswith('L2 DESIGN_FIXTURE_URL found: ') and 'design-palette' in e for e in result['errors']), result['errors']
     assert items(root)['machine']['dads-000001'] == {'DESIGN_FIXTURE_URL': 'fail', 'DESIGN_FIXTURE_URL_2': 'fail'}
     assert items(root)['unrendered'] == []
+
+
+def test_report_all_help_states_the_gate_exit_rule():
+    # Report-all exits like the gate: an L2 finding alone is exit 1, not 2. The help must not promise exit 2.
+    from test_core import SKILL
+    done = subprocess.run([sys.executable, str(SKILL / 'scripts/web_check.py'), '--help'], capture_output=True, text=True)
+    assert done.returncode == 0, done.stderr
+    text = ' '.join(done.stdout.split())
+    assert 'exits 2 on any failure' not in text, text
+    assert 'exits like the gate' in text, text
+
+
+@pytest.mark.skipif(os.environ.get('DESIGN_BROWSER_TEST') != '1', reason='explicit real browser run required')
+def test_report_all_does_not_report_success_when_only_l2_found_problems(project, monkeypatch, capsys):
+    # Every other stage is clean and L2 finds an off-palette colour (exit 1): the diagnostic run must not end as
+    # success while it lists that failure. L1, L2, ITEMS and AFM run for real. Only L0's exit code is set to 0,
+    # because every fixture carries L0 advisories (proposed values, uncovered rules) whose exit 1 hides the defect.
+    from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
+    from functools import partial
+    from threading import Thread
+    import web_check
+    from test_core import approve
+    from test_ship_integration import browser_env, browser_project
+    env = browser_env()
+    root = browser_project(project, env)
+    _, catalogs = project
+    for key in ('NODE_PATH', 'DESIGN_AUDIT_NODE'):
+        if key in env:
+            monkeypatch.setenv(key, env[key])
+    real = web_check.check_design
+    monkeypatch.setattr(web_check, 'check_design', lambda *a, **k: {**real(*a, **k), 'exit_code': 0})
+    html = root / 'index.html'
+    clean = html.read_text()
+
+    class Handler(SimpleHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+    server = ThreadingHTTPServer(('127.0.0.1', 0), partial(Handler, directory=str(root)))
+    Thread(target=server.serve_forever, daemon=True).start()
+    monkeypatch.setenv('DESIGN_WEB_URL', 'http://127.0.0.1:' + str(server.server_port) + '/')
+
+    def run(page, *extra):
+        html.write_text(page)
+        approve(project)
+        capsys.readouterr()
+        monkeypatch.setattr(sys, 'argv', ['web_check.py', '--repo', str(root), '--catalog-dir', str(catalogs), *extra])
+        code = web_check.main()
+        return code, json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    try:
+        code, result = run(clean, '--report-all')
+        assert code == 0 and result['exit_code'] == 0, result  # the baseline is clean; only L2 changes below
+        page = clean.replace('<p>Stable text.</p>', '<p style="color:rgb(255,0,0)">Stable text.</p>')
+        code, result = run(page, '--report-all')
+        gate_code, gate = run(page)
+    finally:
+        server.shutdown()
+    assert result['mode'] == 'report-all'
+    assert [s['exit_code'] for s in result['stages'] if s['stage'] == 'L2'] == [1], result['stages']
+    assert [s['exit_code'] for s in result['stages'] if s['stage'] == 'ITEMS'] == [0], result['stages']
+    assert not result.get('warnings'), result['warnings']
+    assert any(e.startswith('L2 DESIGN_WEB_URL found: ') for e in result['errors']), result['errors']
+    assert code != 0 and result['exit_code'] == code, result
+    assert code == gate_code == 1, (result['errors'], gate['errors'])

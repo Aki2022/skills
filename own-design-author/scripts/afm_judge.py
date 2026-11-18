@@ -24,6 +24,8 @@ QUESTION = 'Return exactly one verdict per rule id listed.'
 BATCH_CHARS = 4000  # ~2,100 of the 4,096-token window with an image (measured 2026-11-12)
 TEXT_ARTIFACT_CHARS = 2000
 TIMEOUT = 180
+OVERFLOW = "exceeded the model's context size"
+SHRINK_STEPS = 3  # halve the longest image side at most this many times when one rule and the image overflow
 SCHEMA = {
     '$defs': {'Verdict': {'type': 'object', 'title': 'Verdict', 'additionalProperties': False,
                           'properties': {'id': {'type': 'string'}, 'applies': {'type': 'boolean'},
@@ -38,6 +40,25 @@ ANSI = re.compile(r'\x1b\[[0-9;]*m')
 
 class AfmUnavailable(RuntimeError):
     """The on-device model cannot be reached; the gate must stop, not pass."""
+
+
+class _Overflow(Exception):
+    """The rules plus the image did not fit the model's window; a smaller copy of the image may."""
+
+
+def _shrunk(image, scratch, step):
+    """A copy of the image with its longest side halved `step` times (macOS sips). The evidence image is untouched."""
+    sips = shutil.which('sips')
+    if not sips:
+        return None
+    size = subprocess.run([sips, '-g', 'pixelWidth', '-g', 'pixelHeight', image], capture_output=True, text=True)
+    sides = [int(n) for n in re.findall(r'pixel(?:Width|Height): (\d+)', size.stdout)]
+    if size.returncode or len(sides) != 2:
+        return None
+    longest = max(1, max(sides) >> step)
+    target = Path(scratch) / f'shrunk-{step}-{Path(image).name}'
+    done = subprocess.run([sips, '-Z', str(longest), image, '--out', str(target)], capture_output=True, text=True)
+    return str(target) if done.returncode == 0 and target.is_file() else None
 
 
 def default_command():
@@ -114,6 +135,8 @@ def _ask(command, schema_path, batch, artifact):
         args += ['--text', 'ARTIFACT SOURCE:\n' + artifact['text'][:TEXT_ARTIFACT_CHARS]]
     run = _run(command, args + [QUESTION])
     if run.returncode:
+        if OVERFLOW in ANSI.sub('', run.stderr + run.stdout):
+            raise _Overflow()
         return {}
     try:
         verdicts = json.loads(ANSI.sub('', run.stdout).strip())['verdicts']
@@ -128,9 +151,33 @@ def _ask(command, schema_path, batch, artifact):
     return found
 
 
+def _retry_alone(command, schema_path, row, artifact, scratch, result):
+    """Ask for one rule on its own. If even that overflows the window, ask again on smaller copies of the image."""
+    result['calls'] += 1
+    try:
+        return _ask(command, schema_path, [row], artifact)
+    except _Overflow:
+        pass
+    if artifact['kind'] != 'image':
+        return {}
+    for step in range(1, SHRINK_STEPS + 1):
+        smaller = _shrunk(artifact['path'], scratch, step)
+        if not smaller:
+            return {}
+        result['calls'] += 1
+        try:
+            found = _ask(command, schema_path, [row], {**artifact, 'path': smaller})
+        except _Overflow:
+            continue
+        if found:
+            result['shrunk'] += 1
+        return found
+    return {}
+
+
 def judge(candidates, artifacts, *, command=None, cache_dir=None):
     command, cache_dir = command or default_command(), Path(cache_dir or default_cache())
-    result = {'errors': [], 'warnings': [], 'uncovered': [], 'screened': [], 'calls': 0, 'cached': 0}
+    result = {'errors': [], 'warnings': [], 'uncovered': [], 'screened': [], 'calls': 0, 'cached': 0, 'shrunk': 0}
     if not candidates:
         return result
     if not artifacts:
@@ -153,12 +200,14 @@ def judge(candidates, artifacts, *, command=None, cache_dir=None):
                 else:
                     pending.append(row)
             for batch in _batches(pending):
-                answered = _ask(command, schema_path, batch, artifact)
+                try:
+                    answered = _ask(command, schema_path, batch, artifact)
+                except _Overflow:
+                    answered = {}
                 result['calls'] += 1
                 for row in batch:
                     if row['id'] not in answered:  # one retry per item on its own
-                        answered.update(_ask(command, schema_path, [row], artifact))
-                        result['calls'] += 1
+                        answered.update(_retry_alone(command, schema_path, row, artifact, scratch, result))
                     if row['id'] in answered:
                         verdicts[row['id']] = answered[row['id']]
                         path = cache_dir / (_key(identity, row, digest) + '.json')

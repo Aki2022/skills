@@ -6,23 +6,16 @@
 // visibility, visible text (painted text nodes only, the same rule as `unanchored`) and whether a declared-text or
 // official-name anchor holds another IA anchor (`nested`), the total rendered text length, the text visible in the
 // first screen, and the visible text that belongs to no anchor (`unanchored`).
-// Playwright is resolved from INFOARCH_PLAYWRIGHT_DIR, else from the current directory (the target repo).
-// It is never installed automatically; when it cannot be resolved this exits 2.
-import { createRequire } from "node:module";
+// Playwright is found by own-design-author's playwright_runtime.mjs: OWN_PLAYWRIGHT_DIR, else the project
+// (INFOARCH_PLAYWRIGHT_DIR when set, else the current directory), else the per-machine runtime of the version
+// pinned in the project's design/render-environment.json. It is never installed automatically; when it cannot
+// be resolved this exits 2.
 import { pathToFileURL } from "node:url";
-import { resolve } from "node:path";
+import { join } from "node:path";
+import { loadPlaywright, pinnedVersion } from "../../own-design-author/scripts/playwright_runtime.mjs";
 
-const base = process.env.INFOARCH_PLAYWRIGHT_DIR || process.cwd();
-let playwright;
-try {
-  // An explicit runtime root is authoritative; NODE_PATH must not silently replace it.
-  // With no override, retain normal project/monorepo ancestor module resolution.
-  playwright = createRequire(`${base}/`)(process.env.INFOARCH_PLAYWRIGHT_DIR
-    ? resolve(base, "node_modules/playwright") : "playwright");
-} catch {
-  console.error(`playwright が解決できない（${base ? "INFOARCH_PLAYWRIGHT_DIR か実行ディレクトリ" : ""}）。自動では入れない。`);
-  process.exit(2);
-}
+const projectRoot = process.env.INFOARCH_PLAYWRIGHT_DIR || process.cwd();
+const { playwright } = loadPlaywright({ version: pinnedVersion(join(projectRoot, "design", "render-environment.json")) });
 
 const [file, viewportsJson] = process.argv.slice(2);
 if (!file || !viewportsJson) {

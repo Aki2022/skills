@@ -48,11 +48,25 @@ def test_value_fit_is_copy_times_one_value_and_replaces_strategy_fit():
     kinds = {r['input']['kind'] for r in rows}
     assert 'ia-value-fit' in kinds and 'ia-strategy-fit' not in kinds
     fit = {r['id']: r for r in rows if r['input']['kind'] == 'ia-value-fit'}
-    assert sorted(fit) == [f'ia-value-fit:lp-municipal/{s}/{c}' for s, c in
-                           (('sec-0001', 'cpy-0001'), ('sec-0001', 'cpy-0002'), ('sec-0002', 'cpy-0003'),
-                            ('sec-0003', 'cpy-0004'), ('sec-0003', 'cpy-0005'))]
-    ctx = fit['ia-value-fit:lp-municipal/sec-0002/cpy-0003']['input']['context']
-    assert ctx['value'] == {'id': 'val-0003', 'text': '止まらずに動く'} and set(ctx) == {'outline', 'message', 'value'}
+    # trust (facts, proof) and act (the call to action) sections do not carry a value: they are not asked (D32).
+    assert sorted(fit) == ['ia-value-fit:lp-municipal/sec-0001/cpy-0001', 'ia-value-fit:lp-municipal/sec-0001/cpy-0002']
+    ctx = fit['ia-value-fit:lp-municipal/sec-0001/cpy-0002']['input']['context']
+    assert set(ctx) == {'outline', 'message', 'value'}
+
+
+def test_trust_and_act_copy_is_not_asked_whether_it_conveys_a_value():
+    """Pilot and I16: every fact listing and call-to-action copy was labeled "does not convey" by the owner, because
+    conveying a value is not its job. The value judgment skips those sections; the name and claim judgments stay."""
+    rows = judge.outline_candidates('lp-municipal', OUTLINE, SSOT, jl.load_policy(), jl)
+    roles = {sid: sec['role'] for sid, sec in OUTLINE['sections'].items()}
+    by_kind = {}
+    for r in rows:
+        by_kind.setdefault(r['input']['kind'], set()).add(r['id'].split(':', 1)[1])
+    skipped = {f'lp-municipal/{c["section"]}/{cid}' for cid, c in OUTLINE['copies'].items()
+               if roles[c['section']] in ('trust', 'act')}
+    assert skipped and not skipped & by_kind['ia-value-fit']
+    assert skipped <= by_kind['ia-unregistered-claim']
+    assert not any(i['id'].split('@')[0] in skipped for i in items())
 
 
 def test_value_fit_kind_is_in_the_shared_policy():
@@ -67,21 +81,24 @@ def test_judgment_input_binds_the_copy_and_the_value_content(change):
         return {r['id']: r['judgment_hash'] for r in rows if r['input']['kind'] == 'ia-value-fit'}
     ssot, outline = copy.deepcopy(SSOT), copy.deepcopy(OUTLINE)
     if change == 'copy':
-        outline['copies']['cpy-0003']['text'] = '導入は{{fct-0001}}、止まらずに動きます'
+        outline['copies']['cpy-0002']['text'] = '運用の手間がかなり減ります'
     else:
-        ssot['values']['val-0003']['text'] = '止まらない'
+        ssot['values']['val-0001']['text'] = '運用がかなり楽になる'
     before, after = key(SSOT, OUTLINE), key(ssot, outline)
     moved = sorted(k for k in before if before[k] != after[k])
-    assert moved == ['ia-value-fit:lp-municipal/sec-0002/cpy-0003'], moved
+    # cpy-0001 and cpy-0002 both point to val-0001; trust and act copy are not asked (D32)
+    expect = ['ia-value-fit:lp-municipal/sec-0001/cpy-0002'] if change == 'copy' else \
+        ['ia-value-fit:lp-municipal/sec-0001/cpy-0001', 'ia-value-fit:lp-municipal/sec-0001/cpy-0002']
+    assert moved == expect, moved
 
 
 # ---- the answer key (requirement 12) -----------------------------------------------------------------------------
 
 def test_answer_key_pairs_each_copy_with_its_value_and_re_pairs_it_within_the_positioning():
     out = {i['id']: i for i in items()}
-    own = out['lp-municipal/sec-0002/cpy-0003@val-0003']
-    assert own['kind'] == 'own' and own['value']['id'] == 'val-0003'
-    swap = out['lp-municipal/sec-0002/cpy-0003@val-0001']  # the other value of seg-0001
+    own = out['lp-municipal/sec-0001/cpy-0002@val-0001']
+    assert own['kind'] == 'own' and own['value']['id'] == 'val-0001'
+    swap = out['lp-municipal/sec-0001/cpy-0002@val-0003']  # the other value of seg-0001
     assert swap['kind'] == 'swap' and swap['candidate']['input']['kind'] == 'ia-value-fit'
     assert swap['candidate']['input']['text'] == own['candidate']['input']['text']  # same copy, another value
 

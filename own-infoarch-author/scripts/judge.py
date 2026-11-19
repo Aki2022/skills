@@ -36,6 +36,9 @@ from common import Report
 DESIGN_SCRIPTS = Path(__file__).resolve().parents[2] / 'own-design-author/scripts'
 LEDGER = Path('design/judgments.json')
 ACCEPTED = Path('design/info_arch/accepted_reviews.yaml')
+# Fact and proof listings (trust) and the call to action (act) are not there to convey a value: in the I16 example
+# and the officeohana pilot the owner labeled every such copy "does not convey", so asking only produced reviews.
+VALUE_FIT_SKIP_ROLES = ('trust', 'act')
 IA_PREFIX = 'ia-'
 
 
@@ -99,7 +102,8 @@ def outline_candidates(oid, outline, ssot, policy, jl):
                    'facts': [{'id': f, 'label': facts.get(f, {}).get('label', ''), 'value': facts.get(f, {}).get('value', '')}
                              for f in dict.fromkeys(check.PLACEHOLDER.findall(c['text']))]}
             rows.append(jl.candidate('ia-unregistered-claim', ident, text, ctx, policy=policy))
-            if msg and (ssot.get('values', {}).get(msg['value']) or {}).get('text'):
+            if (msg and sec['role'] not in VALUE_FIT_SKIP_ROLES
+                    and (ssot.get('values', {}).get(msg['value']) or {}).get('text')):
                 rows.append(value_fit(jl, policy, ident, text, oid, c['message'], _value(ssot, msg['value'])))
     # The order of the copy is what the fit is judged against, so reordering it must invalidate the judgment.
     fit_ctx = {'outline': oid, 'target': outline['target'], 'touchpoint': outline['touchpoint'], 'tone': outline['tone'],

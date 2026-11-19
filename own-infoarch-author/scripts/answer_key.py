@@ -27,7 +27,9 @@ def build(m, approved, policy, jl):
         seg = ol.segment_of(o)
         same = sorted(v for v, a in values.items() if a.get('segment') == seg)
         other = sorted(v for v, a in values.items() if a.get('segment') != seg)
-        for sid, _, copies in ol.ordered_sections(o):
+        for sid, sec, copies in ol.ordered_sections(o):
+            if sec['role'] in judge.VALUE_FIT_SKIP_ROLES:
+                continue  # not asked whether it conveys a value, so nothing to measure
             for cid, c in copies:
                 own = (o['messages'].get(c['message']) or {}).get('value')
                 if own not in values:

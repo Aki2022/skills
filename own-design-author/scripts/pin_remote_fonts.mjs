@@ -16,7 +16,7 @@
  * (the measurement's own flow can request subsets this tool's render does not), and prints the whole remote_fonts.
  */
 import {readFileSync} from 'node:fs';
-import {createRequire} from 'node:module';
+import {loadPlaywright} from './playwright_runtime.mjs';
 import {sha,fixedLaunchOptions,settleFonts} from './fixed_render.mjs';
 
 const args=process.argv.slice(2);
@@ -47,8 +47,7 @@ if(!urls.length||!origins.length||!flag('environment')){
 }
 if(origins.some(o=>!/^https?:\/\/[^/?#\s]+$/.test(o))){console.error('origins are scheme://host[:port] without a path');process.exit(2);}
 const config=JSON.parse(readFileSync(flag('environment'),'utf8'));
-const require=createRequire(process.cwd()+'/');
-const {chromium}=require('playwright');
+const {chromium}=loadPlaywright({version:config.runtime?.playwright_version||null}).playwright;
 const browser=await chromium.launch(fixedLaunchOptions(chromium));
 const files={};const families=new Set();
 try{

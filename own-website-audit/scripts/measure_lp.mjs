@@ -24,20 +24,12 @@ import { writeFileSync, existsSync, realpathSync, unlinkSync } from "node:fs";
 import {dirname} from "node:path";
 import {loadEnvironment,verifyRuntime,configureFonts,trackFonts,renderEvidence,compareRepeats,fixedLaunchOptions,describeRenderFailure,parseState,applyState,settleFonts,stableCapture} from "../../own-design-author/scripts/fixed_render.mjs";
 import { loadManifest, collectDesign, collectItemChecks } from "../../own-design-author/scripts/resolved_contract.mjs";
-import { createRequire } from "node:module";
+import {loadPlaywright as locateRuntime, pinnedVersion, locateCompanion} from "../../own-design-author/scripts/playwright_runtime.mjs";
 
-const require = createRequire(`${process.cwd()}/`);
-
+// Playwright comes from the project, else the per-machine runtime of the version pinned in --environment.
 function loadPlaywright() {
-  try {
-    return require("playwright");
-  } catch {
-    console.error(
-      "playwright が解決できない。playwright を持つディレクトリで実行するか、" +
-        "`npm i -D playwright && npx playwright install chromium` を実行する。",
-    );
-    process.exit(2);
-  }
+  const i = process.argv.indexOf("--environment");
+  return locateRuntime({version: pinnedVersion(i === -1 ? null : process.argv[i + 1])});
 }
 
 const args = process.argv.slice(2);
@@ -70,8 +62,6 @@ try {
 }
 catch { console.error('resolved manifest unavailable, invalid or stale; rerun L0'); process.exit(2); }
 if (!viewports.length || !schemes.length) { console.error('zero measurement runs'); process.exit(2); }
-let axePath = process.env.AXE_CORE_PATH;
-if (!axePath) { try { axePath = require.resolve('axe-core/axe.min.js'); } catch {} }
 
 
 /**
@@ -677,7 +667,10 @@ async function assetsReady(page) {
   await page.waitForTimeout(700);
 }
 
-const { chromium } = loadPlaywright();
+const runtime = loadPlaywright();
+const { chromium } = runtime.playwright;
+// axe-core comes from AXE_CORE_PATH, else the project, else the Playwright runtime's directory.
+const axePath = process.env.AXE_CORE_PATH || locateCompanion('axe-core/axe.min.js', {runtimeDir: runtime.dir});
 let fixed=null,environment=null;
 try {
   if(flag('environment',null)){
@@ -689,7 +682,7 @@ try {
 let browser;
 try{browser=await chromium.launch(fixed?fixedLaunchOptions(chromium):{});}
 catch{console.error('browser runtime unavailable');process.exit(2);}
-try{if(fixed)environment=await verifyRuntime(fixed,chromium,require('playwright/package.json').version,browser);}
+try{if(fixed)environment=await verifyRuntime(fixed,chromium,runtime.version,browser);}
 catch{await browser.close();console.error('fixed runtime mismatch');process.exit(2);}
 const report = {
   url,
@@ -886,7 +879,7 @@ if(fixed){
   stage='recheck';
   const reloaded=loadEnvironment(fixed.path,fixed.root,viewports,schemes);
   if(reloaded.config_sha256!==fixed.config_sha256)throw Error('environment changed');
-  await verifyRuntime(reloaded,chromium,require('playwright/package.json').version,browser);
+  await verifyRuntime(reloaded,chromium,runtime.version,browser);
 }
 } catch (error) {
   const failure=describeRenderFailure(error,stage);

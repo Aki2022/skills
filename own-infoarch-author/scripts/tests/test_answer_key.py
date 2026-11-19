@@ -138,10 +138,35 @@ const { chromium } = require(require('path').join(process.env.PW_DIR, 'node_modu
     picks[await rows[n].getAttribute('data-id')] = v === 'null' ? null : v === 'true';
   }
   const shown = await p.$eval('#labels-json', e => e.value);
-  console.log(JSON.stringify({ picks, shown }));
+  const notice = await p.isVisible('#no-script');
+  console.log(JSON.stringify({ picks, shown, notice }));
   await b.close();
 })();
 """
+NO_SCRIPT = r"""
+const { chromium } = require(require('path').join(process.env.PW_DIR, 'node_modules', 'playwright'));
+(async () => {
+  const b = await chromium.launch();
+  const p = await b.newPage({ javaScriptEnabled: false });
+  await p.goto('file://' + process.argv[2]);
+  console.log(JSON.stringify({ notice: await p.isVisible('#no-script'),
+                               text: await p.textContent('#no-script') }));
+  await b.close();
+})();
+"""
+
+
+@pytest.mark.skipif(not PW_DIR, reason='INFOARCH_TEST_PLAYWRIGHT_DIR is not set: real-browser test not run (skipped, not passed)')
+def test_a_viewer_without_scripts_is_told_to_open_the_page_in_a_browser(tmp_path):
+    """The owner's file viewer ran no script, so save and copy silently did nothing (pilot, 2026-11-19)."""
+    page = tmp_path / 'page.html'
+    page.write_text(answer_key.page(items()), encoding='utf-8')
+    script = tmp_path / 'noscript.cjs'
+    script.write_text(NO_SCRIPT, encoding='utf-8')
+    proc = subprocess.run(['node', str(script), str(page)], capture_output=True, text=True, check=True,
+                          env={**os.environ, 'PW_DIR': PW_DIR})
+    out = json.loads(proc.stdout)
+    assert out['notice'] and 'ブラウザ' in out['text']
 
 
 def test_page_shows_the_labels_as_copyable_json():
@@ -162,6 +187,7 @@ def test_copyable_json_follows_the_choices_and_measures(tmp_path):
     out = json.loads(proc.stdout)
     shown = json.loads(out['shown'])
     assert shown == {'answer_key': answer_key.key_hash(its), 'labels': out['picks']}
+    assert out['notice'] is False  # scripts run, so the no-script notice is hidden
     theta = jl.load_policy()['theta']
     result = answer_key.measure(its, shown, ledger(its, {i['id']: 0.0 for i in its}), theta)
     assert result['status'] == 'measured'

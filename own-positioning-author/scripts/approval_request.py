@@ -263,11 +263,12 @@ def _card(i):
     fields = f'<dl>{fields}</dl>' if fields else ''
     where = html.escape('・'.join(x for x in (i.get('segment'), i.get('kind')) if x))
     diagram = _diagram(i['graph']) if i.get('graph', {}).get('nodes') else ''
+    detail = f'<details class="detail"{" open" if not diagram else ""}><summary>文章でも読む</summary>{"".join(sections)}</details>' if sections else ''
     return f'''<article class="card" data-key="{html.escape(i["key"])}" data-id="{html.escape(i["id"])}">
 <header><h3>{html.escape(i["text"] or i["id"])}</h3>
 <p class="meta"><code>{html.escape(i["key"])}</code> <span class="hash" title="{html.escape(i.get("hash_note", "この経路全体のハッシュ"))}">{i["hash12"]}</span> {where} {"".join(badges)}</p></header>
 <p class="meta">{meta}</p>
-{fields}{todo}{diagram}<details class="detail"{" open" if not diagram else ""}><summary>文章でも読む</summary>{"".join(sections)}</details>
+{fields}{todo}{diagram}{detail}
 <div class="choice" role="group" aria-label="{html.escape(i["id"])} の判断">
 <button type="button" data-d="ok" aria-pressed="false">○ 承認する</button>
 <button type="button" data-d="ng" aria-pressed="false">× 差し戻す</button>

@@ -24,7 +24,10 @@ def build(bp, approved=(), must=()):
     """-> [item] sorted by item id, one per proposed product item, in the shape the page renders."""
     approved, must = set(approved), set(must)
     out = []
-    for key, digest in sorted(blueprint.targets(bp).items(), key=lambda kv: kv[0]):
+    order = {p: n for n, p in enumerate(blueprint.ITEM_BLOCKS.values())}  # stories, principles, constraints, objects, entries
+    named = lambda ident: ((blueprint.items(bp).get(ident) or {}).get('text') or (blueprint.items(bp).get(ident) or {}).get('name')
+                           or (bp.screens[ident][1]['title'] if ident in bp.screens else '') or '')
+    for key, digest in sorted(blueprint.targets(bp).items(), key=lambda kv: (order[kv[0].split(':')[2].split('-')[0]], kv[0])):
         iid = key[len(blueprint.ITEM_PREFIX):]
         item = blueprint.items(bp)[iid]
         fields = []
@@ -35,8 +38,9 @@ def build(bp, approved=(), must=()):
             v = KIND_VALUES.get(v, v) if fld == 'kind' else ('主役' if fld == 'lead' and v is True else v)
             if fld == 'lead' and v is False:
                 continue
-            fields.append((FIELD_NAMES[fld], '、'.join(v) if isinstance(v, list) else str(v)))
-        title = item.get('text') or item.get('name') or iid
+            shown = [f'{x}（{named(x)}）' if named(x) and x != named(x) and fld in ('serves', 'screen') else x for x in (v if isinstance(v, list) else [v])] if fld in ('serves', 'screen') else None
+            fields.append((FIELD_NAMES[fld], '、'.join(shown) if shown else ('、'.join(v) if isinstance(v, list) else str(v))))
+        title = item.get('text') or item.get('name') or (f'入口：{named(item["screen"]) or item["screen"]}' if iid.startswith('ntr-') else iid)
         out.append({'id': iid, 'key': key, 'value_hash': digest, 'hash12': digest[:12], 'kind': KIND_NAMES[iid.split('-')[0]],
                     'text': title, 'fields': fields, 'roles': [], 'problems': [], 'approved': iid in approved,
                     'required': key in must, 'hash_note': 'この項目 1 件のハッシュ'})

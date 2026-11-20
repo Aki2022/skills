@@ -7,12 +7,14 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 import signal
 import socket
 import subprocess
 import sys
 import tempfile
 import time
+from urllib.error import HTTPError
 from urllib.request import urlopen
 
 from design_author import git_root, read_data, CATALOG
@@ -45,41 +47,64 @@ def command(argv,root,env,*,purpose="ship"):
     if result.returncode:raise ValueError('configured '+purpose+' command failed')
 
 
-def wait_ready(url,process):
-    deadline=time.monotonic()+30
+# The longest a render row may take to answer. A server that starts local emulators and seeds them before its app
+# (the web pilot waits up to 120s for its emulator ports alone) does not answer within the 30s a bare process
+# needs; measured 2026-11-20, the web row was still seeding when a 30s wait stopped it. A healthy row answers
+# as soon as it is up, so the bound only sets how long a broken one takes to fail.
+READY_SECONDS=180
+
+
+def wait_ready(name,url,process,log):
+    """Wait for one render row. A failure names the row, what it last answered, and where its server's output is."""
+    deadline=time.monotonic()+READY_SECONDS;last='no connection'
+    where=name+' ('+url+')'
     while True:
-        if process is not None and process.poll() is not None:raise ValueError('bound render server exited before validation')
+        if process is not None and process.poll() is not None:
+            raise ValueError('bound render server '+where+' exited before validation (exit '+str(process.returncode)+'); log: '+str(log))
         try:
             with urlopen(url,timeout=0.5) as response:
                 if response.status<400:return
+                last='HTTP '+str(response.status)
+        except HTTPError as exc:last='HTTP '+str(exc.code)
         except (OSError,ValueError):pass
-        if time.monotonic()>=deadline:raise ValueError('bound render server did not become ready')
+        if time.monotonic()>=deadline:
+            raise ValueError('bound render server '+where+' did not become ready in '+str(READY_SECONDS)+'s (last: '+last+'); log: '+str(log))
         time.sleep(0.1)
 
 
 @contextmanager
 def render_servers(root,servers,env):
-    """Own each endpoint's process and ephemeral origin; ignore inherited URLs."""
+    """Own each endpoint's process and ephemeral origin; ignore inherited URLs.
+
+    Each server's output goes to a private log file, kept only when a row fails, so the failure can be read
+    rather than guessed. The log is never echoed: it is the app's own output and may hold what it was given."""
     processes=[];urls={};child_env={key:value for key,value in env.items() if key not in servers}
+    log_dir=Path(tempfile.mkdtemp(prefix='design-ship-render-'));failed=False
     try:
-        origins={}
+        origins={};logs={}
         # Rows that start a server first, then rows that render another path of one of them.
         for name,row in sorted(servers.items(),key=lambda item:'same_as' in item[1]):
             if 'same_as' in row:
                 url=origins[row['same_as']]+row['path']
-                wait_ready(url,None)
+                wait_ready(name,url,None,logs[row['same_as']])
                 urls[name]=url;child_env[name]=url
                 continue
             with socket.socket() as listener:
                 listener.bind(('127.0.0.1',0));port=listener.getsockname()[1]
             argv=[value.replace('{port}',str(port)) for value in row['command']]
-            process=subprocess.Popen(argv,cwd=root,env=child_env,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,start_new_session=True)
+            logs[name]=log_dir/(name+'.log')
+            with open(os.open(logs[name],os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600),'w') as out:
+                process=subprocess.Popen(argv,cwd=root,env=child_env,stdout=out,stderr=subprocess.STDOUT,start_new_session=True)
+            process.log_dir=str(log_dir)
             processes.append(process)
             origins[name]='http://127.0.0.1:'+str(port)
             url=origins[name]+row['path']
-            wait_ready(url,process)
+            wait_ready(name,url,process,logs[name])
             urls[name]=url;child_env[name]=url
         yield child_env,urls,processes
+    except BaseException:
+        failed=True
+        raise
     finally:
         for process in processes:
             try:os.killpg(process.pid,signal.SIGTERM)
@@ -90,6 +115,7 @@ def render_servers(root,servers,env):
                 try:os.killpg(process.pid,signal.SIGKILL)
                 except ProcessLookupError:pass
                 process.wait()
+        if not failed:shutil.rmtree(log_dir,ignore_errors=True)
 
 
 def gate(root,name,channel,catalogs,*,deploy=False,source_commit=None,predicted=False,local=False):

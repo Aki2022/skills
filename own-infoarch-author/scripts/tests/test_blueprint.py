@@ -263,6 +263,60 @@ def test_changing_one_item_changes_the_page_and_only_that_cards_hash():
     assert blueprint.approved_items(bp2, rows) == set(new) - {'pri-0002'}  # the stale page approves everything but the changed item
 
 
+def test_every_element_the_pages_script_treats_as_a_card_has_the_controls_it_needs(tmp_path):
+    """The page's script selects cards with one selector and then reads a textarea, a state line and two buttons from each.
+    The overview section is also a `.card` box: a selector that matches it throws on the first card, so no button gets a
+    click handler and nothing is saved (the owner could not click). Every element the selector matches must be an
+    approval card with its controls, and the number of them must equal the embedded cards."""
+    import re
+    from html.parser import HTMLParser
+
+    write_blueprint(tmp_path)
+    out = tmp_path / 'o'
+    rc, res = cli('request', '--root', str(tmp_path), '--out', str(out))
+    assert rc == 0
+    page = (out / 'approval-request.html').read_text(encoding='utf-8')
+    selectors = set(re.findall(r"document\.querySelectorAll\('(\.card[^']*)'\)", page))
+    assert selectors, 'the script no longer selects cards by .card: update this test with the new selector'
+
+    class Boxes(HTMLParser):
+        """Every element with class `card`, with the controls found inside it (nesting counted by depth)."""
+
+        def __init__(self):
+            super().__init__()
+            self.cards, self.open = [], []
+
+        def handle_starttag(self, tag, attrs):
+            a = dict(attrs)
+            classes = (a.get('class') or '').split()
+            for box in self.open:
+                box['buttons'] += tag == 'button'
+                box['textarea'] += tag == 'textarea'
+                box['state'] += 'state' in classes
+                box['depth'] += 1
+            if 'card' in classes:
+                box = {'tag': tag, 'attrs': a, 'buttons': 0, 'textarea': 0, 'state': 0, 'depth': 1}
+                self.cards.append(box)
+                self.open.append(box)
+
+        def handle_endtag(self, tag):
+            for box in list(self.open):
+                box['depth'] -= 1
+                if box['depth'] == 0:
+                    self.open.remove(box)
+
+    parser = Boxes()
+    parser.feed(page)
+    embedded_ids = set(embedded(page)['cards'])
+    for selector in selectors:
+        needs_id = '[data-id]' in selector
+        matched = [c for c in parser.cards if (not needs_id) or 'data-id' in c['attrs']]
+        for c in matched:
+            assert c['attrs'].get('data-id') in embedded_ids and (c['buttons'], c['textarea'], c['state']) == (2, 1, 1), \
+                f"{selector} also matches a {c['tag']}.card that is not an approval card: the page's script throws on it"
+        assert len(matched) == len(embedded_ids)
+
+
 def test_the_command_writes_the_page_and_reads_the_answers_back(tmp_path):
     write_blueprint(tmp_path)
     out = tmp_path / 'out'

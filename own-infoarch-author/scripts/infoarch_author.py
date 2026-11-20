@@ -69,8 +69,10 @@ def cmd_request(args):
         out = approval_request.decisions_from_rows(items, json.loads(Path(args.read_decisions).read_text(encoding='utf-8')))
         _print(out)
         return 0 if not (out['stale'] or out['unknown']) else 1
+    import positioning
+    values = {k: (a.get('text') or k) for k, a in positioning.atoms(m, proposed_only=False).items() if k.startswith('val-')}
     out_dir = Path(args.out)
-    files = {out_dir / 'approval-request.html': blueprint_request.page(items, args.title),
+    files = {out_dir / 'approval-request.html': blueprint_request.page(items, args.title, blueprint_request.overview(bp, values)),
              out_dir / 'approval-request.json': json.dumps({'rows': [{'key': i['key'], 'value_hash': i['value_hash']} for i in items]},
                                                           ensure_ascii=False, indent=2)}
     existing = [str(p) for p in files if p.exists() or p.is_symlink()]

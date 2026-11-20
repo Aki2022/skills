@@ -205,7 +205,7 @@ def _diagram(graph):
              '<path d="M0 0L8 4L0 8z" class="arrowhead"/></marker></defs>']
     for li, l in enumerate(layers):
         y = PAD + CAP + li * (BOX_H + GAP_Y + CAP)
-        parts.append(f'<text x="{PAD}" y="{y - 6}" class="coltitle">{html.escape(LAYER_TITLES[l])}</text>')
+        parts.append(f'<text x="{PAD}" y="{y - 6}" class="coltitle">{html.escape(graph.get('layer_titles', LAYER_TITLES)[l])}</text>')
     lines, labels = [], []
     for e in graph['edges']:
         a = point(e['from'], e, 'from', e['to'])
@@ -223,7 +223,7 @@ def _diagram(graph):
         mx, my = a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t
         cls = 'line deg-' + e['degree'] if e['degree'] else ('line support' if e['kind'] == 'supports' else 'line')
         lines.append(f'<path d="{path}" class="{cls}" marker-end="url(#arw)"><title>{html.escape(e["from"])} → {html.escape(e["to"])}：{html.escape(pm.EDGE_NAMES.get(e["kind"], e["kind"]))}</title></path>')
-        label = DEGREE_NAMES[e['degree']] if e['degree'] else SHORT_NAMES.get(e['kind'], e['kind'])
+        label = DEGREE_NAMES[e['degree']] if e['degree'] else e.get('label') or SHORT_NAMES.get(e['kind'], e['kind'])
         labels.append(f'<text x="{mx:.1f}" y="{my + 3:.1f}" text-anchor="middle" class="elabel {("deg-" + e["degree"]) if e["degree"] else ""}">{html.escape(label)}</text>')
     parts += lines
     for n in nodes:
@@ -281,7 +281,7 @@ INTRO = ('提供価値ごとに、それを支える経路の全体（主張→�
 HASH_NOTE = '各カードの英数字はその経路のハッシュの先頭 12 桁で、経路の中身が変わるとハッシュも変わり、保存した判断は古いものとして数えません。'
 
 
-def page(items, title='承認依頼', intro=INTRO, hash_note=HASH_NOTE):
+def page(items, title='承認依頼', intro=INTRO, hash_note=HASH_NOTE, overview=''):
     """A self-contained page body (the Artifact tool wraps it in its own document: title, meta and style first, then the content; no
     doctype, html, head or body): a card per value path, ○ and × saved to the `db` collection `decisions`."""
     data = json.dumps({'collection': COLLECTION, 'cards': {i['id']: {'key': i['key'], 'value_hash': i['value_hash']} for i in items}},
@@ -327,6 +327,7 @@ textarea{{width:100%;box-sizing:border-box;font:inherit;color:var(--fg);backgrou
 <p>{html.escape(intro)}</p>
 <p class="meta">{len(items)} 件。{html.escape(hash_note)}</p>
 <p id="nodb" class="warn" hidden>この画面では選んだ判断を保存できません（スクリプトが動かない、またはサインインしていない画面です）。ブラウザで開き直してください。保存できないときは、下の欄の中身をコピーして AI に渡してください。</p>
+{overview}
 {cards}
 <h2 style="font-size:15px">保存できないときの控え</h2>
 <textarea id="copy" readonly rows="6" aria-label="判断の控え（JSON）"></textarea>

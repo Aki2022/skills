@@ -298,3 +298,13 @@ pre-push の拡張は、マーカーのある repo だけで動く（opt-in）�
 - `--map`：`{旧 id: {"id": "<kind>-<slug>", "expires": "YYYY-MM-DD" | "evergreen": true, "variants": [...]}}`。辞書の id は人が読む名前なので道具は付けない。値には `expires` か `evergreen` のどちらか 1 つを必ず決める（暗黙の期限は無い。どちらにするかはその repo の中身の判断で、既定値は置かない）。
 - 移せないもの（対応の無い固定値・正式名称、期限の決まっていない値、辞書の id でない名前、SSOT に無い固定値を指す文案・印、既にある辞書のファイル）は `unmigrated` に並べて exit 2、何も書かない。
 - 既定は dry run。散らかさない scratch の複製で移した木の検査も走らせ、移す前の失格の code と並べて出す（`check`）。新しい失格が増えるなら移さない。`--write` で書く。スキーマ版 5 の木は何もしない（再実行できる）。承認台帳は触らない（承認のハッシュは positioning の経路にだけ掛かり、固定値・正式名称・声はどの経路にも載っていない）。
+
+## blueprint（プロダクト UI の infoarch。SPEC-product-ui-infoarch）
+
+`design/info_arch/blueprint/product.yaml`（`references/schema/blueprint-product.v1.schema.json`）と `screens/<scr-…>.yaml`（`blueprint-screen.v1.schema.json`）。`blueprint/` が無い repo では何も読まない。画面だけの repo（outline もチャネルも無い）は `IA_NO_OUTLINES` で失格にしない。
+
+- **項目と id**：ストーリー `sto`・原則 `pri`・制約 `con`・オブジェクト `ojc`・入口 `ntr`。id は `product.yaml` の台帳が発行し（`ledger.next`）、`ledger.tombstones` にある id は再利用しない（画面 id `scr-…` も載せられる）。承認の状態は持たない（state は empty / proposed）。
+- **承認**：`ia:item:<項目 id>`。ハッシュは `blueprint.item_hash`（項目 id と、書かれた内容から provenance を除いたものの JCS 正規化の SHA-256）。ほかの項目に依らない。`infoarch-author targets` の `approval_hashes` に proposed の項目すべて、`must_approval_keys` に出荷する画面が引く項目が出る。`ia_module.py` の鍵の形は `ia:path:val-NNNN` と `ia:item:<種別>-NNNN`。
+- **画面の領域**：`priority`（小さいほど上位、画面の中で重ならない）、`shape`（`value`・`list`・`comparison`・`trend`・`distribution`・`status`・`form`・`text`。見せるものの種類。どの部品で見せるかは design）。状態は `loading`・`empty`・`error`・`partial`・`offline`・`denied` から宣言する。主操作は `primary: true` の操作がちょうど 1 つ（持たない画面は `no_primary: true`）。
+- **検査の code**：IA_BLUEPRINT_NO_STORIES / NO_SCREENS / NO_REGIONS / PRODUCT_MISSING / LEAD_COUNT / VALUE_NONE / VALUE_UNAPPROVED（警告）/ CONSTRAINT_FORM / ID_NOT_ISSUED / ID_REUSED / REF_BROKEN / REF_EMPTY / ITEM_UNAPPROVED / SCREEN_NO_STORY / SCREEN_ID / SCREEN_FILE / GROUP_NO_PRINCIPLE / PRIORITY_MISSING / PRIORITY_DUPLICATE / PRIMARY_MANY / PRIMARY_NONE / PRIMARY_CONTRADICTS / STATES_MISSING、IA_BLUEPRINT_CHECKED（info。画面と項目の件数）。形の違反（shape が決まった種類でない等）は IA_SCHEMA。
+- **ia_module の targets の 3 つの数**（channels・outlines・sections）は変えない。blueprint だけの repo は 3 つとも 0 になり、橋渡し（design-author の L0）は「対象 0 件」で止まる（blueprint 用の数を契約に足すのは別の仕事）。

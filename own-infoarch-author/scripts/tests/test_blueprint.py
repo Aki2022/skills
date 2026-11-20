@@ -283,3 +283,32 @@ def test_a_failing_blueprint_makes_no_request(tmp_path):
     write_case(tmp_path, next(c for c in CASES if c['id'] == 'two-primary-actions'))
     rc, res = cli('request', '--root', str(tmp_path), '--out', str(tmp_path / 'o'))
     assert rc == 2 and not (tmp_path / 'o').exists()
+
+
+def test_the_overview_draws_every_item_the_screens_and_the_values_they_stand_on(tmp_path):
+    import blueprint
+    import blueprint_request
+    import positioning
+    from ia_fixtures import SSOT
+    import positioning_model as pm
+    bp = blueprint.Blueprint(Path('.'), present=True, product=PRODUCT, screens={s['id']: (Path(f'{s["id"]}.yaml'), s) for s in SCREENS})
+    values = {k: a['text'] for k, a in positioning.atoms(pm.Model(Path('.'), SSOT), proposed_only=False).items() if k.startswith('val-')}
+    g = blueprint_request.overview_graph(bp, values)
+    ids = {n['id'] for n in g['nodes']}
+    assert set(blueprint.items(bp)) <= ids and {'scr-overview', 'scr-person', 'val-0001', 'val-0003'} <= ids
+    assert len(ids) == len(g['nodes'])  # no box twice
+    pairs = {(e['from'], e['to']) for e in g['edges']}
+    assert ('pri-0001', 'val-0001') in pairs and ('pri-0001', 'sto-0001') in pairs and ('ntr-0001', 'scr-overview') in pairs
+    assert ('scr-person', 'sto-0002') in pairs and ('ojc-0001', 'val-0001') in pairs
+    html = blueprint_request.overview(bp, values)
+    assert html.count('<g class="node') == len(ids) and 'プロダクト全体の関係図' in html
+
+
+def test_the_page_opens_with_the_overview_then_one_card_per_item(tmp_path):
+    write_blueprint(tmp_path)
+    out = tmp_path / 'o'
+    rc, res = cli('request', '--root', str(tmp_path), '--out', str(out))
+    assert rc == 0
+    page = (out / 'approval-request.html').read_text(encoding='utf-8')
+    assert page.index('プロダクト全体の関係図') < page.index('data-key="ia:item:sto-0001"')
+    assert page.count('data-key="ia:item:') == 10

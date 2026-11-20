@@ -43,5 +43,65 @@ def build(bp, approved=(), must=()):
     return out
 
 
-def page(items, title='プロダクト UI の承認依頼'):
-    return ar.page(items, title, intro=INTRO, hash_note=HASH_NOTE)
+LAYER_TITLES = {0: '提供価値（positioning）', 1: 'ストーリー', 2: '原則・制約', 3: 'オブジェクト', 4: '入口', 5: '画面（AI が作る。承認の対象ではない）'}
+
+
+def overview_graph(bp, values):
+    """The whole product as one graph: which story each principle and entry answers, which positioning value each principle
+    and the lead object stand on, which screen an entry opens, which stories a screen serves. `values`: {value id: text}."""
+    p = bp.product
+    nodes, edges = {}, []
+
+    def node(iid, layer, text, role):
+        nodes.setdefault(iid, {'id': iid, 'layer': layer, 'role': role, 'text': text, 'kind': ''})
+
+    def edge(a, b, label, kind='cites'):
+        edges.append({'key': f'{kind}:{a}:{b}', 'from': a, 'to': b, 'kind': kind, 'degree': None, 'role': 'premise', 'label': label})
+
+    for iid, s in p['stories'].items():
+        if s['state'] == 'proposed':
+            node(iid, 1, f'{s["actor"]}：{s["text"]}', 'premise')
+    for iid, x in p['principles'].items():
+        if x['state'] == 'proposed':
+            node(iid, 2, x['text'], 'basis')
+            for st in x.get('serves', []):
+                edge(iid, st, '応える')
+            for v in x.get('values', []):
+                node(v, 0, values.get(v, v), 'claim')
+                edge(iid, v, '引く')
+    for iid, c in p['constraints'].items():
+        if c['state'] == 'proposed':
+            node(iid, 2, c['text'], 'basis')
+    for iid, o in p['objects'].items():
+        if o['state'] == 'proposed':
+            node(iid, 3, ('主役：' if o.get('lead') else '') + o['name'], 'claim' if o.get('lead') else 'premise')
+            for v in o.get('values', []):
+                node(v, 0, values.get(v, v), 'claim')
+                edge(iid, v, '引く')
+    for iid, e in p['entries'].items():
+        if e['state'] == 'proposed':
+            node(iid, 4, f'入口：{e["screen"]}', 'premise')
+            for st in e.get('serves', []):
+                edge(iid, st, '応える')
+            node(e['screen'], 5, bp.screens[e['screen']][1]['title'] if e['screen'] in bp.screens else e['screen'], 'evidence')
+            edge(iid, e['screen'], '入る')
+    for sid, (_, s) in bp.screens.items():
+        node(sid, 5, s['title'], 'evidence')
+        for st in s['serves']:
+            if st in nodes:
+                edge(sid, st, '応える')
+        for con in s.get('constraints', []):
+            if con in nodes:
+                edge(sid, con, '守る')
+    return {'nodes': list(nodes.values()), 'edges': edges, 'layer_titles': LAYER_TITLES}
+
+
+def overview(bp, values):
+    graph = overview_graph(bp, values)
+    return ('<section class="card"><h3>プロダクト全体の関係図</h3>'
+            '<p class="meta">箱は項目、線は「どれがどれを引いているか」です。各項目の中身は、この下のカードで 1 件ずつ読みます。</p>'
+            + ar._diagram(graph) + '</section>')
+
+
+def page(items, title='プロダクト UI の承認依頼', overview_html=''):
+    return ar.page(items, title, intro=INTRO, hash_note=HASH_NOTE, overview=overview_html)

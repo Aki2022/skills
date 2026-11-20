@@ -143,8 +143,7 @@ def cmd_request(args):
         _print({'exit_code': 2, 'error': '承認の対象（提供価値の経路）が 0 件'})
         return 2
     if args.read_decisions:
-        rows = json.loads(Path(args.read_decisions).read_text(encoding='utf-8'))
-        out = approval_request.decisions_from_rows(items, rows)
+        out = approval_request.decisions_from_rows(items, approval_request.load_rows(args.read_decisions))
         _print(out)
         return 0 if not (out['stale'] or out['unknown']) else 1
     out_dir = Path(args.out)
@@ -190,7 +189,7 @@ def main(argv=None):
     rq.add_argument('--out', default='approval-request', help='directory to write into (files are never overwritten)')
     rq.add_argument('--title', default='承認依頼')
     rq.add_argument('--must-file', help='`infoarch-author targets` output: marks the paths shipping needs')
-    rq.add_argument('--read-decisions', help="the owner's saved answers (the Artifact db `decisions` rows, or the page's copied JSON): ok / ng / stale / undecided")
+    rq.add_argument('--read-decisions', help="the owner's saved answers (the directory `ArtifactData` list wrote with out_dir, or the page's copied JSON): ok / ng / stale / undecided")
     rq.set_defaults(fn=cmd_request)
     args = ap.parse_args(argv)
     try:

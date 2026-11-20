@@ -102,6 +102,16 @@ def test_the_page_offers_circle_and_cross_and_saves_to_the_db_collection():
     assert 'id="nodb"' in page and 'id="copy"' in page  # a page that cannot save says so and offers a copy
 
 
+def test_the_page_is_a_body_for_the_artifact_tool_and_keeps_the_page_contract():
+    page = ar.page(ar.build(model()))
+    head = page[:600]
+    assert head.lstrip().startswith('<title>') and 'claude:viewport-fit-sides' in head
+    assert not re.search(r'<(!doctype|html|head|body)[\s>]', page.lower())  # <header> inside a card is fine
+    assert 'padding-left:max(16px,env(safe-area-inset-left,0px))' in page and 'padding-right:max(16px,env(safe-area-inset-right,0px))' in page
+    assert page.count('color-scheme:dark') >= 2 and ':root:not([data-theme="light"])' in page and ':root[data-theme="dark"]' in page
+    assert 'background:var(--bg)' in page
+
+
 def test_text_is_escaped_in_the_page_and_in_the_embedded_data():
     ssot = copy.deepcopy(SSOT)
     ssot['values']['val-0001']['text'] = '</script><script>alert(1)</script>'
@@ -192,3 +202,56 @@ def test_no_paths_is_not_a_page(tmp_path):
     dump(tmp_path / 'design/info_arch/info_arch.yaml', ssot)
     rc, res = cli('request', '--root', str(tmp_path), '--out', str(tmp_path / 'o'))
     assert rc == 2 and not (tmp_path / 'o').exists()
+
+
+def test_the_answers_are_read_back_in_the_shape_an_artifact_read_writes_them(tmp_path):
+    """`ArtifactData` list with out_dir writes <dir>/decisions/<doc id>.json holding the document body alone (observed
+    on a real artifact, 2026-11-20); the page's own copy is a list of {id, data}; both must read back the same."""
+    m = model()
+    t = pos.approval_targets(m)
+    folder = tmp_path / 'decisions'
+    folder.mkdir()
+    body = {'key': 'ia:path:val-0001', 'value_hash': t['ia:path:val-0001'], 'decision': 'ok', 'note': '', 'decided_at': '2026-11-20T00:00:00Z'}
+    (folder / 'val-0001.json').write_text(json.dumps(body), encoding='utf-8')
+    (folder / 'val-0002.json').write_text(json.dumps({**body, 'key': 'ia:path:val-0002', 'value_hash': 'b' * 64, 'decision': 'ng'}), encoding='utf-8')
+    rows = ar.load_rows(folder)
+    assert [r['id'] for r in rows] == ['val-0001', 'val-0002']
+    out = ar.decisions_from_rows(ar.build(m), rows)
+    assert out['ok'] == ['ia:path:val-0001'] and out['stale'] == ['ia:path:val-0002'] and out['unknown'] == []
+    page_copy = tmp_path / 'copy.json'
+    page_copy.write_text(json.dumps(rows), encoding='utf-8')
+    assert ar.decisions_from_rows(ar.build(m), ar.load_rows(page_copy)) == out
+    single = tmp_path / 'val-0001.json'
+    single.write_text(json.dumps(body), encoding='utf-8')
+    assert ar.load_rows(single) == [{'id': 'val-0001', 'data': body}]
+    assert [r['id'] for r in ar.load_rows(folder / 'val-0001.json')] == ['val-0001']
+
+
+# ---- the diagram: the path drawn as boxes and lines --------------------------------------------------------------
+
+def test_the_diagram_draws_every_atom_and_arrow_the_hash_covers_and_nothing_else():
+    m = model()
+    for item in ar.build(m):
+        path = pos.paths(m)[item['id']]
+        atoms = {k for k in path.members if k in pos.atoms(m, proposed_only=False)}
+        arrows = set(path.members) - atoms
+        g = item['graph']
+        assert {n['id'] for n in g['nodes']} == atoms and {e['key'] for e in g['edges']} == arrows
+        svg = ar._diagram(g)
+        assert svg.count('<g class="node') == len(atoms) and svg.count('marker-end') == len(arrows)
+        for k in atoms:
+            assert svg.count(f'class="nid">{k}<') == 1
+
+
+def test_the_diagram_colours_the_degree_and_marks_the_claim():
+    svg = ar._diagram(ar.build(model())[0]['graph'])
+    assert 'deg-full' in svg or 'deg-partial' in svg or 'deg-none' in svg
+    assert 'role-claim' in svg and 'role-premise' in svg and 'role-evidence' in svg
+    assert '満たす' in svg and 'viewBox' in svg
+
+
+def test_the_page_shows_the_diagram_before_the_text_list_and_keeps_the_list_available():
+    page = ar.page(ar.build(model()))
+    assert page.count('<svg class="graph"') == 3 and page.count('文章でも読む') == 3
+    assert page.index('<svg class="graph"') < page.index('文章でも読む')
+    assert 'overflow-x:auto' in page  # a wide diagram scrolls inside its own box, never the page

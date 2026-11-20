@@ -166,10 +166,25 @@ def write_repo(root, ssot=SSOT, channels=(CHANNEL, DRAFT), outlines=(OUTLINE, DE
     return base
 
 
+def record_red_case(command, rc, report):
+    """RED_CASE_LOG=<file>: append one line per CLI run (test id, command, exit code, fail codes). The before/after
+    table of the positioning split (WS-20261120 ISSUE-04) compares two such logs; unset, this does nothing."""
+    import os
+    path = os.environ.get('RED_CASE_LOG')
+    if not path:
+        return
+    fails = sorted({f['code'] for f in report.get('findings', []) if f.get('level') == 'fail'})
+    with open(path, 'a', encoding='utf-8') as fh:
+        fh.write(json.dumps({'test': os.environ.get('PYTEST_CURRENT_TEST', '').split(' ')[0], 'command': command,
+                             'exit_code': rc, 'fail_codes': fails}, ensure_ascii=False) + '\n')
+
+
 def cli(*args):
     proc = subprocess.run([sys.executable, str(SCRIPTS / 'infoarch_author.py'), *args], capture_output=True, text=True, check=False)
     assert proc.stdout, proc.stderr
-    return proc.returncode, json.loads(proc.stdout)
+    report = json.loads(proc.stdout)
+    record_red_case(args[0], proc.returncode, report)
+    return proc.returncode, report
 
 
 def check(root):

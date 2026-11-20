@@ -17,11 +17,6 @@ affected_workstreams: []
 
 ## Non-Goals
 
-## Domain Language
-
-| Term | Meaning | Boundary or contrast |
-| --- | --- | --- |
-
 ## Actors and Scenarios
 
 ## Requirements

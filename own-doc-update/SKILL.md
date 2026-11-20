@@ -15,6 +15,7 @@ Treat `docs/` as persistent AI context. Keep each fact in one layer only.
 | `docs/issues/`      | Issue files; each declares `workstream: WS-…` (owned) or `workstream: none`     |
 | `docs/guides/`      | Current implemented behavior; source of truth                                  |
 | `docs/adrs/`        | Decision rationale, alternatives, and consequences; historical decision record |
+| `docs/dictionary/`  | Official names, fixed values, and development terms; the one source of each word and value |
 | `*/archive/`        | Historical work context, not current truth                                     |
 | `docs/log/`         | Narrative moved out of the index and hygiene reports; history, never current truth |
 
@@ -79,6 +80,15 @@ Use the repository-level `docs/adrs/` directory for both kinds of decision:
 Create the record when the decision is made, not only at session close. Use `references/adr.template.md` or `scripts/create_adr.py <slug> --scope <spec|development> --status <proposed|accepted|rejected>`. The generated filename is `ADR-YYYYMMDD-<slug>.md`. Keep accepted and rejected records in `docs/adrs/`; when a decision changes, create a new ADR and mark the old one `superseded` with a link instead of rewriting its decision history.
 
 An ADR must state the context/problem, the decision, alternatives considered, consequences, and links to its source workstream/issue and affected specs/guides. Use `status: proposed` while a human gate is pending and `status: accepted` or `rejected` after the decision is settled. Record only the rationale here; current policy belongs in specs and current behavior belongs in guides.
+
+## Dictionary
+
+`docs/dictionary/<domain>.json` holds the repository's words and values: official names (`kind: name`), fixed values such as numbers, conditions, contacts and campaign terms (`kind: value`), and the terms development uses (`kind: term`). It is the only source; a spec, a workstream, and `design/` refer to it and never keep a copy. A spec has no `Domain Language` table: when an older spec's table disagrees with the dictionary, the dictionary is right, and the old table is left in place rather than migrated.
+
+- **Shape.** One JSON file per domain (the file name is the `domain`), so a reader loads only the domain it needs. Copy `references/dictionary.template.json`. Every entry has `id` (`<kind>-<slug>`, never reused), `kind`, `text` (the correct form), `meaning`, and optional `variants` (forms that must not appear). A term also has `boundary` (what it differs from). A value has `expires` (YYYY-MM-DD) or `evergreen: true`, and an optional `as_of`; there is no implicit lifetime. Any other key is refused: an entry carries meaning and boundary only, never the spec it came from or a state.
+- **Create or update.** Before writing a spec or workstream, read the domains it touches and use their terms. Add an important settled term in the same change that settles it. Write a variant only when it is wrong in every context (a word with another legitimate meaning, such as a generic "check", is not a variant). An official name or fixed value is the owner's to confirm: record the confirmation before the entry is used by a deliverable.
+- **Validate.** `validate_repo_docs.py` checks the shape and fails on a variant in current docs (`docs/**/*.md` outside `adrs/`, `log/` and any `archive/`; inline code spans are not read, so a variant can be quoted to be named). It warns on an expired value and prints a `coverage: 辞書 …` line with the counts it read. A repository without `docs/dictionary/` is not checked.
+- **Deliverables.** `scripts/dictionary.py check-html <repo> <file.html>… [--date YYYY-MM-DD]` reads the same files and fails on a variant in visible text, a `data-dict="<id>"` element whose text differs from the entry, and an expired value shown in or outside an anchor. It exits 2 when nothing was checked (no dictionary, no file), never 0.
 
 ## Improvement issues
 
@@ -285,6 +295,7 @@ Templates in `references/`:
 - `guide.template.md`
 - `adr.template.md`
 - `spec.template.md`
+- `dictionary.template.json`
 
 Scripts in `scripts/`:
 
@@ -340,6 +351,9 @@ Scripts in `scripts/`:
   is safe to run across every governed repository. Exit 2 when the repository has
   no `docs/00_index.md`. Do not run `--fix` against a deliberately shaped fixture
   repository (e.g. `ws-loop-fixture`).
+- `dictionary.py validate|check-docs <repo>` and `dictionary.py check-html <repo> <file.html>… [--date]`:
+  the dictionary's shape, its variants in current docs, and a deliverable's names, values and expiry
+  (see Dictionary). Exit 0 clean, 1 findings, 2 nothing checked or a malformed dictionary
 - `index_digest.py <path to docs/00_index.md>`: the routing digest the SessionStart
   hook injects, bounded in characters rather than bytes
 - `validate_repo_docs.py <repo>` (prints the repository it validated, and a

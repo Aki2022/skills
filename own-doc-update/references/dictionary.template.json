@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "domain": "example",
+  "summary": "この分野の語と値を 1 行で言う（読むかどうかをこの行で決める）",
+  "entries": [
+    {
+      "id": "term-example-term",
+      "kind": "term",
+      "text": "正しい表記",
+      "meaning": "何を指すか",
+      "boundary": "何と違うか・何とは呼ばないか",
+      "variants": ["ゆれた表記"]
+    },
+    {
+      "id": "name-example-product",
+      "kind": "name",
+      "text": "Example Product",
+      "meaning": "製品名（会社名・サービス名など、何の正式名称か）",
+      "variants": ["ExampleProduct"]
+    },
+    {
+      "id": "value-example-count",
+      "kind": "value",
+      "text": "100件以上",
+      "meaning": "何の値か（導入数・料金・連絡先など）",
+      "as_of": "2026-01-01",
+      "expires": "2027-01-01"
+    },
+    {
+      "id": "value-example-phone",
+      "kind": "value",
+      "text": "00-0000-0000",
+      "meaning": "期限の無い値は evergreen を書く",
+      "evergreen": true
+    }
+  ]
+}

@@ -6,7 +6,7 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[3]
-ENTRY = ROOT / 'own-web-design/scripts/preflight.py'
+ENTRY = ROOT / 'own-web-build/scripts/preflight.py'
 
 def test_factory_stops_without_design_from_nested_directory(tmp_path):
     subprocess.run(['git', 'init', '-q', str(tmp_path)], check=True)

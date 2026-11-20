@@ -148,7 +148,7 @@ PR の head SHA から中身が読める。公開を確実に止める手段は 
 **ただし使用統計だけで判定してはいけない。統計は直接発火しか数えない。**
 自作 skill の振り分け先として呼ばれる第三者は 0 回に見える。
 2026-09-23 に「141 日ゼロ」の 34 本を落とし、`own-quarto-route` の振り分け先
-`quarto-authoring`、`own-design-route` / `own-website-audit` のカバレッジ表が指す
+`quarto-authoring`、`own-deliverable-check` / `own-website-audit` のカバレッジ表が指す
 `web-design-guidelines` `fixing-accessibility` `web-perf` `baseline-ui`
 `vercel-react-best-practices`、`google-agents-cli-*` の suite 内参照を壊し、11 本を戻した。
 
@@ -408,7 +408,7 @@ repo トークンは `trade` / `yorisoi` / `bizops` / `iscore` / `marketing`。
 `-cleanup` `-maintenance` `-routing` `-warehouse` 等）と、`動作-対象` の逆順。
 
 **skill 名は description と並んで発火条件そのもの**で、動作の無い名前は「何をする skill か」を
-名前から読めなくする。実害があった — `origin-design-runtime`（当時の名前。現 `own-web-design`） と `own-design-route` の
+名前から読めなくする。実害があった — `origin-design-runtime` と `origin-design-check-routing`（どちらも当時の名前。現 `own-web-build` と `own-deliverable-check`）の
 役割が名前から区別できず、人間が指摘して初めて分かった。名詞末尾が機能を隠していた実例は
 ほかにも4件あり、いずれも description を読むと名前と実体が違っていた
 （`-policy` の実体は振り分け、`-access` の実体は質問への回答、`-report` の実体は実装）。

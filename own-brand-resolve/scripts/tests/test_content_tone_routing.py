@@ -11,7 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 MAPPING = ROOT / "own-brand-resolve/plugins/awesome-design-md-jp-import/mapping.md"
-TYPOGRAPHY = ROOT / "own-web-design/validators/common/typography.md"
+TYPOGRAPHY = ROOT / "own-web-build/validators/common/typography.md"
 
 
 def content_tone_row():

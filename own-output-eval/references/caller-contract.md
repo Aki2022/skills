@@ -4,7 +4,7 @@ title: 呼び出し規約と単発利用
 
 # 呼び出し規約（工場から）と単発利用（人間から）
 
-## A. 工場から呼ぶ（例: `own-web-design` 工程4 — 会社サイトのイラスト5枚と LP）
+## A. 工場から呼ぶ（例: `own-web-build` 工程4 — 会社サイトのイラスト5枚と LP）
 
 渡すもの:
 
@@ -58,7 +58,7 @@ JSON
 bash <skill>/scripts/run_round.sh $E --thresholds $E/thresholds.json --max-rounds 3
 ```
 
-## 受付（`own-design-route`）との関係
+## 受付（`own-deliverable-check`）との関係
 
 受付は「どの検査 skill を並べるか」を決める。本 skill は「選んだ検査を合格まで回す」。
 接続の向き（受付が本 skill を1レビューアとして呼ぶか、本 skill が受付を方式 B の実体として使うか）は

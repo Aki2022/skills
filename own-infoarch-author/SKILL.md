@@ -1,6 +1,6 @@
 ---
 name: own-infoarch-author
-description: "repo 直下 design/info_arch/ の「伝え方の SSOT」（オーナーが承認する positioning：セグメントごとの原子と矢印＝ジョブ・痛み・代替・カテゴリー・強み・提供価値・証拠、と固定値・正式名称・声）と、成果物ごとの outline（target・メッセージ・セクション・文案）を読み書きし、Web サイト・LP・チラシ・ポスター・資料を作るときに、誰に・何を・どの順で・どう話すかをそろえる。「情報設計を作って」「伝え方をそろえて」「SSOT から LP の構成を作って」「メッセージを整理して」「info_arch を検査して」で使う。見た目は own-design-author と工場 skill（own-web-design 等）。"
+description: "repo 直下 design/info_arch/ の「伝え方の SSOT」（オーナーが承認する positioning：セグメントごとの原子と矢印＝ジョブ・痛み・代替・カテゴリー・強み・提供価値・証拠、と固定値・正式名称・声）と、成果物ごとの outline（target・メッセージ・セクション・文案）を読み書きし、Web サイト・LP・チラシ・ポスター・資料を作るときに、誰に・何を・どの順で・どう話すかをそろえる。「情報設計を作って」「伝え方をそろえて」「SSOT から LP の構成を作って」「メッセージを整理して」「info_arch を検査して」で使う。見た目は own-design-author と工場 skill（own-web-build 等）。"
 ---
 
 # own-infoarch-author — positioning と outline

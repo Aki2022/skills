@@ -215,7 +215,7 @@ v5 の木（`info_arch.yaml` 版 3・outline 版 2・描画物の v5 の印・`m
 セクションを `order` の順に `<section data-ia-section="sec-…" data-ia-role="…">` で、その中の文案を `order` の順に `data-ia-copy="cpy-…"` で出す。
 ナビの宣言は `<nav data-ia-text>`、ラベルはそのセクションの先頭に `data-ia-text` で出す。文案の `{{fct-NNNN}}` は SSOT の値の
 `<span data-ia-fact>` に展開し、文案は HTML エスケープする。1 ページ＝1 outline なので、どの output にも outline 全体を出す。`--out` を付けるとファイルに書き、既にあるファイルは上書きしない。
-工場（own-web-design）は、文言・順序・`data-ia-*` を変えずにスタイリングし、描画後に `dom` を走らせる。
+工場（own-web-build）は、文言・順序・`data-ia-*` を変えずにスタイリングし、描画後に `dom` を走らせる。
 
 ## 描画物の確認（`dom`）
 

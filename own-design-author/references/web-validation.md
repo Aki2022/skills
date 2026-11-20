@@ -8,7 +8,7 @@ L0を実行してから、工場は次を使う。L0/L1は確認不要、L2は�
 
 ```sh
 design-author check --repo .
-python3 <own-web-design>/scripts/audit_html.py index.html --manifest design/.resolved/web.json --tailwind tailwind.config.cjs
+python3 <own-web-build>/scripts/audit_html.py index.html --manifest design/.resolved/web.json --tailwind tailwind.config.cjs
 node <own-website-audit>/scripts/measure_lp.mjs <url> --manifest design/.resolved/web.json --viewports 375,1280 --schemes dark,light --json <report.json>
 ```
 

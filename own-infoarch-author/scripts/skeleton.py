@@ -1,6 +1,6 @@
 """outline -> semantic HTML skeleton (v6: one page = one outline).
 
-The factory (own-web-design) styles this skeleton with the design system. It must not change the text, the order
+The factory (own-web-build) styles this skeleton with the design system. It must not change the text, the order
 of sections and copy, or the data-ia-* attributes: those carry the information design, and `dom` checks them after
 rendering. Each section is `data-ia-section`, each piece of copy `data-ia-copy`, in their `order`. Facts are
 expanded to their SSOT value inside <span data-ia-fact>. Declared non-claim text is `data-ia-text`.

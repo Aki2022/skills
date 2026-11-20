@@ -358,7 +358,7 @@ textarea{{width:100%;box-sizing:border-box;font:inherit;color:var(--fg);backgrou
     else st.textContent = s.decision === 'ok' ? '○ 承認する（保存済み）' : '× 差し戻す（保存済み）';
     if (s && s.note !== undefined && card.querySelector('textarea') !== document.activeElement) card.querySelector('textarea').value = s.note;
   }}
-  function paintAll() {{ document.querySelectorAll('.card').forEach(paint); show(); }}
+  function paintAll() {{ document.querySelectorAll('.card[data-id]').forEach(paint); show(); }}
   function save(card, decision) {{
     var id = card.getAttribute('data-id');
     var row = {{key: cards[id].key, value_hash: cards[id].value_hash, decision: decision,
@@ -366,7 +366,7 @@ textarea{{width:100%;box-sizing:border-box;font:inherit;color:var(--fg);backgrou
     state[id] = row; paintAll();
     if (col) col.doc(id).set(row).catch(function () {{ card.querySelector('.state').textContent = '保存できませんでした（下の控えをコピーしてください）'; }});
   }}
-  document.querySelectorAll('.card').forEach(function (card) {{
+  document.querySelectorAll('.card[data-id]').forEach(function (card) {{
     card.querySelectorAll('button').forEach(function (b) {{ b.addEventListener('click', function () {{ save(card, b.getAttribute('data-d')); }}); }});
     card.querySelector('textarea').addEventListener('change', function () {{
       var id = card.getAttribute('data-id'); if (state[id]) save(card, state[id].decision);

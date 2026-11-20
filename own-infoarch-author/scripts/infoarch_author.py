@@ -1,4 +1,4 @@
-"""own-infoarch-author CLI: check (deterministic), dom, judge (judgment ledger reader), evaluate (all three), ship (gate), maintain, skeleton, impact, positioning, set, diff. Never writes approvals."""
+"""own-infoarch-author CLI: check (deterministic), dom, judge (judgment ledger reader), evaluate (all three), ship (gate), maintain, skeleton, impact, targets, set, diff, answer-key, migrate-v6, migrate-dictionary. Never writes approvals. The positioning layer (paths, approval requests, the approval ledger migration) is own-positioning-author's CLI."""
 from __future__ import annotations
 
 import argparse
@@ -153,22 +153,6 @@ def cmd_impact(args):
     return 0
 
 
-def cmd_review(args):
-    """The owner reads what an approval request binds (requirement 3), and a stale request is refused."""
-    report = check.Report('review', dt.date.today().isoformat())
-    m = check.load(args.root, report)
-    if m.ssot is None or report.exit_code == 2:
-        _print(report.to_dict())
-        return 2
-    request = json.loads(Path(args.request).read_text(encoding='utf-8'))
-    hashes, must = check.positioning_targets(m)
-    rows = [r for r in request.get('rows', []) if str(r.get('key', '')).startswith(check.APPROVAL_PREFIX)]
-    stale = sorted(r['key'] for r in rows if hashes.get(r['key']) != r.get('value_hash'))
-    _print({'rows': len(rows), 'stale': stale, 'missing_required': sorted(set(must) - {r['key'] for r in rows}),
-            'markdown': check.review_markdown(m, [r['key'] for r in rows], hashes)})
-    return 2 if stale or not rows else 0
-
-
 def _loaded(args, level):
     report = check.Report(level, dt.date.today().isoformat())
     m = check.load(args.root, report)
@@ -217,24 +201,6 @@ def cmd_diff(args):
     return out['exit_code']
 
 
-def cmd_positioning(args):
-    """Every approved positioning: its id, derived gaps and points of parity, and what waits for the owner."""
-    import positioning
-    report = check.Report('positioning', dt.date.today().isoformat())
-    m = check.load(args.root, report)
-    if m.ssot is None or report.exit_code == 2:
-        _print(report.to_dict())
-        return 2
-    approved = positioning.approved_keys(m, check.read_approvals(args.root, report))
-    if report.exit_code == 2:
-        _print(report.to_dict())
-        return 2
-    ps = positioning.paths(m)
-    _print({'positionings': {seg: p.to_dict() for seg, p in positioning.derive(m, approved, ps).items()},
-            'paths': {v: {**p.to_dict(), 'approved': v in approved} for v, p in ps.items()}})
-    return 0
-
-
 def cmd_answer_key(args):
     """Requirement 12: write the answer key (pairs, candidates for Jev, the owner's labeling page), or measure it."""
     import answer_key
@@ -274,34 +240,19 @@ def cmd_answer_key(args):
     return 0
 
 
-def cmd_migrate_approvals(args):
-    """Requirement 17: replace the per-element ia:positioning rows by ia:path rows, once (dry run without --write)."""
-    import approval_migration
-    import positioning
-    report = check.Report('migrate-approvals', dt.date.today().isoformat())
-    m = check.load(args.root, report)
-    if m.ssot is None or report.exit_code == 2:
-        _print(report.to_dict())
-        return 2
-    path = Path(args.root) / approval_migration.LEDGER
-    if path.is_symlink() or not path.is_file():
-        _print({'exit_code': 2, 'written': False, 'error': f'{approval_migration.LEDGER} が無いか symlink'})
-        return 2
-    rows = check.load_yaml(path) or []
-    try:
-        positioning._verify_rows()(rows, Path(args.root))
-    except ValueError as exc:
-        _print({'exit_code': 2, 'written': False, 'error': f'承認台帳の形でない: {exc}'})
-        return 2
-    out = approval_migration.migrate(args.root, m, rows, write=args.write)
-    _print(out)
-    return out['exit_code']
-
-
 def cmd_migrate_v6(args):
     """Requirement 17: one batch v5 -> v6 migration of design/info_arch/ (dry run without --write)."""
     import migrate_v6
     out = migrate_v6.run(args.root, write=args.write)
+    _print(out)
+    return out['exit_code']
+
+
+def cmd_migrate_dictionary(args):
+    """One migration of a schema 4 tree to schema 5 and the docs dictionary (dry run without --write)."""
+    import migrate_dictionary
+    mapping = json.loads(Path(args.map).read_text(encoding='utf-8'))
+    out = migrate_dictionary.run(args.root, mapping, domain=args.domain, write=args.write, date=args.date)
     _print(out)
     return out['exit_code']
 
@@ -380,10 +331,6 @@ def main(argv=None):
     i.add_argument('--root', default='.')
     i.add_argument('--id', required=True)
     i.set_defaults(fn=cmd_impact)
-    rv = sub.add_parser('review', help='readable content of an owner-approval request (ia:positioning rows); a stale request fails')
-    rv.add_argument('--root', default='.')
-    rv.add_argument('--request', required=True)
-    rv.set_defaults(fn=cmd_review)
     st = sub.add_parser('set', help='set id of one deliverable: positioning id + outline id, and its element hashes')
     st.add_argument('--root', default='.')
     st.add_argument('--outline', required=True)
@@ -399,23 +346,23 @@ def main(argv=None):
     t = sub.add_parser('targets', help='owner-approval targets (ia:path keys and path hashes) for own-design-author approvals')
     t.add_argument('--root', default='.')
     t.set_defaults(fn=cmd_targets)
-    mg = sub.add_parser('migrate-approvals', help='replace per-element ia:positioning approval rows by ia:path rows once')
-    mg.add_argument('--root', default='.')
-    mg.add_argument('--write', action='store_true', help='write the ledger (without it: dry run)')
-    mg.set_defaults(fn=cmd_migrate_approvals)
     m6 = sub.add_parser('migrate-v6', help='one batch v5 -> v6 migration: SSOT, outlines, rendered marks, modules.ia pin')
     m6.add_argument('--root', default='.')
     m6.add_argument('--write', action='store_true', help='write the migrated files (without it: dry run)')
     m6.set_defaults(fn=cmd_migrate_v6)
+    md = sub.add_parser('migrate-dictionary', help='one migration of a schema 4 tree: facts and entities to docs/dictionary/, the voice dropped, outlines and rendered marks rewritten')
+    md.add_argument('--root', default='.')
+    md.add_argument('--map', required=True, help='JSON: {old id: {"id": "<kind>-<slug>", "expires": "YYYY-MM-DD" | "evergreen": true, "variants": [..]}}')
+    md.add_argument('--domain', default='product', help='dictionary file docs/dictionary/<domain>.json (default: product)')
+    md.add_argument('--date', help='evaluation date YYYY-MM-DD (default: today)')
+    md.add_argument('--write', action='store_true', help='write the files (without it: dry run, with the check of the migrated tree)')
+    md.set_defaults(fn=cmd_migrate_dictionary)
     ak = sub.add_parser('answer-key', help='answer key for the meaning judgment: pairs, candidates and the labeling page, or --measure')
     ak.add_argument('--root', default='.')
     ak.add_argument('--out', default='answer-key', help='directory to write into (files are never overwritten)')
     ak.add_argument('--measure', help="the owner's labels.json: measure agreement against design/judgments.json")
     ak.add_argument('--key', help='answer-key.json written with the page (required with --measure)')
     ak.set_defaults(fn=cmd_answer_key)
-    po = sub.add_parser('positioning', help='approved positionings per segment: id, gaps, points of parity, member category, drafts')
-    po.add_argument('--root', default='.')
-    po.set_defaults(fn=cmd_positioning)
     args = ap.parse_args(argv)
     try:
         return args.fn(args)

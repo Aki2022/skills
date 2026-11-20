@@ -60,7 +60,7 @@ copies:
     section: sec-0002
     order: 1
     message: msg-0002
-    text: 導入は{{fct-0001}}、止まらずに動き続けます
+    text: 導入は{{value-customer-count}}、止まらずに動き続けます
   cpy-0004:
     section: sec-0003
     order: 1
@@ -70,4 +70,4 @@ copies:
     section: sec-0003
     order: 2
     message: msg-0003
-    text: 資料請求はこちら（{{fct-0002}}）
+    text: 資料請求はこちら（{{value-phone}}）

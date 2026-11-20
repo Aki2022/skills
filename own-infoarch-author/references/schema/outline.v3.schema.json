@@ -214,7 +214,7 @@
         "message",
         "text"
       ],
-      "description": "どんな言葉で言うか。セクションに属し、同じセクションに置かれたメッセージを 1 つ伝える。固定値は {{fct-NNNN}} で参照する",
+      "description": "どんな言葉で言うか。セクションに属し、同じセクションに置かれたメッセージを 1 つ伝える。固定値は {{value-<辞書の id>}} で参照する",
       "properties": {
         "section": {
           "type": "string"

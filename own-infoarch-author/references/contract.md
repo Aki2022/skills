@@ -1,94 +1,22 @@
 # design/info_arch/ の契約
 
-方針は、利用側の repo の spec `information-architecture-standardization`（v6）に従う。
+方針は、利用側の repo の spec `information-architecture-standardization`（v6）と `deliverable-production-layers`（layer の切り方）に従う。
 
 ## ディレクトリ
 
-- `info_arch.yaml`：人が保守する SSOT（positioning の原子と矢印、固定値・正式名称・声、id 台帳）。承認の状態は持たない（承認台帳が持つ）。変更は他の変更と同じく、検査が緑なら自律マージする（人のレビューは置かない）。記録は git の履歴が持つ。
+- `info_arch.yaml`：positioning の SSOT（スキーマ版 5。own-positioning-author が持つ。原子と矢印、id 台帳）。固定値・正式名称は持たない（辞書）。承認の状態は持たない（承認台帳が持つ）。記録は git の履歴が持つ。
 - `channels/<media>.yaml`：成果物の置き場所と出し方の宣言だけ。中身は `media`（ファイル名と一致）・`outputs`（repo 相対の glob）・`ship`・`ship_command`（`ship: true` なら必須。出荷の正式の入口が実行する）・`merge_base`（pre-push の予測マージの相手。出荷チャネルで無いと doctor が失格）・`viewports`。
 - `outlines/<成果物 id>.yaml`：成果物ごとの outline（版 3）。1 ページ＝1 outline。AI が書き、人は保守しない。`id` はファイル名と一致する。
 - `INFO_ARCH.md`：散文。原子を id で参照するだけで、値を持たない。
 
 それ以外のファイルやサブディレクトリが `channels/` `outlines/` にあると失格にする（黙って無視しない）。`.` で始まるファイル（`.DS_Store`・`.gitkeep`）だけは読まずに飛ばす。`.` で始まるサブディレクトリは失格にする。
 
-## 原子（スキーマ版 4）
+## positioning と辞書（この skill が読むもの）
 
-id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不可）か、10000 以上なら先頭を 0 にしない。`msg-00001` や末尾に改行の付いたキーのような、同じ番号の別表記は失格（id は常に全体一致で判定する）。`ledger.next` 未満でなければ「台帳が発行していない」。改名・削除は `ledger.tombstones`（旧 → 新、削除は null）。
-
-| 種別 | 接頭辞 | proposed で必須 | 参照 |
-| --- | --- | --- | --- |
-| 証拠 | `prf` | text・source・segment・as_of か expires | 支える原子・矢印は、矢印 `supports` で結ぶ（positioning の原子として承認する） |
-| 固定値 | `fct` | label・value・as_of か expires か evergreen: true（evergreen と日付は併存させない） | ― |
-| 正式名称 | `ent` | type・name | ― |
-| 声 | `vce` | traits（3〜4 個。trait・is・is_not） | proposed はプロジェクトに 1 つ |
-
-対象者とメッセージは SSOT に持たない。outline の target（定数）とメッセージ（outline の原子）に書く。
-
-### positioning（SPEC-information-architecture-standardization v6 要件 2・4・5・8）
-
-原子は 1 つのセグメントにだけ属する（`segment`）。写しの出どころ（`copied_from`）と書いた人・材料（`provenance`）は中身ではないので、どの id と承認のハッシュにも入らない。別のセグメントで同じ代替などを使うときは写しを作り、出どころを `copied_from` に書く（同じ種類・別のセグメントの原子）。v5 の約束（`prm`）とカテゴリーとコンセプト（`cpt`）は持たない（スキーマ違反）。重要度は持たない。
-
-| 種別 | 接頭辞 | proposed で必須 |
-| --- | --- | --- |
-| セグメント | `seg` | qualifier・situation |
-| ジョブ | `job` | text・segment |
-| 痛み | `pan` | text・segment |
-| 得たいもの | `gan` | text・segment |
-| 代替 | `alt` | text・segment |
-| カテゴリー | `cat` | text・segment |
-| 強み | `str` | text・segment |
-| 提供価値 | `val` | text・segment・kind（difference：隙間を満たす／parity：同等であるべき点を満たす） |
-
-矢印は `edges` に 1 本ずつ書く（`kind`・`from`・`to`・`state`・`provenance`）。キーは `<kind>:<from>:<to>` で、同じキーは 1 本だけ。矢印のセグメントは始点の原子のもの。
-
-| kind | 始点 → 終点 | 意味 |
-| --- | --- | --- |
-| `has_job` | seg → job | セグメントのジョブ |
-| `need` | job → pan・gan | ジョブの周りの痛み・得たいもの |
-| `fulfills` | alt → pan・gan | 満たす度合い（`degree`：full／partial／none。この種類にだけ必ず書く） |
-| `recalls` | job → cat | この場面で思い出すカテゴリー |
-| `includes` | cat → alt | カテゴリーに入れている代替 |
-| `member_of` | seg → cat | 所属カテゴリー（ちょうど 1 本） |
-| `lacks` | str → alt | 代替に無い強み |
-| `produces` | str → val | 強みが生む提供価値 |
-| `satisfies` | val → pan・gan | 提供価値が満たす隙間か同等であるべき点 |
-| `supports` | prf → 原子・矢印のキー | 証拠が支える |
-
-**承認**：オーナーが提供価値ごとに、その経路をまとめて承認する（ADR-20261118-ia-approval-per-value-path、biz_ops）。`design/approvals.yaml` の行のキーは `ia:path:<提供価値 id>`、ハッシュは経路の原子と矢印すべての中身（`copied_from`・`provenance` を除く）を id でそろえ重複を除いて正規化した JSON の SHA-256（`positioning.extract`）。経路は次の 4 つの役からなり、下書きを含む proposed の全要素から毎回抜き出す（承認済みのものだけから抜き出さない。代替や度合いの矢印の追加・削除が必ずハッシュに映る）。
-
-| 役 | 原子と矢印 |
-| --- | --- |
-| 主張（claim） | その提供価値、それを生む強みと `produces`、その強みの `lacks` とその先の代替 |
-| 差別化の根拠（basis） | `satisfies` とその先の痛み・得たいもの、比べる集合の代替すべてと、その代替から満たす先への `fulfills` すべて。比べる集合は difference ならセグメントの代替すべて、parity なら所属カテゴリーが `includes` で入れている代替すべて（`includes` の矢印も入る） |
-| 前提（premise） | セグメント、満たす先を持つジョブと `need`・`has_job`、所属カテゴリーと `member_of`、そのジョブの `recalls` とその先のカテゴリー |
-| 証拠（evidence） | 上のどれかを `supports` する証拠とその矢印（`supports` を支える `supports` もたどる） |
-
-経路の中身が 1 つでも変わると、その経路の承認が外れる。経路どうしで共有する原子（セグメント・ジョブ・所属カテゴリー・思い出す場面など）を直すと、それを含む経路の承認がまとめて外れる。ある経路の承認は別の経路に使い回せない（キーが提供価値を名指す）。原子と矢印ごとの旧い行（`ia:positioning:`）は承認として数えず、IA だけの repo では IA_APPROVALS_LEGACY（警告）、design.yaml のある repo では design の検査が「approval target absent」で止まる。旧い行は `infoarch-author migrate-approvals` で一度だけ経路の行へ移す（下）。承認の判断はオーナー、記録は AI（`design-author approve --request --owner-words --approved-on`。オーナー自身の承認の言葉が無ければ道具が断る。ADR-20261118-ai-records-owner-approvals、biz_ops）。positioning は outline より先に承認するので、outline 0 件でも束を作れる。design.yaml の無い IA だけの repo でも記録できる。承認かどうかは台帳のハッシュの一致だけで決まり、`state` には持たない。承認は採用の判断だけを表し、顧客での検証を意味しない。台帳は own-design-author と同じ `approvals.verify_rows` で読み（項目・キーの名前空間・ハッシュ・承認者・ISO の日付・キーの重複）、symlink も断る。どれかに反すれば IA_APPROVALS_INVALID で、何も承認済みとして数えない。束は `design-author approve --prepare` が経路ごとの行で作る。
-
-**移行**（`infoarch-author migrate-approvals --root . [--write]`）：経路の原子と矢印がすべて旧い行とハッシュ（`positioning.element_hash`）一致で承認済みのときだけ、経路の行を作る。日付は元の行の日付、承認者は元の承認者（1 人でなければ作らない）。根拠のオーナーの言葉は、台帳を書いた commit の `Owner-Approval:` trailer から機械で読み、出力の `commit_trailers`（`Owner-Approval-Migrated: 「…」 (日付)`）に引用する。言葉が見つからない経路は作らない（`no-owner-words`）。1 つでも欠ける経路は未承認のまま（`unmigrated` に理由と欠けたキー）。`--write` で旧い行をすべて消し、経路の行と ds: などほかの行を残す（旧い行は git の履歴に残り、移行の commit を revert すれば戻る）。`--write` が無ければ書かない。言葉の使い回しはこの移行に限る。
-
-**導出**（`positioning.derive`、記録しない）：positioning ＝ そのセグメントで承認済みの経路をすべて合わせたもの。どの承認済みの経路にも入らない原子と矢印は下書きのままで、positioning に入らず、outline から指せない。隙間と同等であるべき点は経路ごとに導く。隙間 ＝ 満たす先のうち、比べる集合（セグメントの代替すべて）のどれも `full` でないもの。同等であるべき点 ＝ 比べる集合（所属カテゴリーの代替）のすべてが `full` のもの。一部の代替だけが満たすものは、どちらにもならない。比べる集合の度合いの矢印が 1 本でも欠ければ導かない（未調査を `none` とみなさない）。
-
-**id**：経路の id は `pth-` ＋ 経路のハッシュ。positioning の id は `pos-` ＋ そのセグメントで承認済みの経路の原子と矢印を合わせた中身の SHA-256（報告にだけ使い、set の id には入れない）。ファイルの中で書いた順番・写しの出どころ・provenance は入らない。`infoarch-author positioning --root .` が、セグメントごとの positioning（承認済みの経路・承認待ちの提供価値・隙間・同等であるべき点・所属カテゴリー）と、提供価値ごとの経路（`paths`：比べる集合・満たす先・失格・承認済みか）を出す。
-
-**失格**は経路ごとに見る（要件 3・5）。出荷チャネルの outline が指す経路は失格（fail）、下書きの outline が指すか承認済みの経路は警告、どちらでもない下書きの経路は見ない。形の失格は proposed の全要素。条件と赤のフィクスチャの対応表は `fixtures/positioning-red-cases.json`（対応の無い条件 0 件をテストが確かめる）。
-
-| code | 内容 |
-| --- | --- |
-| IA_POSITIONING_ISOLATED_ATOM | 経路の矢印にどれも繋がらない経路の原子（矢印の無い代替、何にも繋がらない提供価値） |
-| IA_POSITIONING_JOB_WITHOUT_NEED | 満たす先の痛み・得たいものを持つジョブが無い（ジョブ→痛み・得たいものの矢印が無い） |
-| IA_POSITIONING_INCOMPLETE | 経路のジョブか痛み・得たいものが 0 件、またはジョブがセグメントに `has_job` で繋がらない（Quality 2：中身の無い経路を合格にしない） |
-| IA_POSITIONING_CATEGORY_COUNT | 所属カテゴリーが 0 本か 2 本以上 |
-| IA_POSITIONING_NO_ALTERNATIVES | 隙間の比較に使うセグメントの代替が 0 件 |
-| IA_POSITIONING_NO_CATEGORY_ALTERNATIVES | 同等であるべき点の比較に使う所属カテゴリーの代替が 0 件 |
-| IA_POSITIONING_FULFILLMENT_MISSING | 比べる集合の代替と満たす先の組で、満たす度合いの矢印が欠ける（`detail.pairs`）。比べる集合の外の組は見ない |
-| IA_POSITIONING_VALUE_UNANCHORED | difference の提供価値が隙間を、parity の提供価値が同等であるべき点を 1 つも満たさない |
-| IA_POSITIONING_STRENGTH_UNCOMPARED | 代替と比べない（`lacks` の無い）強み |
-| IA_POSITIONING_EDGE_SHAPE | 矢印の始点・終点の種類が表と違う、`degree` が fulfills に無い・ほかの種類にある |
-| IA_POSITIONING_EDGE_DUPLICATE | 同じキーの矢印が 2 本 |
-| IA_POSITIONING_CROSS_SEGMENT | 矢印が別のセグメントの原子を結ぶ（共有しない。写しを作る） |
-| IA_POSITIONING_COPY_SOURCE | 写しの出どころが無い・別の種類・同じセグメント |
-| IA_POSITIONING_PATH_PENDING | 承認済みの経路があるセグメントに、どの outline も指さない未承認の経路が残る（警告。止めない） |
+- positioning（原子・矢印・証拠・id 台帳・承認）は own-positioning-author の持ち物：`design/info_arch/info_arch.yaml`（スキーマ版 5）。契約は `own-positioning-author/references/contract.md`。outline は、その id（提供価値・代替）を引く。引けなければ失格。
+- 固定値と正式名称は `docs/dictionary/<分野>.json` の辞書が持つ（own-doc-update の `dictionary.py` が形を検査し、この skill が同じファイルを読む）。辞書の `value` が固定値、`name` が正式名称。outline の文案は固定値を `{{value-<辞書の id>}}` で参照する。辞書の形が壊れていれば IA_DICTIONARY_INVALID で失格。
+- 固定値の期限は辞書の `expires`（日付）か `evergreen: true`。`as_of` から日数を足す暗黙の期限は辞書には無い。
+- 声は廃止した。成果物ごとのトーンは outline の `tone` が持つ。
 
 ### outline が指す経路（`check.referenced_values`・`check.positioning_path`）
 
@@ -98,7 +26,7 @@ outline のメッセージが指す提供価値のうち、target のセグメ�
 
 ### 承認の対象（`ia:path:<提供価値 id>`）
 
-- `infoarch-author review --root . --request <束>`：束が束縛する経路を、経路ごとに全部（主張→差別化の根拠→前提→証拠の順、比べる集合・満たす先・失格つき）Markdown で出す（オーナーが読む）。見せる範囲とハッシュの範囲は同じ。今のハッシュと合わない行があれば `stale` に並べて失格（作り直す）。
+- 承認依頼の表示と、束の読み取り（`review`）、承認の台帳の移行（`migrate-approvals`）は own-positioning-author（`positioning-author request` / `review` / `migrate-approvals`）。
 - `infoarch-author targets --root .`：proposed の全部の提供価値の経路のハッシュ（`approval_hashes`）と、出荷チャネルの outline が指す経路のキー（`must_approval_keys`）を出す。`ia_module.py`（契約 `ia-git-history-v4`、`modules.ia: 0.4.0`、governance の schema_version 4）がこれを own-design-author に返す。キーの形は `ia:path:val-NNNN` だけ。
 - 出荷の報告（`ship`）は `positioning` に、`owner_adopted`（approved / unapproved）・`semantic_fit`（意味の判定の状態。今は not-judged）・`customer_validation`（IA は判定しない：not-judged-by-ia）を分けて出す。
 
@@ -108,7 +36,7 @@ outline のメッセージが指す提供価値のうち、target のセグメ�
 - 定数：`target`（`segment`＋`condition`。outline はこのセグメントの positioning にだけ立つ）・`touchpoint`（接点）・`tone`。目的変数：`objective`（`id`・`action`）。
 - `messages`（`msg-NNNN`）：`value`（提供価値ちょうど 1 つ）・`rank`（lead / support）・`type`（normal / cta）・`compares`（比べる代替）・`achieves`（CTA が指す目的変数）。`no_cta: true` で CTA を置かないことを宣言できる。
 - `sections`（`sec-NNNN`）：`order`・`role`（aware / pain / compare / trust / act）・`places`（通常のメッセージ 1 つと CTA 0〜1 つ）。
-- `copies`（`cpy-NNNN`）：`section`・`order`（セクションの中の順番）・`message`（同じセクションに置かれたもの）・`text`。固定値は `{{fct-NNNN}}` で参照する（括弧の中に空白や改行を入れない。入れたものは形の崩れた参照として失格）。
+- `copies`（`cpy-NNNN`）：`section`・`order`（セクションの中の順番）・`message`（同じセクションに置かれたもの）・`text`。固定値は `{{value-<辞書の id>}}` で参照する（括弧の中に空白や改行を入れない。入れたものは形の崩れた参照として失格）。
 - `texts`（任意）：主張でない文言の宣言。key ごとに `kind`（navigation / label）・`text`・（label なら）`section`。
 - 並びは `order` で持ち、ファイルの中で書いた順番は意味を持たない。outline の原子の id は outline の中で一意で、台帳は持たない（別案は同じ id を引き継ぐ）。
 
@@ -173,17 +101,18 @@ v5 の木（`info_arch.yaml` 版 3・outline 版 2・描画物の v5 の印・`m
 | IA_MISSING / IA_YAML / IA_SCHEMA | ファイルが無い・YAML として読めない（重複キーを含む。日付は文字列として読む）・スキーマ違反（`state: approved` を含む） |
 | IA_ID_NOT_ISSUED / IA_ID_TOMBSTONED / IA_TOMBSTONE_TARGET | 台帳と墓標 |
 | IA_REF_BROKEN / IA_EMPTY_REFERENCED | SSOT 内の参照切れ・proposed の原子が空欄を参照（参照の表は `check.ssot_refs` の 1 か所） |
-| IA_VOICE_MULTIPLE | proposed の声が 2 つ以上 |
+| IA_SSOT_LEGACY_V4（警告） | スキーマ版 4 の SSOT（固定値・正式名称・声を持つ）。読むが、辞書へ移す（`migrate-dictionary`） |
+| IA_DICTIONARY_INVALID | `docs/dictionary/` が辞書の形でない（固定値と正式名称を読めない。evergreen と日付の併存など） |
 | IA_POSITIONING_*（要件 5・要件 2） | 上の positioning の表 |
 | IA_POSITIONING_UNAPPROVED | outline が指す経路に、オーナーの承認が無いか外れたものがある（`detail.values`。出荷チャネルは失格、ほかは警告） |
-| IA_APPROVALS_LEGACY | 承認台帳に原子と矢印ごとの旧い行（`ia:positioning:`）がある。数えない（警告。`migrate-approvals` で移す） |
+| IA_APPROVALS_LEGACY | 承認台帳に原子と矢印ごとの旧い行（`ia:positioning:`）がある。数えない（警告。`positioning-author migrate-approvals` で移す） |
 | IA_APPROVALS_INVALID | `design/approvals.yaml` が読めない・symlink・design の `verify_rows` を通らない（重複キー・項目の過不足・承認者・日付・ハッシュ）。何も承認済みとして数えない |
 | IA_PAGES_OUTPUT_NOT_INVENTORIED（警告） | 出荷チャネルの HTML の成果物が、design/validation.json の pages（covered・excluded）に無い（design の検査が見ていない） |
 | IA_PAGES_OUTPUT_EXCLUDED_BY_DESIGN（info） | design が対象外にした成果物。IA の検査は続ける（ページの宣言は一本化しない。ADR-20261115-design-ia-two-skills-shared-base） |
 | IA_NO_CHANNELS / IA_NO_OUTLINES / IA_CHANNEL_NAME / IA_CHANNEL_FILE / IA_OUTLINE_FILE / IA_OUTLINE_ID | 対象 0 件・名前の不一致・読まれないファイル |
 | IA_OUTLINE_CHANNEL / IA_OUTLINE_OUTPUT_UNDECLARED | 宣言の無いチャネル・チャネルの outputs に一致しない成果物 |
 | IA_OUTLINE_REF_BROKEN / IA_OUTLINE_REF_EMPTY | アウトラインの参照切れ（墓標なら先を案内）・空欄の原子を参照（参照の表は `check.outline_refs` の 1 か所） |
-| IA_OUTLINE_BAD_PLACEHOLDER / IA_OUTLINE_FACT_LITERAL | `{{fct-NNNN}}` の形でない `{{…}}`（改行をまたぐものを含む）・固定値の値を参照せず直接書いた |
+| IA_OUTLINE_BAD_PLACEHOLDER / IA_OUTLINE_FACT_LITERAL | `{{value-<辞書の id>}}` の形でない `{{…}}`（改行をまたぐものを含む）・固定値の値を参照せず直接書いた |
 | IA_IMPACT_UNKNOWN_ID | `impact --id` に SSOT にも墓標にも無い id を渡した（空の結果を合格にしない） |
 | IA_OUTLINE_TARGET | target のセグメントが無いか空欄（target が無い・形が違うのは IA_SCHEMA） |
 | IA_OUTLINE_VALUE_UNAPPROVED | メッセージが、経路の承認が無いか外れた提供価値を指す（出荷チャネルは失格、ほかは警告） |
@@ -202,19 +131,19 @@ v5 の木（`info_arch.yaml` 版 3・outline 版 2・描画物の v5 の印・`m
 | IA_DIFF_UNASSIGNED | 別案どうしで、印の外の文か参照する固定値の値が違う（`diff`） |
 | IA_EXPIRED_SHIPPED / IA_EXPIRED_UNSHIPPED（info） | 期限切れの証拠（経路から受け継ぐもの）・固定値（文案が参照するもの）に、出荷チャネル（`ship: true`）の outline が立っている／立っていない |
 
-条件と赤のフィクスチャの対応表：`fixtures/red-cases.json`（参照と形）・`positioning-red-cases.json`（要件 5）・`outline-red-cases.json`（要件 7・9）。
+条件と赤のフィクスチャの対応表：`fixtures/red-cases.json`（参照と形）・`own-positioning-author/fixtures/positioning-red-cases.json`（要件 5。positioning の持ち物で、outline を持つこの検査と、outline 無しの `positioning-author check --strict` の両方で走らせる）・`fixtures/outline-red-cases.json`（要件 7・9）。
 
 ## 期限
 
-`expires` があればその日、無ければ `as_of` に日数を足した日を期限とする。期限の日の当日までは有効で、翌日から期限切れ。日数の初期値は `references/expiry.json`、プロジェクトの
-`info_arch.yaml` の `policy.expiry_days` で上書きできる。`evergreen: true` の固定値は期限を持たない。
+証拠は、`expires` があればその日、無ければ `as_of` に日数を足した日を期限とする。期限の日の当日までは有効で、翌日から期限切れ。日数の初期値は `references/expiry.json`、プロジェクトの
+`info_arch.yaml` の `policy.expiry_days` で上書きできる。固定値は辞書の `expires`（日付）か `evergreen: true`（期限なし）で、日数を足す暗黙の期限は無い（スキーマ版 4 の SSOT の固定値だけは、`as_of` から日数の読み方が残る）。出荷の成果物が期限切れの値を参照すると IA_EXPIRED_SHIPPED で失格。
 
 ## 工場への受け渡し（`skeleton`）
 
 `infoarch-author skeleton --outline <id>` は、check が緑のアウトラインから骨組みの HTML を出す（失格していれば出さない）。
 セクションを `order` の順に `<section data-ia-section="sec-…" data-ia-role="…">` で、その中の文案を `order` の順に `data-ia-copy="cpy-…"` で出す。
-ナビの宣言は `<nav data-ia-text>`、ラベルはそのセクションの先頭に `data-ia-text` で出す。文案の `{{fct-NNNN}}` は SSOT の値の
-`<span data-ia-fact>` に展開し、文案は HTML エスケープする。1 ページ＝1 outline なので、どの output にも outline 全体を出す。`--out` を付けるとファイルに書き、既にあるファイルは上書きしない。
+ナビの宣言は `<nav data-ia-text>`、ラベルはそのセクションの先頭に `data-ia-text` で出す。文案の `{{value-<辞書の id>}}` は辞書の値の
+`<span data-dict="<辞書の id>">` に展開し、文案は HTML エスケープする。1 ページ＝1 outline なので、どの output にも outline 全体を出す。`--out` を付けるとファイルに書き、既にあるファイルは上書きしない。
 工場（own-web-build）は、文言・順序・`data-ia-*` を変えずにスタイリングし、描画後に `dom` を走らせる。
 
 ## 描画物の確認（`dom`）
@@ -222,7 +151,7 @@ v5 の木（`info_arch.yaml` 版 3・outline 版 2・描画物の v5 の印・`m
 `infoarch-author dom --root . --outline <id>` は、アウトラインの outputs のうち HTML を、チャネルの viewports（無ければ 375×812 と 1280×800）でブラウザに描画し、DOM を確かめる。
 
 - 解析と描画はブラウザ（Playwright の Chromium）が行う。成果物のソースを自前のパーサで読まない。
-- 工場はアンカーを埋める：セクションは `data-ia-section`、文案は `data-ia-copy`、固定値の表示は `data-ia-fact`、正式名称（SSOT の `ent-`）の表示は `data-ia-entity`、宣言した文言は `data-ia-text`。v4・v5 の `data-ia-problem`・`data-ia-msg`・`data-ia-pain`・`data-ia-frame` が残っていれば IA_DOM_LEGACY_ATTRIBUTE で失格（互換は持たない。v5 の描画物は `infoarch-author migrate-v6` が読み替える）。
+- 工場はアンカーを埋める：セクションは `data-ia-section`、文案は `data-ia-copy`、固定値と正式名称の表示は `data-dict="<辞書の id>"`（`value-` の id は固定値、`name-` の id は正式名称。`term-` の id は印にできない）、宣言した文言は `data-ia-text`。v4・v5 の `data-ia-problem`・`data-ia-msg`・`data-ia-pain`・`data-ia-frame` が残っていれば IA_DOM_LEGACY_ATTRIBUTE で失格（互換は持たない。v5 の描画物は `infoarch-author migrate-v6` が読み替える）。
 - **画面の適合（SPEC v6 要件 10）**：セクションの印は outline の順序どおりにちょうど並ぶ（IA_DOM_ORDER）。文案の印は、outline で属するセクションの印の中にあり（IA_DOM_COPY_SECTION）、セクションの中で outline の順番どおりに並ぶ（IA_DOM_COPY_ORDER）。同じ文案の印は 1 つだけ（IA_DOM_COPY_REPEATED。繰り返したい行動喚起は、outline に別の文案として置く）。条件と赤のフィクスチャの対応表は `fixtures/screen-red-cases.json`（DOM の写しと実ブラウザの両方で確かめる）。
 - Playwright は own-design-author の `scripts/playwright_runtime.mjs` で解決する：`OWN_PLAYWRIGHT_DIR` → 対象 repo（`INFOARCH_PLAYWRIGHT_DIR`、無ければ実行ディレクトリとその祖先）→ 端末の共通置き場（対象 repo の `design/render-environment.json` が固定する版）。`NODE_PATH` は見ない。自動では入れない。解決できなければ IA_DOM_PLAYWRIGHT で失格。
 - 読み取る前に、ページが落ち着くのを待つ：network idle の後に 1 秒（表示を始めるタイマーのため）、さらに実行中のアニメーションとトランジションが終わるまで最大 5 秒。終わらないアニメーションがあっても読み取り、2 回の描画の比較で揺れを報告する。
@@ -357,7 +286,15 @@ pre-push の拡張は、マーカーのある repo だけで動く（opt-in）�
 あれば `check` と `judge`（台帳を読むだけ。ブラウザは使わない）を走らせ、次を 1 行の JSON で返す。
 - `due`：期限が `references/expiry.json` の `due_within_days` 日以内に来る証拠・固定値と、それを参照するアウトライン（出荷されるか）。
 - `changed_paths`：出荷チャネルの `merge_base` からのコミット済みの差分と、未コミットの差分（`design/info_arch/` の中だけ）。
-- `impacted_outlines`：変わった原子を参照するアウトライン（正式名称と声が変わったら全部）。
+- `impacted_outlines`：変わった原子を参照するアウトライン（辞書（`docs/dictionary/`）が変わったら全部）。
 - `uncovered_judgments`：台帳に無い判定の数（Jev で取得する候補）。
 
 終了コードは 0（整合）・1（期限が近い・未カバー・警告）・2（失格）。台帳もアウトラインも書き換えない。
+
+## スキーマ版 4 からの移行（`infoarch-author migrate-dictionary --root . --map <map.json> [--write]`）
+
+固定値（`fct-NNNN`）を辞書の `value`、正式名称（`ent-NNNN`）を `name` に移し、声（`voices`）を捨て、SSOT をスキーマ版 5 にする。outline の `{{fct-NNNN}}` は `{{<辞書の id>}}` に、描画物の `data-ia-fact`・`data-ia-entity` は `data-dict` に書き換える。SSOT のコメントは残す（ブロックを文面から除き、読み戻した結果がスキーマ版 4 を持ち上げた形と一致しなければ何も書かない）。
+
+- `--map`：`{旧 id: {"id": "<kind>-<slug>", "expires": "YYYY-MM-DD" | "evergreen": true, "variants": [...]}}`。辞書の id は人が読む名前なので道具は付けない。値には `expires` か `evergreen` のどちらか 1 つを必ず決める（暗黙の期限は無い。どちらにするかはその repo の中身の判断で、既定値は置かない）。
+- 移せないもの（対応の無い固定値・正式名称、期限の決まっていない値、辞書の id でない名前、SSOT に無い固定値を指す文案・印、既にある辞書のファイル）は `unmigrated` に並べて exit 2、何も書かない。
+- 既定は dry run。散らかさない scratch の複製で移した木の検査も走らせ、移す前の失格の code と並べて出す（`check`）。新しい失格が増えるなら移さない。`--write` で書く。スキーマ版 5 の木は何もしない（再実行できる）。承認台帳は触らない（承認のハッシュは positioning の経路にだけ掛かり、固定値・正式名称・声はどの経路にも載っていない）。

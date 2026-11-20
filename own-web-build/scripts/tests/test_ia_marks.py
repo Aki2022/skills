@@ -1,7 +1,6 @@
 """Information-architecture marks on a factory page (biz_ops WS-20261114 D2/D16; IA v6 requirement 10).
 
-The factory keeps the outline's marks (data-ia-section / data-ia-copy / data-ia-text / data-ia-fact /
-data-ia-entity) and adds nothing but attributes: the marks must never change how the page looks. L1 refuses CSS that
+The factory keeps the outline's marks (data-ia-section / data-ia-copy / data-ia-text / data-dict) and adds nothing but attributes: the marks must never change how the page looks. L1 refuses CSS that
 selects a mark; with a real browser, the page with and without its marks renders to identical pixels.
 """
 import json
@@ -85,3 +84,9 @@ def test_marks_do_not_change_the_rendered_pixels(tmp_path):
     a, b, c = shots(tmp_path, marked, plain, styled)
     assert a == b, 'adding the IA marks changed how the page looks'
     assert a != c, 'the snapshot cannot see a change (control failed)'
+
+
+def test_css_that_selects_a_dictionary_mark_fails_the_l1_row():
+    page = PAGE.replace('<h1 data-ia-copy="cpy-0001">', '<h1 data-ia-copy="cpy-0001"><span data-dict="value-answer-time">10分</span>')
+    assert mark_row(page.format(extra='')) is True
+    assert mark_row(page.format(extra='[data-dict]{font-weight:700}')) is False

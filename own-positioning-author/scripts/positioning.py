@@ -463,6 +463,6 @@ def read_approvals(root, report, load_yaml, yaml_error):
     legacy = sorted(k for k in approved if k.startswith(LEGACY_PREFIX))
     if legacy:
         report.add('warn', 'IA_APPROVALS_LEGACY',
-                   f'{rel} に原子と矢印ごとの旧い行が {len(legacy)} 件ある（承認として数えない。infoarch-author migrate-approvals で経路の行へ移す）',
+                   f'{rel} に原子と矢印ごとの旧い行が {len(legacy)} 件ある（承認として数えない。positioning-author migrate-approvals で経路の行へ移す）',
                    rel, rows=len(legacy))
     return {k: v for k, v in approved.items() if k.startswith(PATH_PREFIX)}

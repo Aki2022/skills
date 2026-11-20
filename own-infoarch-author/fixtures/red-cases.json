@@ -1,6 +1,6 @@
 {
-  "version": 3,
-  "note": "必須の赤ケース（SSOT・チャネル・outline の参照と形の決定論の検査）。scripts/tests/test_check.py が全 id を 1 回ずつ実行し、終了コード 2 と code を確かめる。ケースを足したらテスト側の変異も足す（片方だけだとテストが失敗する）。positioning の失格（要件 5）は positioning-red-cases.json、outline の失格（要件 7）と差分の失格（要件 9）は outline-red-cases.json。",
+  "version": 4,
+  "note": "必須の赤ケース（SSOT・チャネル・outline の参照と形の決定論の検査）。scripts/tests/test_check.py が全 id を 1 回ずつ実行し、終了コード 2 と code を確かめる。ケースを足したらテスト側の変異も足す（片方だけだとテストが失敗する）。positioning の失格（要件 5）は positioning-red-cases.json、outline の失格（要件 7）と差分の失格（要件 9）は outline-red-cases.json。 2026-11-20（positioning の切り出し）：声と固定値と正式名称は SSOT から出た。固定値と正式名称は docs/dictionary/ の辞書（own-doc-update の dictionary.py が形を検査）、声は廃止。id の書き方の赤ケースは positioning の原子の id で書き直した（同じ IA_SCHEMA）。",
   "cases": [
     {
       "id": "outline-ref-broken",
@@ -20,12 +20,12 @@
     {
       "id": "outline-placeholder-unknown",
       "code": "IA_OUTLINE_REF_BROKEN",
-      "why": "文案の {{fct-…}} が存在しない固定値"
+      "why": "文案の {{value-…}} が辞書に存在しない固定値"
     },
     {
       "id": "outline-placeholder-malformed",
       "code": "IA_OUTLINE_BAD_PLACEHOLDER",
-      "why": "{{fct-NNNN}} の形でない {{…}}"
+      "why": "{{value-<辞書の id>}} の形でない {{…}}"
     },
     {
       "id": "outline-fact-literal",
@@ -55,7 +55,7 @@
     {
       "id": "expired-fact-shipped",
       "code": "IA_EXPIRED_SHIPPED",
-      "why": "期限切れの固定値を出荷チャネルの成果物が参照"
+      "why": "期限切れの辞書の固定値を出荷チャネルの成果物が参照"
     },
     {
       "id": "no-outlines",
@@ -83,9 +83,9 @@
       "why": "台帳の次番号以上の id"
     },
     {
-      "id": "ssot-voice-multiple",
-      "code": "IA_VOICE_MULTIPLE",
-      "why": "proposed の声が 2 つ"
+      "id": "ssot-voices-block",
+      "code": "IA_SCHEMA",
+      "why": "SSOT に声（voices）を書いた（声は廃止。旧い「声が 2 つ」の条件は機能ごと無くなったので、声が残っていること自体を赤にした）"
     },
     {
       "id": "channel-ship-without-command",
@@ -109,8 +109,8 @@
     },
     {
       "id": "ssot-evergreen-with-date",
-      "code": "IA_SCHEMA",
-      "why": "evergreen と日付の併存（日付が黙って捨てられる）"
+      "code": "IA_DICTIONARY_INVALID",
+      "why": "辞書の固定値に evergreen と日付が併存（日付が黙って捨てられる。固定値は辞書の持ち物になったので、辞書の形の検査が止める）"
     },
     {
       "id": "outline-dot-directory",
@@ -130,7 +130,7 @@
     {
       "id": "outline-placeholder-padded",
       "code": "IA_OUTLINE_BAD_PLACEHOLDER",
-      "why": "余白や改行を含む {{ fct-NNNN }}（形は {{fct-NNNN}} だけ）"
+      "why": "余白や改行を含む {{ value-… }}（形は {{value-<辞書の id>}} だけ）"
     },
     {
       "id": "outline-text-section-broken",

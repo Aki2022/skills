@@ -76,7 +76,6 @@ def cover_ledger(root, score=0.0):
 def fresh_ssot():
     ssot = copy.deepcopy(SSOT)
     ssot['proofs']['prf-0001']['as_of'] = '2026-10-01'
-    ssot['facts']['fct-0001']['as_of'] = '2026-10-01'
     return ssot
 
 
@@ -186,7 +185,7 @@ def test_symlinks_in_shipped_paths_are_refused(repo, tmp_path, path):
 
 def test_uncovered_judgment_of_a_shipped_outline_stops_but_a_draft_does_not(repo):
     changed = {**copy.deepcopy(DECK), 'channel': 'deck'}
-    changed['copies']['cpy-0003']['text'] = 'いますぐお問い合わせ {{fct-0002}}'
+    changed['copies']['cpy-0003']['text'] = 'いますぐお問い合わせ {{value-phone}}'
     dump(repo / 'design/info_arch/outlines/deck-smb.yaml', changed)
     commit(repo, 'shipped copy changed without a judgment')
     code, out, _ = ship(repo)

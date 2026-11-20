@@ -1,7 +1,8 @@
 // Snapshot of a rendered page for the information-architecture DOM checks.
 // Usage: node dom_snapshot.mjs <html file> <viewports JSON>
-// Prints a JSON array, one snapshot per viewport: anchors (data-ia-section / data-ia-copy / data-ia-fact /
-// data-ia-entity / data-ia-text; the v4/v5 attributes data-ia-problem / data-ia-msg / data-ia-pain / data-ia-frame are
+// Prints a JSON array, one snapshot per viewport: anchors (data-ia-section / data-ia-copy / data-ia-text, and
+// data-dict="<dictionary id>": a value-* id is reported as a `fact`, a name-* id as an `entity`, any other as a
+// `term`; the v4/v5 attributes data-ia-problem / data-ia-msg / data-ia-pain / data-ia-frame are
 // reported as legacy-<name>) with their rendered box,
 // visibility, visible text (painted text nodes only, the same rule as `unanchored`) and whether a declared-text or
 // official-name anchor holds another IA anchor (`nested`), the total rendered text length, the text visible in the
@@ -90,13 +91,15 @@ try {
       const NESTED = {
         copy: "[data-ia-section],[data-ia-copy],[data-ia-text]",
         text: "[data-ia-section],[data-ia-copy],[data-ia-text]",
-        entity: "[data-ia-section],[data-ia-copy],[data-ia-text],[data-ia-fact],[data-ia-entity]",
+        entity: "[data-ia-section],[data-ia-copy],[data-ia-text],[data-dict]",
       };
       const anchors = [];
-      for (const [attr, kind] of [["data-ia-section", "section"], ["data-ia-copy", "copy"], ["data-ia-fact", "fact"], ["data-ia-entity", "entity"], ["data-ia-text", "text"],
+      const dictKind = (id) => ({ value: "fact", name: "entity" })[id.split("-")[0]] ?? "term";
+      for (const [attr, base] of [["data-ia-section", "section"], ["data-ia-copy", "copy"], ["data-dict", null], ["data-ia-text", "text"],
         ["data-ia-problem", "legacy-problem"], ["data-ia-msg", "legacy-msg"], ["data-ia-pain", "legacy-pain"], ["data-ia-frame", "legacy-frame"]]) {
         for (const el of document.querySelectorAll(`[${attr}]`)) {
           const r = el.getBoundingClientRect();
+          const kind = base ?? dictKind(el.getAttribute(attr));
           anchors.push({
             kind, id: el.getAttribute(attr),
             top: Math.round(r.top + scrollY), left: Math.round(r.left + scrollX),
@@ -110,7 +113,7 @@ try {
       }
       const parts = [], loose = [];
       // A section is a container: its text belongs to the copy and the declared text inside it, not to the section.
-      const ANCHORED = "[data-ia-copy],[data-ia-fact],[data-ia-entity],[data-ia-text]";
+      const ANCHORED = "[data-ia-copy],[data-dict],[data-ia-text]";
       const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
       for (let n = walker.nextNode(); n; n = walker.nextNode()) {
         const t = paintedText(n);

@@ -24,8 +24,9 @@ def attach(project):
     # Fixed artificial dates stay future-proof without weakening the expiry test.
     ssot = copy.deepcopy(FIXTURE['SSOT'])
     ssot['proofs']['prf-0001']['as_of'] = '2099-01-01'
-    ssot['facts']['fct-0001']['as_of'] = '2099-01-01'
-    FIXTURE['write_repo'](root, ssot)
+    dictionary = copy.deepcopy(FIXTURE['DICTIONARY'])
+    dictionary['entries'][0]['expires'] = '2099-01-01'  # a dated value far in the future: the expiry test is the one below
+    FIXTURE['write_repo'](root, ssot, dictionary=dictionary)
     config = json.loads((root / 'design/design.yaml').read_text())
     config['modules'] = {'ia': '0.4.0'}
     write(root / 'design/design.yaml', config)
@@ -67,9 +68,9 @@ def test_actual_ia_bad_inputs_make_l0_red(project, broken):
         data['sections']['sec-0002']['places'] = ['msg-9999']
         FIXTURE['dump'](base / 'outlines/lp-municipal.yaml', data)
     elif broken == 'expiry':
-        data = copy.deepcopy(FIXTURE['SSOT'])
-        data['facts']['fct-0001']['expires'] = '2000-01-01'
-        FIXTURE['dump'](base / 'info_arch.yaml', data)
+        dictionary = copy.deepcopy(FIXTURE['DICTIONARY'])
+        dictionary['entries'][0]['expires'] = '2000-01-01'  # an expired value in the docs dictionary
+        FIXTURE['write_dictionary'](root, dictionary)
     elif broken == 'zero':
         for path in (base / 'outlines').iterdir():
             path.unlink()
@@ -104,6 +105,9 @@ def test_python_and_javascript_reject_changed_checker_and_schema(project, tmp_pa
     installed = tmp_path / 'installed'
     shutil.copytree(SKILL, installed / SKILL.name, ignore=shutil.ignore_patterns('__pycache__'))
     shutil.copytree(IA, installed / IA.name, ignore=shutil.ignore_patterns('__pycache__'))
+    # the checker is not only own-infoarch-author: it imports the positioning layer and reads the docs dictionary
+    for sibling in ('own-positioning-author', 'own-doc-update'):
+        shutil.copytree(SKILL.parent / sibling, installed / sibling, ignore=shutil.ignore_patterns('__pycache__', 'tests'))
     command = [sys.executable, str(installed / SKILL.name / 'scripts/design_author.py'),
                'check', '--repo', str(root), '--catalog-dir', str(project[1])]
     run = subprocess.run(command, capture_output=True, text=True)
@@ -115,8 +119,10 @@ def test_python_and_javascript_reject_changed_checker_and_schema(project, tmp_pa
     for consumer in (python, node):
         good = subprocess.run(consumer, capture_output=True, text=True)
         assert good.returncode == 0, good.stdout + good.stderr
-    for relative in ('scripts/check.py', 'references/schema/info_arch.v4.schema.json'):
-        path = installed / IA.name / relative
+    for relative in ('own-infoarch-author/scripts/check.py', 'own-infoarch-author/references/schema/outline.v3.schema.json',
+                     'own-positioning-author/scripts/positioning.py', 'own-positioning-author/references/schema/info_arch.v5.schema.json',
+                     'own-doc-update/scripts/dictionary.py'):
+        path = installed / relative
         saved = path.read_bytes()
         path.write_bytes(saved + b'\n')
         for consumer in (python, node):
@@ -211,7 +217,6 @@ def test_changing_one_positioning_element_withdraws_only_the_paths_it_is_on(proj
     assert approved['exit_code'] == 0, approved['errors']
     ssot = copy.deepcopy(FIXTURE['SSOT'])
     ssot['proofs']['prf-0001']['as_of'] = '2099-01-01'
-    ssot['facts']['fct-0001']['as_of'] = '2099-01-01'
     ssot['strengths']['str-0001']['text'] = '自動更新で保守がほぼ要らない'
     FIXTURE['dump'](root / 'design/info_arch/info_arch.yaml', ssot)
     after = check(project, ship=True)

@@ -187,7 +187,6 @@ def _attach_ia(root, proof_as_of):
     ssot = copy.deepcopy(fixture['SSOT'])
     ssot['proofs']['prf-0001']['as_of'] = proof_as_of
     ssot['proofs']['prf-0002']['as_of'] = '2026-10-01'
-    ssot['facts']['fct-0001']['as_of'] = '2026-10-01'
     fixture['write_repo'](root, ssot)
     config = json.loads((root / 'design/design.yaml').read_text())
     from design_modules import IA_VERSION

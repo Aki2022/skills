@@ -39,7 +39,7 @@ copies:
     section: sec-0001
     order: 1
     message: msg-0001
-    text: '{{fct-0001}}が導入、少人数でも回ります'
+    text: '{{value-customer-count}}が導入、少人数でも回ります'
   cpy-0002:
     section: sec-0002
     order: 1
@@ -49,4 +49,4 @@ copies:
     section: sec-0002
     order: 2
     message: msg-0002
-    text: お問い合わせ {{fct-0002}}
+    text: お問い合わせ {{value-phone}}

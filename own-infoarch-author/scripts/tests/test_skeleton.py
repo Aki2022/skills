@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import dom  # noqa: E402
 import skeleton  # noqa: E402
-from test_check import OUTLINE, SSOT, write_repo  # noqa: E402
+from test_check import OUTLINE, SSOT_VIEW as SSOT, write_repo  # noqa: E402
 
 SCRIPTS = Path(__file__).resolve().parents[1]
 
@@ -28,8 +28,8 @@ class Anchors(HTMLParser):
         for k in ('data-ia-section', 'data-ia-copy'):
             if k in a:
                 self.seq.append(a[k])
-        if 'data-ia-fact' in a:
-            self.stack.append(a['data-ia-fact'])
+        if 'data-dict' in a:
+            self.stack.append(a['data-dict'])
             self.text = []
 
     def handle_data(self, data):
@@ -55,7 +55,7 @@ def test_skeleton_keeps_outline_order_anchors_and_fact_values():
     assert list(pages) == ['site/index.html']
     p = parse(pages['site/index.html'])
     assert p.seq == ORDER
-    assert p.facts == {'fct-0001': '100社以上', 'fct-0002': '03-1234-5678'}
+    assert p.facts == {'value-customer-count': '100社以上', 'value-phone': '03-1234-5678'}
     assert '{{' not in pages['site/index.html']
     assert [k[1] for k in dom.expected(OUTLINE)[0]] == ORDER  # dom expects the order the skeleton writes
 
@@ -71,7 +71,7 @@ def test_order_comes_from_the_order_field_not_the_file():
 
 def test_copy_is_html_escaped():
     o = copy.deepcopy(OUTLINE)
-    o['copies']['cpy-0002']['text'] = '<script>alert(1)</script> {{fct-0001}} & <b>運用</b>'
+    o['copies']['cpy-0002']['text'] = '<script>alert(1)</script> {{value-customer-count}} & <b>運用</b>'
     html = skeleton.render(o, SSOT)['site/index.html']
     assert '<script>alert' not in html and '&lt;script&gt;' in html and '&amp;' in html and '<b>' not in html
 

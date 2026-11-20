@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "domain": "product",
+  "summary": "例：製品の正式名称と固定値",
+  "entries": [
+    {
+      "id": "value-customer-count",
+      "kind": "value",
+      "text": "100自治体以上",
+      "meaning": "導入自治体数",
+      "expires": "2027-10-01"
+    },
+    {
+      "id": "value-phone",
+      "kind": "value",
+      "text": "03-1234-5678",
+      "meaning": "問い合わせ電話",
+      "evergreen": true
+    },
+    {
+      "id": "name-web-server",
+      "kind": "name",
+      "text": "Webサーバー",
+      "meaning": "製品名"
+    }
+  ]
+}

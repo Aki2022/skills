@@ -107,7 +107,7 @@ def test_candidates_are_reproducible_by_the_shared_reader_and_expand_facts(repo)
     # a message inherits the evidence of its value's path (v6): prf-0001 backs val-0001, prf-0003 backs str-0001
     assert [e['id'] for e in lead['input']['context']['evidence']] == ['prf-0001', 'prf-0003']
     names = next(r for r in rows if r['id'] == 'ia-name-variant:lp-municipal/sec-0001/cpy-0001')
-    assert names['input']['context']['entities'] == [{'id': 'ent-0001', 'name': 'Webサーバー'}]
+    assert names['input']['context']['entities'] == [{'id': 'name-web-server', 'name': 'Webサーバー'}]
 
 
 def test_emphasis_candidates_come_from_the_rendered_first_screen(repo, tmp_path):

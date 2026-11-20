@@ -76,6 +76,25 @@ def request_rows(items):
     return [{'key': i['key'], 'value_hash': i['value_hash']} for i in items]
 
 
+def load_rows(path):
+    """The owner's saved answers as rows [{id, data}], from any of the shapes they reach us in: a directory the
+    `ArtifactData` read wrote with `out_dir` (one `<doc id>.json` per document, the body alone), a JSON list of rows (what
+    the page offers to copy), one document body, or a {doc id: body} mapping."""
+    import json
+    from pathlib import Path
+    path = Path(path)
+    if path.is_dir():
+        return [{'id': f.stem, 'data': json.loads(f.read_text(encoding='utf-8'))} for f in sorted(path.rglob('*.json'))]
+    data = json.loads(path.read_text(encoding='utf-8'))
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict) and 'key' in data:
+        return [{'id': path.stem, 'data': data}]
+    if isinstance(data, dict):
+        return [{'id': k, 'data': v} for k, v in sorted(data.items())]
+    raise ValueError('the saved answers are not a list, a document or a mapping of documents')
+
+
 def decisions_from_rows(items, rows):
     """The owner's saved choices read back against the current cards.
 

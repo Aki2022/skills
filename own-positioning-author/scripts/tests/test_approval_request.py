@@ -202,3 +202,26 @@ def test_no_paths_is_not_a_page(tmp_path):
     dump(tmp_path / 'design/info_arch/info_arch.yaml', ssot)
     rc, res = cli('request', '--root', str(tmp_path), '--out', str(tmp_path / 'o'))
     assert rc == 2 and not (tmp_path / 'o').exists()
+
+
+def test_the_answers_are_read_back_in_the_shape_an_artifact_read_writes_them(tmp_path):
+    """`ArtifactData` list with out_dir writes <dir>/decisions/<doc id>.json holding the document body alone (observed
+    on a real artifact, 2026-11-20); the page's own copy is a list of {id, data}; both must read back the same."""
+    m = model()
+    t = pos.approval_targets(m)
+    folder = tmp_path / 'decisions'
+    folder.mkdir()
+    body = {'key': 'ia:path:val-0001', 'value_hash': t['ia:path:val-0001'], 'decision': 'ok', 'note': '', 'decided_at': '2026-11-20T00:00:00Z'}
+    (folder / 'val-0001.json').write_text(json.dumps(body), encoding='utf-8')
+    (folder / 'val-0002.json').write_text(json.dumps({**body, 'key': 'ia:path:val-0002', 'value_hash': 'b' * 64, 'decision': 'ng'}), encoding='utf-8')
+    rows = ar.load_rows(folder)
+    assert [r['id'] for r in rows] == ['val-0001', 'val-0002']
+    out = ar.decisions_from_rows(ar.build(m), rows)
+    assert out['ok'] == ['ia:path:val-0001'] and out['stale'] == ['ia:path:val-0002'] and out['unknown'] == []
+    page_copy = tmp_path / 'copy.json'
+    page_copy.write_text(json.dumps(rows), encoding='utf-8')
+    assert ar.decisions_from_rows(ar.build(m), ar.load_rows(page_copy)) == out
+    single = tmp_path / 'val-0001.json'
+    single.write_text(json.dumps(body), encoding='utf-8')
+    assert ar.load_rows(single) == [{'id': 'val-0001', 'data': body}]
+    assert [r['id'] for r in ar.load_rows(folder / 'val-0001.json')] == ['val-0001']

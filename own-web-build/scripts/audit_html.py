@@ -213,9 +213,9 @@ def check_structure(html, linked_css=""):
 
     # 情報設計の印（outline がある成果物だけが持つ。D2）は属性だけで、見た目を変えない。CSS が印を選ぶと、
     # 印を付けたり外したりで見た目が変わり、印の付け替えが見た目の差分になる。
-    if re.search(r"\bdata-ia-(section|copy)\s*=", html):
+    if re.search(r"\bdata-(ia-(section|copy)|dict)\s*=", html):
         css = "\n".join(re.findall(r"<style\b[^>]*>(.*?)</style>", html, re.I | re.S)) + "\n" + linked_css
-        styled = sorted(set(re.findall(r"\[\s*(data-ia-[a-z-]+)", css)))
+        styled = sorted(set(re.findall(r"\[\s*(data-(?:ia-[a-z-]+|dict))", css)))
         res.append((not styled, f"情報設計の印にスタイルを当てない{(' ' + str(styled)) if styled else ''} (ia-marks-inert)"))
     return res
 

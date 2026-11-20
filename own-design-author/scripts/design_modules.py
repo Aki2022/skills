@@ -10,28 +10,42 @@ IA_GIT_CONTRACT = 'ia-git-history-v4'
 IA_VERSION = '0.4.0'
 
 
+# The IA checker is more than its own skill: the positioning layer (own-positioning-author) is imported by it, and the
+# docs dictionary reader (own-doc-update's dictionary.py) reads the fixed values and official names it checks against.
+# What the resolved result trusts is bound together; a change to any of them invalidates it (rerun L0).
+IA_TRUSTED_SKILLS = ('own-positioning-author',)
+IA_TRUSTED_FILES = ('own-doc-update/scripts/dictionary.py',)
+
+
 def _digest(path, full=False):
     if not full:
         return hashlib.sha256(path.read_bytes()).hexdigest()
     skill = path.parent.parent
+    root = skill.parent
     inputs = {}
-    for sub in ('scripts', 'references'):
-        directory = skill / sub
-        if directory.is_symlink() or not directory.is_dir():
+    for owner in (skill, *(root / name for name in IA_TRUSTED_SKILLS)):
+        for sub in ('scripts', 'references'):
+            directory = owner / sub
+            if directory.is_symlink() or not directory.is_dir():
+                raise ValueError('IA trusted dependencies are missing')
+            for candidate in sorted(directory.rglob('*')):
+                relative = candidate.relative_to(owner)
+                if 'tests' in relative.parts or '__pycache__' in relative.parts or candidate.suffix == '.pyc':
+                    continue
+                if candidate.is_symlink() or not candidate.resolve().is_relative_to(owner):
+                    raise ValueError('IA trusted dependency symlink or escape')
+                # Prose under references/ explains; it is not executed or read by the checker. Editing it must not
+                # invalidate resolved results (ADR-20261115-design-ia-two-skills-shared-base, biz_ops). Files only:
+                # a directory named *.md still has its contents bound.
+                if candidate.is_file() and sub == 'references' and candidate.suffix == '.md':
+                    continue
+                if candidate.is_file():
+                    inputs[(owner.name / relative).as_posix()] = hashlib.sha256(candidate.read_bytes()).hexdigest()
+    for name in IA_TRUSTED_FILES:
+        file = root / name
+        if file.is_symlink() or not file.is_file() or not file.resolve().is_relative_to(root):
             raise ValueError('IA trusted dependencies are missing')
-        for candidate in sorted(directory.rglob('*')):
-            relative = candidate.relative_to(skill)
-            if 'tests' in relative.parts or '__pycache__' in relative.parts or candidate.suffix == '.pyc':
-                continue
-            if candidate.is_symlink() or not candidate.resolve().is_relative_to(skill):
-                raise ValueError('IA trusted dependency symlink or escape')
-            # Prose under references/ explains; it is not executed or read by the checker. Editing it must not
-            # invalidate resolved results (ADR-20261115-design-ia-two-skills-shared-base, biz_ops). Files only:
-            # a directory named *.md still has its contents bound.
-            if candidate.is_file() and sub == 'references' and candidate.suffix == '.md':
-                continue
-            if candidate.is_file():
-                inputs[relative.as_posix()] = hashlib.sha256(candidate.read_bytes()).hexdigest()
+        inputs[name] = hashlib.sha256(file.read_bytes()).hexdigest()
     if not inputs:
         raise ValueError('zero IA trusted dependencies')
     import json

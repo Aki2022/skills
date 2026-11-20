@@ -127,6 +127,7 @@ def test_findings_are_not_repeated_per_stage(repo):
 def test_cli_prints_one_report_without_candidate_text(tmp_path):
     root = tmp_path / 'empty'
     shutil.copytree(SCRIPTS.parent / 'templates/design', root / 'design')
+    shutil.copytree(SCRIPTS.parents[1] / 'own-positioning-author/templates/design', root / 'design', dirs_exist_ok=True)
     proc = subprocess.run([sys.executable, str(SCRIPTS / 'infoarch_author.py'), 'evaluate', '--root', str(root), '--date', DATE],
                           capture_output=True, text=True, check=False)
     out = json.loads(proc.stdout)

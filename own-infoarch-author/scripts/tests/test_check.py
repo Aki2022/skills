@@ -12,6 +12,8 @@ SCRIPTS = Path(__file__).resolve().parents[1]
 SKILL = SCRIPTS.parent
 POSITIONING_TESTS = SKILL.parent / 'own-positioning-author/scripts/tests'
 sys.path.insert(0, str(POSITIONING_TESTS))
+for _p in (SCRIPTS, SKILL.parent / 'own-positioning-author/scripts', SKILL.parent / 'own-doc-update/scripts'):
+    sys.path.insert(0, str(_p))  # also when a sibling skill's tests load this file by path (runpy)
 from ia_fixtures import EDGES, SSOT, _a, _e, confirm, dump  # noqa: E402,F401  (the positioning the outlines stand on)
 DATE = '2026-10-23'
 RED = json.loads((SKILL / 'fixtures/red-cases.json').read_text(encoding='utf-8'))['cases']

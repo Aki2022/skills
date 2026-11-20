@@ -25,8 +25,14 @@ DAY = '2026-11-18'
 def ssot():
     data = copy.deepcopy(FIXTURE['SSOT'])
     data['proofs']['prf-0001']['as_of'] = '2099-01-01'
-    data['facts']['fct-0001']['as_of'] = '2099-01-01'
     return data
+
+
+def future_dictionary():
+    """The fixture's docs dictionary with its dated value far in the future (the expiry test is not what these are about)."""
+    dictionary = copy.deepcopy(FIXTURE['DICTIONARY'])
+    dictionary['entries'][0]['expires'] = '2099-01-01'
+    return dictionary
 
 
 def ia_only(tmp_path):
@@ -35,7 +41,7 @@ def ia_only(tmp_path):
     root.mkdir()
     subprocess.run(['git', 'init', '-q', str(root)], check=True)
     subprocess.run(['git', '-C', str(root), 'remote', 'add', 'origin', 'https://example.org/ia-only.git'], check=True)
-    FIXTURE['write_repo'](root, ssot(), outlines=(), confirmed=False)
+    FIXTURE['write_repo'](root, ssot(), outlines=(), confirmed=False, dictionary=future_dictionary())
     return root
 
 
@@ -106,7 +112,7 @@ def test_cli_refuses_recording_without_owner_words(project, tmp_path):
 def test_positioning_without_outlines_can_be_prepared_in_a_design_repository(project):
     approve(project)
     root, catalogs = project
-    FIXTURE['write_repo'](root, ssot(), outlines=(), confirmed=False)
+    FIXTURE['write_repo'](root, ssot(), outlines=(), confirmed=False, dictionary=future_dictionary())
     config = json.loads((root / 'design/design.yaml').read_text())
     config['modules'] = {'ia': '0.4.0'}
     write(root / 'design/design.yaml', config)

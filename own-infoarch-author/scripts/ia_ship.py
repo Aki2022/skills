@@ -473,10 +473,12 @@ def _dirty(root):
     return paths
 
 
-def _atoms(ssot):
+def _atoms(ssot, legacy=False):
+    """The positioning elements of an SSOT as written in its file. A schema 4 file also writes its facts and entities
+    there (`legacy`); a loaded model's injected dictionary view is not the file's, so it is never compared."""
     if not isinstance(ssot, dict):
         return {}
-    out = {aid: atom for block in list(check.BLOCKS) + ['facts', 'entities']
+    out = {aid: atom for block in list(check.BLOCKS) + (['facts', 'entities'] if legacy else [])
            for aid, atom in (ssot.get(block) or {}).items()}
     # Arrows are positioning elements too: a changed degree or a new `supports` moves the outlines standing on it.
     out.update({f'{e.get("kind")}:{e.get("from")}:{e.get("to")}': e for e in ssot.get('edges') or [] if isinstance(e, dict)})
@@ -537,7 +539,8 @@ def maintain(root, date, within_days=None):
                 before = load_yaml_text(_git_raw(root, 'show', old_ref + ':' + path))
             except (ValueError, YamlError):
                 before = None
-            old, new = _atoms(before), _atoms(m.ssot)
+            legacy = isinstance(before, dict) and before.get('schema_version') == 4
+            old, new = _atoms(before, legacy), _atoms(m.ssot, legacy)
             moved = {aid for aid in set(old) | set(new) if old.get(aid) != new.get(aid)}
             if before is None or any(aid.startswith('ent-') for aid in moved):
                 impacted |= set(m.outlines)  # a schema 4 tree's official names apply to every outline

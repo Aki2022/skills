@@ -4,11 +4,17 @@ import {dirname, basename, join, relative, resolve, sep} from 'node:path';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 
+// Mirrors design_modules._digest: the IA checker is its own skill, the positioning layer it imports, and the docs
+// dictionary reader. Keys are `<skill>/<path>`, sorted by UTF-8 bytes.
+const IA_TRUSTED_SKILLS = ['own-positioning-author'];
+const IA_TRUSTED_FILES = ['own-doc-update/scripts/dictionary.py'];
+
 function iaDigest(file, full) {
   if (!full) return createHash('sha256').update(readFileSync(file)).digest('hex');
   const skill = dirname(dirname(file));
+  const root = dirname(skill);
   const inputs = {};
-  function walk(directory) {
+  function walk(owner, directory) {
     if (lstatSync(directory).isSymbolicLink() || realpathSync(directory) !== directory)
       throw new Error('IA trusted dependency symlink or escape');
     for (const name of readdirSync(directory)) {
@@ -16,14 +22,21 @@ function iaDigest(file, full) {
       const path = join(directory, name);
       if (lstatSync(path).isSymbolicLink() || realpathSync(path) !== path)
         throw new Error('IA trusted dependency symlink or escape');
-      if (statSync(path).isDirectory()) walk(path);
+      if (statSync(path).isDirectory()) walk(owner, path);
       // Reference prose (files only) is not bound (ADR-20261115-design-ia-two-skills-shared-base, biz_ops).
-      else if (statSync(path).isFile() && relative(skill, path).split(sep)[0] === 'references' && name.endsWith('.md')) continue;
+      else if (statSync(path).isFile() && relative(owner, path).split(sep)[0] === 'references' && name.endsWith('.md')) continue;
       else if (statSync(path).isFile())
-        inputs[relative(skill, path).split(sep).join('/')] = createHash('sha256').update(readFileSync(path)).digest('hex');
+        inputs[basename(owner) + '/' + relative(owner, path).split(sep).join('/')] = createHash('sha256').update(readFileSync(path)).digest('hex');
     }
   }
-  for (const sub of ['scripts', 'references']) walk(join(skill, sub));
+  for (const owner of [skill, ...IA_TRUSTED_SKILLS.map(name => join(root, name))])
+    for (const sub of ['scripts', 'references']) walk(owner, join(owner, sub));
+  for (const name of IA_TRUSTED_FILES) {
+    const path = join(root, name);
+    if (lstatSync(path).isSymbolicLink() || realpathSync(path) !== path || !statSync(path).isFile())
+      throw new Error('IA trusted dependencies are missing');
+    inputs[name] = createHash('sha256').update(readFileSync(path)).digest('hex');
+  }
   const keys = Object.keys(inputs).sort((a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b)));
   if (!keys.length) throw new Error('zero IA trusted dependencies');
   return createHash('sha256').update(JSON.stringify(Object.fromEntries(keys.map(key => [key, inputs[key]])))).digest('hex');

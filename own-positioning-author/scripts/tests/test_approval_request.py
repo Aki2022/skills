@@ -225,3 +225,33 @@ def test_the_answers_are_read_back_in_the_shape_an_artifact_read_writes_them(tmp
     single.write_text(json.dumps(body), encoding='utf-8')
     assert ar.load_rows(single) == [{'id': 'val-0001', 'data': body}]
     assert [r['id'] for r in ar.load_rows(folder / 'val-0001.json')] == ['val-0001']
+
+
+# ---- the diagram: the path drawn as boxes and lines --------------------------------------------------------------
+
+def test_the_diagram_draws_every_atom_and_arrow_the_hash_covers_and_nothing_else():
+    m = model()
+    for item in ar.build(m):
+        path = pos.paths(m)[item['id']]
+        atoms = {k for k in path.members if k in pos.atoms(m, proposed_only=False)}
+        arrows = set(path.members) - atoms
+        g = item['graph']
+        assert {n['id'] for n in g['nodes']} == atoms and {e['key'] for e in g['edges']} == arrows
+        svg = ar._diagram(g)
+        assert svg.count('<g class="node') == len(atoms) and svg.count('marker-end') == len(arrows)
+        for k in atoms:
+            assert svg.count(f'class="nid">{k}<') == 1
+
+
+def test_the_diagram_colours_the_degree_and_marks_the_claim():
+    svg = ar._diagram(ar.build(model())[0]['graph'])
+    assert 'deg-full' in svg or 'deg-partial' in svg or 'deg-none' in svg
+    assert 'role-claim' in svg and 'role-premise' in svg and 'role-evidence' in svg
+    assert '満たす' in svg and 'viewBox' in svg
+
+
+def test_the_page_shows_the_diagram_before_the_text_list_and_keeps_the_list_available():
+    page = ar.page(ar.build(model()))
+    assert page.count('<svg class="graph"') == 3 and page.count('文章でも読む') == 3
+    assert page.index('<svg class="graph"') < page.index('文章でも読む')
+    assert 'overflow-x:auto' in page  # a wide diagram scrolls inside its own box, never the page

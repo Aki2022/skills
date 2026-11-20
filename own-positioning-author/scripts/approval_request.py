@@ -63,11 +63,12 @@ def build(m, approved=None, must=()):
             if rows:
                 roles.append({'role': role, 'label': pm.ROLE_NAMES[role], 'rows': rows})
         value = atoms.get(vid) or {}
+        graph = _graph(p, atoms, edges)
         items.append({'id': vid, 'key': key, 'value_hash': hashes[key], 'hash12': hashes[key][:12],
                       'segment': p.segment, 'kind': p.kind, 'text': value.get('text', ''), 'roles': roles,
                       'comparison': list(p.comparison), 'targets': list(p.targets),
                       'problems': [{'code': c, 'message': msg} for c, msg in p.problems],
-                      'approved': vid in approved, 'required': key in must})
+                      'approved': vid in approved, 'required': key in must, 'graph': graph})
     return items
 
 
@@ -123,6 +124,123 @@ def decisions_from_rows(items, rows):
     return out
 
 
+# ---- the diagram: what the hash covers, drawn as boxes (atoms) and lines (arrows) ----------------------------------
+# Top to bottom, like the story it tells: who, what they want to do and which category they think of, our strength,
+# what they use now (the alternatives) and what we promise (the value), the needs the two are measured against, and the
+# evidence that holds it up. A page is read at laptop width, so the layers stack instead of running sideways.
+
+LAYERS = (('seg', 'だれが'), ('job', 'ジョブ'), ('str', '強み'), ('alt', '代替'), ('need', '痛み・得たいもの'), ('prf', '証拠'))
+LAYER_OF = {'seg': 0, 'job': 1, 'cat': 1, 'str': 2, 'alt': 3, 'val': 3, 'pan': 4, 'gan': 4, 'prf': 5}
+LAYER_TITLES = {0: 'だれが', 1: 'ジョブ・思い出すカテゴリー', 2: '強み', 3: '使っている代替と、私たちの提供価値', 4: '痛み・得たいもの', 5: '証拠'}
+SHORT_NAMES = {'has_job': '担う', 'need': '求める', 'recalls': '思い出す', 'includes': '含む', 'member_of': '所属', 'lacks': '代替に無い',
+               'produces': '生む', 'satisfies': '満たす先', 'supports': '支える'}  # the words on a line: short, so they fit in the gap
+DEGREE_NAMES = {'full': '満たす', 'partial': '一部', 'none': '満たさない'}
+BOX_W, BOX_H, GAP_X, GAP_Y, PAD, CAP = 188, 64, 26, 58, 14, 18
+
+
+def _wrap(text, width=13, lines=3):
+    chunks = [text[i:i + width] for i in range(0, len(text), width)] or ['']
+    if len(chunks) > lines:
+        chunks = chunks[:lines]
+        chunks[-1] = chunks[-1][:-1] + '…'
+    return chunks
+
+
+def _graph(path, atoms, edges):
+    """The path as data for the diagram: nodes (atoms with their role), edges (arrows with their kind and degree)."""
+    nodes = [{'id': k, 'layer': LAYER_OF[pos._prefix(k)], 'role': path.roles[k], 'text': (atoms[k].get('text') or atoms[k].get('qualifier') or k),
+              'kind': pm.REVIEW_NAMES.get(pos._prefix(k), k)} for k in path.members if k in atoms]
+    lines = []
+    for k in path.members:
+        if k in edges:
+            e = edges[k]
+            lines.append({'key': k, 'from': e['from'], 'to': e['to'], 'kind': e['kind'], 'degree': e.get('degree'), 'role': path.roles[k]})
+    return {'nodes': nodes, 'edges': lines}
+
+
+def _diagram(graph):
+    """Inline SVG of the path, layer by layer from the top. A box is an atom (its role sets the border), a line an arrow
+    with its words on it; a degree is coloured (satisfies / partly / does not satisfy). Evidence points up at what it holds up."""
+    nodes = graph['nodes']
+    layers = sorted({n['layer'] for n in nodes})
+    rows = {l: [n for n in nodes if n['layer'] == l] for l in layers}
+    widest = max(len(v) for v in rows.values())
+    width = PAD * 2 + widest * BOX_W + (widest - 1) * GAP_X
+    pos_of = {}
+    for li, l in enumerate(layers):
+        count = len(rows[l])
+        left = (width - (count * BOX_W + (count - 1) * GAP_X)) / 2
+        y = PAD + CAP + li * (BOX_H + GAP_Y + CAP)
+        for ri, n in enumerate(rows[l]):
+            pos_of[n['id']] = (left + ri * (BOX_W + GAP_X), y)
+    total_h = PAD * 2 + len(layers) * (BOX_H + GAP_Y + CAP) - GAP_Y
+    by_key = {e['key']: e for e in graph['edges']}
+    # how many lines meet each box on each side, so the lines do not pile up on one point
+    slots = {}
+    for e in graph['edges']:
+        for end, other in (('from', 'to'), ('to', 'from')):
+            ident = e[end]
+            if ident in pos_of:
+                up = e[other] in pos_of and pos_of[e[other]][1] < pos_of[ident][1]
+                slots.setdefault((ident, 'top' if up else 'bottom'), []).append(e['key'] + ':' + end)
+
+    def point(ident, edge, end, other_ident):
+        if ident not in pos_of:  # an arrow: the middle of that arrow
+            e = by_key[ident]
+            a, b = point(e['from'], e, 'from', e['to']), point(e['to'], e, 'to', e['from'])
+            return ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, 'mid')
+        x, y = pos_of[ident]
+        oy = pos_of[other_ident][1] if other_ident in pos_of else y + 1
+        if oy == y:  # same layer: side to side
+            ox = pos_of[other_ident][0]
+            return (x + BOX_W, y + BOX_H / 2, 'right') if ox > x else (x, y + BOX_H / 2, 'left')
+        side = 'top' if oy < y else 'bottom'
+        ring = slots[(ident, side)]
+        i = ring.index(edge['key'] + ':' + end)
+        dx = (i - (len(ring) - 1) / 2) * min(26, (BOX_W - 24) / max(len(ring), 1))
+        return (x + BOX_W / 2 + dx, y if side == 'top' else y + BOX_H, side)
+
+    parts = [f'<svg class="graph" role="img" viewBox="0 0 {width:.0f} {total_h}" style="width:100%;max-width:{width:.0f}px;height:auto" aria-label="この経路の図：箱は原子、線は矢印">',
+             '<defs><marker id="arw" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">'
+             '<path d="M0 0L8 4L0 8z" class="arrowhead"/></marker></defs>']
+    for li, l in enumerate(layers):
+        y = PAD + CAP + li * (BOX_H + GAP_Y + CAP)
+        parts.append(f'<text x="{PAD}" y="{y - 6}" class="coltitle">{html.escape(LAYER_TITLES[l])}</text>')
+    lines, labels = [], []
+    for e in graph['edges']:
+        a = point(e['from'], e, 'from', e['to'])
+        b = point(e['to'], e, 'to', e['from'])
+        vertical = a[2] in ('top', 'bottom') or b[2] in ('top', 'bottom', 'mid')
+        if vertical:
+            d = max(abs(b[1] - a[1]) / 2, 24)
+            sign = 1 if b[1] >= a[1] else -1
+            path = f'M{a[0]:.1f} {a[1]:.1f} C{a[0]:.1f} {a[1] + sign * d:.1f} {b[0]:.1f} {b[1] - sign * d:.1f} {b[0]:.1f} {b[1]:.1f}'
+        else:
+            d = max(abs(b[0] - a[0]) / 2, 20)
+            sign = 1 if b[0] >= a[0] else -1
+            path = f'M{a[0]:.1f} {a[1]:.1f} C{a[0] + sign * d:.1f} {a[1]:.1f} {b[0] - sign * d:.1f} {b[1]:.1f} {b[0]:.1f} {b[1]:.1f}'
+        t = 0.72 if e['degree'] else 0.5  # degrees converge on a box, so they are read near the box they lead to
+        mx, my = a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t
+        cls = 'line deg-' + e['degree'] if e['degree'] else ('line support' if e['kind'] == 'supports' else 'line')
+        lines.append(f'<path d="{path}" class="{cls}" marker-end="url(#arw)"><title>{html.escape(e["from"])} → {html.escape(e["to"])}：{html.escape(pm.EDGE_NAMES.get(e["kind"], e["kind"]))}</title></path>')
+        label = DEGREE_NAMES[e['degree']] if e['degree'] else SHORT_NAMES.get(e['kind'], e['kind'])
+        labels.append(f'<text x="{mx:.1f}" y="{my + 3:.1f}" text-anchor="middle" class="elabel {("deg-" + e["degree"]) if e["degree"] else ""}">{html.escape(label)}</text>')
+    parts += lines
+    for n in nodes:
+        x, y = pos_of[n['id']]
+        tspans = ''.join(f'<tspan x="{x + 8}" dy="{14 if i else 0}">{html.escape(t)}</tspan>' for i, t in enumerate(_wrap(n['text'])))
+        parts.append(f'<g class="node role-{n["role"]}"><title>{html.escape(n["kind"])} {html.escape(n["id"])}：{html.escape(n["text"])}</title>'
+                     f'<rect x="{x:.1f}" y="{y}" width="{BOX_W}" height="{BOX_H}" rx="6"/>'
+                     f'<text x="{x + 8:.1f}" y="{y + 13}" class="nid">{html.escape(n["id"])}</text>'
+                     f'<text x="{x + 8:.1f}" y="{y + 28}" class="ntext">{tspans}</text></g>')
+    parts += labels
+    parts.append('</svg>')
+    legend = ('<p class="legend"><span class="lg role-claim">主張（提供価値）</span><span class="lg role-basis">差別化の根拠（代替・度合い）</span>'
+              '<span class="lg role-premise">前提（だれの・どんな場面で）</span><span class="lg role-evidence">証拠</span>'
+              '<span class="lg deg-full">満たす</span><span class="lg deg-partial">一部</span><span class="lg deg-none">満たさない</span></p>')
+    return f'<div class="graphbox" tabindex="0" aria-label="図（はみ出すときは横にスクロールできます）">{"".join(parts)}</div>{legend}'
+
+
 def _card(i):
     badges = []
     if i['approved']:
@@ -141,11 +259,12 @@ def _card(i):
             if problems else '')
     meta = (f'比べる集合：{html.escape("、".join(i["comparison"]) or "なし")}　'
             f'満たす先：{html.escape("、".join(i["targets"]) or "なし")}')
+    diagram = _diagram(i['graph']) if i.get('graph', {}).get('nodes') else ''
     return f'''<article class="card" data-key="{html.escape(i["key"])}" data-id="{html.escape(i["id"])}">
 <header><h3>{html.escape(i["text"] or i["id"])}</h3>
 <p class="meta"><code>{html.escape(i["key"])}</code> <span class="hash" title="この経路全体のハッシュ">{i["hash12"]}</span> {html.escape(i["segment"])}・{html.escape(i["kind"])} {"".join(badges)}</p></header>
 <p class="meta">{meta}</p>
-{todo}{"".join(sections)}
+{todo}{diagram}<details class="detail"{" open" if not diagram else ""}><summary>文章でも読む</summary>{"".join(sections)}</details>
 <div class="choice" role="group" aria-label="{html.escape(i["id"])} の判断">
 <button type="button" data-d="ok" aria-pressed="false">○ 承認する</button>
 <button type="button" data-d="ng" aria-pressed="false">× 差し戻す</button>
@@ -173,6 +292,18 @@ h1{{font-size:20px;margin:0 0 4px}} h3{{font-size:17px;margin:0}} h4{{font-size:
 .meta{{color:var(--muted);font-size:13px;margin:4px 0}} code,.hash{{font:12px ui-monospace,monospace}}
 .hash{{background:var(--line);padding:1px 6px;border-radius:4px}}
 .tag{{font-size:12px;border:1px solid currentColor;border-radius:999px;padding:0 8px;margin-left:4px}} .tag.done{{color:var(--ok)}} .tag.must{{color:var(--warn)}}
+/* the diagram: boxes are atoms, lines are arrows */
+.graphbox{{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--bg);margin:10px 0 4px;padding:4px}}
+.graph{{display:block}} .coltitle{{font-size:11px;fill:var(--muted)}}
+.node rect{{fill:var(--card);stroke:var(--line);stroke-width:1.2}} .nid{{font:10px ui-monospace,monospace;fill:var(--muted)}} .ntext{{font-size:12px;fill:var(--fg)}}
+.node.role-claim rect{{stroke:var(--ok);stroke-width:2.4}} .node.role-basis rect{{stroke:var(--warn);stroke-width:1.8}} .node.role-evidence rect{{stroke-dasharray:4 3;stroke:var(--muted)}}
+.line{{fill:none;stroke:var(--muted);stroke-width:1.3;opacity:.75}} .line.support{{stroke-dasharray:4 3}}
+.line.deg-full,.lg.deg-full{{stroke:var(--ok);color:var(--ok)}} .line.deg-partial,.lg.deg-partial{{stroke:var(--warn);color:var(--warn)}} .line.deg-none,.lg.deg-none{{stroke:var(--ng);color:var(--ng)}}
+.arrowhead{{fill:var(--muted)}}
+.elabel{{font-size:10px;fill:var(--muted);paint-order:stroke;stroke:var(--bg);stroke-width:3px}} .elabel.deg-full{{fill:var(--ok)}} .elabel.deg-partial{{fill:var(--warn)}} .elabel.deg-none{{fill:var(--ng)}}
+.legend{{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:12px;margin:4px 0 8px}} .lg{{border-left:4px solid currentColor;padding-left:6px;color:var(--muted)}}
+.lg.role-claim{{color:var(--ok)}} .lg.role-basis{{color:var(--warn)}}
+details.detail summary{{cursor:pointer;color:var(--muted);font-size:13px;margin-top:6px}}
 ul{{margin:0;padding-left:20px}} li{{margin:2px 0}} .kind{{color:var(--muted);font-size:12px}} .detail{{display:block;color:var(--muted);font-size:12px}}
 .todo{{border-left:4px solid var(--warn);padding:4px 12px;margin:10px 0;background:color-mix(in srgb,var(--warn) 10%,transparent)}}
 .choice{{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:14px}}

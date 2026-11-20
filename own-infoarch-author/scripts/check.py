@@ -2,6 +2,10 @@
 
 What is checked here is structure and references, never meaning. Meaning (term variants, emphasis, whether a
 sentence is a claim) belongs to the Jev judgement ledger; rendered artifacts belong to the DOM checks.
+
+The positioning SSOT is the positioning layer's (own-positioning-author): this module reads it through that skill's
+loader and adds what stands on it: channels, outlines, the dictionary's values and names (docs/dictionary/, read
+through own-doc-update's reader), approvals per path, expiry and the design page inventory.
 """
 from __future__ import annotations
 
@@ -12,46 +16,38 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import common  # noqa: F401  (puts the sibling skills' scripts on sys.path)
+import dictionary
 import outline as ol
 import positioning as pos
+import positioning_model as pm
 from common import INFO_ARCH_DIR, Report, YamlError, load_ref, load_yaml, validator_for
+from positioning_model import (  # noqa: F401  (the positioning layer's, re-exported for the rest of this skill)
+    APPROVAL_PREFIX, BLOCKS, ID_RE, POSITIONING, PREFIX_BLOCK, SSOT_PATH, check_ssot, element, positioning_path,
+    review_markdown, ssot_refs)
 
-# Positioning (v6): segment, job, pain, gain, alternative, category, strength, value (+ evidence in proofs).
-POSITIONING = dict(pos.ATOM_BLOCKS)
-BLOCKS = {'proofs': 'prf', 'facts': 'fct', 'entities': 'ent', 'voices': 'vce', **POSITIONING}
-PREFIX_BLOCK = {v: k for k, v in BLOCKS.items()}
-ID_RE = re.compile(r'(' + '|'.join(BLOCKS.values()) + r')-((?!0000)[0-9]{4}|[1-9][0-9]{4,})')  # always fullmatch: $ would accept a trailing newline
-PLACEHOLDER = re.compile(r'\{\{(fct-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,}))\}\}')  # exactly {{fct-NNNN}}, no padding
+# A fixed value is the dictionary's: a copy of a `value` entry is written {{<dictionary id>}}. A schema 4 tree still
+# writes {{fct-NNNN}} for the facts its SSOT carries (read with a warning until it moves to the dictionary).
+PLACEHOLDER = re.compile(r'\{\{(value-[a-z0-9]+(?:-[a-z0-9]+)*|fct-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,}))\}\}')  # no padding
 ANY_BRACES = re.compile(r'\{\{.*?\}\}', re.S)
-SSOT_PATH = INFO_ARCH_DIR / 'info_arch.yaml'
 
 
 @dataclass
-class Model:
-    root: Path
-    ssot: dict | None = None
+class Model(pm.Model):
     channels: dict = field(default_factory=dict)  # media -> (rel path, data)
     outlines: dict = field(default_factory=dict)  # id -> (rel path, data)
+    # The dictionary as the rest of the checks read it: facts (kind value) and entities (kind name), keyed by the
+    # dictionary id. Built at load time, so dom, judge, skeleton and the answer key read one shape wherever the
+    # values came from (docs/dictionary/, or a schema 4 SSOT that still carries them).
+    facts: dict = field(default_factory=dict)
+    entities: dict = field(default_factory=dict)
 
     def atom(self, aid):
-        m = ID_RE.fullmatch(aid or '')
-        return (self.ssot.get(PREFIX_BLOCK[m.group(1)]) or {}).get(aid) if m and self.ssot else None
-
-    def tombstone(self, aid):
-        return (self.ssot['ledger'].get('tombstones') or {}).get(aid, '__live__')
-
-    def resolve(self, aid):
-        """Follow tombstones to the live id (None when deleted). Bounded so a cycle cannot loop."""
-        for _ in range(len(self.ssot['ledger'].get('tombstones') or {}) + 1):
-            t = self.tombstone(aid)
-            if t == '__live__' or t is None:
-                return aid if t == '__live__' else None
-            aid = t
-        return None
+        return self.facts.get(aid) or self.entities.get(aid) or super().atom(aid)
 
 
 def _errors(validator, data):
-    return sorted(validator.iter_errors(data), key=lambda e: list(e.absolute_path))
+    return pm.errors_of(validator, data)
 
 
 def _load(path, rel, report):
@@ -62,22 +58,41 @@ def _load(path, rel, report):
         return None, False
 
 
+def terms_of(entries):
+    """-> (facts, entities) of dictionary entries: kind value becomes a fact, kind name an entity, keyed by dictionary id."""
+    facts = {e['id']: {'state': 'proposed', 'label': e['meaning'], 'value': e['text'],
+                       **({'expires': e['expires']} if e.get('expires') else {}),
+                       **({'evergreen': True} if e.get('evergreen') else {}),
+                       **({'as_of': e['as_of']} if e.get('as_of') else {}),
+                       'from': 'dictionary'} for e in entries if e['kind'] == 'value'}
+    entities = {e['id']: {'state': 'proposed', 'type': 'name', 'name': e['text'], 'from': 'dictionary'}
+                for e in entries if e['kind'] == 'name'}
+    return facts, entities
+
+
+def _dictionary_view(root, legacy, report):
+    """-> (facts, entities). From docs/dictionary/, or from a schema 4 SSOT's own blocks."""
+    entries, nfiles, errors = dictionary.load(root)
+    for e in errors:
+        report.add('fail', 'IA_DICTIONARY_INVALID', f'docs/dictionary/ が辞書の形でない: {e}（辞書の値を読めない）', 'docs/dictionary')
+    facts, entities = terms_of(entries)
+    if legacy:  # a schema 4 SSOT keeps its own, under its own ids; the dictionary's win when both exist
+        facts = {**{k: {**v, 'from': 'ssot-v4'} for k, v in legacy['facts'].items()}, **facts}
+        entities = {**{k: {**v, 'from': 'ssot-v4'} for k, v in legacy['entities'].items()}, **entities}
+    return facts, entities
+
+
 def load(root, report):
     root = Path(root)
     base = root / INFO_ARCH_DIR
     m = Model(root)
-    if not (root / SSOT_PATH).is_file():
-        report.add('fail', 'IA_MISSING', f'{SSOT_PATH} がない', SSOT_PATH)
-        return m
-    data, ok = _load(root / SSOT_PATH, SSOT_PATH, report)
-    if not ok:
-        return m
-    errs = _errors(validator_for('info_arch.v4.schema.json'), data)
-    for e in errs:
-        report.add('fail', 'IA_SCHEMA', e.message, SSOT_PATH, pointer='/' + '/'.join(map(str, e.absolute_path)))
-    if errs:
+    data, legacy = pm.load_ssot(root, report)
+    if data is None:
         return m
     m.ssot = data
+    m.facts, m.entities = _dictionary_view(root, legacy, report)
+    # downstream readers (dom, judge, skeleton, answer key) take facts and entities from the SSOT dict
+    m.ssot['facts'], m.ssot['entities'] = m.facts, m.entities
     for kind, sub, schema, store in (('channel', 'channels', 'channel.v2.schema.json', m.channels),
                                      ('outline', 'outlines', 'outline.v3.schema.json', m.outlines)):
         d = base / sub
@@ -106,60 +121,8 @@ def load(root, report):
     return m
 
 
-# ---- SSOT --------------------------------------------------------------------------------
-
-def ssot_refs(block, atom):
-    """Every id an SSOT atom references, as (field, id). One table, so no field is forgotten."""
-    out = []
-    single = {'proofs': ('segment',), **{b: ('segment',) for b in POSITIONING if b != 'segments'}}
-    many = {}
-    for fld in single.get(block, ()):
-        if fld in atom:
-            out.append((fld, atom[fld]))
-    for fld in many.get(block, ()):
-        out += [(fld, x) for x in atom.get(fld, [])]
-    return out
-
-
-def _ref(m, report, src, aid, where, *, from_proposed, broken_code, empty_code):
-    atom = m.atom(aid)
-    if atom is None:
-        t = m.tombstone(aid) if m.ssot else '__live__'
-        hint = f'（墓標: {t} を使う）' if t not in ('__live__', None) else ''
-        report.add('fail', broken_code, f'{src} が存在しない {aid} を参照している{hint}', where)
-    elif from_proposed and atom['state'] == 'empty':
-        report.add('fail', empty_code, f'{src} が空欄の {aid} を参照している', where)
-    return atom
-
-
-def check_ssot(m, report):
-    d, path = m.ssot, str(SSOT_PATH)
-    nxt, tomb = d['ledger']['next'], d['ledger']['tombstones']
-    for key in [k for b in BLOCKS for k in d[b]] + list(tomb) + [v for v in tomb.values() if v]:
-        if not ID_RE.fullmatch(key):
-            report.add('fail', 'IA_SCHEMA', f'{key!r} は id の正規の書き方（接頭辞-0001〜9999、10000 以上は先頭 0 なし）でない', path)
-    for block, prefix in BLOCKS.items():
-        for aid, atom in d[block].items():
-            if not ID_RE.fullmatch(aid):
-                continue
-            if int(ID_RE.fullmatch(aid).group(2)) >= nxt[prefix]:
-                report.add('fail', 'IA_ID_NOT_ISSUED', f'{aid} は台帳の次番号 {nxt[prefix]} 以上で、台帳が発行していない', path)
-            if aid in tomb:
-                report.add('fail', 'IA_ID_TOMBSTONED', f'{aid} は墓標にある（id は再利用しない）', path)
-            for fld, target in ssot_refs(block, atom):
-                _ref(m, report, f'{aid}.{fld}', target, path, from_proposed=atom['state'] == 'proposed',
-                     broken_code='IA_REF_BROKEN', empty_code='IA_EMPTY_REFERENCED')
-    for old, new in tomb.items():
-        o = ID_RE.fullmatch(old)
-        if o is None or (new is not None and not ID_RE.fullmatch(new)):
-            continue
-        if int(o.group(2)) >= nxt[o.group(1)]:
-            report.add('fail', 'IA_ID_NOT_ISSUED', f'墓標 {old} は台帳が発行していない番号', path)
-        if new is not None and m.atom(new) is None:
-            report.add('fail', 'IA_TOMBSTONE_TARGET', f'墓標 {old} → {new} の先が無い', path)
-    voices = [v for v, a in d['voices'].items() if a['state'] == 'proposed']
-    if len(voices) > 1:
-        report.add('fail', 'IA_VOICE_MULTIPLE', f'proposed の声が {len(voices)} 個ある（声はプロジェクトに 1 つ）: {voices}', path)
+def _ref(m, report, src, aid, where, **kw):
+    return pm.check_reference(m, report, src, aid, where, **kw)
 
 
 def check_lead_support(m, report, oid, rel, o, all_paths):
@@ -199,22 +162,6 @@ def referenced_paths(m):
     return out
 
 
-def positioning_path(m, root_ids, segment):
-    """The atoms and arrows the given values stand on in one segment, and the hash of their union. A value's path is
-    its whole approval unit (requirement 3). -> (sorted keys, sha256 of their content); no value -> ([], None)."""
-    ps = pos.paths(m)
-    on = {}
-    for v in root_ids:
-        p = ps.get(v)
-        if p is not None and p.segment == segment:
-            on.update(p.roles)
-    if not on:
-        return [], None
-    A, E = pos.atoms(m), pos.edges(m)
-    ids = sorted(on)
-    return ids, pos.sha256([[k, pos.content(A.get(k) or E[k])] for k in ids])
-
-
 # ---- owner approval per value path (v6 requirements 3 and 15) -------------------------------------------------
 
 APPROVAL_PREFIX = pos.PATH_PREFIX
@@ -227,52 +174,8 @@ def positioning_targets(m):
     return hashes, sorted(must & set(hashes))
 
 
-REVIEW_NAMES = {'seg': 'セグメント', 'job': 'ジョブ', 'pan': '痛み', 'gan': '得たいもの', 'alt': '代替',
-                'cat': 'カテゴリー', 'str': '強み', 'val': '提供価値', 'prf': '証拠'}
-REVIEW_FIELDS = {'text': '', 'qualifier': '見分ける条件', 'situation': '状況', 'kind': '種類', 'segment': 'セグメント',
-                 'source': '出典', 'as_of': '時点', 'expires': '期限', 'copied_from': '写しの出どころ', 'provenance': '出所'}
-EDGE_NAMES = {'has_job': 'ジョブを持つ', 'need': '痛み・得たいものを持つ', 'fulfills': '満たす度合い', 'recalls': '思い出す',
-              'includes': '入れている', 'member_of': '所属', 'lacks': '代替に無い', 'produces': '生む',
-              'satisfies': '満たす', 'supports': '支える'}
-ROLE_NAMES = {'claim': '主張', 'basis': '差別化の根拠', 'premise': '前提', 'evidence': '証拠'}
-
-
-def review_markdown(m, keys, hashes):
-    """Markdown of the paths an approval request binds: each path whole, claim -> basis -> premises -> evidence, with
-    the hash that binds it. What is shown is exactly what the hash covers (ADR-20261118-ia-approval-per-value-path)."""
-    lines, ps = [], pos.paths(m)
-    atoms, edges = pos.atoms(m, proposed_only=False), pos.edges(m, proposed_only=False)
-    for key in sorted(keys):
-        vid = key[len(APPROVAL_PREFIX):]
-        p = ps.get(vid)
-        if p is None:
-            continue
-        lines.append(f'## 提供価値 {vid}（{p.segment}・{p.kind}）　`{(hashes.get(key) or "")[:12]}`')
-        lines.append(f'- 比べる集合：{"、".join(p.comparison) or "なし"}　満たす先：{"、".join(p.targets) or "なし"}')
-        for code, message in p.problems:
-            lines.append(f'- 失格：{code} {message}')
-        for role in pos.ROLES:
-            members = [k for k in p.members if p.roles[k] == role]
-            if not members:
-                continue
-            lines.append(f'### {ROLE_NAMES[role]}（{len(members)}）')
-            for k in members:
-                if k in atoms:
-                    a = atoms[k]
-                    body = '／'.join(f'{label + "：" if label else ""}{"、".join(v) if isinstance(v, list) else v}'
-                                    for fld, label in REVIEW_FIELDS.items() if (v := a.get(fld)) and fld != 'provenance')
-                    lines.append(f'- {REVIEW_NAMES.get(pos._prefix(k), k)} {k}：{body}')
-                else:
-                    e = edges[k]
-                    degree = f'（{e["degree"]}）' if 'degree' in e else ''
-                    lines.append(f'- 矢印 {e["from"]} → {e["to"]}：{EDGE_NAMES.get(e["kind"], e["kind"])}{degree}')
-        lines.append('')
-    return '\n'.join(lines)
-
-
 def read_approvals(root, report):
-    """The owner's ia:path rows of design/approvals.yaml. Its full validation belongs to own-design-author."""
-    return pos.read_approvals(Path(root), report, load_yaml, YamlError)
+    return pm.read_approvals(root, report)
 
 
 def positioning_dependencies(m, o):
@@ -294,11 +197,6 @@ def positioning_dependencies(m, o):
 def outline_dependencies(m, o):
     """Direct references plus the positioning underneath (requirement 14: reverse lookup is transitive)."""
     return {x for _, x in outline_refs(o)} | positioning_dependencies(m, o)
-
-
-def element(m, key):
-    """An atom or an arrow by its key (None when there is none)."""
-    return m.atom(key) or pos.edges(m, proposed_only=False).get(key)
 
 
 def check_positioning_use(m, report, oid, rel, o, shipped, approved):
@@ -362,7 +260,7 @@ def check_outline(m, report, oid, rel, o):
     for where, text in outline_texts(o):
         w = f'{oid}.{where}'
         for bad in [b for b in ANY_BRACES.findall(text) if not PLACEHOLDER.fullmatch(b)]:
-            report.add('fail', 'IA_OUTLINE_BAD_PLACEHOLDER', f'{w}: {bad} は固定値の参照 {{{{fct-NNNN}}}} の形でない', rel)
+            report.add('fail', 'IA_OUTLINE_BAD_PLACEHOLDER', f'{w}: {bad} は固定値の参照 {{{{value-<辞書の id>}}}} の形でない', rel)
         plain = PLACEHOLDER.sub(' ', text)
         for fid, value in facts.items():
             if value in plain:

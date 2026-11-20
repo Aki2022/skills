@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import check as ia_check  # noqa: E402
 import outline as ia_outline  # noqa: E402
 import positioning  # noqa: E402
-from test_check import DECK, OUTLINE, SKILL, SSOT, check, cli, codes, confirm, dump, write_repo  # noqa: E402
+from test_check import DECK, DICTIONARY, OUTLINE, SKILL, SSOT, check, cli, codes, confirm, dump, write_repo  # noqa: E402
 
 TABLE = json.loads((SKILL / 'fixtures/outline-red-cases.json').read_text(encoding='utf-8'))
 CONDITIONS = {c['id']: c for c in TABLE['conditions']}
@@ -88,10 +88,10 @@ def test_unassigned_difference_disqualifies_the_variant(case, tmp_path):
     variant = copy.deepcopy(OUTLINE)
     variant['id'], variant['outputs'] = 'lp-municipal-b', ['site/b.html']
     write_repo(tmp_path / 'a', outlines=(OUTLINE, DECK))
-    ssot_b = copy.deepcopy(SSOT)
+    dictionary_b = copy.deepcopy(DICTIONARY)
     for fid, value in case.get('fact_b', {}).items():
-        ssot_b['facts'][fid]['value'] = value
-    write_repo(tmp_path / 'b', ssot_b, outlines=(variant, DECK))
+        next(e for e in dictionary_b['entries'] if e['id'] == fid)['text'] = value
+    write_repo(tmp_path / 'b', outlines=(variant, DECK), dictionary=dictionary_b)
     extra = []
     if 'dom_a' in case:
         for name in ('a', 'b'):

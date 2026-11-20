@@ -642,7 +642,7 @@
       "condition": "9-unassigned-difference",
       "why": "2 つの別案が参照する固定値の値が違う（outline の要素にも positioning にも割り当てられない）",
       "fact_b": {
-        "fct-0001": "500社以上"
+        "value-customer-count": "500社以上"
       }
     }
   ]

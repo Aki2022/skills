@@ -14,7 +14,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import dom  # noqa: E402
-from test_check import OUTLINE, SKILL, SSOT  # noqa: E402
+from test_check import OUTLINE, SKILL, SSOT_VIEW as SSOT  # noqa: E402
 from test_dom import anchor, green_snapshot  # noqa: E402
 
 TABLE = json.loads((SKILL / 'fixtures/screen-red-cases.json').read_text(encoding='utf-8'))

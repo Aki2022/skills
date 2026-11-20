@@ -19,52 +19,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import check as ia_check  # noqa: E402
 import positioning  # noqa: E402
+from ia_fixtures import apply  # noqa: E402,F401  (the red cases' operations live with the positioning fixture)
 from test_check import SKILL, SSOT, check, cli, codes, dump, write_repo  # noqa: E402
 
-TABLE = json.loads((SKILL / 'fixtures/positioning-red-cases.json').read_text(encoding='utf-8'))
+TABLE = json.loads((SKILL.parent / 'own-positioning-author/fixtures/positioning-red-cases.json').read_text(encoding='utf-8'))
 CONDITIONS = {c['id']: c for c in TABLE['conditions']}
 CASES = TABLE['cases']
-
-
-def _key(edge):
-    return f'{edge["kind"]}:{edge["from"]}:{edge["to"]}'
-
-
-def apply(ops, ssot=SSOT):
-    """Apply a red case's declarative operations to a copy of the base fixture. -> (ssot, keys left unapproved)."""
-    ssot = copy.deepcopy(ssot)
-    blocks = {p: b for b, p in positioning.ATOM_BLOCKS.items()} | {'prf': 'proofs'}
-    unapproved = []
-    for op in ops:
-        kind = op['op']
-        if kind == 'set_atom':
-            ssot[blocks[op['id'].split('-')[0]]][op['id']] = op['atom']
-        elif kind == 'set_field':
-            ssot[blocks[op['id'].split('-')[0]]][op['id']][op['field']] = op['value']
-        elif kind == 'set_next':
-            ssot['ledger']['next'][op['prefix']] = op['value']
-        elif kind == 'add_edge':
-            ssot['edges'].append({'state': 'proposed', 'provenance': 'owner', **op['edge']})
-        elif kind == 'remove_edge':
-            before = len(ssot['edges'])
-            ssot['edges'] = [e for e in ssot['edges'] if _key(e) != op['key']]
-            assert len(ssot['edges']) == before - 1, op
-        elif kind in ('set_field_edge', 'remove_field_edge'):
-            [edge] = [e for e in ssot['edges'] if _key(e) == op['key']]
-            if kind == 'set_field_edge':
-                edge[op['field']] = op['value']
-            else:
-                del edge[op['field']]
-        elif kind == 'set_block':
-            ssot[op['block']] = op['value']
-        elif kind == 'remove_atom':
-            del ssot[blocks[op['id'].split('-')[0]]][op['id']]
-            ssot['edges'] = [e for e in ssot['edges'] if op['id'] not in (e['from'], e['to'])]
-        elif kind == 'unapprove':
-            unapproved.append(op['key'])
-        else:
-            raise KeyError(kind)
-    return ssot, tuple(unapproved)
 
 
 SHIPPED_DECK = {'schema_version': 2, 'media': 'deck', 'outputs': ['decks/*.pptx'], 'ship': True,
@@ -102,7 +62,8 @@ def test_every_condition_has_a_red_case_and_every_case_names_a_condition():
 
 def test_every_requirement_5_code_is_raised_by_the_checker():
     """A condition whose code the checker never raises would sit in the table forever green."""
-    source = ''.join((SKILL / f'scripts/{n}').read_text(encoding='utf-8') for n in ('positioning.py', 'check.py'))
+    source = ''.join((root / f'scripts/{n}').read_text(encoding='utf-8')
+                     for root, n in ((SKILL.parent / 'own-positioning-author', 'positioning.py'), (SKILL, 'check.py')))
     for c in CONDITIONS.values():
         if c['code'].startswith('IA_POSITIONING_'):
             assert f"'{c['code']}'" in source, c

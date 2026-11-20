@@ -453,7 +453,7 @@ def stops_applying(root):
             if key.startswith('ia:') and not key.startswith(pos.PATH_PREFIX):
                 legacy = key.startswith(pos.LEGACY_PREFIX)
                 out['approvals'].append({'key': key, 'approver': row.get('approver'), 'date': row.get('date'),
-                                         'why': ('原子と矢印ごとの行。infoarch-author migrate-approvals で経路の行へ移せるか確かめる' if legacy
+                                         'why': ('原子と矢印ごとの行。positioning-author migrate-approvals で経路の行へ移せるか確かめる' if legacy
                                                  else 'v5 の戦略の層の確定。v6 は提供価値ごとの経路（ia:path:）をオーナーが新たに承認する')})
     ledger = judge.read_ledger(root)
     for row in (ledger or {}).get('rows', []):

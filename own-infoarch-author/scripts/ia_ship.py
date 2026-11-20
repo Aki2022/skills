@@ -29,6 +29,7 @@ import sys
 import tempfile
 
 import check
+import dictionary
 import dom
 import judge
 from common import INFO_ARCH_DIR, SKILL, YamlError, load_ref, load_yaml
@@ -475,7 +476,7 @@ def _dirty(root):
 def _atoms(ssot):
     if not isinstance(ssot, dict):
         return {}
-    out = {aid: atom for block in list(check.BLOCKS) + ['entities', 'voices']
+    out = {aid: atom for block in list(check.BLOCKS) + ['facts', 'entities']
            for aid, atom in (ssot.get(block) or {}).items()}
     # Arrows are positioning elements too: a changed degree or a new `supports` moves the outlines standing on it.
     out.update({f'{e.get("kind")}:{e.get("from")}:{e.get("to")}': e for e in ssot.get('edges') or [] if isinstance(e, dict)})
@@ -512,7 +513,8 @@ def maintain(root, date, within_days=None):
 
     # What changed since the shipping merge base (committed) and in the working tree (uncommitted).
     prefix = INFO_ARCH_DIR.as_posix() + '/'
-    changed, old_ref = set(p for p in _dirty(root) if p.startswith(prefix)), 'HEAD'
+    dict_prefix = dictionary.DICTIONARY_DIR.as_posix() + '/'  # the values and names an outline copies live here
+    changed, old_ref = set(p for p in _dirty(root) if p.startswith((prefix, dict_prefix))), 'HEAD'
     bases = sorted({row.get('merge_base') for _, row in m.channels.values() if row['ship'] and row.get('merge_base')})
     for ref in bases:
         try:
@@ -520,7 +522,7 @@ def maintain(root, date, within_days=None):
         except ValueError:
             result['warnings'].append(f'merge_base {ref} is not resolvable here; committed IA changes are not listed')
             continue
-        changed |= set(p for p in _git(root, 'diff', '--name-only', fork, 'HEAD', '--', prefix).splitlines() if p)
+        changed |= set(p for p in _git(root, 'diff', '--name-only', fork, 'HEAD', '--', prefix, dict_prefix).splitlines() if p)
         old_ref = fork
     result['changed_paths'] = sorted(changed)
     impacted = set()
@@ -528,6 +530,8 @@ def maintain(root, date, within_days=None):
         stem = Path(path).stem
         if path.startswith(prefix + 'outlines/') and stem in m.outlines:
             impacted.add(stem)
+        elif path.startswith(dict_prefix):
+            impacted |= set(m.outlines)  # official names and fixed values apply to every outline
         elif path == check.SSOT_PATH.as_posix():
             try:
                 before = load_yaml_text(_git_raw(root, 'show', old_ref + ':' + path))
@@ -535,8 +539,8 @@ def maintain(root, date, within_days=None):
                 before = None
             old, new = _atoms(before), _atoms(m.ssot)
             moved = {aid for aid in set(old) | set(new) if old.get(aid) != new.get(aid)}
-            if before is None or any(aid.startswith(('ent-', 'vce-')) for aid in moved):
-                impacted |= set(m.outlines)  # names and voice apply to every outline
+            if before is None or any(aid.startswith('ent-') for aid in moved):
+                impacted |= set(m.outlines)  # a schema 4 tree's official names apply to every outline
             impacted |= {oid for oid, ids in refs.items() if ids & moved}
     result['impacted_outlines'] = sorted(impacted)
 

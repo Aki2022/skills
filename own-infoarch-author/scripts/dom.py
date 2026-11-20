@@ -5,7 +5,7 @@ and every piece of copy has exactly one visible mark (data-ia-section / data-ia-
 the outline's order, each piece of copy is drawn inside its own section and in the section's order, each copy mark
 shows the outline's copy word for word (facts expanded; width and whitespace folded), every fact the copy refers to
 is shown with the SSOT value, and two runs give the same snapshot. A repeat is another piece of copy in the outline.
-Declared non-claim text (data-ia-text) must show its text on every occurrence, and an official name (data-ia-entity)
+Declared non-claim text (data-ia-text) must show its text on every occurrence, and an official name (data-dict="name-…")
 must show exactly the SSOT name. A v4/v5 attribute (data-ia-problem / -msg / -pain / -frame) left on the page fails.
 Visible text outside every mark is text nobody manages: it fails (requirement 10) without echoing the text.
 dom exit 0 means the page shows what the outline declares; it does not judge whether the claims are true.
@@ -130,11 +130,13 @@ def compare(outline, ssot, snap, output=None):
             out.append(('IA_DOM_COPY_DRIFT', 'fail', f'{vp}: 宣言した文言 {k} の表示がアウトラインの文案と違う（全出現で一致させる）'))
     entities = ssot.get('entities') or {}
     for a in anchors:
+        if a['kind'] == 'term':
+            out.append(('IA_DOM_ANCHOR_UNKNOWN', 'fail', f'{vp}: 辞書の印 {a["id"]} は用語（term）で、印にできるのは固定値（value）と正式名称（name）だけ'))
         if a['kind'] != 'entity':
             continue
         name = (entities.get(a['id']) or {}).get('name')
         if not name:
-            out.append(('IA_DOM_ANCHOR_UNKNOWN', 'fail', f'{vp}: 正式名称の印 {a["id"]} は SSOT に無い'))
+            out.append(('IA_DOM_ANCHOR_UNKNOWN', 'fail', f'{vp}: 正式名称の印 {a["id"]} は辞書に無い'))
         elif a['visible'] and _copy_norm(a['text']) != _copy_norm(name):
             out.append(('IA_DOM_ENTITY_NAME', 'fail', f'{vp}: 正式名称 {a["id"]} の表示が SSOT の名前「{name}」と違う（名前だけを包む）'))
     unanchored = _norm(snap.get('unanchored'))
@@ -149,13 +151,13 @@ def compare(outline, ssot, snap, output=None):
         if a['kind'] != 'fact' or a['id'] in facts:
             continue
         if a['id'] not in values:
-            out.append(('IA_DOM_ANCHOR_UNKNOWN', 'fail', f'{vp}: 固定値のアンカー {a["id"]} は SSOT に無い'))
+            out.append(('IA_DOM_ANCHOR_UNKNOWN', 'fail', f'{vp}: 固定値のアンカー {a["id"]} は辞書に無い'))
         elif _norm(a['text']) != _norm(values.get(a['id'])):
             out.append(('IA_DOM_FACT_VALUE', 'fail', f'{vp}: 固定値 {a["id"]} の表示が SSOT の値「{values.get(a["id"])}」と違う'))
     for fid in facts:
         shown = [a for a in anchors if a['kind'] == 'fact' and a['id'] == fid]
         if not shown:
-            out.append(('IA_DOM_FACT_MISSING', 'fail', f'{vp}: 固定値 {fid} の表示（data-ia-fact）が無い'))
+            out.append(('IA_DOM_FACT_MISSING', 'fail', f'{vp}: 固定値 {fid} の表示（data-dict）が無い'))
         for a in shown:
             if _norm(a['text']) != _norm(values.get(fid)):
                 out.append(('IA_DOM_FACT_VALUE', 'fail', f'{vp}: 固定値 {fid} の表示「{_norm(a["text"])}」が SSOT の値「{values.get(fid)}」と違う'))

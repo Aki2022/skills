@@ -3,7 +3,7 @@
 The factory (own-web-build) styles this skeleton with the design system. It must not change the text, the order
 of sections and copy, or the data-ia-* attributes: those carry the information design, and `dom` checks them after
 rendering. Each section is `data-ia-section`, each piece of copy `data-ia-copy`, in their `order`. Facts are
-expanded to their SSOT value inside <span data-ia-fact>. Declared non-claim text is `data-ia-text`.
+expanded to their dictionary value inside <span data-dict="<dictionary id>">. Declared non-claim text is `data-ia-text`.
 """
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ def _copy(text, facts):
     for m in check.PLACEHOLDER.finditer(text):
         out.append(html.escape(text[pos:m.start()]))
         fid = m.group(1)
-        out.append(f'<span data-ia-fact="{fid}">{html.escape(facts[fid])}</span>')
+        out.append(f'<span data-dict="{fid}">{html.escape(facts[fid])}</span>')
         pos = m.end()
     out.append(html.escape(text[pos:]))
     return ''.join(out)

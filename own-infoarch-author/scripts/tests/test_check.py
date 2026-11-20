@@ -10,88 +10,12 @@ import yaml
 
 SCRIPTS = Path(__file__).resolve().parents[1]
 SKILL = SCRIPTS.parent
+POSITIONING_TESTS = SKILL.parent / 'own-positioning-author/scripts/tests'
+sys.path.insert(0, str(POSITIONING_TESTS))
+from ia_fixtures import EDGES, SSOT, _a, _e, confirm, dump  # noqa: E402,F401  (the positioning the outlines stand on)
 DATE = '2026-10-23'
 RED = json.loads((SKILL / 'fixtures/red-cases.json').read_text(encoding='utf-8'))['cases']
 
-def _a(**kw):
-    return {'state': 'proposed', 'provenance': 'owner', **kw}
-
-
-def _e(kind, frm, to, **kw):
-    return {'kind': kind, 'from': frm, 'to': to, 'state': 'proposed', 'provenance': 'owner', **kw}
-
-
-# Positioning (SPEC-information-architecture-standardization v6, requirement 2): atoms belong to one segment each;
-# arrows are listed once, with their kind and direction. seg-0001 has a gap (pan-0001, gan-0001: no alternative fully
-# meets them) and a point of parity (gan-0002: every alternative of the member category meets it). seg-0002 reuses
-# alt-0001 as a copy (alt-0003, copied_from) instead of sharing it.
-EDGES = [
-    _e('has_job', 'seg-0001', 'job-0001'),
-    _e('need', 'job-0001', 'pan-0001'), _e('need', 'job-0001', 'gan-0001'), _e('need', 'job-0001', 'gan-0002'),
-    _e('recalls', 'job-0001', 'cat-0001'), _e('includes', 'cat-0001', 'alt-0001'),
-    _e('member_of', 'seg-0001', 'cat-0001'),
-    _e('fulfills', 'alt-0001', 'pan-0001', degree='none'), _e('fulfills', 'alt-0002', 'pan-0001', degree='partial'),
-    _e('fulfills', 'alt-0001', 'gan-0001', degree='none'), _e('fulfills', 'alt-0002', 'gan-0001', degree='partial'),
-    _e('fulfills', 'alt-0001', 'gan-0002', degree='full'), _e('fulfills', 'alt-0002', 'gan-0002', degree='full'),
-    _e('lacks', 'str-0001', 'alt-0001'), _e('produces', 'str-0001', 'val-0001'),
-    _e('satisfies', 'val-0001', 'pan-0001'), _e('satisfies', 'val-0001', 'gan-0001'),
-    _e('satisfies', 'val-0003', 'gan-0002'),
-    _e('supports', 'prf-0003', 'str-0001'), _e('supports', 'prf-0003', 'fulfills:alt-0001:pan-0001'),
-    _e('supports', 'prf-0001', 'val-0001'), _e('supports', 'prf-0002', 'val-0002'),
-    _e('has_job', 'seg-0002', 'job-0002'), _e('need', 'job-0002', 'pan-0002'),
-    _e('recalls', 'job-0002', 'cat-0002'), _e('includes', 'cat-0002', 'alt-0003'),
-    _e('member_of', 'seg-0002', 'cat-0002'),
-    _e('fulfills', 'alt-0003', 'pan-0002', degree='none'),
-    _e('lacks', 'str-0002', 'alt-0003'), _e('produces', 'str-0002', 'val-0002'),
-    _e('satisfies', 'val-0002', 'pan-0002'),
-]
-
-SSOT = {
-    'schema_version': 4,
-    'ledger': {'next': {'prf': 4, 'fct': 3, 'ent': 2, 'vce': 2,
-                        'seg': 3, 'job': 3, 'pan': 3, 'gan': 3, 'alt': 4, 'cat': 3, 'str': 3, 'val': 4},
-               'tombstones': {}},
-    'segments': {
-        'seg-0001': _a(qualifier='自治体の情報部門', situation='既存システムの運用が重い'),
-        'seg-0002': _a(qualifier='中小企業の経営者', situation='人手が足りない')},
-    'jobs': {
-        'job-0001': _a(segment='seg-0001', text='既存システムを無理なく運用する'),
-        'job-0002': _a(segment='seg-0002', text='少ない人数で業務を回す')},
-    'pains': {
-        'pan-0001': _a(segment='seg-0001', text='運用が重い'),
-        'pan-0002': _a(segment='seg-0002', text='人手が足りない')},
-    'gains': {
-        'gan-0001': _a(segment='seg-0001', text='職員が本来の業務に時間を使える'),
-        'gan-0002': _a(segment='seg-0001', text='止まらずに動き続ける')},
-    'alternatives': {
-        'alt-0001': _a(segment='seg-0001', text='今のシステムを使い続ける'),
-        'alt-0002': _a(segment='seg-0001', text='保守を外部に委託する'),
-        'alt-0003': _a(segment='seg-0002', text='今のシステムを使い続ける', copied_from='alt-0001')},
-    'categories': {
-        'cat-0001': _a(segment='seg-0001', text='自治体向け Web サーバー'),
-        'cat-0002': _a(segment='seg-0002', text='中小企業向けの業務システム')},
-    'strengths': {
-        'str-0001': _a(segment='seg-0001', text='自動更新で保守が要らない'),
-        'str-0002': _a(segment='seg-0002', text='設定なしで使い始められる')},
-    'values': {
-        'val-0001': _a(segment='seg-0001', kind='difference', text='運用の手間が減る'),
-        'val-0002': _a(segment='seg-0002', kind='difference', text='少人数でも回る'),
-        'val-0003': _a(segment='seg-0001', kind='parity', text='止まらずに動く')},
-    'edges': EDGES,
-    # positioning evidence: belongs to a segment and supports atoms and arrows through `supports` edges
-    'proofs': {'prf-0001': _a(segment='seg-0001', text='導入自治体の数', source='導入台帳', as_of='2026-10-01'),
-               'prf-0002': _a(segment='seg-0002', text='導入前後の運用時間の比較', source='導入事例の計測', as_of='2026-10-01'),
-               'prf-0003': _a(segment='seg-0001', text='自動更新の稼働記録', source='運用ログ', as_of='2026-10-01')},
-    'facts': {
-        'fct-0001': {'state': 'proposed', 'provenance': 'owner', 'label': '導入社数', 'value': '100社以上', 'as_of': '2026-10-01'},
-        'fct-0002': {'state': 'proposed', 'provenance': 'owner', 'label': '問い合わせ電話', 'value': '03-1234-5678', 'evergreen': True},
-    },
-    'entities': {'ent-0001': {'state': 'proposed', 'provenance': 'owner', 'type': 'product', 'name': 'Webサーバー'}},
-    'voices': {'vce-0001': {'state': 'proposed', 'provenance': 'owner', 'traits': [
-        {'trait': 'わかりやすい', 'is': '専門的な中身も噛み砕いて言う', 'is_not': '子ども扱いはしない'},
-        {'trait': '誠実', 'is': 'できることを具体的に言う', 'is_not': '大げさな約束はしない'},
-        {'trait': '前向き', 'is': '解決の道筋を示す', 'is_not': '浮ついた煽りはしない'}]}},
-}
 CHANNEL = {'schema_version': 2, 'media': 'web', 'outputs': ['site/**/*.html'], 'ship': True, 'ship_command': 'mise run deploy'}
 DRAFT = {'schema_version': 2, 'media': 'deck', 'outputs': ['decks/*.pptx'], 'ship': False}
 # outline v3 (requirement 6): stands on the target segment's positioning; constants, objective, then the three
@@ -112,9 +36,9 @@ OUTLINE = {
     'copies': {
         'cpy-0001': {'section': 'sec-0001', 'order': 1, 'message': 'msg-0001', 'text': '既存システムの運用、重くありませんか'},
         'cpy-0002': {'section': 'sec-0001', 'order': 2, 'message': 'msg-0001', 'text': '運用の手間が半分になります'},
-        'cpy-0003': {'section': 'sec-0002', 'order': 1, 'message': 'msg-0002', 'text': '導入は{{fct-0001}}、止まらずに動き続けます'},
+        'cpy-0003': {'section': 'sec-0002', 'order': 1, 'message': 'msg-0002', 'text': '導入は{{value-customer-count}}、止まらずに動き続けます'},
         'cpy-0004': {'section': 'sec-0003', 'order': 1, 'message': 'msg-0001', 'text': '保守の要らない運用へ'},
-        'cpy-0005': {'section': 'sec-0003', 'order': 2, 'message': 'msg-0003', 'text': '資料請求はこちら（{{fct-0002}}）'}},
+        'cpy-0005': {'section': 'sec-0003', 'order': 2, 'message': 'msg-0003', 'text': '資料請求はこちら（{{value-phone}}）'}},
 }
 DECK = {
     'schema_version': 3, 'id': 'deck-smb', 'channel': 'deck', 'outputs': ['decks/smb.pptx'],
@@ -128,35 +52,39 @@ DECK = {
         'sec-0001': {'order': 1, 'role': 'aware', 'places': ['msg-0001']},
         'sec-0002': {'order': 2, 'role': 'act', 'places': ['msg-0001', 'msg-0002']}},
     'copies': {
-        'cpy-0001': {'section': 'sec-0001', 'order': 1, 'message': 'msg-0001', 'text': '{{fct-0001}}が導入、少人数でも回ります'},
+        'cpy-0001': {'section': 'sec-0001', 'order': 1, 'message': 'msg-0001', 'text': '{{value-customer-count}}が導入、少人数でも回ります'},
         'cpy-0002': {'section': 'sec-0002', 'order': 1, 'message': 'msg-0001', 'text': '少人数で回す仕組みを'},
-        'cpy-0003': {'section': 'sec-0002', 'order': 2, 'message': 'msg-0002', 'text': 'お問い合わせ {{fct-0002}}'}},
+        'cpy-0003': {'section': 'sec-0002', 'order': 2, 'message': 'msg-0002', 'text': 'お問い合わせ {{value-phone}}'}},
 }
 
-def dump(path, data):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding='utf-8')
+# The docs dictionary the outlines copy from (docs/dictionary/<domain>.json): fixed values and the official name.
+DICTIONARY = {'schema_version': 1, 'domain': 'product', 'summary': 'テスト用の辞書', 'entries': [
+    {'id': 'value-customer-count', 'kind': 'value', 'text': '100社以上', 'meaning': '導入社数', 'expires': '2027-10-01'},
+    {'id': 'value-phone', 'kind': 'value', 'text': '03-1234-5678', 'meaning': '問い合わせ電話', 'evergreen': True},
+    {'id': 'name-web-server', 'kind': 'name', 'text': 'Webサーバー', 'meaning': '製品名'}]}
 
 
-def confirm(root, ssot, skip=()):
-    """Record the owner's approval of every proposed positioning atom and arrow (as the owner would with
-    design-author approve). `skip` names atom ids or arrow keys (kind:from:to) left unapproved."""
-    sys.path.insert(0, str(SCRIPTS))
+def view_of(ssot, dictionary=DICTIONARY):
+    """An SSOT with the dictionary's values and names laid in the way the loader does (what dom, judge and skeleton read)."""
     import check as ia_check
-    import positioning
-    m = ia_check.Model(root=root, ssot=ssot)
-    rows = [{'key': key, 'value_hash': digest, 'approver': 'fixture-owner', 'date': '2026-11-16'}
-            for key, digest in sorted(positioning.approval_targets(m).items())
-            if key[len(positioning.APPROVAL_PREFIX):] not in skip]
-    path = root / 'design/approvals.yaml'
-    kept = yaml.safe_load(path.read_text(encoding='utf-8')) if path.is_file() else []
-    kept = [r for r in (kept or []) if not str(r.get('key', '')).startswith(positioning.APPROVAL_PREFIX)]
-    dump(path, kept + rows)  # keep the design rows (ds:*) the owner already recorded
+    facts, entities = ia_check.terms_of(dictionary['entries'])
+    return {**ssot, 'facts': facts, 'entities': entities}
 
 
-def write_repo(root, ssot=SSOT, channels=(CHANNEL, DRAFT), outlines=(OUTLINE, DECK), confirmed=True):
+SSOT_VIEW = view_of(SSOT)
+
+
+def write_dictionary(root, dictionary):
+    path = root / 'docs/dictionary' / f'{dictionary["domain"]}.json'
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(dictionary, ensure_ascii=False, indent=2), encoding='utf-8')
+
+
+def write_repo(root, ssot=SSOT, channels=(CHANNEL, DRAFT), outlines=(OUTLINE, DECK), confirmed=True, dictionary=DICTIONARY):
     base = root / 'design/info_arch'
     dump(base / 'info_arch.yaml', ssot)
+    if dictionary is not None:
+        write_dictionary(root, dictionary)
     if confirmed:
         confirm(root, ssot)
     for ch in channels:
@@ -179,8 +107,13 @@ def record_red_case(command, rc, report):
                              'exit_code': rc, 'fail_codes': fails}, ensure_ascii=False) + '\n')
 
 
+POSITIONING_COMMANDS = {'positioning', 'migrate-approvals', 'review'}  # the positioning layer's CLI, not this skill's
+POSITIONING_SCRIPTS = SKILL.parent / 'own-positioning-author/scripts'
+
+
 def cli(*args):
-    proc = subprocess.run([sys.executable, str(SCRIPTS / 'infoarch_author.py'), *args], capture_output=True, text=True, check=False)
+    script = (POSITIONING_SCRIPTS / 'positioning_author.py') if args[0] in POSITIONING_COMMANDS else (SCRIPTS / 'infoarch_author.py')
+    proc = subprocess.run([sys.executable, str(script), *args], capture_output=True, text=True, check=False)
     assert proc.stdout, proc.stderr
     report = json.loads(proc.stdout)
     record_red_case(args[0], proc.returncode, report)
@@ -205,6 +138,7 @@ def test_green_fixture_passes_with_real_targets(tmp_path):
 
 def mutate(case, root):
     ssot, outline, deck = copy.deepcopy(SSOT), copy.deepcopy(OUTLINE), copy.deepcopy(DECK)
+    dic = copy.deepcopy(DICTIONARY)
     channels = [copy.deepcopy(CHANNEL), copy.deepcopy(DRAFT)]
     cp = outline['copies']
     if case == 'outline-ref-broken':
@@ -217,7 +151,7 @@ def mutate(case, root):
         ssot['values']['val-0003'] = {'state': 'empty', 'provenance': 'proposal'}
         ssot['edges'] = [e for e in ssot['edges'] if 'val-0003' not in (e['from'], e['to'])]
     elif case == 'outline-placeholder-unknown':
-        cp['cpy-0003']['text'] = '導入は{{fct-0099}}'
+        cp['cpy-0003']['text'] = '導入は{{value-unknown}}'
     elif case == 'outline-placeholder-malformed':
         cp['cpy-0003']['text'] = '導入は{{fct-1}}と{{ msg-0001 }}'
     elif case == 'outline-fact-literal':
@@ -227,13 +161,13 @@ def mutate(case, root):
     elif case == 'outline-output-undeclared':
         outline['outputs'] = ['other/index.html']
     elif case == 'outline-id-mismatch':
-        base = write_repo(root, ssot, channels, [outline, deck])
+        base = write_repo(root, ssot, channels, [outline, deck], dictionary=dic)
         (base / 'outlines/lp-municipal.yaml').rename(base / 'outlines/lp-renamed.yaml')
         return
     elif case == 'expired-proof-shipped':
         ssot['proofs']['prf-0001']['as_of'] = '2024-01-01'
     elif case == 'expired-fact-shipped':
-        ssot['facts']['fct-0001']['expires'] = '2026-10-22'
+        dic['entries'][0]['expires'] = '2026-10-22'
     elif case == 'no-outlines':
         outline = deck = None
     elif case == 'no-channels':
@@ -245,41 +179,41 @@ def mutate(case, root):
         ssot['segments']['seg-0003'] = {'state': 'empty', 'provenance': 'proposal'}
         ssot['proofs']['prf-0003']['segment'] = 'seg-0003'
     elif case == 'ssot-id-not-issued':
-        ssot['ledger']['next']['fct'] = 2
-    elif case == 'ssot-voice-multiple':
-        ssot['ledger']['next']['vce'] = 3
-        ssot['voices']['vce-0002'] = copy.deepcopy(ssot['voices']['vce-0001'])
+        ssot['ledger']['next']['alt'] = 3
+    elif case == 'ssot-voices-block':
+        ssot['voices'] = {'vce-0001': {'state': 'proposed', 'provenance': 'owner', 'traits': []}}
     elif case == 'channel-ship-without-command':
         del channels[0]['ship_command']
     elif case == 'ssot-duplicate-key':
-        write_repo(root, ssot, channels, [o for o in (outline, deck) if o])
+        write_repo(root, ssot, channels, [o for o in (outline, deck) if o], dictionary=dic)
         p = root / 'design/info_arch/info_arch.yaml'
         p.write_text(p.read_text(encoding='utf-8') + 'schema_version: 2\n', encoding='utf-8')
         return
     elif case == 'outline-placeholder-multiline':
         cp['cpy-0003']['text'] = '導入は{{fct-001\n}}と{{ msg-0001\n}}'
     elif case == 'ssot-id-noncanonical':
-        ssot['facts']['fct-00001'] = copy.deepcopy(ssot['facts']['fct-0001'])
+        ssot['ledger']['next']['str'] = 4
+        ssot['strengths']['str-00003'] = copy.deepcopy(ssot['strengths']['str-0001'])
     elif case == 'ssot-evergreen-with-date':
-        ssot['facts']['fct-0002']['expires'] = '2020-01-01'
+        dic['entries'][1]['expires'] = '2020-01-01'
     elif case == 'outline-dot-directory':
-        base = write_repo(root, ssot, channels, [outline, deck])
+        base = write_repo(root, ssot, channels, [outline, deck], dictionary=dic)
         (base / 'outlines/.drafts').mkdir()
         (base / 'outlines/.drafts/broken.yaml').write_text('a: [', encoding='utf-8')
         return
     elif case == 'ssot-id-zero-serial':
-        ssot['facts']['fct-0000'] = copy.deepcopy(ssot['facts']['fct-0002'])
+        ssot['strengths']['str-0000'] = copy.deepcopy(ssot['strengths']['str-0001'])
     elif case == 'ssot-id-trailing-newline':
-        ssot['facts']['fct-0001\n'] = copy.deepcopy(ssot['facts']['fct-0002'])
+        ssot['strengths']['str-0001\n'] = copy.deepcopy(ssot['strengths']['str-0001'])
     elif case == 'outline-text-section-broken':
         outline['texts'] = {'label-problem': {'kind': 'label', 'text': 'PROBLEM', 'section': 'sec-0099'}}
     elif case == 'outline-placeholder-padded':
-        deck['copies']['cpy-0001']['text'] = '{{\nfct-0001\n}}が導入'
+        deck['copies']['cpy-0001']['text'] = '{{\nvalue-customer-count\n}}が導入'
     elif case == 'outline-v2':
         outline['schema_version'] = 2
     else:
         raise KeyError(case)
-    write_repo(root, ssot, channels, [o for o in (outline, deck) if o])
+    write_repo(root, ssot, channels, [o for o in (outline, deck) if o], dictionary=dic)
 
 
 @pytest.mark.parametrize('case', RED, ids=[c['id'] for c in RED])
@@ -299,9 +233,9 @@ def test_red_case_table_and_mutations_agree(tmp_path):
 
 def test_expired_but_not_shipped_is_reported_not_failed(tmp_path):
     ssot = copy.deepcopy(SSOT)
-    ssot['ledger']['next']['fct'] = 4
-    ssot['facts']['fct-0003'] = {'state': 'proposed', 'provenance': 'owner', 'label': '旧料金', 'value': '月額 1万円', 'expires': '2025-01-01'}
-    write_repo(tmp_path, ssot)
+    dic = copy.deepcopy(DICTIONARY)
+    dic['entries'].append({'id': 'value-old-fee', 'kind': 'value', 'text': '月額 1万円', 'meaning': '旧料金', 'expires': '2025-01-01'})
+    write_repo(tmp_path, ssot, dictionary=dic)
     rc, report = check(tmp_path)
     assert rc == 0 and 'IA_EXPIRED_UNSHIPPED' in codes(report, 'info'), report['findings']
 
@@ -325,7 +259,7 @@ def test_evidence_off_every_shipped_path_expires_quietly(tmp_path):
 
 def test_impact_lists_outlines_and_outputs(tmp_path):
     write_repo(tmp_path)
-    rc, out = cli('impact', '--root', str(tmp_path), '--id', 'fct-0001')
+    rc, out = cli('impact', '--root', str(tmp_path), '--id', 'value-customer-count')
     assert rc == 0 and out['outlines'] == ['deck-smb', 'lp-municipal']
     assert out['outputs'] == ['decks/smb.pptx', 'site/index.html']
     rc, out = cli('impact', '--root', str(tmp_path), '--id', 'seg-0002')
@@ -343,7 +277,8 @@ def test_crash_is_exit_2(tmp_path):
 
 def test_template_is_schema_valid(tmp_path):
     import shutil
-    shutil.copytree(SKILL / 'templates/design', tmp_path / 'design')
+    shutil.copytree(SKILL / 'templates/design', tmp_path / 'design')  # channels and the guide: this skill's
+    shutil.copytree(SKILL.parent / 'own-positioning-author/templates/design', tmp_path / 'design', dirs_exist_ok=True)  # the empty SSOT
     rc, report = check(tmp_path)
     assert 'IA_SCHEMA' not in codes(report), report['findings']
     assert rc == 2 and 'IA_NO_OUTLINES' in codes(report)

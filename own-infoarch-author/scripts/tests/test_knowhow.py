@@ -59,4 +59,4 @@ def test_worked_example_two_deliverables_stand_on_their_own_positioning():
         values = {m['value'] for m in o['messages'].values()}
         assert all(ssot['values'][v]['segment'] == o['target']['segment'] for v in values), o['id']
         assert [m['rank'] for m in o['messages'].values()].count('lead') == 1
-        assert any('{{fct-0001}}' in c['text'] for c in o['copies'].values())
+        assert any('{{value-customer-count}}' in c['text'] for c in o['copies'].values())

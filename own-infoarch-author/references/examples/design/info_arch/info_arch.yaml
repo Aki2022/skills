@@ -1,14 +1,11 @@
 # 例：自治体の情報部門（seg-0001）と中小企業の経営者（seg-0002）の 2 つの positioning。人が保守するのはこのファイルだけ。
 # seg-0001 の隙間は pan-0001・gan-0001（どの代替も「満たす」に届かない）、同等であるべき点は gan-0002
 # （所属カテゴリー cat-0001 に入っている代替がすべて満たす）。alt-0003 は alt-0001 の写し（copied_from）。
-# 対象者・メッセージ・セクション・文案は outlines/*.yaml（AI が作る）。
-schema_version: 4
+# 対象者・メッセージ・セクション・文案は outlines/*.yaml（AI が作る）。固定値と正式名称は docs/dictionary/ の辞書（このフォルダの docs/dictionary/product.json）が持ち、ここには書かない。
+schema_version: 5
 ledger:
   next:
     prf: 4
-    fct: 3
-    ent: 2
-    vce: 2
     seg: 3
     job: 3
     pan: 3
@@ -305,36 +302,3 @@ edges:
   to: pan-0002
   state: proposed
   provenance: owner
-facts:
-  fct-0001:
-    state: proposed
-    provenance: owner
-    label: 導入自治体数
-    value: 100自治体以上
-    as_of: '2026-10-01'
-  fct-0002:
-    state: proposed
-    provenance: owner
-    label: 問い合わせ電話
-    value: 03-1234-5678
-    evergreen: true
-entities:
-  ent-0001:
-    state: proposed
-    provenance: owner
-    type: product
-    name: Webサーバー
-voices:
-  vce-0001:
-    state: proposed
-    provenance: owner
-    traits:
-    - trait: わかりやすい
-      is: 専門的な中身も噛み砕いて言う
-      is_not: 子ども扱いはしない
-    - trait: 誠実
-      is: できることを具体的に言う
-      is_not: 大げさな約束はしない
-    - trait: 前向き
-      is: 解決の道筋を示す
-      is_not: 浮ついた煽りはしない

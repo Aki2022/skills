@@ -17,7 +17,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import dom  # noqa: E402
-from test_check import OUTLINE, SSOT  # noqa: E402
+from test_check import OUTLINE, SSOT_VIEW as SSOT  # noqa: E402
 
 SCRIPTS = Path(__file__).resolve().parents[1]
 VP = {'name': 'mobile', 'width': 375, 'height': 812}
@@ -33,19 +33,19 @@ C3, C4, C5 = '導入は100社以上、止まらずに動き続けます', '保�
 
 
 def green_snapshot():
-    # index:        0 sec-0001, 1 cpy-0001, 2 cpy-0002, 3 sec-0002, 4 cpy-0003, 5 fct-0001, 6 sec-0003, 7 cpy-0004,
-    #               8 cpy-0005, 9 fct-0002
+    # index:        0 sec-0001, 1 cpy-0001, 2 cpy-0002, 3 sec-0002, 4 cpy-0003, 5 value-customer-count, 6 sec-0003, 7 cpy-0004,
+    #               8 cpy-0005, 9 value-phone
     return {'viewport': VP, 'text_chars': 400, 'first_screen': f'{C1} {C2}', 'anchors': [
         anchor('section', 'sec-0001', 0, f'{C1} {C2}', height=200),
         anchor('copy', 'cpy-0001', 10, C1, section='sec-0001'),
         anchor('copy', 'cpy-0002', 120, C2, section='sec-0001'),
         anchor('section', 'sec-0002', 880, C3, height=200),
         anchor('copy', 'cpy-0003', 900, C3, section='sec-0002'),
-        anchor('fact', 'fct-0001', 905, '100社以上', height=20, section='sec-0002'),
+        anchor('fact', 'value-customer-count', 905, '100社以上', height=20, section='sec-0002'),
         anchor('section', 'sec-0003', 1480, f'{C4} {C5}', height=200),
         anchor('copy', 'cpy-0004', 1490, C4, section='sec-0003'),
         anchor('copy', 'cpy-0005', 1500, C5, section='sec-0003'),
-        anchor('fact', 'fct-0002', 1505, '03-1234-5678', height=20, section='sec-0003'),
+        anchor('fact', 'value-phone', 1505, '03-1234-5678', height=20, section='sec-0003'),
     ]}
 
 
@@ -153,8 +153,8 @@ PW_DIR = os.environ.get('INFOARCH_TEST_PLAYWRIGHT_DIR')
 
 HTML = '''<!doctype html><html><head><meta charset="utf-8"><style>body{{font:16px sans-serif;margin:0}} section{{min-height:200px}}</style></head><body>
 <section data-ia-section="sec-0001" data-ia-role="pain"><h1 data-ia-copy="cpy-0001">既存システムの運用、重くありませんか</h1><h2 data-ia-copy="cpy-0002">運用の手間が半分になります</h2></section>
-<section data-ia-section="sec-0002" data-ia-role="trust" style="margin-top:600px"><p data-ia-copy="cpy-0003">導入は<span data-ia-fact="fct-0001">100社以上</span>、止まらずに動き続けます</p></section>
-<section data-ia-section="sec-0003" data-ia-role="act"{hidden}><p data-ia-copy="cpy-0004">保守の要らない運用へ</p><a href="#" data-ia-copy="cpy-0005">資料請求はこちら（<span data-ia-fact="fct-0002">03-1234-5678</span>）</a></section>
+<section data-ia-section="sec-0002" data-ia-role="trust" style="margin-top:600px"><p data-ia-copy="cpy-0003">導入は<span data-dict="value-customer-count">100社以上</span>、止まらずに動き続けます</p></section>
+<section data-ia-section="sec-0003" data-ia-role="act"{hidden}><p data-ia-copy="cpy-0004">保守の要らない運用へ</p><a href="#" data-ia-copy="cpy-0005">資料請求はこちら（<span data-dict="value-phone">03-1234-5678</span>）</a></section>
 </body></html>'''
 
 
@@ -195,8 +195,8 @@ body{{margin:0;font:16px sans-serif}} section{{min-height:200px}}
 @keyframes up{{from{{opacity:0}}to{{opacity:1}}}} .anim{{animation:up .6s ease-out forwards}}
 </style></head><body>
 <section data-ia-section="sec-0001" class="hero" style="opacity:0"><p data-ia-copy="cpy-0001">既存システムの運用、重くありませんか</p><p data-ia-copy="cpy-0002" class="anim">運用の手間が半分になります</p></section>
-<section data-ia-section="sec-0002" class="anim"><p data-ia-copy="cpy-0003">導入は<span data-ia-fact="fct-0001">100社以上</span>、止まらずに動き続けます</p></section>
-<section data-ia-section="sec-0003" class="anim"><p data-ia-copy="cpy-0004">保守の要らない運用へ</p><p data-ia-copy="cpy-0005">資料請求はこちら（<span data-ia-fact="fct-0002">03-1234-5678</span>）</p></section>
+<section data-ia-section="sec-0002" class="anim"><p data-ia-copy="cpy-0003">導入は<span data-dict="value-customer-count">100社以上</span>、止まらずに動き続けます</p></section>
+<section data-ia-section="sec-0003" class="anim"><p data-ia-copy="cpy-0004">保守の要らない運用へ</p><p data-ia-copy="cpy-0005">資料請求はこちら（<span data-dict="value-phone">03-1234-5678</span>）</p></section>
 <script>document.addEventListener('DOMContentLoaded',function(){{setTimeout(function(){{var h=document.querySelector('.hero');h.style.transition='opacity .8s ease-out .2s';h.style.opacity='1';}},100);}});</script>
 </body></html>'''
 
@@ -260,13 +260,13 @@ def test_real_browser_reads_copy_and_unanchored_text(tmp_path, page, expect, cod
 
 def test_fact_anchor_with_an_unknown_id_fails():
     snap = green_snapshot()
-    snap['anchors'].append(anchor('fact', 'fct-0099', 2000, '業界No.1'))
+    snap['anchors'].append(anchor('fact', 'value-unknown', 2000, '業界No.1'))
     assert 'IA_DOM_ANCHOR_UNKNOWN' in codes(run(snap)), run(snap)
 
 
 def test_fact_anchor_for_a_fact_this_page_does_not_use_must_show_its_value():
     outline = copy.deepcopy(OUTLINE)
-    outline['copies']['cpy-0005']['text'] = '資料請求はこちら'  # the page no longer refers to fct-0002
+    outline['copies']['cpy-0005']['text'] = '資料請求はこちら'  # the page no longer refers to value-phone
     snap = green_snapshot()
     snap['anchors'][8]['text'] = '資料請求はこちら'
     snap['anchors'][9]['text'] = '業界No.1'  # a registered fact id wrapped around other text
@@ -343,7 +343,7 @@ def declared_snapshot():
     s = green_snapshot()
     s['anchors'] += [anchor('text', 'nav', 0, 'サービス 使い方', height=20),
                      anchor('text', 'label-proof', 880, 'EVIDENCE', height=20),
-                     anchor('entity', 'ent-0001', 1700, 'Webサーバー', height=20)]
+                     anchor('entity', 'name-web-server', 1700, 'Webサーバー', height=20)]
     s['unanchored'] = ''
     return s
 
@@ -361,7 +361,7 @@ def test_declared_text_and_official_name_pass_with_no_warning():
     # the official name must be the whole text of its anchor, everywhere
     (lambda s: s['anchors'][-1].update(text='Web サーバー Pro'), 'IA_DOM_ENTITY_NAME'),
     (lambda s: s['anchors'][-1].update(text='Webサーバー 業界No.1'), 'IA_DOM_ENTITY_NAME'),
-    (lambda s: s['anchors'].append(anchor('entity', 'ent-0001', 1800, 'Webサーバー2')), 'IA_DOM_ENTITY_NAME'),
+    (lambda s: s['anchors'].append(anchor('entity', 'name-web-server', 1800, 'Webサーバー2')), 'IA_DOM_ENTITY_NAME'),
     (lambda s: s['anchors'].append(anchor('entity', 'ent-0099', 1800, 'Webサーバー')), 'IA_DOM_ANCHOR_UNKNOWN'),
     # declared text must match on every visible occurrence (no COPY_EXTRA leniency)
     (lambda s: s['anchors'][-2].update(text='EVIDENCE 業界No.1'), 'IA_DOM_COPY_DRIFT'),
@@ -396,7 +396,7 @@ def test_navigation_may_be_collapsed_at_a_viewport_but_must_exist():
 
 def test_declared_text_with_a_fact_shows_the_value():
     o = declared_outline()
-    o['texts']['nav']['text'] = 'サービス {{fct-0002}}'
+    o['texts']['nav']['text'] = 'サービス {{value-phone}}'
     snap = declared_snapshot()
     snap['anchors'][-3]['text'] = 'サービス 03-1234-5678'
     assert codes(drun(snap, o)) == [], drun(snap, o)
@@ -412,9 +412,9 @@ def test_unanchored_warning_points_at_declaring_the_text():
 DECLARED = '''<!doctype html><html><head><meta charset="utf-8"><style>body{{font:16px sans-serif;margin:0}} section{{min-height:200px}}</style></head><body>
 <nav data-ia-text="nav">サービス 使い方</nav>
 <section data-ia-section="sec-0001"><h1 data-ia-copy="cpy-0001">既存システムの運用、重くありませんか</h1><h2 data-ia-copy="cpy-0002">運用の手間が半分になります</h2></section>
-<section data-ia-section="sec-0002" style="margin-top:600px"><p data-ia-text="label-proof">{label}</p><p data-ia-copy="cpy-0003">導入は<span data-ia-fact="fct-0001">100社以上</span>、止まらずに動き続けます</p></section>
-<section data-ia-section="sec-0003"><p data-ia-copy="cpy-0004">保守の要らない運用へ</p><a href="#" data-ia-copy="cpy-0005">資料請求はこちら（<span data-ia-fact="fct-0002">03-1234-5678</span>）</a></section>
-<footer><span data-ia-entity="ent-0001">{name}</span></footer>
+<section data-ia-section="sec-0002" style="margin-top:600px"><p data-ia-text="label-proof">{label}</p><p data-ia-copy="cpy-0003">導入は<span data-dict="value-customer-count">100社以上</span>、止まらずに動き続けます</p></section>
+<section data-ia-section="sec-0003"><p data-ia-copy="cpy-0004">保守の要らない運用へ</p><a href="#" data-ia-copy="cpy-0005">資料請求はこちら（<span data-dict="value-phone">03-1234-5678</span>）</a></section>
+<footer><span data-dict="name-web-server">{name}</span></footer>
 </body></html>'''
 
 
@@ -447,8 +447,8 @@ def test_real_browser_declared_text_and_names(tmp_path, label, name, expect, cod
 # --- screen conformance with a real browser (requirement 10; fixtures/screen-red-cases.json) ---
 
 SEC1 = '<section data-ia-section="sec-0001" data-ia-role="pain"><h1 data-ia-copy="cpy-0001">既存システムの運用、重くありませんか</h1><h2 data-ia-copy="cpy-0002">運用の手間が半分になります</h2></section>'
-SEC2 = '<section data-ia-section="sec-0002" data-ia-role="trust"><p data-ia-copy="cpy-0003">導入は<span data-ia-fact="fct-0001">100社以上</span>、止まらずに動き続けます</p></section>'
-SEC3 = '<section data-ia-section="sec-0003" data-ia-role="act"><p data-ia-copy="cpy-0004">保守の要らない運用へ</p><a href="#" data-ia-copy="cpy-0005">資料請求はこちら（<span data-ia-fact="fct-0002">03-1234-5678</span>）</a></section>'
+SEC2 = '<section data-ia-section="sec-0002" data-ia-role="trust"><p data-ia-copy="cpy-0003">導入は<span data-dict="value-customer-count">100社以上</span>、止まらずに動き続けます</p></section>'
+SEC3 = '<section data-ia-section="sec-0003" data-ia-role="act"><p data-ia-copy="cpy-0004">保守の要らない運用へ</p><a href="#" data-ia-copy="cpy-0005">資料請求はこちら（<span data-dict="value-phone">03-1234-5678</span>）</a></section>'
 PAGE = ('<!doctype html><html><head><meta charset="utf-8"><style>body{{font:16px sans-serif;margin:0}} section{{min-height:200px}}</style>'
         '</head><body>{body}</body></html>')
 SCREEN_RED = [

@@ -22,7 +22,7 @@ import answer_key  # noqa: E402
 import check as ia_check  # noqa: E402
 import judge  # noqa: E402
 import positioning  # noqa: E402
-from test_check import DECK, OUTLINE, SSOT, cli, write_repo  # noqa: E402
+from test_check import DECK, OUTLINE, SSOT_VIEW as SSOT, cli, write_repo  # noqa: E402
 
 DESIGN = Path(__file__).resolve().parents[3] / 'own-design-author/scripts'
 sys.path.insert(0, str(DESIGN))

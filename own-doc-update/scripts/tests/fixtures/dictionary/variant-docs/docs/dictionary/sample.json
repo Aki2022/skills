@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "domain": "sample",
+  "summary": "テスト用の辞書。正式名称・固定値・用語を 1 つずつ持つ",
+  "entries": [
+    {
+      "id": "term-layer",
+      "kind": "term",
+      "text": "layer",
+      "meaning": "持ち続ける正典のまとまり",
+      "boundary": "step・phase とは呼ばない",
+      "variants": ["レイヤー"]
+    },
+    {
+      "id": "name-sample-product",
+      "kind": "name",
+      "text": "Sample Score",
+      "meaning": "製品名",
+      "variants": ["SampleScore", "サンプルスコア"]
+    },
+    {
+      "id": "value-answer-time",
+      "kind": "value",
+      "text": "10分",
+      "meaning": "回答時間",
+      "as_of": "2026-10-23",
+      "expires": "2027-10-23"
+    },
+    {
+      "id": "value-campaign-free",
+      "kind": "value",
+      "text": "今なら無料",
+      "meaning": "申し込みの料金（キャンペーン）",
+      "expires": "2026-12-31"
+    },
+    {
+      "id": "value-phone",
+      "kind": "value",
+      "text": "03-1234-5678",
+      "meaning": "問い合わせ電話",
+      "evergreen": true
+    }
+  ]
+}

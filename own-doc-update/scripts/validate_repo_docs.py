@@ -1367,8 +1367,40 @@ def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:
     validate_spec_placement(root, errors, warnings)
     validate_baseline_freshness(root, baseline, deferred, errors, warnings)
     validate_review_recency(root, warnings)
+    validate_dictionary(root, errors, warnings)
 
     return errors, warnings
+
+
+def validate_dictionary(root: Path, errors: list[str], warnings: list[str], date: Optional[str] = None) -> None:
+    """The docs dictionary (docs/dictionary/*.json): its shape, and its variants in current docs.
+
+    A repository without the directory gains nothing. An expired value only warns here: time passing must not
+    block an unrelated commit, while the HTML check (dictionary.py check-html) stops a deliverable that shows it.
+    """
+    scripts_dir = str(Path(__file__).resolve().parent)
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+    import datetime as dt
+
+    import dictionary as dic
+
+    root = Path(root)
+    cov = {"files": 0, "entries": 0, "docs": 0}
+    LAST_COVERAGE["dictionary"] = cov
+    entries, nfiles, shape = dic.load(root)
+    cov["files"] = nfiles
+    if nfiles == 0 and not shape:
+        return
+    errors.extend(shape)
+    if shape:
+        return
+    findings, ndocs = dic.docs_findings(root, entries)
+    cov.update(entries=len(entries), docs=ndocs)
+    errors.extend(findings)
+    today = dt.date.fromisoformat(date) if date else dt.date.today()
+    for e in dic.expired(entries, today):
+        warnings.append(f"{dic.DICTIONARY_DIR}: {e['id']} の期限 {e['expires']} が過ぎている（値を確かめて更新する）")
 
 
 def validate_ownership(root: Path, errors: list[str], warnings: list[str]) -> None:
@@ -1500,6 +1532,9 @@ def main() -> None:
         line = (f"coverage: Next Actions {na['checked']}/{na['total']} 件を検査"
                 f"（分岐で除外 {na['skipped']}）")
         print(f"  ! {line}" if na["skipped"] else f"  {line}")
+    dc = LAST_COVERAGE.get("dictionary", {})
+    if dc.get("files"):
+        print(f"  coverage: 辞書 {dc['entries']} 語（{dc['files']} ファイル）で docs {dc['docs']} 件を検査")
     if errors:
         print("ERRORS:")
         for error in errors:

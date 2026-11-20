@@ -5,7 +5,7 @@ description: Shape, create, or materially revise repository specs through a rigo
 
 # Own Spec Grill
 
-Turn an ambiguous development direction into an approved `docs/specs/` source of intent. Interview the user, stress-test material assumptions, maintain the domain language, and write the spec as decisions resolve. Do not implement the result.
+Turn an ambiguous development direction into an approved `docs/specs/` source of intent. Interview the user, stress-test material assumptions, keep its terms in the repository dictionary, and write the spec as decisions resolve. Do not implement the result.
 
 ## Prepare the repository
 
@@ -49,7 +49,7 @@ For every question:
 Start with upstream decisions because they reshape downstream questions:
 
 1. desired outcome and problem;
-2. actors and canonical domain language;
+2. actors and canonical domain language (checked against `docs/dictionary/`);
 3. scope, non-goals, and observable behavior;
 4. concrete scenarios, edge cases, and failure behavior;
 5. constraints, compatibility, migration, and tradeoffs;
@@ -64,10 +64,11 @@ Adapt the tree to the answers. Do not recite this list as a questionnaire.
 - Compare new terminology with existing specs, guides, and code. Surface contradictions immediately.
 - Probe relationships with concrete scenarios, especially boundary and failure cases.
 - Distinguish domain concepts that the user has collapsed into one word.
-- Record resolved terms in the spec's `Domain Language` section immediately.
+- Read the repository's dictionary (`docs/dictionary/*.json`, one file per domain) before writing, and use its terms. When the dictionary and an older spec's term table disagree, the dictionary is right.
+- Add each settled important term to the dictionary immediately, through `own-doc-update` (its `Dictionary` section owns the shape and the check). Write meaning and boundary only; do not link the entry to this spec.
 - Keep definitions conceptual. Put implementation choices in `Design Direction`, not in domain definitions.
 
-Do not create a separate glossary or ADR structure unless the repository already uses one. In the standard docs layout, the spec owns its domain language and hard-to-reverse design decisions.
+A spec has no `Domain Language` table: the dictionary is the one place for terms, official names and fixed values. Leave the tables of existing specs where they are; do not migrate them. When the repository has no `docs/dictionary/` yet, create the first domain file from `own-doc-update`'s template rather than a table in the spec. The spec still owns its hard-to-reverse design decisions.
 
 ## Persist decisions inline
 
@@ -91,7 +92,7 @@ Treat the grill as complete only when the spec has:
 
 - a clear problem and desired outcome;
 - explicit goals and non-goals;
-- stable domain terms;
+- stable domain terms, each important one in the dictionary;
 - observable requirements and representative edge cases;
 - relevant constraints and tradeoffs;
 - testable acceptance: product capabilities stated under `Requirements`, and delivery proofs recorded as `Open Questions` items tagged `【受入】`;

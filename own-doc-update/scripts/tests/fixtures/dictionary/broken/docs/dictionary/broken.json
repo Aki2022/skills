@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "domain": "broken",
+  "summary": "形が壊れた辞書",
+  "entries": [
+    {"id": "term-layer", "kind": "term", "text": "layer", "meaning": "正典のまとまり", "spec": "SPEC-x"},
+    {"id": "value-free", "kind": "value", "text": "今なら無料", "meaning": "料金"}
+  ]
+}

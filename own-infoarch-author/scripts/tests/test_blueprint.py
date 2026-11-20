@@ -312,3 +312,30 @@ def test_the_page_opens_with_the_overview_then_one_card_per_item(tmp_path):
     page = (out / 'approval-request.html').read_text(encoding='utf-8')
     assert page.index('プロダクト全体の関係図') < page.index('data-key="ia:item:sto-0001"')
     assert page.count('data-key="ia:item:') == 10
+
+
+# ---- the screen skeleton (what the build keeps and the render check reads) ----------------------------------------
+
+def test_the_screen_skeleton_marks_regions_groups_actions_and_states(tmp_path):
+    write_blueprint(tmp_path)
+    proc = subprocess.run([sys.executable, str(SCRIPTS / 'infoarch_author.py'), 'skeleton', '--root', str(tmp_path), '--screen', 'scr-overview'],
+                          capture_output=True, text=True)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    html = proc.stdout
+    import re
+    assert re.findall(r'data-ia-region="(rgn-\d+)"', html) == ['rgn-0001', 'rgn-0002', 'rgn-0003']  # priority order
+    assert html.count('data-ia-group=') == 2 and html.count('data-ia-primary="true"') == 1
+    assert all(f'data-ia-state="{s}"' in html for s in OVERVIEW['states']) and 'hidden' in html
+    assert 'data-ia-action="act-0001"' in html and 'rgn-0003' in html
+
+
+def test_the_screen_skeleton_is_refused_for_a_failing_blueprint_and_never_overwrites(tmp_path):
+    write_case(tmp_path, next(c for c in CASES if c['id'] == 'two-primary-actions'))
+    proc = subprocess.run([sys.executable, str(SCRIPTS / 'infoarch_author.py'), 'skeleton', '--root', str(tmp_path), '--screen', 'scr-overview'], capture_output=True, text=True)
+    assert proc.returncode == 2
+    ok = tmp_path / 'ok'
+    write_blueprint(ok)
+    out = ok / 'x.html'
+    args = [sys.executable, str(SCRIPTS / 'infoarch_author.py'), 'skeleton', '--root', str(ok), '--screen', 'scr-overview', '--out', str(out)]
+    assert subprocess.run(args, capture_output=True, text=True).returncode == 0
+    assert subprocess.run(args, capture_output=True, text=True).returncode == 2

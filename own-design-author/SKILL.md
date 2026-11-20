@@ -53,6 +53,8 @@ push時の検査は、`design/design.yaml` を持つ全repoで pre-push の拡�
 `design-author sync` はL0通過後に宣言したTailwindとassetコピーを配置する。`design-check` はL0/L1を通ったら画面ごとにL2とITEMSを実行し、全画面が通ってからAFM段を実行するためL2実施確認後に呼ぶ。
 L1/L2と生成Tailwindの使い方・制約は `references/web-validation.md` を読む。
 
+プロダクト UI の画面の位置と幅は、割り付け規則 `references/allocation-rules.md`（機械が読む形は `allocation-rules.json`）が、infoarch（blueprint）の優先度・グループ・shape から導く。グリッド・breakpoint・画面の型・部品の選択（表かカードか、どのグラフか）・規則に反する配置を人が指定するときの書き方（`design/layout-overrides.yaml`）はここにある。作るのは own-web-build の `build_screen.py`、確かめるのは `audit_screen.py`。
+
 ## 判定台帳と共有runner
 
 散文のdoc証拠とn-a理由は、保存済みの判定だけを読む。未登録入力は未カバーとして報告し、全候補の現在の記録が揃わなければ出荷失格。

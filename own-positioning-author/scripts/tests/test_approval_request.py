@@ -102,6 +102,16 @@ def test_the_page_offers_circle_and_cross_and_saves_to_the_db_collection():
     assert 'id="nodb"' in page and 'id="copy"' in page  # a page that cannot save says so and offers a copy
 
 
+def test_the_page_is_a_body_for_the_artifact_tool_and_keeps_the_page_contract():
+    page = ar.page(ar.build(model()))
+    head = page[:600]
+    assert head.lstrip().startswith('<title>') and 'claude:viewport-fit-sides' in head
+    assert not re.search(r'<(!doctype|html|head|body)[\s>]', page.lower())  # <header> inside a card is fine
+    assert 'padding-left:max(16px,env(safe-area-inset-left,0px))' in page and 'padding-right:max(16px,env(safe-area-inset-right,0px))' in page
+    assert page.count('color-scheme:dark') >= 2 and ':root:not([data-theme="light"])' in page and ':root[data-theme="dark"]' in page
+    assert 'background:var(--bg)' in page
+
+
 def test_text_is_escaped_in_the_page_and_in_the_embedded_data():
     ssot = copy.deepcopy(SSOT)
     ssot['values']['val-0001']['text'] = '</script><script>alert(1)</script>'

@@ -136,18 +136,18 @@ def _card(i):
 
 
 def page(items, title='承認依頼'):
-    """A self-contained page: a card per value path, ○ and × saved to the `db` collection `decisions`."""
+    """A self-contained page body (the Artifact tool wraps it in its own document: title, meta and style first, then the content; no
+    doctype, html, head or body): a card per value path, ○ and × saved to the `db` collection `decisions`."""
     data = json.dumps({'collection': COLLECTION, 'cards': {i['id']: {'key': i['key'], 'value_hash': i['value_hash']} for i in items}},
                       ensure_ascii=False).replace('</', '<\\/')
     cards = '\n'.join(_card(i) for i in items) or '<p>承認の対象がありません。</p>'
-    return f'''<!doctype html>
-<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{html.escape(title)}</title>
+    return f'''<title>{html.escape(title)}</title>
+<meta name="claude:viewport-fit-sides" content="cover">
 <style>
 :root{{--fg:#1b1b1b;--bg:#fafaf8;--card:#fff;--line:#d6d6d0;--muted:#5f5f5a;--ok:#1a6b3a;--ng:#a3262a;--warn:#8a5a00}}
-@media (prefers-color-scheme:dark){{:root:not([data-theme="light"]){{--fg:#ececea;--bg:#151515;--card:#1e1e1e;--line:#3c3c3a;--muted:#a3a39e;--ok:#5ac17f;--ng:#ff7b7f;--warn:#e8b24a}}}}
-:root[data-theme="dark"]{{--fg:#ececea;--bg:#151515;--card:#1e1e1e;--line:#3c3c3a;--muted:#a3a39e;--ok:#5ac17f;--ng:#ff7b7f;--warn:#e8b24a}}
-body{{margin:0;padding:16px;background:var(--bg);color:var(--fg);font:15px/1.65 system-ui,"Hiragino Sans",sans-serif}}
+@media (prefers-color-scheme:dark){{:root:not([data-theme="light"]){{--fg:#ececea;--bg:#151515;--card:#1e1e1e;--line:#3c3c3a;--muted:#a3a39e;--ok:#5ac17f;--ng:#ff7b7f;--warn:#e8b24a;color-scheme:dark}}}}
+:root[data-theme="dark"]{{--fg:#ececea;--bg:#151515;--card:#1e1e1e;--line:#3c3c3a;--muted:#a3a39e;--ok:#5ac17f;--ng:#ff7b7f;--warn:#e8b24a;color-scheme:dark}}
+body{{margin:0;padding-block:16px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));background:var(--bg);color:var(--fg);font:15px/1.65 system-ui,"Hiragino Sans",sans-serif}}
 main{{max-width:760px;margin:0 auto}}
 h1{{font-size:20px;margin:0 0 4px}} h3{{font-size:17px;margin:0}} h4{{font-size:13px;margin:14px 0 4px;color:var(--muted)}}
 .card{{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:16px 0}}
@@ -162,7 +162,8 @@ button[data-d=ok][aria-pressed=true]{{border-color:var(--ok);color:var(--ok);fon
 .state{{font-size:13px;color:var(--muted)}} .note{{display:block;margin-top:8px;font-size:13px;color:var(--muted)}}
 textarea{{width:100%;box-sizing:border-box;font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px}}
 .warn{{border:2px solid var(--ng);padding:8px 12px;border-radius:8px}}
-</style></head><body><main>
+</style>
+<main>
 <h1>{html.escape(title)}</h1>
 <p>提供価値ごとに、それを支える経路の全体（主張→差別化の根拠→前提→証拠）を見せています。内容を読んで、○（承認する）か ×（差し戻す）を選んでください。選ぶとこのページに保存され、AI が読み戻します。承認の台帳に書くのは、あなたの承認の言葉を受けた AI です。</p>
 <p class="meta">{len(items)} 件。各カードの英数字はその経路のハッシュの先頭 12 桁で、経路の中身が変わるとハッシュも変わり、保存した判断は古いものとして数えません。</p>
@@ -213,5 +214,5 @@ textarea{{width:100%;box-sizing:border-box;font:inherit;color:var(--fg);backgrou
     }}, function () {{ document.getElementById('nodb').hidden = false; }});
   }}).catch(function () {{ clearTimeout(timer); document.getElementById('nodb').hidden = false; }});
 }})();
-</script></main></body></html>
+</script></main>
 '''

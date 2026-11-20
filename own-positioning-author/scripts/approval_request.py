@@ -136,6 +136,7 @@ SHORT_NAMES = {'has_job': '担う', 'need': '求める', 'recalls': '思い出�
                'produces': '生む', 'satisfies': '満たす先', 'supports': '支える'}  # the words on a line: short, so they fit in the gap
 DEGREE_NAMES = {'full': '満たす', 'partial': '一部', 'none': '満たさない'}
 BOX_W, BOX_H, GAP_X, GAP_Y, PAD, CAP = 188, 64, 26, 58, 14, 18
+MAX_PER_ROW = 4
 
 
 def _wrap(text, width=13, lines=3):
@@ -162,8 +163,15 @@ def _diagram(graph):
     """Inline SVG of the path, layer by layer from the top. A box is an atom (its role sets the border), a line an arrow
     with its words on it; a degree is coloured (satisfies / partly / does not satisfy). Evidence points up at what it holds up."""
     nodes = graph['nodes']
-    layers = sorted({n['layer'] for n in nodes})
-    rows = {l: [n for n in nodes if n['layer'] == l] for l in layers}
+    # a layer with more than MAX_PER_ROW boxes wraps onto further rows, so the drawing stays readable at page width
+    rows, captions = {}, {}
+    for layer in sorted({n['layer'] for n in nodes}):
+        mine = [n for n in nodes if n['layer'] == layer]
+        for k in range(0, len(mine), MAX_PER_ROW):
+            key = (layer, k // MAX_PER_ROW)
+            rows[key] = mine[k:k + MAX_PER_ROW]
+            captions[key] = layer if k == 0 else None
+    layers = sorted(rows)
     widest = max(len(v) for v in rows.values())
     width = PAD * 2 + widest * BOX_W + (widest - 1) * GAP_X
     pos_of = {}
@@ -205,7 +213,8 @@ def _diagram(graph):
              '<path d="M0 0L8 4L0 8z" class="arrowhead"/></marker></defs>']
     for li, l in enumerate(layers):
         y = PAD + CAP + li * (BOX_H + GAP_Y + CAP)
-        parts.append(f'<text x="{PAD}" y="{y - 6}" class="coltitle">{html.escape(graph.get('layer_titles', LAYER_TITLES)[l])}</text>')
+        if captions[l] is not None:
+            parts.append(f'<text x="{PAD}" y="{y - 6}" class="coltitle">{html.escape(graph.get('layer_titles', LAYER_TITLES)[captions[l]])}</text>')
     lines, labels = [], []
     for e in graph['edges']:
         a = point(e['from'], e, 'from', e['to'])

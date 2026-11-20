@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "note": "割り付け規則（SPEC-product-ui-infoarch 要件 5、SPEC-deliverable-production-layers 要件 3）。プロダクト UI の infoarch（blueprint）の優先度・グループ・shape から、位置と幅を導く決まり。位置と幅と部品は design が持つ。infoarch は画面幅を変えても変わらないこと（優先度・グループ・shape）だけを書く。読むのは own-web-build の build_screen.py と audit_screen.py。人が読む説明は allocation-rules.md。",
+  "grid": {"columns": 12, "gap_px": 16, "max_width_px": 1200},
+  "breakpoints": [
+    {"name": "mobile", "max_width_px": 639, "columns_used": 1},
+    {"name": "tablet", "min_width_px": 640, "max_width_px": 1023, "columns_used": 6},
+    {"name": "desktop", "min_width_px": 1024, "columns_used": 12}
+  ],
+  "order": {
+    "vertical": "priority-ascending",
+    "same_row": "priority-ascending-left-to-right",
+    "groups": "contiguous-ordered-by-smallest-priority",
+    "tolerance_px": 4,
+    "note": "優先度の順は画面幅で変わらない。幅で変わるのは何列で並べるかだけ。"
+  },
+  "width_by_shape": {
+    "value": {"desktop": 3, "tablet": 3, "mobile": 1, "part": "stat"},
+    "status": {"desktop": 3, "tablet": 3, "mobile": 1, "part": "badge-list"},
+    "comparison": {"desktop": 6, "tablet": 6, "mobile": 1, "part": "chart"},
+    "distribution": {"desktop": 6, "tablet": 6, "mobile": 1, "part": "chart"},
+    "trend": {"desktop": 6, "tablet": 6, "mobile": 1, "part": "chart"},
+    "list": {"desktop": 12, "tablet": 6, "mobile": 1, "part": "table"},
+    "form": {"desktop": 12, "tablet": 6, "mobile": 1, "part": "form"},
+    "text": {"desktop": 12, "tablet": 6, "mobile": 1, "part": "prose"}
+  },
+  "screen_types": {
+    "dashboard": "領域を読むだけ。優先度の高い領域が上、同じグループは連続し、value は横に並べてよい",
+    "detail": "1 つの対象の中身。本人の値を最上段に置き、内訳を続ける",
+    "list": "一覧が主役。絞り込みを最上段に置く",
+    "form": "入力が主役。主操作を入力の直後に置く"
+  },
+  "override": {
+    "file": "design/layout-overrides.yaml",
+    "entry": {"screen": "scr-…", "above": "rgn-…（規則では下になる領域）", "below": "rgn-…（規則では上になる領域）", "reason": "人が決めた理由（必須）", "viewports": ["desktop", "mobile"]},
+    "note": "規則に反して優先度の低い領域を上に置くときは、このファイルに理由つきで書く。書いていない逆転は audit_screen が失格にし、書いてあれば報告に info として残す。"
+  }
+}

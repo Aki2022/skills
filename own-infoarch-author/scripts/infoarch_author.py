@@ -175,8 +175,36 @@ def cmd_maintain(args):
     return result['exit_code']
 
 
+def cmd_skeleton_screen(args):
+    """The HTML skeleton of a blueprint screen (marks for regions, groups, actions and states). A failing blueprint gives none."""
+    import screen_skeleton
+    report, m = check.check(args.root, dt.date.today().isoformat())
+    bp = m.blueprint
+    if m.ssot is None or bp is None or args.screen not in bp.screens:
+        report.add('fail', 'IA_SKELETON_OUTLINE', f'画面 {args.screen} が無い')
+    elif report.exit_code == 2:
+        report.add('fail', 'IA_SKELETON_REFUSED', 'check が失格しているので骨組みを出さない。先に直す')
+    if report.exit_code == 2:
+        _print(report.to_dict())
+        return 2
+    page = screen_skeleton.render(bp.screens[args.screen][1], css=Path(args.css).read_text(encoding='utf-8') if args.css else '')
+    if not args.out:
+        print(page, end='')
+        return 0
+    target = Path(args.out)
+    if target.exists():
+        _print({'exit_code': 2, 'error': f'上書きしない: {target}'})
+        return 2
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(page, encoding='utf-8')
+    _print({'written': [str(target)]})
+    return 0
+
+
 def cmd_skeleton(args):
-    """Print (or write under --out, never overwriting) the HTML skeleton of a checked outline."""
+    """Print (or write under --out, never overwriting) the HTML skeleton of a checked outline (or, with --screen, of a blueprint screen)."""
+    if args.screen:
+        return cmd_skeleton_screen(args)
     report, m = check.check(args.root, dt.date.today().isoformat())
     if m.ssot is None or args.outline not in m.outlines:
         report.add('fail', 'IA_SKELETON_OUTLINE', f'アウトライン {args.outline} が無い')
@@ -391,8 +419,10 @@ def main(argv=None):
     mt.set_defaults(fn=cmd_maintain)
     k = sub.add_parser('skeleton', help='print or write the HTML skeleton (anchors, order, facts) of an outline for a factory to style')
     k.add_argument('--root', default='.')
-    k.add_argument('--outline', required=True)
-    k.add_argument('--out', help='directory to write into (files are never overwritten)')
+    k.add_argument('--outline')
+    k.add_argument('--screen', help='a blueprint screen id: print or write its HTML skeleton (marks for regions, groups, actions, states)')
+    k.add_argument('--css', help='with --screen: a stylesheet to embed (design\'s allocation CSS)')
+    k.add_argument('--out', help='outline: a directory; screen: the HTML file to write (never overwritten)')
     k.set_defaults(fn=cmd_skeleton)
     i = sub.add_parser('impact', help='list outlines and outputs that reference an atom id')
     i.add_argument('--root', default='.')

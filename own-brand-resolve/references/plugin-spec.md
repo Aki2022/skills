@@ -6,7 +6,7 @@ title: plugin.yaml の正式スキーマ（等級・取得メタ・ライセン�
 
 各箱（`plugins/<box>/`）の `plugin.yaml` の正式スキーマ。倉庫はこれをスキャンして
 候補一覧を作る。**`media.yaml` の仕様は本書には無い** — 媒体は工場の所掌なので
-`own-web-design/references/media-spec.md` にある。
+`own-web-build/references/media-spec.md` にある。
 
 ## 等級と取得メタ（決定8・2026-09-09 追加）
 

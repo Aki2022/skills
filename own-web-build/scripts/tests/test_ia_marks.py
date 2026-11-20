@@ -14,7 +14,7 @@ import sys
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT / 'own-web-design/scripts'))
+sys.path.insert(0, str(ROOT / 'own-web-build/scripts'))
 import audit_html  # noqa: E402
 
 PAGE = '''<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">

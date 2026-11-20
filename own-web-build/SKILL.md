@@ -1,9 +1,11 @@
 ---
-name: own-web-design
+name: own-web-build
 description: "web 成果物（HTML 画面・LP・コンポーネント・ダッシュボード）を作る工場。「UI を作って」「HTML を作って」「LP を作って」「ダッシュボードを作って」「web の見た目を整えて」「ブランドに沿ったサイトを作って」で必ず使う。意匠は repo の design/ と解決済みマニフェストから読み、生成前に L0 を必ず実行する。design/ が無ければ own-design-author へ渡す。画像は own-image-gen に任せる。スライドは own-pptx-build。"
 ---
 
-# own-web-design — web 成果物の工場
+# own-web-build — web 成果物の工場（build）
+
+作る skill（build）の名前は own-pptx-build とそろえ、`design` は layer の名前だけに使う。
 
 repo の git toplevel の `design/` を正典として HTML / dashboard を生成する。
 値の定義・参照の写しは `own-design-author`、画像生成は `own-image-gen`、スライドは

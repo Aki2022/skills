@@ -177,7 +177,7 @@ mirrors:
 #
 # 退役の判定に使用統計だけを使ってはいけない。統計は直接発火しか数えず、
 # 自作 skill の振り分け先として呼ばれるものは 0 回に見える。実際 2026-09-23 に
-# 34本を落として own-quarto-route / own-design-route / own-website-audit の
+# 34本を落として own-quarto-route / own-deliverable-check（当時は design の route）/ own-website-audit の
 # 振り分け先と google-agents-cli の suite 内参照を壊し、11本を戻した。
 # 落とす前に、残す skill 全部から退役候補名を grep すること。
 

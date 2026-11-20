@@ -225,7 +225,7 @@ def main():
         files=[inside(root,path) for path in html]
         resolved=root/'design/.resolved/web.json'
         skills=Path(__file__).resolve().parents[2]
-        l1=subprocess.run([sys.executable,str(skills/'own-web-design/scripts/audit_html.py'),
+        l1=subprocess.run([sys.executable,str(skills/'own-web-build/scripts/audit_html.py'),
                            *map(str,files),'--manifest',str(resolved)],cwd=root,capture_output=True,text=True)
         report['stages'].append({'stage':'L1','exit_code':l1.returncode,'targets':len(files)})
         stage(report['report'],'L1',l1.returncode,len(files))

@@ -375,7 +375,7 @@ def test_fresh_init_reports_empty_must_even_before_first_token(project):
 
 def test_factory_preflight_preserves_warning_and_failure(project):
     root, catalogs = project
-    entry = SKILL.parent / 'own-web-design/scripts/preflight.py'
+    entry = SKILL.parent / 'own-web-build/scripts/preflight.py'
     env = dict(os.environ, DESIGN_AUTHOR_PYTHON=sys.executable)
     argv = [sys.executable, str(entry), '--repo', str(root), '--catalog-dir', str(catalogs)]
     run = subprocess.run(argv, env=env, capture_output=True, text=True)
@@ -405,7 +405,7 @@ def test_l0_generates_tailwind_contract_from_resolved_values(project):
 def test_l1_checks_real_generated_config_and_zero_targets(project):
     root, _ = project
     assert check(project)['exit_code'] == 1
-    audit = SKILL.parent / 'own-web-design/scripts/audit_html.py'
+    audit = SKILL.parent / 'own-web-build/scripts/audit_html.py'
     html = root / 'index.html'
     html.write_text('<html lang="ja"><meta name="viewport"><main><h1>fixture</h1></main>'
                     '<style>:focus-visible{} @media(min-width:1px){}</style></html>')
@@ -710,7 +710,7 @@ def test_l1_rejects_missing_declared_tailwind_target(project):
     check(project)
     (root/'index.html').write_text('<html lang="en"><meta name="viewport" content="width=device-width">'
         '<style>:focus-visible{outline:auto}@media(min-width:1px){}</style><main><h1>Fixture</h1></main></html>')
-    audit=SKILL.parent/'own-web-design/scripts/audit_html.py'
+    audit=SKILL.parent/'own-web-build/scripts/audit_html.py'
     assert audit.is_file(),'sibling audit_html.py is missing; exit code 2 alone would not prove the tailwind check'
     assert not (root/'app/tailwind.config.cjs').exists()
     run=subprocess.run([sys.executable,str(audit),

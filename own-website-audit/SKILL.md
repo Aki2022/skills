@@ -1,6 +1,6 @@
 ---
 name: own-website-audit
-description: "LP・サイトの総合監査（広告審査・法務・SEO・マーケ・デザイン/UX・a11y・技術・計測）。「LPを評価して」「このコピーは刺さるか」「LPを公開前に見て」「リデザインの良し悪しを判定して」、英語では review / audit / evaluate / QA / preflight の依頼で使う。審美と配置は scripts/measure_lp.mjs で決定論的に実測し、緑になってから独立レビュアーへ進む。生成と対象判定は行わない（own-design-route / own-web-design）。"
+description: "LP・サイトの総合監査（広告審査・法務・SEO・マーケ・デザイン/UX・a11y・技術・計測）。「LPを評価して」「このコピーは刺さるか」「LPを公開前に見て」「リデザインの良し悪しを判定して」、英語では review / audit / evaluate / QA / preflight の依頼で使う。審美と配置は scripts/measure_lp.mjs で決定論的に実測し、緑になってから独立レビュアーへ進む。生成と対象判定は行わない（own-deliverable-check / own-web-build）。"
 ---
 
 # Website Audit

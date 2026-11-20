@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""own-web-design — HTML [自動] Validator.
+"""own-web-build — HTML [自動] Validator.
 
 media/html の type: constraint を機械検証する。LLMの自己申告に頼らず、
 生成したHTMLファイルを実際に解析してPASS/FAILを出す。手順10で必ず実行する。

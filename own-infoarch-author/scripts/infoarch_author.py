@@ -10,6 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import blueprint  # noqa: E402
 import check  # noqa: E402
 import dom  # noqa: E402
 import evaluate  # noqa: E402
@@ -28,6 +29,60 @@ def cmd_check(args):
     report, _ = check.check(args.root, date)
     _print(report.to_dict())
     return report.exit_code
+
+
+def cmd_blueprint(args):
+    """Deterministic checks of the product UI's infoarch alone (product items, screens, approvals per item)."""
+    date = args.date or dt.date.today().isoformat()
+    dt.date.fromisoformat(date)
+    report, m = check.check(args.root, date)
+    bp = m.blueprint
+    if m.ssot is not None:
+        # only the blueprint's own findings and the positioning's: an outline repository's findings are `check`'s
+        report.findings = [f for f in report.findings if f.code.startswith(('IA_BLUEPRINT', 'IA_SCHEMA', 'IA_YAML', 'IA_MISSING',
+                                                                            'IA_APPROVALS', 'IA_SSOT', 'IA_DICTIONARY'))]
+        if bp is None or not bp.present or not bp.screens:
+            if not [f for f in report.findings if f.code in ('IA_BLUEPRINT_NO_SCREENS', 'IA_BLUEPRINT_PRODUCT_MISSING')]:
+                report.add('fail', 'IA_BLUEPRINT_NO_SCREENS', 'blueprint/screens/*.yaml が 0 件（対象 0 件を合格にしない）', 'design/info_arch/blueprint/screens')
+        report.targets = {'screens': len(bp.screens) if bp else 0, 'items': len(blueprint.items(bp)) if bp else 0}
+    _print(report.to_dict())
+    return report.exit_code
+
+
+def cmd_request(args):
+    """The approval request for the product items (○ / ×, saved to the Artifact db); or read the owner's answers back."""
+    import blueprint_request
+    date = dt.date.today().isoformat()
+    report, m = check.check(args.root, date)
+    bp = m.blueprint
+    if m.ssot is None or bp is None or not bp.present or bp.product is None or report.exit_code == 2:
+        _print({'exit_code': 2, 'error': 'blueprint の検査が失格しているか、product.yaml が無い（先に blueprint を緑にする）',
+                'findings': [f.code for f in report.findings if f.level == 'fail']})
+        return 2
+    rows = check.read_approvals(args.root, check.Report('request', date))
+    items = blueprint_request.build(bp, blueprint.approved_items(bp, rows), blueprint.required_keys(bp))
+    if not items:
+        _print({'exit_code': 2, 'error': '承認の対象（proposed の項目）が 0 件'})
+        return 2
+    if args.read_decisions:
+        import approval_request
+        out = approval_request.decisions_from_rows(items, json.loads(Path(args.read_decisions).read_text(encoding='utf-8')))
+        _print(out)
+        return 0 if not (out['stale'] or out['unknown']) else 1
+    out_dir = Path(args.out)
+    files = {out_dir / 'approval-request.html': blueprint_request.page(items, args.title),
+             out_dir / 'approval-request.json': json.dumps({'rows': [{'key': i['key'], 'value_hash': i['value_hash']} for i in items]},
+                                                          ensure_ascii=False, indent=2)}
+    existing = [str(p) for p in files if p.exists() or p.is_symlink()]
+    if existing:
+        _print({'exit_code': 2, 'error': f'上書きしない: {existing}'})
+        return 2
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for p, text in files.items():
+        p.write_text(text + ('' if text.endswith('\n') else '\n'), encoding='utf-8')
+    _print({'cards': len(items), 'approved': sum(i['approved'] for i in items), 'written': sorted(str(p) for p in files),
+            'publish': 'この html を非公開の Artifact として出す（capabilities: {db: {}}）。保存先は decisions/<項目 id>'})
+    return 0
 
 
 def cmd_dom(args):
@@ -277,6 +332,16 @@ def main(argv=None):
     c.add_argument('--root', default='.')
     c.add_argument('--date', help='evaluation date YYYY-MM-DD (default: today)')
     c.set_defaults(fn=cmd_check)
+    bpc = sub.add_parser('blueprint', help='deterministic checks of the product UI\'s infoarch: product items, screens, approvals per item')
+    bpc.add_argument('--root', default='.')
+    bpc.add_argument('--date', help='evaluation date YYYY-MM-DD (default: today)')
+    bpc.set_defaults(fn=cmd_blueprint)
+    rq = sub.add_parser('request', help='the approval request page for the product items of a blueprint (○ / ×), or read the answers back')
+    rq.add_argument('--root', default='.')
+    rq.add_argument('--out', default='approval-request', help='directory to write into (files are never overwritten)')
+    rq.add_argument('--title', default='プロダクト UI の承認依頼')
+    rq.add_argument('--read-decisions', help="the owner's saved answers (the Artifact db `decisions` rows, or the page's copied JSON)")
+    rq.set_defaults(fn=cmd_request)
     d = sub.add_parser('dom', help='render the outline outputs in a browser and compare anchors, order and facts')
     d.add_argument('--root', default='.')
     d.add_argument('--outline', required=True)

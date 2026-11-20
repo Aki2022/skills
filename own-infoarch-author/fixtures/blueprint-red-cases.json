@@ -1,0 +1,679 @@
+{
+  "version": 1,
+  "note": "プロダクト UI の infoarch（blueprint。SPEC-product-ui-infoarch 要件 6）の失格の条件と、それを起こす赤のフィクスチャの対応表。scripts/tests/test_blueprint.py が、全条件に赤のケースが 1 つ以上あること（対応の無い条件 0 件）、全ケースが既知の条件を指すこと、全ケースが終了コード 2・その条件の code になることを確かめる。ケースは基準のフィクスチャ（scripts/tests/blueprint_fixtures.py の PRODUCT・OVERVIEW・PERSON）への操作で書く：{file: product か画面 id, path, set か del}、{add_screen}、{drop_screen}、{drop_product}、{unapprove: 項目 id}。",
+  "conditions": [
+    {
+      "id": "screen-no-story",
+      "code": "IA_BLUEPRINT_SCREEN_NO_STORY",
+      "text": "どのストーリーにも応えない画面（serves が空）"
+    },
+    {
+      "id": "ref-broken",
+      "code": "IA_BLUEPRINT_REF_BROKEN",
+      "text": "画面や項目が引く id が無い（ストーリー・原則・オブジェクト・グループ・領域・移動先・入口の画面）"
+    },
+    {
+      "id": "ref-empty",
+      "code": "IA_BLUEPRINT_REF_EMPTY",
+      "text": "空欄の項目を引く"
+    },
+    {
+      "id": "item-unapproved",
+      "code": "IA_BLUEPRINT_ITEM_UNAPPROVED",
+      "text": "承認されていない（承認が無いか外れた）項目を、出荷する画面が引く"
+    },
+    {
+      "id": "primary-many",
+      "code": "IA_BLUEPRINT_PRIMARY_MANY",
+      "text": "主操作が 2 つ以上"
+    },
+    {
+      "id": "primary-none",
+      "code": "IA_BLUEPRINT_PRIMARY_NONE",
+      "text": "主操作が無く、無いと宣言していない"
+    },
+    {
+      "id": "primary-contradicts",
+      "code": "IA_BLUEPRINT_PRIMARY_CONTRADICTS",
+      "text": "「主操作なし」と宣言したのに主操作がある"
+    },
+    {
+      "id": "priority-missing",
+      "code": "IA_BLUEPRINT_PRIORITY_MISSING",
+      "text": "優先度が欠けた領域"
+    },
+    {
+      "id": "priority-duplicate",
+      "code": "IA_BLUEPRINT_PRIORITY_DUPLICATE",
+      "text": "同じ画面で優先度が重なる領域"
+    },
+    {
+      "id": "states-missing",
+      "code": "IA_BLUEPRINT_STATES_MISSING",
+      "text": "状態の宣言が無い画面"
+    },
+    {
+      "id": "group-no-principle",
+      "code": "IA_BLUEPRINT_GROUP_NO_PRINCIPLE",
+      "text": "並べ方の原則が無い（または並べ方の原則でない原則の）グループ"
+    },
+    {
+      "id": "shape-invalid",
+      "code": "IA_SCHEMA",
+      "text": "領域の中身の種類（shape）が無いか、決まった種類でない"
+    },
+    {
+      "id": "id-reused",
+      "code": "IA_BLUEPRINT_ID_REUSED",
+      "text": "墓標にある id を使う（id の再利用）"
+    },
+    {
+      "id": "id-not-issued",
+      "code": "IA_BLUEPRINT_ID_NOT_ISSUED",
+      "text": "台帳が発行していない id"
+    },
+    {
+      "id": "constraint-form",
+      "code": "IA_BLUEPRINT_CONSTRAINT_FORM",
+      "text": "「〜しない」の形でない制約"
+    },
+    {
+      "id": "value-none",
+      "code": "IA_BLUEPRINT_VALUE_NONE",
+      "text": "提供価値の id を引かない原則・主役"
+    },
+    {
+      "id": "lead-count",
+      "code": "IA_BLUEPRINT_LEAD_COUNT",
+      "text": "主役が 0 または 2 以上"
+    },
+    {
+      "id": "no-stories",
+      "code": "IA_BLUEPRINT_NO_STORIES",
+      "text": "ストーリーが 0 件"
+    },
+    {
+      "id": "no-screens",
+      "code": "IA_BLUEPRINT_NO_SCREENS",
+      "text": "画面が 0 件（対象 0 件を合格にしない）"
+    },
+    {
+      "id": "no-regions",
+      "code": "IA_BLUEPRINT_NO_REGIONS",
+      "text": "領域が 0 件の画面"
+    },
+    {
+      "id": "screen-id-mismatch",
+      "code": "IA_BLUEPRINT_SCREEN_ID",
+      "text": "画面の id がファイル名と違う"
+    },
+    {
+      "id": "product-missing",
+      "code": "IA_BLUEPRINT_PRODUCT_MISSING",
+      "text": "画面があるのに product.yaml が無い"
+    }
+  ],
+  "cases": [
+    {
+      "id": "screen-without-story",
+      "condition": "screen-no-story",
+      "ops": [
+        {
+          "file": "scr-overview",
+          "path": [
+            "serves"
+          ],
+          "set": []
+        }
+      ]
+    },
+    {
+      "id": "story-unknown",
+      "condition": "ref-broken",
+      "ops": [
+        {
+          "file": "scr-overview",
+          "path": [
+            "serves"
+          ],
+          "set": [
+            "sto-0001",
+            "sto-0009"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "group-principle-unknown",
+      "condition": "ref-broken",
+      "ops": [
+        {
+          "file": "scr-overview",
+          "path": [
+            "groups",
+            "grp-0001",
+            "principle"
+          ],
+          "set": "pri-0009"
+        }
+      ]
+    },
+    {
+      "id": "region-object-unknown",
+      "condition": "ref-broken",
+      "ops": [
+        {
+          "file": "scr-overview",
+          "path": [
+            "regions",
+            "rgn-0002",
+            "objects"
+          ],
+          "set": [
+            "ojc-0009"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "region-group-unknown",
+      "condition": "ref-broken",
+      "ops": [
+        {
+          "file": "scr-overview",
+          "path": [
+            "regions",
+            "rgn-0002",
+            "group"
+          ],
+          "set": "grp-0009"
+        }
+      ]
+    },
+    {
+      "id": "action-destination-unknown",
+      "condition": "ref-broken",
+      "ops": [
+        {
+          "file": "scr-overview",
+          "path": [
+            "actions",
+            "act-0001",
+            "to"
+          ],
+          "set": "scr-nowhere"
+        }
+      ]
+    },
+    {
+      "id": "action-region-unknown",
+      "condition": "ref-broken",
+      "ops": [
+        {
+          "file": "scr-overview",
+          "path": [
+            "actions",
+            "act-0001",
+            "region"
+          ],
+          "set": "rgn-0009"
+        }
+      ]
+    },
+    {
+      "id": "entry-screen-unknown",
+      "condition": "ref-broken",
+      "ops": [
+        {
+          "file": "product",
+          "path": [
+            "entries",
+            "ntr-0001",
+            "screen"
+          ],
+          "set": "scr-nowhere"
+        }
+      ]
+    },
+    {
+      "id": "principle-value-unknown",
+      "condition": "ref-broken",
+      "ops": [
+        {
+          "file": "product",
+          "path": [
+            "principles",
+            "pri-0001",
+            "values"
+          ],
+          "set": [
+            "val-9999"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "screen-cites-empty-story",
+      "condition": "ref-empty",
+      "ops": [
+        {
+          "file": "product",
+          "path": [
+            "stories",
+            "sto-0002"
+          ],
+          "set": {
+            "state": "empty",
+            "provenance": "proposal"
+          }
+        },
+        {
+          "file": "product",
+          "path": [
+            "principles",
+            "pri-0002",
+            "serves"
+          ],
+          "set": [
+            "sto-0001"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "unapproved-principle-on-shipped-screen",
+      "condition": "item-unapproved",
+      "ops": [
+        {
+          "unapprove": "pri-0001"
+        }
+      ]
+    },
+    {
+      "id": "unapproved-story-on-shipped-screen",
+      "condition": "item-unapproved",
+      "ops": [
+        {
+          "unapprove": "sto-0002"
+        }
+      ]
+    },
+    {
+      "id": "two-primary-actions",
+      "condition": "primary-many",
+      "ops": [
+        {
+          "file": "scr-overview",
+          "path": [
+            "actions",
+            "act-0002"
+          ],
+          "set": {
+            "text": "部署を見る",
+            "region": "rgn-0002",
+            "primary": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "no-primary-action",
+      "condition": "primary-none",
+      "ops": [
+        {
+          "file": "scr-overview",
+          "path": [
+            "actions",
+            "act-0001",
+            "primary"
+          ],
+          "set": false
+        }
+      ]
+    },
+    {
+      "id": "primary-despite-declaration",
+      "condition": "primary-contradicts",
+      "ops": [
+        {
+          "file": "scr-overview",
+          "path": [
+            "no_primary"
+          ],
+          "set": true
+        }
+      ]
+    },
+    {
+      "id": "region-without-priority",
+      "condition": "priority-missing",
+      "ops": [
+        {
+          "file": "scr-overview",
+          "path": [
+            "regions",
+            "rgn-0002",
+            "priority"
+          ],
+          "del": true
+        }
+      ]
+    },
+    {
+      "id": "regions-share-a-priority",
+      "condition": "priority-duplicate",
+      "ops": [
+        {
+          "file": "scr-overview",
+          "path": [
+            "regions",
+            "rgn-0003",
+            "priority"
+          ],
+          "set": 2
+        }
+      ]
+    },
+    {
+      "id": "screen-without-states",
+      "condition": "states-missing",
+      "ops": [
+        {
+          "file": "scr-overview",
+          "path": [
+            "states"
+          ],
+          "set": {}
+        }
+      ]
+    },
+    {
+      "id": "group-without-principle",
+      "condition": "group-no-principle",
+      "ops": [
+        {
+          "file": "scr-overview",
+          "path": [
+            "groups",
+            "grp-0002",
+            "principle"
+          ],
+          "del": true
+        }
+      ]
+    },
+    {
+      "id": "group-on-a-behavior-principle",
+      "condition": "group-no-principle",
+      "ops": [
+        {
+          "file": "scr-overview",
+          "path": [
+            "groups",
+            "grp-0002",
+            "principle"
+          ],
+          "set": "pri-0002"
+        }
+      ]
+    },
+    {
+      "id": "region-shape-unknown",
+      "condition": "shape-invalid",
+      "ops": [
+        {
+          "file": "scr-overview",
+          "path": [
+            "regions",
+            "rgn-0002",
+            "shape"
+          ],
+          "set": "chart"
+        }
+      ]
+    },
+    {
+      "id": "region-shape-missing",
+      "condition": "shape-invalid",
+      "ops": [
+        {
+          "file": "scr-overview",
+          "path": [
+            "regions",
+            "rgn-0002",
+            "shape"
+          ],
+          "del": true
+        }
+      ]
+    },
+    {
+      "id": "retired-id-used-again",
+      "condition": "id-reused",
+      "ops": [
+        {
+          "file": "product",
+          "path": [
+            "ledger",
+            "tombstones"
+          ],
+          "set": {
+            "sto-0002": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "retired-screen-id-used-again",
+      "condition": "id-reused",
+      "ops": [
+        {
+          "file": "product",
+          "path": [
+            "ledger",
+            "tombstones"
+          ],
+          "set": {
+            "scr-person": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "item-id-not-issued",
+      "condition": "id-not-issued",
+      "ops": [
+        {
+          "file": "product",
+          "path": [
+            "ledger",
+            "next",
+            "pri"
+          ],
+          "set": 2
+        }
+      ]
+    },
+    {
+      "id": "constraint-without-the-form",
+      "condition": "constraint-form",
+      "ops": [
+        {
+          "file": "product",
+          "path": [
+            "constraints",
+            "con-0001",
+            "text"
+          ],
+          "set": "個人の順位づけは避けたい"
+        }
+      ]
+    },
+    {
+      "id": "principle-without-value",
+      "condition": "value-none",
+      "ops": [
+        {
+          "file": "product",
+          "path": [
+            "principles",
+            "pri-0001",
+            "values"
+          ],
+          "set": []
+        }
+      ]
+    },
+    {
+      "id": "lead-without-value",
+      "condition": "value-none",
+      "ops": [
+        {
+          "file": "product",
+          "path": [
+            "objects",
+            "ojc-0001",
+            "values"
+          ],
+          "set": []
+        }
+      ]
+    },
+    {
+      "id": "no-lead-object",
+      "condition": "lead-count",
+      "ops": [
+        {
+          "file": "product",
+          "path": [
+            "objects",
+            "ojc-0001",
+            "lead"
+          ],
+          "set": false
+        }
+      ]
+    },
+    {
+      "id": "two-lead-objects",
+      "condition": "lead-count",
+      "ops": [
+        {
+          "file": "product",
+          "path": [
+            "objects",
+            "ojc-0002",
+            "lead"
+          ],
+          "set": true
+        }
+      ]
+    },
+    {
+      "id": "product-without-stories",
+      "condition": "no-stories",
+      "ops": [
+        {
+          "file": "product",
+          "path": [
+            "stories"
+          ],
+          "set": {}
+        },
+        {
+          "file": "product",
+          "path": [
+            "principles"
+          ],
+          "set": {}
+        },
+        {
+          "file": "scr-overview",
+          "path": [
+            "serves"
+          ],
+          "set": []
+        },
+        {
+          "file": "scr-person",
+          "path": [
+            "serves"
+          ],
+          "set": []
+        }
+      ]
+    },
+    {
+      "id": "product-without-screens",
+      "condition": "no-screens",
+      "ops": [
+        {
+          "drop_screen": "scr-overview"
+        },
+        {
+          "drop_screen": "scr-person"
+        },
+        {
+          "file": "product",
+          "path": [
+            "entries"
+          ],
+          "set": {}
+        }
+      ]
+    },
+    {
+      "id": "screen-without-regions",
+      "condition": "no-regions",
+      "ops": [
+        {
+          "file": "scr-person",
+          "path": [
+            "regions"
+          ],
+          "set": {}
+        },
+        {
+          "file": "scr-person",
+          "path": [
+            "actions"
+          ],
+          "set": {}
+        },
+        {
+          "file": "scr-person",
+          "path": [
+            "states"
+          ],
+          "set": {
+            "loading": {
+              "text": "読み込み中"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen-id-differs-from-file",
+      "condition": "screen-id-mismatch",
+      "ops": [
+        {
+          "file": "scr-person",
+          "path": [
+            "id"
+          ],
+          "set": "scr-someone-else"
+        }
+      ]
+    },
+    {
+      "id": "screens-without-a-product",
+      "condition": "product-missing",
+      "ops": [
+        {
+          "drop_product": true
+        }
+      ]
+    }
+  ]
+}

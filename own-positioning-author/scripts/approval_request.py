@@ -121,12 +121,15 @@ def _card(i):
     todo = (f'<div class="todo"><strong>決めてほしいこと（承認だけでは出荷できない欠け）</strong><ul>{problems}</ul></div>'
             if problems else '')
     meta = (f'比べる集合：{html.escape("、".join(i["comparison"]) or "なし")}　'
-            f'満たす先：{html.escape("、".join(i["targets"]) or "なし")}')
+            f'満たす先：{html.escape("、".join(i["targets"]) or "なし")}') if 'comparison' in i else ''
+    fields = ''.join(f'<dt>{html.escape(k)}</dt><dd>{html.escape(v)}</dd>' for k, v in i.get('fields', [])) 
+    fields = f'<dl>{fields}</dl>' if fields else ''
+    where = html.escape('・'.join(x for x in (i.get('segment'), i.get('kind')) if x))
     return f'''<article class="card" data-key="{html.escape(i["key"])}" data-id="{html.escape(i["id"])}">
 <header><h3>{html.escape(i["text"] or i["id"])}</h3>
-<p class="meta"><code>{html.escape(i["key"])}</code> <span class="hash" title="この経路全体のハッシュ">{i["hash12"]}</span> {html.escape(i["segment"])}・{html.escape(i["kind"])} {"".join(badges)}</p></header>
+<p class="meta"><code>{html.escape(i["key"])}</code> <span class="hash" title="{html.escape(i.get("hash_note", "この経路全体のハッシュ"))}">{i["hash12"]}</span> {where} {"".join(badges)}</p></header>
 <p class="meta">{meta}</p>
-{todo}{"".join(sections)}
+{fields}{todo}{"".join(sections)}
 <div class="choice" role="group" aria-label="{html.escape(i["id"])} の判断">
 <button type="button" data-d="ok" aria-pressed="false">○ 承認する</button>
 <button type="button" data-d="ng" aria-pressed="false">× 差し戻す</button>
@@ -135,7 +138,12 @@ def _card(i):
 </article>'''
 
 
-def page(items, title='承認依頼'):
+INTRO = ('提供価値ごとに、それを支える経路の全体（主張→差別化の根拠→前提→証拠）を見せています。内容を読んで、○（承認する）か ×（差し戻す）を選んでください。'
+         '選ぶとこのページに保存され、AI が読み戻します。承認の台帳に書くのは、あなたの承認の言葉を受けた AI です。')
+HASH_NOTE = '各カードの英数字はその経路のハッシュの先頭 12 桁で、経路の中身が変わるとハッシュも変わり、保存した判断は古いものとして数えません。'
+
+
+def page(items, title='承認依頼', intro=INTRO, hash_note=HASH_NOTE):
     """A self-contained page: a card per value path, ○ and × saved to the `db` collection `decisions`."""
     data = json.dumps({'collection': COLLECTION, 'cards': {i['id']: {'key': i['key'], 'value_hash': i['value_hash']} for i in items}},
                       ensure_ascii=False).replace('</', '<\\/')
@@ -154,6 +162,7 @@ h1{{font-size:20px;margin:0 0 4px}} h3{{font-size:17px;margin:0}} h4{{font-size:
 .meta{{color:var(--muted);font-size:13px;margin:4px 0}} code,.hash{{font:12px ui-monospace,monospace}}
 .hash{{background:var(--line);padding:1px 6px;border-radius:4px}}
 .tag{{font-size:12px;border:1px solid currentColor;border-radius:999px;padding:0 8px;margin-left:4px}} .tag.done{{color:var(--ok)}} .tag.must{{color:var(--warn)}}
+dl{{margin:8px 0}} dt{{font-size:12px;color:var(--muted)}} dd{{margin:0 0 6px}}
 ul{{margin:0;padding-left:20px}} li{{margin:2px 0}} .kind{{color:var(--muted);font-size:12px}} .detail{{display:block;color:var(--muted);font-size:12px}}
 .todo{{border-left:4px solid var(--warn);padding:4px 12px;margin:10px 0;background:color-mix(in srgb,var(--warn) 10%,transparent)}}
 .choice{{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:14px}}
@@ -164,8 +173,8 @@ textarea{{width:100%;box-sizing:border-box;font:inherit;color:var(--fg);backgrou
 .warn{{border:2px solid var(--ng);padding:8px 12px;border-radius:8px}}
 </style></head><body><main>
 <h1>{html.escape(title)}</h1>
-<p>提供価値ごとに、それを支える経路の全体（主張→差別化の根拠→前提→証拠）を見せています。内容を読んで、○（承認する）か ×（差し戻す）を選んでください。選ぶとこのページに保存され、AI が読み戻します。承認の台帳に書くのは、あなたの承認の言葉を受けた AI です。</p>
-<p class="meta">{len(items)} 件。各カードの英数字はその経路のハッシュの先頭 12 桁で、経路の中身が変わるとハッシュも変わり、保存した判断は古いものとして数えません。</p>
+<p>{html.escape(intro)}</p>
+<p class="meta">{len(items)} 件。{html.escape(hash_note)}</p>
 <p id="nodb" class="warn" hidden>この画面では選んだ判断を保存できません（スクリプトが動かない、またはサインインしていない画面です）。ブラウザで開き直してください。保存できないときは、下の欄の中身をコピーして AI に渡してください。</p>
 {cards}
 <h2 style="font-size:15px">保存できないときの控え</h2>

@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import common  # noqa: F401  (puts the sibling skills' scripts on sys.path)
+import blueprint
 import dictionary
 import outline as ol
 import positioning as pos
@@ -35,6 +36,7 @@ ANY_BRACES = re.compile(r'\{\{.*?\}\}', re.S)
 @dataclass
 class Model(pm.Model):
     channels: dict = field(default_factory=dict)  # media -> (rel path, data)
+    blueprint: object = None  # the product UI's infoarch (blueprint.Blueprint), when design/info_arch/blueprint/ exists
     outlines: dict = field(default_factory=dict)  # id -> (rel path, data)
     # The dictionary as the rest of the checks read it: facts (kind value) and entities (kind name), keyed by the
     # dictionary id. Built at load time, so dom, judge, skeleton and the answer key read one shape wherever the
@@ -118,7 +120,14 @@ def load(root, report):
                 report.add('fail', code, f'{key!r} がファイル名 {f.stem!r} と違う', rel)
                 continue
             store[key] = (rel, data)
+    m.blueprint = blueprint.load(root, report)
     return m
+
+
+def check_blueprint(m, report, approved_values, rows):
+    """The product UI's infoarch (blueprint), when the repository has one: product items and screens."""
+    if m.blueprint is not None and m.blueprint.present:
+        blueprint.check(m.blueprint, report, pos.atoms(m), approved_values, blueprint.approved_items(m.blueprint, rows))
 
 
 def _ref(m, report, src, aid, where, **kw):
@@ -168,10 +177,17 @@ APPROVAL_PREFIX = pos.PATH_PREFIX
 
 
 def positioning_targets(m):
-    """-> ({ia:path:<value>: path hash} for every proposed value, sorted keys of the paths shipped outlines use)."""
+    """-> ({approval key: hash}, sorted keys shipping needs). Keys: ia:path:<value> (the hash of a value's whole path) for
+    every proposed value, and ia:item:<item id> (the hash of that item alone) for every proposed product item. Shipping
+    needs the paths shipped outlines use and the items shipped screens cite."""
     hashes = pos.approval_targets(m)
     must = {APPROVAL_PREFIX + v for v, shipped in referenced_paths(m).items() if shipped}
-    return hashes, sorted(must & set(hashes))
+    must &= set(hashes)
+    bp = m.blueprint
+    if bp is not None and bp.present and bp.product:
+        hashes = {**hashes, **blueprint.targets(bp)}
+        must |= set(blueprint.required_keys(bp))
+    return hashes, sorted(must)
 
 
 def read_approvals(root, report):
@@ -342,11 +358,13 @@ def check(root, date):
     if m.ssot is None:
         return report, m
     check_ssot(m, report)
-    approved = pos.approved_keys(m, read_approvals(root, report))
+    rows = read_approvals(root, report)
+    approved = pos.approved_keys(m, rows)
     _, all_paths = pos.check_positioning(m, report, approved, referenced_paths(m), str(SSOT_PATH))
-    if not m.channels:
+    product_ui = bool(m.blueprint and m.blueprint.present)  # a product UI is checked by its blueprint, not by outlines
+    if not m.channels and (m.outlines or not product_ui):
         report.add('fail', 'IA_NO_CHANNELS', 'channels/*.yaml が 0 件（対象 0 件を合格にしない）', INFO_ARCH_DIR / 'channels')
-    if not m.outlines:
+    if not m.outlines and not product_ui:
         report.add('fail', 'IA_NO_OUTLINES', 'outlines/*.yaml が 0 件（対象 0 件を合格にしない）', INFO_ARCH_DIR / 'outlines')
     for oid, (rel, o) in sorted(m.outlines.items()):
         ch = m.channels.get(o['channel'])
@@ -355,6 +373,7 @@ def check(root, date):
         ol.check(m, report, oid, rel, o, shipped, approved)
         check_positioning_use(m, report, oid, rel, o, shipped, approved)
         check_lead_support(m, report, oid, rel, o, all_paths)
+    check_blueprint(m, report, approved, rows)
     check_expiry(m, report, date)
     check_pages(m, report)
     report.targets = {'channels': len(m.channels), 'outlines': len(m.outlines),
@@ -369,4 +388,8 @@ def impact(root, aid):
         report.add('fail', 'IA_IMPACT_UNKNOWN_ID', f'{aid} は SSOT にも墓標にも無い（綴りを確かめる）')
     hits = sorted(oid for oid, (_, o) in m.outlines.items() if m.ssot is not None and aid in outline_dependencies(m, o))
     outputs = sorted({out for oid in hits for out in m.outlines[oid][1]['outputs']})
-    return report, {'id': aid, 'outlines': hits, 'outputs': outputs}
+    bp = m.blueprint
+    if bp is not None and bp.present and bp.item(aid) is not None:
+        report.findings = [f for f in report.findings if f.code != 'IA_IMPACT_UNKNOWN_ID']
+    screens = sorted(sid for sid, (_, s) in bp.screens.items() if aid in blueprint.dependencies(bp, s)) if bp is not None else []
+    return report, {'id': aid, 'outlines': hits, 'outputs': outputs, 'screens': screens}

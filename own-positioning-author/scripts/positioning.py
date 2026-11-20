@@ -41,6 +41,7 @@ EDGE_KINDS = {  # kind -> (allowed `from` prefixes, allowed `to` prefixes; 'edge
 }
 DEGREES = ('full', 'partial', 'none')
 PATH_PREFIX = 'ia:path:'             # one approval row per value: its key names the value, its hash binds the path
+ITEM_PREFIX = 'ia:item:'              # one approval row per product item (own-infoarch-author's blueprint): the item's own hash
 LEGACY_PREFIX = 'ia:positioning:'    # the per-element rows before ADR-20261118-ia-approval-per-value-path
 APPROVAL_PREFIX = PATH_PREFIX
 ID_PREFIX = 'pos-'
@@ -436,7 +437,7 @@ def _verify_rows():
 
 
 def read_approvals(root, report, load_yaml, yaml_error):
-    """The owner's ia:path rows of design/approvals.yaml: {key: value_hash}.
+    """The owner's ia:path rows (and the blueprint's ia:item rows) of design/approvals.yaml: {key: value_hash}.
 
     Validated by own-design-author's verify_rows (fields, key namespace, hash, approver, ISO date, no duplicate key)
     plus a symlink refusal. Any violation fails closed: IA_APPROVALS_INVALID and nothing counts as approved.
@@ -465,4 +466,4 @@ def read_approvals(root, report, load_yaml, yaml_error):
         report.add('warn', 'IA_APPROVALS_LEGACY',
                    f'{rel} に原子と矢印ごとの旧い行が {len(legacy)} 件ある（承認として数えない。positioning-author migrate-approvals で経路の行へ移す）',
                    rel, rows=len(legacy))
-    return {k: v for k, v in approved.items() if k.startswith(PATH_PREFIX)}
+    return {k: v for k, v in approved.items() if k.startswith((PATH_PREFIX, ITEM_PREFIX))}

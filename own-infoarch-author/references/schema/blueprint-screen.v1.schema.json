@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "own-infoarch-author/blueprint-screen.v1.schema.json",
+  "title": "design/info_arch/blueprint/screens/<screen id>.yaml schema version 1 (one screen of a product UI's infoarch)",
+  "description": "プロダクト UI の infoarch のうち、画面ごとの項目（SPEC-product-ui-infoarch 要件 4）：応えるストーリー、グループと領域、優先度、主操作、状態、移動先。AI が作り、人は承認しない。承認済みの項目の id だけを引く。画面幅を変えても変わらないものだけを書く（位置・幅・部品は design の割り付け規則）。優先度は小さいほど上位。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "id", "ship", "title", "serves", "groups", "regions", "actions", "states"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "id": {"type": "string", "pattern": "^scr-[a-z0-9][a-z0-9-]*$"},
+    "ship": {"type": "boolean", "description": "出荷する画面か。出荷する画面が承認の無い項目を引くと失格、下書きは警告"},
+    "title": {"type": "string", "minLength": 1},
+    "serves": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/storyId"}},
+    "constraints": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^con-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"}},
+    "no_primary": {"type": "boolean", "description": "主操作を持たない画面だと宣言する（参照だけの画面など）"},
+    "groups": {
+      "type": "object",
+      "propertyNames": {"pattern": "^grp-[0-9]{4}$"},
+      "additionalProperties": {
+        "type": "object", "additionalProperties": false, "required": ["text"],
+        "properties": {"text": {"type": "string", "minLength": 1}, "principle": {"type": "string", "pattern": "^pri-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"}}
+      }
+    },
+    "regions": {
+      "type": "object",
+      "propertyNames": {"pattern": "^rgn-[0-9]{4}$"},
+      "additionalProperties": {
+        "type": "object", "additionalProperties": false, "required": ["group", "shape", "text"],
+        "properties": {
+          "group": {"type": "string", "pattern": "^grp-[0-9]{4}$"},
+          "priority": {"type": "integer", "minimum": 1},
+          "shape": {"enum": ["value", "list", "comparison", "trend", "distribution", "status", "form", "text"]},
+          "objects": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^ojc-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"}},
+          "text": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "actions": {
+      "type": "object",
+      "propertyNames": {"pattern": "^act-[0-9]{4}$"},
+      "additionalProperties": {
+        "type": "object", "additionalProperties": false, "required": ["text", "region"],
+        "properties": {
+          "text": {"type": "string", "minLength": 1},
+          "region": {"type": "string", "pattern": "^rgn-[0-9]{4}$"},
+          "primary": {"type": "boolean"},
+          "to": {"type": "string", "pattern": "^scr-[a-z0-9][a-z0-9-]*$"}
+        }
+      }
+    },
+    "states": {
+      "type": "object",
+      "propertyNames": {"enum": ["loading", "empty", "error", "partial", "offline", "denied"]},
+      "additionalProperties": {
+        "type": "object", "additionalProperties": false, "required": ["text"],
+        "properties": {"text": {"type": "string", "minLength": 1}, "region": {"type": "string", "pattern": "^rgn-[0-9]{4}$"}}
+      }
+    }
+  },
+  "$defs": {
+    "storyId": {"type": "string", "pattern": "^sto-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"}
+  }
+}

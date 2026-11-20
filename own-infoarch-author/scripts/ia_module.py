@@ -11,9 +11,10 @@ import sys
 
 VERSION = '0.4.0'
 CONTRACT = 'ia-git-history-v4'
+# ia:item:<item id>: one row per product item of a blueprint (the item's own hash, SPEC-product-ui-infoarch requirement 3).
 # ia:path:<value id>: one row per value, its hash binding the whole path (ADR-20261118-ia-approval-per-value-path).
 # Per-element keys (ia:positioning:...) are not targets: a ledger row with one is not counted as an approval.
-KEY = re.compile(r'ia:path:val-[0-9]{4,}')
+KEY = re.compile(r'ia:path:val-[0-9]{4,}|ia:item:(?:sto|pri|con|ojc|ntr)-[0-9]{4,}')  # a value's path; a product item (blueprint)
 CATEGORIES = ('executed', 'skipped', 'missing', 'uncovered', 'screened')
 
 

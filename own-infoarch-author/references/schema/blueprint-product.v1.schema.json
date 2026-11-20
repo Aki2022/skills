@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "own-infoarch-author/blueprint-product.v1.schema.json",
+  "title": "design/info_arch/blueprint/product.yaml schema version 1 (the product-wide items of a product UI's infoarch)",
+  "description": "プロダクト UI の infoarch のうち、プロダクトに 1 つの項目（SPEC-product-ui-infoarch 要件 2）：ストーリー・原則・制約・オブジェクトと主役・入口。オーナーが 1 件ずつ承認する（承認の行は ia:item:<項目 id>）。項目の id は台帳が発行し、再利用しない。承認の状態は持たない。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "ledger", "stories", "principles", "constraints", "objects", "entries"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "ledger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["next", "tombstones"],
+      "properties": {
+        "next": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sto", "pri", "con", "ojc", "ntr"],
+          "properties": {
+            "sto": {"type": "integer", "minimum": 1},
+            "pri": {"type": "integer", "minimum": 1},
+            "con": {"type": "integer", "minimum": 1},
+            "ojc": {"type": "integer", "minimum": 1},
+            "ntr": {"type": "integer", "minimum": 1}
+          }
+        },
+        "tombstones": {
+          "type": "object",
+          "propertyNames": {"$ref": "#/$defs/retiredId"},
+          "additionalProperties": {"oneOf": [{"$ref": "#/$defs/retiredId"}, {"type": "null"}]}
+        }
+      }
+    },
+    "stories": {"type": "object", "propertyNames": {"pattern": "^sto-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"}, "additionalProperties": {"$ref": "#/$defs/story"}},
+    "principles": {"type": "object", "propertyNames": {"pattern": "^pri-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"}, "additionalProperties": {"$ref": "#/$defs/principle"}},
+    "constraints": {"type": "object", "propertyNames": {"pattern": "^con-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"}, "additionalProperties": {"$ref": "#/$defs/constraint"}},
+    "objects": {"type": "object", "propertyNames": {"pattern": "^ojc-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"}, "additionalProperties": {"$ref": "#/$defs/object"}},
+    "entries": {"type": "object", "propertyNames": {"pattern": "^ntr-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"}, "additionalProperties": {"$ref": "#/$defs/entry"}}
+  },
+  "$defs": {
+    "retiredId": {"type": "string", "pattern": "^((sto|pri|con|ojc|ntr)-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})|scr-[a-z0-9][a-z0-9-]*)$"},
+    "state": {"enum": ["empty", "proposed"]},
+    "provenance": {"type": "string", "minLength": 1},
+    "text": {"type": "string", "minLength": 1},
+    "storyIds": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^sto-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"}},
+    "valueIds": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^val-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"}},
+    "story": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "provenance"],
+      "properties": {"state": {"$ref": "#/$defs/state"}, "provenance": {"$ref": "#/$defs/provenance"}, "actor": {"$ref": "#/$defs/text"}, "text": {"$ref": "#/$defs/text"}},
+      "if": {"properties": {"state": {"const": "proposed"}}},
+      "then": {"required": ["actor", "text"]}
+    },
+    "principle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "provenance"],
+      "properties": {
+        "state": {"$ref": "#/$defs/state"}, "provenance": {"$ref": "#/$defs/provenance"},
+        "kind": {"enum": ["arrangement", "behavior"]}, "text": {"$ref": "#/$defs/text"},
+        "serves": {"$ref": "#/$defs/storyIds"}, "values": {"$ref": "#/$defs/valueIds"}
+      },
+      "if": {"properties": {"state": {"const": "proposed"}}},
+      "then": {"required": ["kind", "text", "serves", "values"]}
+    },
+    "constraint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "provenance"],
+      "properties": {"state": {"$ref": "#/$defs/state"}, "provenance": {"$ref": "#/$defs/provenance"}, "text": {"$ref": "#/$defs/text"}},
+      "if": {"properties": {"state": {"const": "proposed"}}},
+      "then": {"required": ["text"]}
+    },
+    "object": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "provenance"],
+      "properties": {
+        "state": {"$ref": "#/$defs/state"}, "provenance": {"$ref": "#/$defs/provenance"},
+        "name": {"$ref": "#/$defs/text"}, "lead": {"type": "boolean"}, "values": {"$ref": "#/$defs/valueIds"}
+      },
+      "if": {"properties": {"state": {"const": "proposed"}}},
+      "then": {"required": ["name"]}
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "provenance"],
+      "properties": {
+        "state": {"$ref": "#/$defs/state"}, "provenance": {"$ref": "#/$defs/provenance"},
+        "serves": {"$ref": "#/$defs/storyIds"}, "screen": {"type": "string", "pattern": "^scr-[a-z0-9][a-z0-9-]*$"}
+      },
+      "if": {"properties": {"state": {"const": "proposed"}}},
+      "then": {"required": ["serves", "screen"]}
+    }
+  }
+}

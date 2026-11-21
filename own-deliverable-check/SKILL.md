@@ -54,6 +54,7 @@ pptxは従属WS完了までdesign/を読まないため、その制約を報告�
 | 表示性能（Core Web Vitals）      | `web-perf`                              | `web-perf`                                                           | 対象外                                              |
 | AI 生成様式の検出                | `baseline-ui`                           | `baseline-ui`                                                        | **欠落**                                            |
 | ブランド一貫性                   | `design/` のL0と解決済みマニフェストによるL1/L2 | 同左 | HTML資料は同左、pptxのdesign/準拠は未カバー                                                |
+| 正式名称・固定値（辞書）         | `own-doc-update` の `dictionary.py check-html`（`docs/dictionary/` のゆれ・印の値・期限切れ） | 同左 | HTML資料は同左、pptxは未カバー |
 
 補足:
 
@@ -65,6 +66,8 @@ pptxは従属WS完了までdesign/を読まないため、その制約を報告�
 - 対象外のデザイン系 skill: `dataviz`（チャートの配色・作成指針で、検査ではない）と
   `artifact-design`（Claude Artifacts の作成指針）は、どちらもこの repo の正典に実体が無く
   アプリ側で提供される。検査のカバレッジ表には載せない。
+
+正式名称・固定値（辞書）の行は、HTML の成果物ごとに `python3 <skills>/own-doc-update/scripts/dictionary.py check-html <repo> <file.html>…` を流す。repo の `docs/dictionary/` が語と値の唯一の出どころで、表示のゆれ・`data-dict="<id>"` の印の文言と辞書の違い・期限切れの固定値を見る。exit 2（`docs/dictionary/` が無い・HTML を渡していない）は「確かめていない」と報告し、合格にしない。印が 0 件のときも値の照合は効いていないので、その件数を報告に書く。
 
 プロダクト UI を渡されたら、構造・骨格・状態の 3 行は `audit_screen.py` を画面ごとに流して埋める（blueprint が無い成果物には、この 3 行は「欠落（blueprint が無い）」と報告する。黙って飛ばさない）。入力は画面の yaml（`design/info_arch/blueprint/screens/<画面 id>.yaml`）・描いた HTML・`--repo`（描画の環境を固定する `design/render-environment.json`）。描画に使える Playwright が無ければ、確かめていないと報告する（合格にしない）。
 

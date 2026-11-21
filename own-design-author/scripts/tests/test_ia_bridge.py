@@ -238,3 +238,133 @@ def test_legacy_per_element_rows_are_refused_until_migrated(project):
     ledger.write_text(yaml.safe_dump(rows, allow_unicode=True, sort_keys=False))
     result = check(project, ship=True)
     assert result['exit_code'] == 2 and result['errors'] == ['approval target absent from catalog/tokens'], result['errors']
+
+
+# ---- the docs dictionary is an input of L0 (WS-20261120, ISSUE-20261121-design-author-input-hashes-skip-dictionary) ----
+# The fixed values and official names the IA checker compares against live in docs/dictionary/<domain>.json, outside
+# design/. A word changed there must change the L0 input hashes, or a resolved manifest built before the change
+# keeps passing every consumer's stale check.
+
+def dictionary_path(root):
+    return root / 'docs/dictionary' / f'{FIXTURE["DICTIONARY"]["domain"]}.json'
+
+
+def ia_input_hashes(result):
+    return result['manifest']['web']['modules']['ia']['resolved']['governance']['input_hashes']
+
+
+def edit_dictionary_word(root):
+    path = dictionary_path(root)
+    data = json.loads(path.read_text(encoding='utf-8'))
+    data['entries'][0]['meaning'] += '（言い換えた）'
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
+
+
+def consumers(manifest):
+    python = [sys.executable, str(SKILL / 'scripts/resolved_contract.py'), str(manifest)]
+    js = 'import {loadManifest} from ' + json.dumps((SKILL / 'scripts/resolved_contract.mjs').as_uri()) + ';loadManifest(process.argv.at(-1));'
+    node = [os.environ.get('DESIGN_TEST_NODE', 'node'), '--input-type=module', '-e', js, str(manifest)]
+    return python, node
+
+
+def test_dictionary_word_change_changes_l0_input_hashes(project):
+    approve(project)
+    root = attach(project)
+    before = ia_input_hashes(check(project, ship=True))
+    rel = dictionary_path(root).relative_to(root).as_posix()
+    assert rel in before, sorted(before)
+    assert any(key.startswith('design/info_arch/') for key in before)
+    assert check(project, ship=True)['exit_code'] == 0
+    assert ia_input_hashes(check(project, ship=True)) == before  # same inputs, same hashes
+    edit_dictionary_word(root)
+    result = check(project, ship=True)
+    assert result['exit_code'] == 0, result['errors']
+    after = ia_input_hashes(result)
+    assert after[rel] != before[rel]
+    assert {k: v for k, v in after.items() if k != rel} == {k: v for k, v in before.items() if k != rel}
+
+
+def test_resolved_manifest_is_stale_for_both_consumers_after_a_dictionary_change(project):
+    approve(project)
+    root = attach(project)
+    command = [sys.executable, str(SKILL / 'scripts/design_author.py'), 'check', '--repo', str(root), '--catalog-dir', str(project[1])]
+    run = subprocess.run(command, capture_output=True, text=True)
+    assert run.returncode == 0, run.stdout + run.stderr
+    manifest = root / 'design/.resolved/web.json'
+    for consumer in consumers(manifest):
+        good = subprocess.run(consumer, capture_output=True, text=True)
+        assert good.returncode == 0, good.stdout + good.stderr
+    path = dictionary_path(root)
+    saved = path.read_bytes()
+    edit_dictionary_word(root)
+    for consumer in consumers(manifest):
+        stale = subprocess.run(consumer, capture_output=True, text=True)
+        assert stale.returncode != 0, stale.stdout + stale.stderr
+    from resolved_contract import load_manifest
+    with pytest.raises(ValueError, match='stale manifest'):
+        load_manifest(manifest)
+    path.write_bytes(saved)  # put the word back: the manifest is valid again, so the stale check is not a one-way latch
+    for consumer in consumers(manifest):
+        assert subprocess.run(consumer, capture_output=True, text=True).returncode == 0
+    # a dictionary file that is added or removed after L0 is a change too
+    extra = root / 'docs/dictionary/other.json'
+    extra.write_text(json.dumps({'schema_version': 1, 'domain': 'other', 'summary': 's', 'entries': []}), encoding='utf-8')
+    for consumer in consumers(manifest):
+        assert subprocess.run(consumer, capture_output=True, text=True).returncode != 0
+    extra.unlink()
+    path.unlink()
+    for consumer in consumers(manifest):
+        assert subprocess.run(consumer, capture_output=True, text=True).returncode != 0
+
+
+def test_repository_without_a_dictionary_has_no_dictionary_inputs_and_stays_valid(project):
+    approve(project)
+    root = project[0]
+    ssot = copy.deepcopy(FIXTURE['SSOT'])
+    ssot['proofs']['prf-0001']['as_of'] = '2099-01-01'
+    FIXTURE['write_repo'](root, ssot, dictionary=None)
+    config = json.loads((root / 'design/design.yaml').read_text())
+    config['modules'] = {'ia': '0.4.0'}
+    write(root / 'design/design.yaml', config)
+    assert not (root / 'docs/dictionary').exists()
+    command = [sys.executable, str(SKILL / 'scripts/design_author.py'), 'check', '--repo', str(root), '--catalog-dir', str(project[1])]
+    run = subprocess.run(command, capture_output=True, text=True)
+    data = json.loads(run.stdout)
+    manifest = root / 'design/.resolved/web.json'
+    if manifest.exists():  # an IA tree that needs a dictionary may be red; what matters is no dictionary key appears
+        assert not any(k.startswith('docs/') for k in ia_input_hashes({'manifest': {'web': json.loads(manifest.read_text())}}))
+        for consumer in consumers(manifest):
+            assert subprocess.run(consumer, capture_output=True, text=True).returncode == 0
+    else:
+        assert data['exit_code'] == 2, data
+
+
+@pytest.mark.parametrize('key', ['docs/dictionary/sub/x.json', 'docs/dictionary/../x.json', 'docs/other.json',
+                                 'docs/dictionary/x.txt', 'docs/dictionary/', '/docs/dictionary/x.json', 'design/info_arch/../../x'])
+def test_governance_input_hash_keys_stay_confined_to_ia_inputs_and_the_dictionary(project, key):
+    import design_modules
+    root = attach(project)
+    resolved = resolve_ia(root, json.loads((root / 'design/design.yaml').read_text()), {}, {'web': {}}, empty_report())
+    resolved.pop('_implementation_sha256')
+    design_modules._git_contract(resolved)  # the real result passes
+
+    def with_key(name):
+        row = copy.deepcopy(resolved)
+        row['governance']['input_hashes'][name] = '0' * 64
+        row['media'] = {m: {'governance': row['governance'], 'targets': row['targets']} for m in row['media']}
+        return row
+
+    design_modules._git_contract(with_key('docs/dictionary/another-domain.json'))  # a dictionary file is an input
+    with pytest.raises(ValueError, match='invalid IA input hash'):
+        design_modules._git_contract(with_key(key))
+
+
+def test_dictionary_folder_is_named_the_same_by_the_reader_the_bridge_and_the_consumers():
+    import design_modules
+    loaded = {}
+    for name, path in (('dictionary', SKILL.parent / 'own-doc-update/scripts/dictionary.py'), ('ia_module', IA / 'scripts/ia_module.py')):
+        spec = importlib.util.spec_from_file_location('pin_' + name, path)
+        loaded[name] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(loaded[name])
+    assert loaded['dictionary'].DICTIONARY_DIR.as_posix() == loaded['ia_module'].DICTIONARY_DIR == design_modules.IA_DICTIONARY_DIR
+    assert "['docs', 'dictionary']" in (SKILL / 'scripts/resolved_contract.mjs').read_text()

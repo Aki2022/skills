@@ -12,7 +12,7 @@ python3 <own-web-build>/scripts/audit_html.py index.html --manifest design/.reso
 node <own-website-audit>/scripts/measure_lp.mjs <url> --manifest design/.resolved/web.json --viewports 375,1280 --schemes dark,light --json <report.json>
 ```
 
-consumerはマニフェストの入力ハッシュを現行のdesign/と照合し、中央の判定policyと宣言したIA resolverのdigestも照合する。変更・追加・削除後の古い生成物を使わない。
+consumerはマニフェストの入力ハッシュを現行のdesign/と照合し（IAモジュールを宣言したrepoでは、IAの入力である docs/dictionary/*.json も照合する）、中央の判定policyと宣言したIA resolverのdigestも照合する。変更・追加・削除後の古い生成物を使わない。
 DTCGの再解決はしない。L1はブラウザを使わず、L2は既存のPlaywright環境を使う。
 Playwrightは `scripts/playwright_runtime.mjs` が探す。順は `OWN_PLAYWRIGHT_DIR`（指定したら版が違えば止まる）→対象repoとその祖先の `node_modules`（固定の版と違えば飛ばす）→端末の共通置き場 `${OWN_PLAYWRIGHT_HOME:-~/.cache/own-playwright}/<render-environment.json の playwright_version>/`。`NODE_PATH` は見ない（別repoのcheckoutを黙って指す経路だったため）。共通置き場は版ごとに端末で一度だけ入れ、無ければ入れるコマンドを出して止まる。ブラウザ本体はPlaywright自身の共有キャッシュにある。
 axe-coreは `AXE_CORE_PATH`、無ければ対象repo、無ければPlaywrightを読んだ共通置き場から解決する。

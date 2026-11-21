@@ -8,6 +8,39 @@ import {fileURLToPath} from 'node:url';
 // dictionary reader. Keys are `<skill>/<path>`, sorted by UTF-8 bytes.
 const IA_TRUSTED_SKILLS = ['own-positioning-author'];
 const IA_TRUSTED_FILES = ['own-doc-update/scripts/dictionary.py'];
+// Mirrors design_modules.IA_DICTIONARY_DIR: the docs dictionary is an IA input outside design/ (one JSON file per domain).
+const IA_DICTIONARY_DIR = ['docs', 'dictionary'];
+
+// A resolved manifest that recorded the docs dictionary is stale once a file changed, appeared or went away; one that
+// recorded none is stale only if the repository has some. Mirrors design_modules.check_ia_dictionary_current.
+function checkIaDictionaryCurrent(modules, repoRoot) {
+  const governance = modules.ia?.resolved?.governance;
+  if (!governance || typeof governance !== 'object') return;
+  const prefix = IA_DICTIONARY_DIR.join('/') + '/';
+  const expected = {};
+  for (const [key, digest] of Object.entries(governance.input_hashes || {})) if (key.startsWith(prefix)) expected[key] = digest;
+  const actual = {};
+  let folder = repoRoot;
+  const real = realpathSync(repoRoot);
+  const outside = path => realpathSync(path) !== join(real, relative(repoRoot, path));
+  for (const part of IA_DICTIONARY_DIR) {
+    folder = join(folder, part);
+    let info;
+    try { info = lstatSync(folder); } catch { folder = null; break; }
+    if (info.isSymbolicLink() || outside(folder)) throw new Error('IA input symlink or escape');
+  }
+  if (folder) {
+    for (const name of readdirSync(folder).sort()) {
+      if (!name.endsWith('.json')) continue;
+      const file = join(folder, name);
+      if (lstatSync(file).isSymbolicLink() || outside(file)) throw new Error('IA input symlink or escape');
+      if (statSync(file).isFile()) actual[prefix + name] = createHash('sha256').update(readFileSync(file)).digest('hex');
+    }
+  }
+  const keys = Object.keys(actual).sort();
+  if (JSON.stringify(keys) !== JSON.stringify(Object.keys(expected).sort()) || keys.some(k => actual[k] !== expected[k]))
+    throw new Error('stale manifest; rerun L0');
+}
 
 function iaDigest(file, full) {
   if (!full) return createHash('sha256').update(readFileSync(file)).digest('hex');
@@ -60,6 +93,7 @@ export function loadManifest(path) {
     const file = fileURLToPath(new URL('../../own-infoarch-author/scripts/ia_module.py', import.meta.url));
     if (realpathSync(file) !== file || iaDigest(file, modules.ia.resolved?.governance?.contract === 'ia-git-history-v4') !== modules.ia.implementation_sha256)
       throw new Error('IA resolver changed; rerun L0');
+    checkIaDictionaryCurrent(modules, dirname(design));
   }
   const actual = {};
   function walk(dir) {

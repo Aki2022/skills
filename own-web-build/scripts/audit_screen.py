@@ -28,6 +28,27 @@ RULES = SKILLS / 'own-design-author/references/allocation-rules.json'
 VIEWPORTS = [{'name': 'desktop', 'width': 1280, 'height': 800}, {'name': 'mobile', 'width': 375, 'height': 812}]
 
 
+REEXEC_GUARD = 'AUDIT_SCREEN_REEXEC'
+
+
+def start_again_under_the_dependency_interpreter():
+    """The python3 on PATH may lack PyYAML. The L0 dependency interpreter (DESIGN_AUTHOR_PYTHON, the one build_screen already
+    uses) has it, so start this script again under it, once. Without PyYAML and without that variable, load_yaml stops (exit 2)."""
+    try:
+        import yaml  # noqa: F401
+        return
+    except ImportError:
+        pass
+    target = os.environ.get('DESIGN_AUTHOR_PYTHON')
+    if not target or os.environ.get(REEXEC_GUARD):
+        return
+    os.environ[REEXEC_GUARD] = '1'
+    try:
+        os.execv(target, [target, str(Path(__file__).resolve()), *sys.argv[1:]])
+    except OSError:
+        pass  # fall through: load_yaml reports the missing PyYAML
+
+
 def load_yaml(path):
     try:
         import yaml
@@ -126,4 +147,5 @@ def main(argv=None):
 
 
 if __name__ == '__main__':
+    start_again_under_the_dependency_interpreter()
     sys.exit(main())

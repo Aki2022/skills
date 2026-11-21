@@ -213,3 +213,44 @@ class TemplateTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NewSpecTermTableTest(unittest.TestCase):
+    """A spec created on or after the dictionary rollout has no term table: terms live in docs/dictionary/."""
+
+    def setUp(self):
+        self.vrd = load("validate_repo_docs_terms", SCRIPTS / "validate_repo_docs.py")
+        self.tmp = Path(tempfile.mkdtemp())
+        (self.tmp / "docs/specs").mkdir(parents=True)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def spec(self, name, created, heading):
+        (self.tmp / "docs/specs" / name).write_text(
+            f"---\nid: SPEC-{name[:-3]}\nstatus: draft\ncreated_at: {created}\nupdated_at: {created}\n---\n\n"
+            f"# T\n\n## Purpose\n\n## {heading}\n\n| Term | Meaning |\n| --- | --- |\n", encoding="utf-8")
+
+    def errors(self):
+        errors, warnings = [], []
+        self.vrd.validate_spec_placement(self.tmp, errors, warnings)
+        return errors
+
+    def test_new_spec_with_a_term_table_is_red_and_names_the_file(self):
+        for heading in ("Domain Language", "用語", "用語集", "Glossary"):
+            with self.subTest(heading):
+                self.spec("new.md", "2026-11-21", heading)
+                self.assertTrue(any(e.startswith("docs/specs/new.md:") and "docs/dictionary/" in e for e in self.errors()),
+                                self.errors())
+
+    def test_rollout_day_itself_counts_as_new(self):
+        self.spec("day.md", self.vrd.DICTIONARY_ROLLOUT_DATE, "Domain Language")
+        self.assertTrue(any("docs/specs/day.md:" in e for e in self.errors()))
+
+    def test_older_spec_keeps_its_table(self):
+        self.spec("old.md", "2026-11-19", "Domain Language")
+        self.assertEqual(self.errors(), [])
+
+    def test_a_heading_that_only_mentions_terms_is_not_a_table(self):
+        self.spec("prose.md", "2026-11-21", "用語の方針")
+        self.assertEqual(self.errors(), [])

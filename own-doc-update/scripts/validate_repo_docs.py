@@ -884,11 +884,41 @@ def validate_review_recency(root: Path, warnings: list[str]) -> None:
         )
 
 
+def _layer_paths():
+    """The one rule for where a repository keeps its design master (own-design-author/references/layer-paths.json).
+
+    Found next to this skill; when it is not there the check stops with a clear message and never falls back to a spelled path."""
+    try:
+        import layer_paths
+        return layer_paths
+    except ImportError:
+        pass
+    scripts = Path(__file__).resolve().parents[2] / "own-design-author" / "scripts"
+    if scripts.is_dir() and str(scripts) not in sys.path:
+        sys.path.append(str(scripts))
+    try:
+        import layer_paths
+        return layer_paths
+    except ImportError as exc:
+        raise RuntimeError(
+            "layer_paths.py not found: the design master check needs own-design-author/scripts/layer_paths.py "
+            f"(expected at {scripts}); install own-design-author next to own-doc-update. Not falling back to a built-in path."
+        ) from exc
+
+
 def validate_design_references(root: Path, errors: list[str]) -> None:
     """Check spec/master links only. Never resolve tokens, approvals, IA or L0."""
     root = root.resolve()
-    config_path = root / "design/design.yaml"
-    masters = {root / "design", config_path}
+    lp = _layer_paths()
+    try:
+        config_path = lp.path(root, "design_config")  # the guard runs first: a repository that moved stops here
+        master_dir = config_path.parent  # the design layer's own directory: the one that holds the design configuration
+    except lp.LayerLayoutError as exc:
+        errors.append(str(exc))
+        return
+    config_rel = lp.rel("design_config")
+    master_rel = Path(config_rel).parent.as_posix()
+    masters = {master_dir, config_path}
     backlinks: set[str] = set()
     for path in sorted(root.glob("docs/specs/**/*.md")):
         if "archive" in path.relative_to(root / "docs/specs").parts:
@@ -907,12 +937,12 @@ def validate_design_references(root: Path, errors: list[str]) -> None:
 
     if not config_path.exists() and not config_path.is_symlink():
         for path in sorted(backlinks):
-            errors.append(f"{path}: design back-reference has no design/design.yaml")
+            errors.append(f"{path}: design back-reference has no {config_rel}")
         if backlinks:
-            errors.append("design/design.yaml: missing master referenced by specs")
+            errors.append(f"{config_rel}: missing master referenced by specs")
         return
     if config_path.resolve() != config_path or not config_path.is_file():
-        errors.append("design/design.yaml: design configuration must be a regular repository file")
+        errors.append(f"{config_rel}: design configuration must be a regular repository file")
         return
     try:
         # Only design-bearing repositories need the runner's existing YAML dependency.
@@ -938,10 +968,10 @@ def validate_design_references(root: Path, errors: list[str]) -> None:
                 or len(set(references)) != len(references)):
             raise ValueError("spec must be a path or nonempty unique path list")
     except ImportError:
-        errors.append("design/design.yaml: YAML dependency missing; use the design runner environment")
+        errors.append(f"{config_rel}: YAML dependency missing; use the design runner environment")
         return
     except (OSError, UnicodeError, ValueError, TypeError, yaml.YAMLError):
-        errors.append("design/design.yaml: invalid configuration or spec declaration")
+        errors.append(f"{config_rel}: invalid configuration or spec declaration")
         return
 
     for reference in references:
@@ -949,19 +979,19 @@ def validate_design_references(root: Path, errors: list[str]) -> None:
         if (len(parts) < 3 or parts[:2] != ["docs", "specs"]
                 or any(part in ("", ".", "..", "archive") for part in parts)
                 or not reference.endswith(".md")):
-            errors.append("design/design.yaml: spec must name an active repository docs/specs Markdown file")
+            errors.append(f"{config_rel}: spec must name an active repository docs/specs Markdown file")
             continue
         path = root / reference
         if (path.resolve() != path or not path.is_file()
                 or not resolves_case_sensitively(root, reference)):
-            errors.append(f"design/design.yaml: spec file missing or not a regular repository file: {reference}")
-            errors.append(f"{reference}: spec referenced by design/design.yaml is missing or not a regular file")
+            errors.append(f"{config_rel}: spec file missing or not a regular repository file: {reference}")
+            errors.append(f"{reference}: spec referenced by {config_rel} is missing or not a regular file")
         elif reference not in backlinks:
-            errors.append(f"{reference}: missing design back-reference to design/ or design/design.yaml")
-            errors.append(f"design/design.yaml: spec has no design back-reference: {reference}")
+            errors.append(f"{reference}: missing design back-reference to {master_rel}/ or {config_rel}")
+            errors.append(f"{config_rel}: spec has no design back-reference: {reference}")
     for reference in sorted(backlinks - set(references)):
-        errors.append(f"design/design.yaml: spec does not list {reference}, which links to the design master")
-        errors.append(f"{reference}: design back-reference is not listed by design/design.yaml spec")
+        errors.append(f"{config_rel}: spec does not list {reference}, which links to the design master")
+        errors.append(f"{reference}: design back-reference is not listed by {config_rel} spec")
 
 
 def validate_repo(repo: str | Path) -> tuple[list[str], list[str]]:

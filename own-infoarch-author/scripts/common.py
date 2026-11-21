@@ -21,6 +21,7 @@ for _name, _path in SIBLING_SCRIPTS.items():
         sys.path.insert(0, str(_path))
 
 import ia_common  # noqa: E402
+import layer_paths  # noqa: E402,F401  (own-design-author's layer rule; ia_common put its scripts on sys.path)
 from ia_common import (  # noqa: E402,F401
     INFO_ARCH_DIR, LEVELS, VERSION, DependencyMissing, Finding, Report, YamlError, load_yaml, safe_load_text)
 

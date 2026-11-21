@@ -20,6 +20,7 @@ import check
 import dom
 import judge
 from common import Report
+import layer_paths  # on sys.path through common
 
 
 def _merge(target, findings, seen):
@@ -42,7 +43,7 @@ def _stages(root, date, outlines, work):
     unknown = [o for o in targets if o not in m.outlines]
     if unknown:
         _merge(findings, [{'level': 'fail', 'code': 'IA_EVALUATE_OUTLINE', 'message': f'アウトライン {unknown} が無い',
-                           'path': str(check.INFO_ARCH_DIR / 'outlines')}], seen)
+                           'path': layer_paths.rel('infoarch', 'outlines')}], seen)
         return stages, findings, None, [], []
     stages['dom'], paths = {}, []
     for oid in targets:

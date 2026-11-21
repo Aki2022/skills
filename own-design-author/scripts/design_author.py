@@ -6,7 +6,8 @@ from datetime import date, datetime, timezone
 import hashlib
 import json
 import math
-from pathlib import Path
+import os
+from pathlib import Path, PurePosixPath
 import re
 import shutil
 import subprocess
@@ -21,6 +22,7 @@ from judgment_ledger import candidate as judgment_candidate,evaluate as evaluate
 from reporting import empty_report,stage,skip
 from design_modules import resolve_ia
 import item_checks
+import layer_paths
 
 VERSION = '1.0.0'
 SKILL = Path(__file__).resolve().parents[1]
@@ -70,6 +72,29 @@ def inside(root, relative):
     return path
 
 
+def design_rel():
+    """The design layer's own directory, repository-relative: the one that holds the design configuration."""
+    return layer_paths.rel('design_dir')
+
+
+def design_dir(root):
+    """The design layer's own directory in `root`, after the layout guard."""
+    return layer_paths.path(root, 'design_dir')
+
+
+def inside_layer(root, key, *rest):
+    """A layer path (guarded) that must stay under the design directory, symlinks resolved."""
+    path = layer_paths.path(root, key, *rest).resolve()
+    if not path.is_relative_to(design_dir(root).resolve()):
+        raise ValueError(f'path outside design directory: {layer_paths.rel(key, *rest)}')
+    return path
+
+
+def _leaf(key):
+    """The file or directory name of a layer entry (generated outputs are recognised by it inside the design dir)."""
+    return PurePosixPath(layer_paths.rel(key)).name
+
+
 def load_catalog(version, catalog_dir):
     if not isinstance(version, str) or not re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9.-]*', version):
         raise ValueError('unknown catalog version')
@@ -102,24 +127,27 @@ def _presets():
 
 def init_design(root, preset, version, *, catalog_dir=CATALOG):
     root = Path(root)
+    layer_paths.guard(root)
     presets = _presets()
     if preset not in presets or preset == 'schema_version':
         raise ValueError('unknown preset')
     load_catalog(version, catalog_dir)
-    design = root / 'design'
+    design = design_dir(root)
     if design.exists():
-        raise ValueError('design/ already exists; use migrate')
+        raise ValueError(f"{design_rel()}/ already exists; use migrate")
     shutil.copytree(SKILL / 'templates/design', design)
-    (design / 'assets').mkdir(exist_ok=True)
-    (design / 'checks').mkdir(exist_ok=True)
-    write_data(design / 'design.yaml', {'schema_version': 1, 'skill_version': VERSION,
+    layer_paths.path(root, 'assets').mkdir(parents=True, exist_ok=True)
+    layer_paths.path(root, 'checks').mkdir(parents=True, exist_ok=True)
+    write_data(layer_paths.path(root, 'design_config'), {'schema_version': 1, 'skill_version': VERSION,
         'catalog_version': version, 'preset': preset, 'media': presets[preset]['media'], 'items': {}})
-    return {'created': 'design/', 'catalog_version': version, 'preset': preset}
+    return {'created': design_rel() + '/', 'catalog_version': version, 'preset': preset}
 
 
 def migrate_design(root, version, *, catalog_dir=CATALOG):
-    design = Path(root) / 'design'
-    config = read_data(design / 'design.yaml')
+    root = Path(root)
+    design = design_dir(root)
+    config_path = layer_paths.path(root, 'design_config')
+    config = read_data(config_path)
     old = load_catalog(config['catalog_version'], catalog_dir)
     new = load_catalog(version, catalog_dir)
     old_ids = {x['id'] for x in old['items']}
@@ -142,17 +170,17 @@ def migrate_design(root, version, *, catalog_dir=CATALOG):
     report = {'from': old['version'], 'to': version, 'added': sorted(new_ids-old_ids),
               'removed': sorted(removed), 'retained': sorted(old_ids & new_ids)}
     write_data(design / 'migration.json', report)
-    write_data(design / 'design.yaml', config)
+    write_data(config_path, config)
     # No stale generated contract survives migration, even before the next L0.
-    _clear_manifests(design)
+    _clear_manifests(root)
     return report
 
 
-def _clear_manifests(design):
-    assets_index = design / 'assets.json'
+def _clear_manifests(root):
+    assets_index = layer_paths.path(root, 'assets_index')
     if assets_index.is_file() or assets_index.is_symlink():
         assets_index.unlink()
-    resolved = design / '.resolved'
+    resolved = layer_paths.path(root, 'resolved')
     if resolved.is_symlink():
         resolved.unlink()
         raise ValueError('.resolved symlink was unlinked; its target was not modified')
@@ -248,12 +276,13 @@ def _page_rule(rule):
         raise ValueError(f"page rule {rule['id']}: judgment needs a statement")
 
 
-def _rules(design):
+def _rules(root):
+    design = design_dir(root)
     rules = {}
     allowed = {'id', 'kind', 'targets', 'allowlist', 'minimum', 'paths', 'pattern'}
     kinds = {'contrast', 'target-size', 'focus', 'source-hash', 'palette', 'source-pattern'}
-    for path in sorted((design / 'checks').glob('*.yaml')):
-        inside(design, str(path.relative_to(design)))
+    for path in sorted(layer_paths.path(root, 'checks').glob('*.yaml')):
+        inside(design, os.path.relpath(path, design))
         data = read_data(path)
         if not isinstance(data, dict) or set(data) != {'rules'} or not isinstance(data['rules'], list):
             raise ValueError('checks must contain a declarative rules list')
@@ -297,7 +326,7 @@ def _asset_rule_evidence(root, rules, errors):
     measured = {}
     for ident, rule in rules.items():
         targets = rule.get('targets',rule.get('paths',[]))
-        if rule['kind'] != 'source-hash' or not all(t.startswith('design/assets/') for t in targets):
+        if rule['kind'] != 'source-hash' or not all(t.startswith(layer_paths.rel('assets') + '/') for t in targets):
             continue
         allowed = rule.get('allowlist')
         if not isinstance(allowed,list) or not allowed or any(not isinstance(v,str) or not re.fullmatch('[0-9a-f]{64}',v) for v in allowed):
@@ -310,7 +339,7 @@ def _asset_rule_evidence(root, rules, errors):
             if not matches:
                 errors.append(f'zero asset source hash targets: {ident}')
             for path in matches:
-                if not path.is_file() or not path.resolve().is_relative_to((Path(root)/'design/assets').resolve()):
+                if not path.is_file() or not path.resolve().is_relative_to(layer_paths.path(root, 'assets').resolve()):
                     raise ValueError('asset source hash target escapes assets')
                 digest = hashlib.sha256(path.read_bytes()).hexdigest()
                 files[path.relative_to(root).as_posix()] = digest
@@ -336,10 +365,10 @@ def _render_paths(config, errors):
 
 def _page_inventory(root, design, config, approvals, counts, errors, warnings, ship):
     """Every page is checked or excluded; an exclusion is the owner's decision, bound to its reason by hash."""
-    if not (design / 'validation.json').exists():
+    if not layer_paths.path(root, 'validation').exists():
         return {}
     from page_inventory import check_pages
-    validation = read_data(inside(design, 'validation.json'))
+    validation = read_data(inside_layer(root, 'validation'))
     pages = validation.get('pages') if isinstance(validation, dict) else None
     if pages is None:
         if ship:
@@ -360,12 +389,13 @@ def _page_inventory(root, design, config, approvals, counts, errors, warnings, s
     return keys
 
 
-def _approvals(design):
-    return verify_rows(read_data(design/'approvals.yaml'),design.parent)
+def _approvals(root):
+    return verify_rows(read_data(layer_paths.path(root, 'ledger')), root)
 
 
 def check_design(root, *, catalog_dir=CATALOG, ship=False):
-    design = Path(root) / 'design'
+    root = Path(root)
+    design = root / design_rel()
     result = {'evaluated_at':datetime.now(timezone.utc).isoformat(),
         'environment':{'python':sys.version.split()[0],
             'jcs_sha256':hashlib.sha256((SKILL/'scripts/jcs.cjs').read_bytes()).hexdigest()},
@@ -378,10 +408,11 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
     skip(report,'L1','L0 command does not execute source validation')
     skip(report,'L2','L0 command does not execute rendering')
     try:
+        layer_paths.guard(root)
         if not design.is_dir() or design.is_symlink():
-            raise ValueError('design/ missing or symlink; run own-design-author init at git toplevel')
-        _clear_manifests(design)
-        config = read_data(inside(design, 'design.yaml'))
+            raise ValueError(f"{design_rel()}/ missing or symlink; run own-design-author init at git toplevel")
+        _clear_manifests(root)
+        config = read_data(inside_layer(root, 'design_config'))
         if not isinstance(config, dict) or set(config) - {'schema_version','skill_version','catalog_version','preset','media','items','retired_items','checks','modules','spec','maintenance','channels','integration_gate'}:
             raise ValueError('unknown design configuration fields')
         if config.get('schema_version') != 1:
@@ -453,7 +484,7 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
             tokens = {}
             errors.append('zero token targets')
         counts['tokens'] = len(tokens)
-        approvals = _approvals(design)
+        approvals = _approvals(root)
         notice = read_data(inside(design, 'NOTICE'))
         sources = {}
         for row in notice.get('sources', []):
@@ -479,7 +510,7 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
             if origin not in ('owner','proposal') and not (isinstance(origin,str) and origin.startswith('reference:') and origin[10:] in sources):
                 errors.append(f'missing origin/NOTICE for token: {path}')
             token['state'] = 'proposed'
-        rules = _rules(design)
+        rules = _rules(root)
         _resolve_style_tokens(rules,tokens,errors)
         measured_rules = _asset_rule_evidence(root,rules,errors)
         # Page rules are measured by L2 on every rendered page and enforced per item after rendering.
@@ -575,7 +606,7 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
                 if way == 'afm':
                     statements = [rules[ref[5:]]['statement'] for ref in judged]
                     result['afm_candidates'].append(afm_candidate(ident,item_context,evidence_values,statements))
-        ledger=read_data(inside(design,'judgments.json')) if (design/'judgments.json').exists() else None
+        ledger=read_data(inside_layer(root,'judgments')) if layer_paths.path(root,'judgments').exists() else None
         judged=evaluate_judgments(result['judgment_candidates'],ledger,policy=judgment_policy)
         errors.extend(judged['errors'])
         warnings.extend(f"semantic advisory: {row['id']} score {row['score']} >= {row['theta']}; source review remains; no semantic guarantee" for row in judged['warnings'])
@@ -651,17 +682,17 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
             errors.append(f'ship gate: adopted items without a verification route {len(route_uncovered)}, '
                           f'unapproved design decisions {len(decision_unapproved)}')
         assets = []
-        for path in sorted((design/'assets').rglob('*')):
+        for path in sorted(layer_paths.path(root,'assets').rglob('*')):
             if path.is_file():
-                inside(design,str(path.relative_to(design)))
+                inside(design,os.path.relpath(path,design))
                 assets.append({'path':path.relative_to(design).as_posix(), 'sha256':hashlib.sha256(path.read_bytes()).hexdigest()})
         input_hashes = {p.relative_to(design).as_posix():hashlib.sha256(p.read_bytes()).hexdigest()
-            for p in sorted(design.rglob('*')) if p.is_file() and '.resolved' not in p.relative_to(design).parts
-            and p.name not in ('assets.json','migration.json')}
+            for p in sorted(design.rglob('*')) if p.is_file() and _leaf('resolved') not in p.relative_to(design).parts
+            and p.name not in (_leaf('assets_index'),'migration.json')}
         source_hash = value_hash(input_hashes)
-        asset_exports = _asset_exports(root,design)
+        asset_exports = _asset_exports(root)
         from tailwind_contract import build_artifacts
-        tailwind_templates = read_data(inside(design,'tailwind.json')) if (design/'tailwind.json').exists() else None
+        tailwind_templates = read_data(inside_layer(root,'tailwind')) if layer_paths.path(root,'tailwind').exists() else None
         artifacts = build_artifacts(tokens,tailwind_templates)
         if hashlib.sha256(JUDGMENT_POLICY.read_bytes()).hexdigest()!=judgment_policy_sha256:
             raise ValueError('judgment policy changed during validation')
@@ -700,20 +731,24 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
         stage(report,'L0',result['exit_code'],counts['items'])
         for manifest in result['manifest'].values():manifest['report']=copy.deepcopy(report)
         if not errors:
-            write_data(design/'assets.json', {'schema_version':1,'assets':assets, 'asset_exports':asset_exports})
+            write_data(layer_paths.path(root,'assets_index'), {'schema_version':1,'assets':assets, 'asset_exports':asset_exports})
             for name, artifact in artifacts.items():
-                generated = design/'.resolved'/artifact.get('file',name)
+                generated = layer_paths.path(root,'resolved',artifact.get('file',name))
                 generated.parent.mkdir(parents=True,exist_ok=True)
                 generated.write_text(artifact['content'])
             for medium, manifest in result['manifest'].items():
-                write_data(design/'.resolved'/f'{medium}.json',manifest)
+                write_data(layer_paths.path(root,'resolved',f'{medium}.json'),manifest)
                 css = ':root {\n' + ''.join(f'  {key}: {value};\n' for key,value in manifest['css_variables'].items()) + '}\n'
-                (design/'.resolved'/f'{medium}.css').write_text(css)
+                layer_paths.path(root,'resolved',f'{medium}.css').write_text(css)
+    except layer_paths.LayerLayoutError as exc:
+        # A repository this version does not read: report and touch nothing (no cleanup, no generated files).
+        errors.append(str(exc))
+        result['exit_code'] = 2
     except (ClassificationError, ValueError, OSError, KeyError, TypeError, AttributeError) as exc:
         errors.append(str(exc).replace(str(Path(root).resolve()), '<repo>'))
         if design.is_dir() and not design.is_symlink():
             try:
-                _clear_manifests(design)
+                _clear_manifests(root)
             except (OSError, ValueError):
                 errors.append('generated output cleanup failed; do not consume generated files')
         result['exit_code'] = 2
@@ -728,16 +763,16 @@ def _deployment_path(root, target):
     path = Path(root)/target
     if any(p.is_symlink() for p in (path, *path.parents) if p.is_relative_to(Path(root))):
         raise ValueError('symlinked deployment target is unsupported')
-    if not path.resolve().is_relative_to(Path(root).resolve()) or path.resolve().is_relative_to((Path(root)/'design').resolve()) or any(p.startswith('.') for p in Path(target).parts):
+    if not path.resolve().is_relative_to(Path(root).resolve()) or path.resolve().is_relative_to(layer_paths.path(root, 'layers').resolve()) or any(p.startswith('.') for p in Path(target).parts):
         raise ValueError('deployment target escapes artifact directories')
     return path
 
 
-def _asset_exports(root, design):
-    path = design/'asset-exports.json'
-    if not path.exists():
+def _asset_exports(root):
+    design = design_dir(root)
+    if not layer_paths.path(root, 'asset_exports').exists():
         return []
-    data = read_data(inside(design,'asset-exports.json'))
+    data = read_data(inside_layer(root, 'asset_exports'))
     if not isinstance(data,dict) or set(data) != {'schema_version','exports'} or data['schema_version'] != 1 or not isinstance(data['exports'],list):
         raise ValueError('invalid asset export schema')
     rows, seen = [], set()
@@ -758,11 +793,13 @@ def _asset_exports(root, design):
 
 
 def sync_artifacts(root, manifest):
+    root = Path(root)
+    layer_paths.guard(root)
     writes = {}
     for target, artifact in manifest.get('artifacts',{}).items():
         writes[_deployment_path(root,target)] = artifact['content'].encode()
     for row in manifest.get('asset_exports',[]):
-        content = inside(Path(root)/'design',row['source']).read_bytes()
+        content = inside(design_dir(root),row['source']).read_bytes()
         for target in row['targets']:
             output = _deployment_path(root,target)
             if output in writes:

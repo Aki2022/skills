@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import approval_migration  # noqa: E402
 import ia_common  # noqa: E402
+import layer_paths  # noqa: E402  (on sys.path through ia_common)
 import positioning as pos  # noqa: E402
 import positioning_model as pm  # noqa: E402
 
@@ -93,7 +94,7 @@ def cmd_migrate_approvals(args):
     if m is None or report.exit_code == 2:
         _print(report.to_dict())
         return 2
-    path = Path(args.root) / approval_migration.LEDGER
+    path = layer_paths.path(Path(args.root), 'ledger')
     if path.is_symlink() or not path.is_file():
         _print({'exit_code': 2, 'written': False, 'error': f'{approval_migration.LEDGER} が無いか symlink'})
         return 2
@@ -193,6 +194,7 @@ def main(argv=None):
     rq.set_defaults(fn=cmd_request)
     args = ap.parse_args(argv)
     try:
+        layer_paths.guard(args.root)  # every subcommand reads the layers: a repository that moved stops before any of them
         return args.fn(args)
     except Exception as exc:  # noqa: BLE001 - any crash must be a failure (2), never the warning code (1)
         print(json.dumps({'exit_code': 2, 'error': f'{type(exc).__name__}: {exc}'}, ensure_ascii=False))

@@ -3,6 +3,7 @@ import hashlib
 import json
 import math
 from pathlib import Path
+import layer_paths
 from tailwind_contract import build_artifacts
 
 
@@ -11,9 +12,8 @@ def load_manifest(path):
     if original.is_symlink() or original.parent.is_symlink() or original.parent.parent.is_symlink():
         raise ValueError("symlinked manifest directory is unsupported")
     path = original.resolve()
-    if path.parent.name != '.resolved' or path.parent.parent.name != 'design':
-        raise ValueError('manifest must be design/.resolved/<media>.json')
-    design = path.parent.parent
+    repo = layer_paths.repo_from_resolved(path)  # guard: a moved repository stops here, a misplaced manifest is rejected
+    design = layer_paths.path(repo, 'design_dir')
     data = json.loads(path.read_text())
     if data.get('schema_version') != 1 or data.get('media') != 'web':
         raise ValueError('unsupported manifest schema/media')
@@ -26,7 +26,7 @@ def load_manifest(path):
         raise ValueError('judgment policy changed; rerun L0')
     from design_modules import validate_module_state, check_ia_dictionary_current
     validate_module_state(data.get('modules',{}))
-    check_ia_dictionary_current(data.get('modules',{}),design.parent)
+    check_ia_dictionary_current(data.get('modules',{}),repo)
     expected = data['input_hashes']
     actual = {}
     for source in sorted(design.rglob('*')):
@@ -69,9 +69,10 @@ def check_tailwind(path, manifest, repo=None):
 
 def check_asset_exports(repo, manifest):
     root=Path(repo).resolve()
+    layer_paths.guard(root)
     for row in manifest.get('asset_exports',[]):
-        source=root/'design'/row['source']
-        if not source.resolve().is_relative_to(root/'design/assets') or hashlib.sha256(source.read_bytes()).hexdigest() != row['sha256']:
+        source=layer_paths.path(root,'design_dir',row['source'])
+        if not source.resolve().is_relative_to(layer_paths.path(root,'assets')) or hashlib.sha256(source.read_bytes()).hexdigest() != row['sha256']:
             raise ValueError('asset source differs from manifest')
         for target in row['targets']:
             path=root/target

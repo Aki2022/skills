@@ -3,6 +3,7 @@ import {readFileSync, readdirSync, realpathSync, statSync, lstatSync} from 'node
 import {dirname, basename, join, relative, resolve, sep} from 'node:path';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
+import {layerPath, repoFromResolved} from './layer_paths.mjs';
 
 // Mirrors design_modules._digest: the IA checker is its own skill, the positioning layer it imports, and the docs
 // dictionary reader. Keys are `<skill>/<path>`, sorted by UTF-8 bytes.
@@ -76,10 +77,10 @@ function iaDigest(file, full) {
 }
 
 export function loadManifest(path) {
+  repoFromResolved(path); // from the path text, so a moved repository stops with the layout message even when the file is missing
   path = realpathSync(path);
-  const design = dirname(dirname(path));
-  if (basename(dirname(path)) !== '.resolved' || basename(design) !== 'design')
-    throw new Error('manifest must be design/.resolved/<media>.json');
+  const repo = repoFromResolved(path);
+  const design = layerPath(repo, 'design_dir');
   const data = JSON.parse(readFileSync(path, 'utf8'));
   if (data.schema_version !== 1 || data.media !== 'web' || !Object.keys(data.tokens || {}).length)
     throw new Error('unsupported or empty manifest');
@@ -93,7 +94,7 @@ export function loadManifest(path) {
     const file = fileURLToPath(new URL('../../own-infoarch-author/scripts/ia_module.py', import.meta.url));
     if (realpathSync(file) !== file || iaDigest(file, modules.ia.resolved?.governance?.contract === 'ia-git-history-v4') !== modules.ia.implementation_sha256)
       throw new Error('IA resolver changed; rerun L0');
-    checkIaDictionaryCurrent(modules, dirname(design));
+    checkIaDictionaryCurrent(modules, repo);
   }
   const actual = {};
   function walk(dir) {

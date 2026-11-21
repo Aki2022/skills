@@ -3,9 +3,11 @@ from datetime import date, timedelta
 import fcntl
 import hashlib
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
 import subprocess
+
+import layer_paths
 
 
 def _git(root, *args):
@@ -60,43 +62,53 @@ def _dirty_paths(root):
 
 
 def _relevant(paths):
-    return sorted({p for p in paths if not p.startswith('design/.resolved/') and p != 'design/assets.json'})
+    generated = layer_paths.rel('resolved') + '/'
+    return sorted({p for p in paths if not p.startswith(generated) and p != layer_paths.rel('assets_index')})
+
+
+def _leaf(key):
+    return PurePosixPath(layer_paths.rel(key)).name
 
 
 def _inputs(design):
     values = {}
     for path in sorted(design.rglob('*')):
         relative = path.relative_to(design)
-        if '.resolved' in relative.parts or path.name in ('assets.json', 'migration.json'):
+        if _leaf('resolved') in relative.parts or path.name in (_leaf('assets_index'), 'migration.json'):
             continue
         if path.is_symlink() or not path.resolve().is_relative_to(design):
-            raise ValueError('maintenance input is a symlink or escapes design/')
+            raise ValueError(f"maintenance input is a symlink or escapes {PurePosixPath(layer_paths.rel('design_config')).parent}/")
         if path.is_file():
             values[relative.as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
     return values
 
 
 def maintain_design(root, *, catalog_dir=None, today=None, force=False):
-    from design_author import CATALOG, check_design, git_root, load_catalog, read_data, write_data
+    from design_author import CATALOG, check_design, design_dir, design_rel, git_root, load_catalog, read_data, write_data
     root = git_root(root).resolve()
-    design = root / 'design'
     result = {'exit_code': 0, 'status': 'skipped', 'triggers': [], 'changed_paths': [],
               'due_items': [], 'invalidated_approvals': [], 'approval_candidates': [],
               'judgment_candidates': [], 'errors': []}
+    try:
+        design = design_dir(root)  # the layout guard: a repository this version does not read is a failure, never a skip
+    except layer_paths.LayerLayoutError as error:
+        return {**result, 'exit_code': 2, 'status': 'failed', 'errors': [str(error)]}
     if not design.exists():
-        return {**result, 'reason': 'design/ absent'}
-    config_path = design / 'design.yaml'
+        return {**result, 'reason': f'{design_rel()}/ absent'}
+    config_path = layer_paths.path(root, 'design_config')
+    infoarch = layer_paths.path(root, 'infoarch')
     if (not design.is_symlink() and design.is_dir() and not config_path.exists() and not config_path.is_symlink()
-            and (design / 'info_arch').is_dir()
-            and {p.name for p in design.iterdir()} <= {'info_arch', 'judgments.json'}):
-        # IA-only: no design system to check here. Anything else without design.yaml still fails below.
-        return {**result, 'reason': 'design/design.yaml absent; IA-only design/ (infoarch-author maintain checks design/info_arch/)'}
+            and infoarch.is_dir()
+            and {p.name for p in design.iterdir()} <= {infoarch.name, _leaf('judgments')}):
+        # IA-only: no design system to check here. Anything else without the design configuration still fails below.
+        return {**result, 'reason': f"{layer_paths.rel('design_config')} absent; IA-only {design_rel()}/ "
+                                    f"(infoarch-author maintain checks {layer_paths.rel('infoarch')}/)"}
     catalog_dir = Path(catalog_dir or CATALOG)
     today = today or date.today()
     try:
         if design.is_symlink() or not design.is_dir():
-            raise ValueError('design/ must be a real directory')
-        config = read_data(design / 'design.yaml')
+            raise ValueError(f'{design_rel()}/ must be a real directory')
+        config = read_data(config_path)
         if not isinstance(config, dict):
             raise ValueError('design configuration must be an object')
         catalog = load_catalog(config.get('catalog_version'), catalog_dir)
@@ -104,7 +116,7 @@ def maintain_design(root, *, catalog_dir=None, today=None, force=False):
                                                set(config.get('retired_items', {})))
         head = _git(root, 'rev-parse', '--verify', 'HEAD^{commit}').decode().strip()
         versions = _versions(config, catalog_dir)
-        resolved = design / '.resolved'
+        resolved = layer_paths.path(root, 'resolved')
         if resolved.is_symlink():
             raise ValueError('maintenance output directory is a symlink')
         resolved.mkdir(exist_ok=True)
@@ -159,13 +171,14 @@ def maintain_design(root, *, catalog_dir=None, today=None, force=False):
                 result['triggers'].append('forced')
             if not result['triggers']:
                 return {**result, 'reason': 'no changes, due reviews, or version changes'}
-            before_approvals = (design / 'approvals.yaml').read_bytes()
+            ledger_path = layer_paths.path(root, 'ledger')
+            before_approvals = ledger_path.read_bytes()
             before_inputs = _inputs(design)
             checked = check_design(root, catalog_dir=catalog_dir)
             result.update(status='checked', exit_code=checked['exit_code'], errors=checked['errors'],
                           warnings=checked['warnings'], counts=checked['counts'], report=checked['report'])
             targets = checked['approval_targets']
-            approvals = read_data(design / 'approvals.yaml')
+            approvals = read_data(ledger_path)
             if isinstance(approvals, list):
                 result['invalidated_approvals'] = sorted({row['key'] for row in approvals
                     if isinstance(row, dict) and isinstance(row.get('key'), str)
@@ -175,7 +188,7 @@ def maintain_design(root, *, catalog_dir=None, today=None, force=False):
                 result['approval_candidates'] = sorted(key for key in checked['approval_required']
                     if approved.get(key) != targets.get(key))
             result['judgment_candidates'] = [row['judgment_hash'] for row in checked['judgment_candidates']]
-            if ((design / 'approvals.yaml').read_bytes() != before_approvals or
+            if (ledger_path.read_bytes() != before_approvals or
                     _inputs(design) != before_inputs or
                     _git(root, 'rev-parse', 'HEAD').decode().strip() != head or
                     _versions(config, catalog_dir) != versions):
@@ -192,24 +205,29 @@ def maintain_all(root, catalog_dir=None, today=None, force=False):
     """own-session-close Step 2.5 in one entry (ADR-20261115-design-ia-two-skills-shared-base, biz_ops).
 
     The design stage may return early when nothing changed; the IA stage still runs every time, because evidence
-    and facts fall due by date alone. Without design/info_arch/ the IA stage is a one-line skip.
+    and facts fall due by date alone. Without the infoarch layer the IA stage is a one-line skip.
     """
     import subprocess
     import sys
     result = maintain_design(root, catalog_dir=catalog_dir, today=today, force=force)
     base = Path(root).resolve()
-    if not (base / 'design/info_arch').is_dir():
-        ia = {'exit_code': 0, 'status': 'skipped', 'reason': 'design/info_arch/ absent'}
+    try:
+        has_infoarch = layer_paths.path(base, 'infoarch').is_dir()
+    except layer_paths.LayerLayoutError as error:  # a repository this version does not read is a failure, never a skip
+        ia = {'exit_code': 2, 'status': 'failed', 'errors': [str(error)]}
     else:
-        cli = Path(__file__).resolve().parents[2] / 'own-infoarch-author/scripts/infoarch_author.py'
-        args = [sys.executable, str(cli), 'maintain', '--root', str(base)]
-        if today:
-            args += ['--date', today.isoformat()]
-        run = subprocess.run(args, capture_output=True, text=True, timeout=600)
-        try:
-            ia = json.loads(run.stdout)
-            if not isinstance(ia, dict) or ia.get('exit_code') != run.returncode:
-                raise ValueError
-        except ValueError:
-            ia = {'exit_code': 2, 'status': 'failed', 'errors': ['infoarch-author maintain gave no valid report']}
+        if not has_infoarch:
+            ia = {'exit_code': 0, 'status': 'skipped', 'reason': f"{layer_paths.rel('infoarch')}/ absent"}
+        else:
+            cli = Path(__file__).resolve().parents[2] / 'own-infoarch-author/scripts/infoarch_author.py'
+            args = [sys.executable, str(cli), 'maintain', '--root', str(base)]
+            if today:
+                args += ['--date', today.isoformat()]
+            run = subprocess.run(args, capture_output=True, text=True, timeout=600)
+            try:
+                ia = json.loads(run.stdout)
+                if not isinstance(ia, dict) or ia.get('exit_code') != run.returncode:
+                    raise ValueError
+            except ValueError:
+                ia = {'exit_code': 2, 'status': 'failed', 'errors': ['infoarch-author maintain gave no valid report']}
     return {**result, 'ia': ia, 'exit_code': max(result['exit_code'], ia['exit_code'])}

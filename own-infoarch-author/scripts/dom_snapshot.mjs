@@ -12,11 +12,11 @@
 // pinned in the project's design/render-environment.json. It is never installed automatically; when it cannot
 // be resolved this exits 2.
 import { pathToFileURL } from "node:url";
-import { join } from "node:path";
 import { loadPlaywright, pinnedVersion } from "../../own-design-author/scripts/playwright_runtime.mjs";
+import { layerPath } from "../../own-design-author/scripts/layer_paths.mjs";
 
 const projectRoot = process.env.INFOARCH_PLAYWRIGHT_DIR || process.cwd();
-const { playwright } = loadPlaywright({ version: pinnedVersion(join(projectRoot, "design", "render-environment.json")) });
+const { playwright } = loadPlaywright({ version: pinnedVersion(layerPath(projectRoot, "render_environment")) });
 
 const [file, viewportsJson] = process.argv.slice(2);
 if (!file || !viewportsJson) {

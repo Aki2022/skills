@@ -17,12 +17,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import common  # noqa: F401  (puts the sibling skills' scripts on sys.path)
+import layer_paths
 import blueprint
 import dictionary
 import outline as ol
 import positioning as pos
 import positioning_model as pm
-from common import INFO_ARCH_DIR, Report, YamlError, load_ref, load_yaml, validator_for
+from common import Report, YamlError, load_ref, load_yaml, validator_for
 from positioning_model import (  # noqa: F401  (the positioning layer's, re-exported for the rest of this skill)
     APPROVAL_PREFIX, BLOCKS, ID_RE, POSITIONING, PREFIX_BLOCK, SSOT_PATH, check_ssot, element, positioning_path,
     review_markdown, ssot_refs)
@@ -86,7 +87,7 @@ def _dictionary_view(root, legacy, report):
 
 def load(root, report):
     root = Path(root)
-    base = root / INFO_ARCH_DIR
+    base = layer_paths.path(root, 'infoarch')  # a repository that moved stops here, never "0 outlines"
     m = Model(root)
     data, legacy = pm.load_ssot(root, report)
     if data is None:
@@ -290,7 +291,7 @@ HTML_SUFFIXES = ('.html', '.htm')
 
 def check_pages(m, report):
     """Shipped HTML outputs against design/validation.json pages: the two declarations are kept, but must agree."""
-    path = m.root / 'design/validation.json'
+    path = layer_paths.path(m.root, 'validation')
     if not path.is_file():
         return
     try:
@@ -312,7 +313,7 @@ def check_pages(m, report):
                            f'{oid}: {out} は design の棚卸しで対象外だが、IA の検査（check・dom・判定）は続ける', rel)
             elif out not in covered:
                 report.add('warn', 'IA_PAGES_OUTPUT_NOT_INVENTORIED',
-                           f'{oid}: 出荷される {out} が design/validation.json の pages（covered・excluded）に無い。design の検査が見ていない', rel)
+                           f'{oid}: 出荷される {out} が {layer_paths.rel("validation")} の pages（covered・excluded）に無い。design の検査が見ていない', rel)
 
 
 # ---- expiry ------------------------------------------------------------------------------
@@ -363,9 +364,9 @@ def check(root, date):
     _, all_paths = pos.check_positioning(m, report, approved, referenced_paths(m), str(SSOT_PATH))
     product_ui = bool(m.blueprint and m.blueprint.present)  # a product UI is checked by its blueprint, not by outlines
     if not m.channels and (m.outlines or not product_ui):
-        report.add('fail', 'IA_NO_CHANNELS', 'channels/*.yaml が 0 件（対象 0 件を合格にしない）', INFO_ARCH_DIR / 'channels')
+        report.add('fail', 'IA_NO_CHANNELS', 'channels/*.yaml が 0 件（対象 0 件を合格にしない）', layer_paths.rel('infoarch', 'channels'))
     if not m.outlines and not product_ui:
-        report.add('fail', 'IA_NO_OUTLINES', 'outlines/*.yaml が 0 件（対象 0 件を合格にしない）', INFO_ARCH_DIR / 'outlines')
+        report.add('fail', 'IA_NO_OUTLINES', 'outlines/*.yaml が 0 件（対象 0 件を合格にしない）', layer_paths.rel('infoarch', 'outlines'))
     for oid, (rel, o) in sorted(m.outlines.items()):
         ch = m.channels.get(o['channel'])
         shipped = bool(ch and ch[1]['ship'])

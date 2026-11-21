@@ -3,7 +3,8 @@ import importlib.util
 import hashlib
 import re
 from reporting import stage
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+import layer_paths
 
 
 IA_GIT_CONTRACT = 'ia-git-history-v4'
@@ -15,7 +16,7 @@ IA_VERSION = '0.4.0'
 # What the resolved result trusts is bound together; a change to any of them invalidates it (rerun L0).
 IA_TRUSTED_SKILLS = ('own-positioning-author',)
 IA_TRUSTED_FILES = ('own-doc-update/scripts/dictionary.py',)
-# What the checker reads outside design/info_arch/: the docs dictionary, one `docs/dictionary/<domain>.json` per domain
+# What the checker reads outside the infoarch layer (layer_paths 'infoarch'): the docs dictionary, one `docs/dictionary/<domain>.json` per domain
 # (the same folder and glob as ia_module.DICTIONARY_DIR; resolved_contract.mjs mirrors it).
 IA_DICTIONARY_DIR = 'docs/dictionary'
 
@@ -26,7 +27,8 @@ def _ia_input_key_ok(key):
     parts = Path(key).parts
     if '..' in parts or key != '/'.join(parts):
         return False
-    if parts[:2] == ('design', 'info_arch') and len(parts) > 2:
+    layer = PurePosixPath(layer_paths.rel('infoarch')).parts
+    if parts[:len(layer)] == layer and len(parts) > len(layer):
         return True
     return len(parts) == 3 and parts[:2] == tuple(IA_DICTIONARY_DIR.split('/')) and parts[2].endswith('.json')
 
@@ -128,7 +130,7 @@ def resolve_ia(root,config,approvals,profiles,report):
     declared=config.get('modules',{})
     if not isinstance(declared,dict) or set(declared)-{'ia'}:
         raise ValueError('unknown design module declaration')
-    present=(root/'design/info_arch').exists()
+    present=layer_paths.path(root,'infoarch').exists()
     if not declared and not present:
         report['skipped'].append({'id':'ia','reason':'IA module not declared and no IA inputs'})
         return None
@@ -143,10 +145,12 @@ def resolve_ia(root,config,approvals,profiles,report):
     spec=importlib.util.spec_from_file_location('design_ia_module',implementation)
     module=importlib.util.module_from_spec(spec)
     try:spec.loader.exec_module(module)
+    except layer_paths.LayerLayoutError:raise
     except Exception as exc:raise ValueError('IA module could not load') from exc
     if getattr(module,'VERSION',None)!=declared['ia'] or not callable(getattr(module,'resolve',None)):
         raise ValueError('IA module version/interface mismatch')
     try:result=module.resolve(root=root,approvals=approvals,profiles=profiles)
+    except layer_paths.LayerLayoutError:raise
     except Exception as exc:raise ValueError('IA module resolution failed') from exc
     if not isinstance(result,dict):
         raise ValueError('invalid IA resolution contract')

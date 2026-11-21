@@ -16,7 +16,11 @@ import dom  # noqa: E402
 import evaluate  # noqa: E402
 import ia_ship  # noqa: E402
 import judge  # noqa: E402
+import layer_paths  # noqa: E402  (on sys.path through check -> common)
 import skeleton  # noqa: E402
+
+# These two print one JSON line whatever happens (their own contract), so they guard inside their own try block.
+GUARD_ITSELF = ('ship', 'maintain')
 
 
 def _print(obj):
@@ -43,7 +47,7 @@ def cmd_blueprint(args):
                                                                             'IA_APPROVALS', 'IA_SSOT', 'IA_DICTIONARY'))]
         if bp is None or not bp.present or not bp.screens:
             if not [f for f in report.findings if f.code in ('IA_BLUEPRINT_NO_SCREENS', 'IA_BLUEPRINT_PRODUCT_MISSING')]:
-                report.add('fail', 'IA_BLUEPRINT_NO_SCREENS', 'blueprint/screens/*.yaml が 0 件（対象 0 件を合格にしない）', 'design/info_arch/blueprint/screens')
+                report.add('fail', 'IA_BLUEPRINT_NO_SCREENS', 'blueprint/screens/*.yaml が 0 件（対象 0 件を合格にしない）', layer_paths.rel('infoarch', 'blueprint', 'screens'))
         report.targets = {'screens': len(bp.screens) if bp else 0, 'items': len(blueprint.items(bp)) if bp else 0}
     _print(report.to_dict())
     return report.exit_code
@@ -149,6 +153,7 @@ def cmd_ship(args):
     date = args.date or dt.date.today().isoformat()
     dt.date.fromisoformat(date)
     try:
+        layer_paths.guard(args.root)
         if args.doctor:
             result = ia_ship.doctor(args.root)
         elif args.pre_push:
@@ -164,10 +169,11 @@ def cmd_ship(args):
 
 
 def cmd_maintain(args):
-    """own-session-close Step 2.5: one JSON line; skips when design/info_arch/ is absent."""
+    """own-session-close Step 2.5: one JSON line; skips when the repository has no infoarch tree, fails when it moved to a layout this version does not read."""
     date = args.date or dt.date.today().isoformat()
     dt.date.fromisoformat(date)
     try:
+        layer_paths.guard(args.root)
         result = ia_ship.maintain(args.root, date, args.within_days)
     except (ValueError, OSError, KeyError, TypeError, subprocess.SubprocessError) as exc:
         result = {'exit_code': 2, 'status': 'failed', 'errors': [str(exc) or type(exc).__name__]}
@@ -392,7 +398,7 @@ def main(argv=None):
     ar.add_argument('--id', action='append', help='judgment id of a current review (repeatable)')
     ar.add_argument('--owner-words', help="the owner's own words accepting them (quoted exactly)")
     ar.add_argument('--approved-on', help='the ISO date the owner said them')
-    ar.add_argument('--write', action='store_true', help='write design/info_arch/accepted_reviews.yaml (without it: preview)')
+    ar.add_argument('--write', action='store_true', help=f'write {layer_paths.rel("accepted_reviews")} (without it: preview)')
     ar.set_defaults(fn=cmd_accept_reviews)
     e = sub.add_parser('evaluate', help='evaluate generated creatives: check, then dom, then judge, one report and one exit code')
     e.add_argument('--root', default='.')
@@ -401,7 +407,7 @@ def main(argv=None):
     e.add_argument('--acquire', action='store_true', help='also fetch missing Jev judgments (preview only unless --execute)')
     e.add_argument('--answers-dir', help='directory that keeps judgment-answers.json between runs (outside the repo)')
     e.add_argument('--limit', type=int, help='most judgments to request in this run')
-    e.add_argument('--execute', action='store_true', help='with --acquire: call Jev (metered) and record design/judgments.json')
+    e.add_argument('--execute', action='store_true', help=f'with --acquire: call Jev (metered) and record {layer_paths.rel("judgments")}')
     e.set_defaults(fn=cmd_evaluate)
     s = sub.add_parser('ship', help='ship gate on the committed SHA: check, dom of shipped HTML, judge; --channel runs ship_command only when green')
     s.add_argument('--root', default='.')
@@ -457,11 +463,15 @@ def main(argv=None):
     ak = sub.add_parser('answer-key', help='answer key for the meaning judgment: pairs, candidates and the labeling page, or --measure')
     ak.add_argument('--root', default='.')
     ak.add_argument('--out', default='answer-key', help='directory to write into (files are never overwritten)')
-    ak.add_argument('--measure', help="the owner's labels.json: measure agreement against design/judgments.json")
+    ak.add_argument('--measure', help=f'the owner\'s labels.json: measure agreement against {layer_paths.rel("judgments")}')
     ak.add_argument('--key', help='answer-key.json written with the page (required with --measure)')
     ak.set_defaults(fn=cmd_answer_key)
     args = ap.parse_args(argv)
     try:
+        if args.cmd not in GUARD_ITSELF:
+            for name in ('root', 'root_b'):  # every other subcommand reads the layers of the checkout(s) it is given
+                if getattr(args, name, None):
+                    layer_paths.guard(getattr(args, name))
         return args.fn(args)
     except Exception as exc:  # noqa: BLE001 - any crash must be a failure (2), never the warning code (1)
         print(json.dumps({'exit_code': 2, 'error': f'{type(exc).__name__}: {exc}'}, ensure_ascii=False))

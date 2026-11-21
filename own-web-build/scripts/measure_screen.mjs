@@ -3,11 +3,16 @@
 // Prints a JSON array, one snapshot per viewport. Playwright is found by own-design-author's playwright_runtime.mjs (never
 // installed automatically; when it cannot be resolved this exits 2), the same way own-infoarch-author's dom_snapshot.mjs does.
 import { pathToFileURL } from "node:url";
-import { join } from "node:path";
 import { loadPlaywright, pinnedVersion } from "../../own-design-author/scripts/playwright_runtime.mjs";
+import { layerPath } from "../../own-design-author/scripts/layer_paths.mjs";
 
 const projectRoot = process.env.SCREEN_PLAYWRIGHT_DIR || process.cwd();
-const { playwright } = loadPlaywright({ version: pinnedVersion(join(projectRoot, "design", "render-environment.json")) });
+// layerPath guards first: a repository that moved to a layout this version does not read stops here (exit 2, before any
+// browser is looked for), instead of "no render environment pinned".
+let renderEnvironment;
+try { renderEnvironment = layerPath(projectRoot, "render_environment"); }
+catch (error) { console.error(error.message); process.exit(2); }
+const { playwright } = loadPlaywright({ version: pinnedVersion(renderEnvironment) });
 const [file, viewportsJson] = process.argv.slice(2);
 if (!file || !viewportsJson) {
   console.error("使い方: node measure_screen.mjs <html file> <viewports JSON>");

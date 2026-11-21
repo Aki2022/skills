@@ -22,6 +22,9 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 
+import ia_common  # noqa: F401  (first: it puts own-design-author/scripts on sys.path)
+import layer_paths
+
 ATOM_BLOCKS = {'segments': 'seg', 'jobs': 'job', 'pains': 'pan', 'gains': 'gan', 'alternatives': 'alt',
                'categories': 'cat', 'strengths': 'str', 'values': 'val'}
 EVIDENCE_BLOCK = 'proofs'  # a proof with `segment` is positioning evidence; one without supports outline messages
@@ -344,7 +347,7 @@ def derive(m, approved, all_paths=None):
 
 # ---- checks ----------------------------------------------------------------------------------------------------
 
-SSOT_REL = 'design/info_arch/info_arch.yaml'
+SSOT_REL = layer_paths.rel('positioning_file')  # repository-relative name; reading goes through layer_paths.path
 
 
 def check_shape(m, report, path=SSOT_REL):
@@ -442,8 +445,8 @@ def read_approvals(root, report, load_yaml, yaml_error):
     Validated by own-design-author's verify_rows (fields, key namespace, hash, approver, ISO date, no duplicate key)
     plus a symlink refusal. Any violation fails closed: IA_APPROVALS_INVALID and nothing counts as approved.
     """
-    rel = 'design/approvals.yaml'
-    path = root / rel
+    rel = layer_paths.rel('ledger')
+    path = layer_paths.path(root, 'ledger')  # a repository that moved stops here, never "no approvals"
     if path.is_symlink():
         report.add('fail', 'IA_APPROVALS_INVALID', f'{rel} が symlink（承認台帳は repo の実ファイルだけを読む）', rel)
         return {}

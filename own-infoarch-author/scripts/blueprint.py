@@ -19,13 +19,15 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from common import INFO_ARCH_DIR, YamlError, load_yaml, validator_for  # first: it puts the sibling skills on sys.path
+from common import YamlError, load_yaml, validator_for  # first: it puts the sibling skills on sys.path
 
+import layer_paths  # noqa: E402
 import positioning as pos  # noqa: E402
 
-BLUEPRINT_DIR = INFO_ARCH_DIR / 'blueprint'
-PRODUCT_PATH = BLUEPRINT_DIR / 'product.yaml'
-SCREENS_DIR = BLUEPRINT_DIR / 'screens'
+# Repository-relative names, derived from the layer rule; every read goes through layer_paths.path (the guard).
+BLUEPRINT_DIR = Path(layer_paths.rel('infoarch', 'blueprint'))
+PRODUCT_PATH = Path(layer_paths.rel('infoarch', 'blueprint', 'product.yaml'))
+SCREENS_DIR = Path(layer_paths.rel('infoarch', 'blueprint', 'screens'))
 ITEM_BLOCKS = {'stories': 'sto', 'principles': 'pri', 'constraints': 'con', 'objects': 'ojc', 'entries': 'ntr'}
 ITEM_PREFIX = pos.ITEM_PREFIX  # ia:item:<item id>
 SHAPES = ('value', 'list', 'comparison', 'trend', 'distribution', 'status', 'form', 'text')
@@ -55,11 +57,11 @@ def load(root, report):
     product UI). A file that does not parse or fit its schema is a failure."""
     root = Path(root)
     bp = Blueprint(root)
-    base = root / BLUEPRINT_DIR
+    base = layer_paths.path(root, 'infoarch', 'blueprint')
     if not base.is_dir():
         return bp
     bp.present = True
-    product_file = root / PRODUCT_PATH
+    product_file = layer_paths.path(root, 'infoarch', 'blueprint', 'product.yaml')
     if product_file.is_file():
         try:
             data = load_yaml(product_file)
@@ -72,7 +74,7 @@ def load(root, report):
                 report.add('fail', 'IA_SCHEMA', e.message, PRODUCT_PATH, pointer='/' + '/'.join(map(str, e.absolute_path)))
             if not errs:
                 bp.product = data
-    screens_dir = root / SCREENS_DIR
+    screens_dir = layer_paths.path(root, 'infoarch', 'blueprint', 'screens')
     validator = validator_for('blueprint-screen.v1.schema.json')
     for f in sorted(screens_dir.iterdir()) if screens_dir.is_dir() else []:
         rel = f.relative_to(root)
@@ -265,7 +267,7 @@ def check(bp, report, values, approved_values, approved):
     if not bp.present:
         return
     if bp.product is None:
-        if not (bp.root / PRODUCT_PATH).is_file():
+        if not layer_paths.path(bp.root, 'infoarch', 'blueprint', 'product.yaml').is_file():
             report.add('fail', 'IA_BLUEPRINT_PRODUCT_MISSING', f'{PRODUCT_PATH} が無い（画面は、承認された項目を引く）', PRODUCT_PATH)
         return  # an unreadable product.yaml was reported by load
     check_product(bp, report, values, approved_values)

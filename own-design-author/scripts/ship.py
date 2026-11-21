@@ -17,6 +17,7 @@ import time
 from urllib.error import HTTPError
 from urllib.request import urlopen
 
+import layer_paths
 from design_author import git_root, read_data, CATALOG
 from ship_contract import validate_channels, validate_integration_gate, artifact_hashes, validate_web_result, safe_path
 from web_check import validation_endpoint
@@ -134,9 +135,9 @@ def gate(root,name,channel,catalogs,*,deploy=False,source_commit=None,predicted=
     if l0.get('counts',{}).get('items',0)<=0:raise ValueError('zero L0 ship targets')
     inputs=l0['manifest']['web']['input_hashes']
     tracked=set(git(root,'ls-files').splitlines())
-    if any('design/'+name not in tracked for name in inputs):
+    if any(layer_paths.rel('design_dir',name) not in tracked for name in inputs):
         raise ValueError('all design inputs must be committed, including ignored inputs')
-    validation=read_data(safe_path(root,'design/validation.json'))
+    validation=read_data(safe_path(root,layer_paths.rel('validation')))
     urls=validation.get('urls',[])
     if not isinstance(urls,list) or not urls:
         raise ValueError('render server coverage differs from validation endpoints')
@@ -156,7 +157,7 @@ def gate(root,name,channel,catalogs,*,deploy=False,source_commit=None,predicted=
     if clean_commit(root)!=(commit,tree) or (not local and artifact_hashes(root,channel['artifacts'])!=before):
         raise ValueError('source or ship artifacts changed during validation')
     from resolved_contract import load_manifest
-    if load_manifest(root/'design/.resolved/web.json')['input_hashes']!=inputs:
+    if load_manifest(layer_paths.path(root,'resolved','web.json'))['input_hashes']!=inputs:
         raise ValueError('design inputs changed after ship L0')
     receipt={'schema_version':1,'exit_code':0,'channel':name,'commit':commit,'tree':tree,
         'source_commit':source_commit or commit,'predicted_merge':predicted,'artifacts':before,
@@ -174,7 +175,7 @@ def gate(root,name,channel,catalogs,*,deploy=False,source_commit=None,predicted=
         if clean_commit(root)!=(commit,tree) or (not local and artifact_hashes(root,channel['artifacts'])!=before):
             raise ValueError('ship command changed the checked source or artifact set')
         receipt['deployment']='command-completed'
-    output=safe_path(root,'design/.resolved/integration.json' if local else 'design/.resolved/ship-'+name+'.json')
+    output=safe_path(root,layer_paths.rel('resolved','integration.json' if local else 'ship-'+name+'.json'))
     output.parent.mkdir(parents=True,exist_ok=True)
     output.write_text(json.dumps(receipt,ensure_ascii=False,sort_keys=True,indent=2)+'\n')
     return receipt
@@ -222,7 +223,7 @@ def pre_push(root,channels,catalogs,refs_file,integration=None):
                     git(root,'worktree','add','--detach',str(snapshot),synthetic)
                     try:
                         # Config and commands come from the predicted tree itself.
-                        config=read_data(snapshot/'design/design.yaml')
+                        config=read_data(layer_paths.path(snapshot,'design_config'))
                         predicted_channels=validate_channels(config)
                         predicted_integration=validate_integration_gate(config)
                         if set(predicted_channels)!=set(channels) or (predicted_integration is not None)!=(integration is not None):
@@ -242,6 +243,18 @@ def pre_push(root,channels,catalogs,refs_file,integration=None):
     return {'exit_code':0,'checks':results,'skipped':[] if sources else ['deleted refs only; no shipment']}
 
 
+def probe(repo):
+    """Exit 0 when the repository has a design system, 3 when it has none, 2 when its layout cannot be read.
+
+    The pre-push hook asks this instead of looking for the config file itself, so the place stays the rule's."""
+    try:
+        config=layer_paths.path(git_root(repo).resolve(),'design_config')  # the guard runs first
+    except ValueError as exc:  # LayerLayoutError is a ValueError
+        print(str(exc),file=sys.stderr)
+        return 2
+    return 0 if config.exists() or config.is_symlink() else 3
+
+
 def main(argv=None):
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--repo',default='.')
@@ -250,12 +263,15 @@ def main(argv=None):
     modes.add_argument('--channel')
     modes.add_argument('--pre-push',action='store_true')
     modes.add_argument('--doctor',action='store_true')
+    modes.add_argument('--probe',action='store_true',help='is a design system present? exit 0 yes, 3 no, 2 unreadable layout; used by the pre-push hook')
     modes.add_argument('--integration',action='store_true',help='check the declared local integration gate; never ships')
     parser.add_argument('--refs-file',type=Path)
     args=parser.parse_args(argv)
+    if args.probe:return probe(args.repo)
     try:
         root=git_root(args.repo).resolve()
-        config=read_data(root/'design/design.yaml')
+        layer_paths.guard(root)  # before any read: a moved repository must stop, never skip
+        config=read_data(layer_paths.path(root,'design_config'))
         channels=validate_channels(config)
         integration=validate_integration_gate(config)
         if args.doctor:result=doctor(root,channels,integration)

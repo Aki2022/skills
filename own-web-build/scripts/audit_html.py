@@ -30,6 +30,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'own-design-author/scripts'))
 from resolved_contract import load_manifest, check_tailwind, check_asset_exports
+import layer_paths
 
 
 class Targets(HTMLParser):
@@ -340,19 +341,24 @@ def main(argv):
     parser.add_argument('--tailwind', action='append', type=Path, default=[])
     args = parser.parse_args(argv[1:])
     try:
+        # Where the repository is comes from the manifest path text alone, before any file is opened: a repository
+        # that moved to a layout this version does not read stops here, even when the manifest is missing.
+        repo = layer_paths.repo_from_resolved(args.manifest)
         manifest = load_manifest(args.manifest)
-        check_asset_exports(args.manifest.resolve().parents[2], manifest)
-        repo = args.manifest.resolve().parents[2]
+        check_asset_exports(repo, manifest)
         configs = [repo / row['target'] for row in (manifest.get('tailwind_templates') or {}).get('configs', [])]
         configs.extend(args.tailwind)
         if not configs:
-            repo = args.manifest.resolve().parents[2]
+            skipped = ('.git', 'node_modules', Path(layer_paths.rel('resolved')).name, '.venv')
             for directory, dirs, files in os.walk(repo):
-                dirs[:] = [d for d in dirs if d not in ('.git', 'node_modules', '.resolved', '.venv')]
+                dirs[:] = [d for d in dirs if d not in skipped]
                 configs.extend(Path(directory) / name for name in files if name.startswith('tailwind.config.'))
         for config in configs:
-            check_tailwind(config, manifest, repo=args.manifest.resolve().parents[2])
+            check_tailwind(config, manifest, repo=repo)
         all_ok = all([audit(p, manifest) for p in args.files])
+    except layer_paths.LayerLayoutError as exc:
+        print(json.dumps({'exit_code': 2, 'errors': [str(exc)]}, ensure_ascii=False))
+        return 2
     except (OSError, ValueError, KeyError, TypeError) as exc:
         print(json.dumps({'exit_code': 2, 'errors': [type(exc).__name__ + ': invalid or unavailable input']}, ensure_ascii=False))
         return 2

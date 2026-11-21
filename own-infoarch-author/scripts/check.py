@@ -376,8 +376,13 @@ def check(root, date):
     check_blueprint(m, report, approved, rows)
     check_expiry(m, report, date)
     check_pages(m, report)
+    # The outline side (channels, outlines, sections) and the blueprint side (screens, items) are counted apart: a product
+    # UI has screens and items and no outline, a deliverable has outlines and no blueprint. The bridge (ia_module) refuses
+    # a check where neither side has anything, and a side that is half empty.
+    bp = m.blueprint if m.blueprint is not None and m.blueprint.present else None
     report.targets = {'channels': len(m.channels), 'outlines': len(m.outlines),
-                      'sections': sum(len(o['sections']) for _, o in m.outlines.values())}
+                      'sections': sum(len(o['sections']) for _, o in m.outlines.values()),
+                      'screens': len(bp.screens) if bp else 0, 'items': len(blueprint.items(bp)) if bp else 0}
     return report, m
 
 

@@ -16,6 +16,7 @@ from design_modules import resolve_ia, validate_module_state
 from reporting import empty_report
 
 IA = SKILL.parent / 'own-infoarch-author'
+sys.path.insert(0, str(IA / 'scripts/tests'))
 FIXTURE = runpy.run_path(str(IA / 'scripts/tests/test_check.py'))
 
 
@@ -50,7 +51,7 @@ def test_schema2_actual_check_has_counts_and_preserves_ds_approvals(project):
     assert resolved['version'] == '0.4.0'
     assert resolved['resolved']['governance']['contract'] == 'ia-git-history-v4'
     assert resolved['resolved']['governance']['schema_version'] == 4
-    assert resolved['resolved']['targets'] == {'channels': 2, 'outlines': 2, 'sections': 5}
+    assert resolved['resolved']['targets'] == {'channels': 2, 'outlines': 2, 'sections': 5, 'screens': 0, 'items': 0}
     assert resolved['resolved']['governance']['method'] == 'git-history'
     assert resolved['resolved']['governance']['input_hashes']
     assert any(row['id'] == 'ia-deterministic' and row['targets'] == 5 for row in result['report']['executed'])
@@ -88,6 +89,61 @@ def test_actual_ia_bad_inputs_make_l0_red(project, broken):
     if broken in ('ref', 'expiry', 'zero'):
         expected = {'ref': 'IA_OUTLINE_REF_BROKEN', 'expiry': 'IA_EXPIRED_SHIPPED', 'zero': 'zero IA check targets'}[broken]
         assert any(expected in error for error in result['errors']), result['errors']
+
+
+def attach_blueprint(project, screens=None, **kw):
+    """A product UI: a positioning and a blueprint, with no outline and no channel."""
+    root, _ = project
+    from blueprint_fixtures import SCREENS, write_blueprint
+    write_blueprint(root, screens=SCREENS if screens is None else screens, **kw)
+    config = json.loads((root / 'design/design.yaml').read_text())
+    config['modules'] = {'ia': '0.4.0'}
+    write(root / 'design/design.yaml', config)
+    return root
+
+
+def test_blueprint_only_repository_passes_l0_and_counts_its_screens_and_items(project):
+    approve(project)
+    root = attach_blueprint(project)
+    result = check(project, ship=True)
+    assert result['exit_code'] == 0, result['errors']
+    assert not [e for e in result['errors'] if 'zero IA' in e]
+    resolved = result['manifest']['web']['modules']['ia']['resolved']
+    assert resolved['targets'] == {'channels': 0, 'outlines': 0, 'sections': 0, 'screens': 2, 'items': 10}
+    assert any(row['id'] == 'ia-deterministic' and row['targets'] == 10 for row in result['report']['executed'])
+    assert sum(k.startswith('ia:item:') for k in result['approval_targets']) == 10
+    validate_module_state(result['manifest']['web']['modules'])
+
+
+@pytest.mark.parametrize('how', ['no-screens', 'no-product'])
+def test_empty_blueprint_stays_red_at_l0(project, how):
+    approve(project)
+    attach_blueprint(project, screens=(), **({'product': None} if how == 'no-product' else {}))
+    result = check(project, ship=True)
+    assert result['exit_code'] == 2, result
+    assert any('zero IA check targets' in e for e in result['errors']), result['errors']
+
+
+@pytest.mark.parametrize('targets,ok', [
+    ({'channels': 0, 'outlines': 0, 'sections': 0, 'screens': 2, 'items': 10}, True),
+    ({'channels': 2, 'outlines': 2, 'sections': 5, 'screens': 0, 'items': 0}, True),
+    ({'channels': 0, 'outlines': 0, 'sections': 0, 'screens': 0, 'items': 0}, False),
+    ({'channels': 0, 'outlines': 0, 'sections': 0, 'screens': 2, 'items': 0}, False),
+    ({'channels': 2, 'outlines': 2, 'sections': 0, 'screens': 2, 'items': 10}, False),
+    ({'channels': 0, 'outlines': 0, 'sections': 0}, False),  # the old three-key shape is not a result of the current resolver
+])
+def test_git_contract_accepts_blueprint_counts_only_when_something_was_checked(targets, ok):
+    import design_modules
+    governance = {'contract': design_modules.IA_GIT_CONTRACT, 'method': 'git-history', 'schema_version': 4, 'commit': None,
+                  'input_hashes': {'design/info_arch/info_arch.yaml': '0' * 64}}
+    result = {'contract': design_modules.IA_GIT_CONTRACT, 'governance': governance, 'targets': targets,
+              'media': {'web': {'governance': governance, 'targets': targets}}, 'approval_hashes': {},
+              'must_approval_keys': [], 'errors': [], 'warnings': [], 'report': {}}
+    if ok:
+        design_modules._git_contract(result)
+    else:
+        with pytest.raises(ValueError, match='zero or invalid IA check targets'):
+            design_modules._git_contract(result)
 
 
 @pytest.mark.parametrize('version', [None, '0.1.0', '0.3.0'])

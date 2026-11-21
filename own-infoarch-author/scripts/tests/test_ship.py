@@ -136,6 +136,22 @@ def test_dirty_tree_is_not_shipped(repo):
     assert code == 2 and 'clean committed source' in ' '.join(out['errors'])
 
 
+def test_a_blueprint_only_repository_does_not_pass_the_ship_gate_by_having_no_channel(tmp_path):
+    """The bridge now counts a blueprint as a target; that must not turn the IA ship gate into a pass for a repository
+    that ships nothing through it: with no ship:true channel the gate stays red, whatever the blueprint holds."""
+    from blueprint_fixtures import write_blueprint
+    root = tmp_path / 'product'
+    root.mkdir()
+    run_git(root, 'init', '-q', '-b', 'main')
+    run_git(root, 'config', 'user.name', 'Fixture Owner')
+    write_blueprint(root)
+    commit(root, 'blueprint only')
+    run_git(root, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
+    code, out, _ = ship(root)
+    assert code == 2 and 'no ship:true IA channel' in ' '.join(out['errors']), out
+    assert out['shipped_outlines'] == []
+
+
 def test_zero_ship_channels_is_not_a_pass(repo):
     dump(repo / 'design/info_arch/channels/deck.yaml', {**SHIP_DECK, 'ship': False})
     commit(repo, 'nothing ships')

@@ -46,6 +46,7 @@ def css_for(rules):
            '.region{border:1px solid var(--line);border-radius:8px;padding:12px;min-width:0}',
            '.btn{font:inherit;padding:8px 16px;border-radius:6px;border:1.5px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;min-height:44px}',
            '.btn.primary{background:var(--accent);color:var(--bg)}',
+           ':focus-visible{outline:2px solid var(--accent);outline-offset:2px}',
            '[hidden]{display:none!important}']
     for name in rules['width_by_shape']:
         out.append(f'.span-{name}{{grid-column:span {rules["width_by_shape"][name]["desktop"]}}}')

@@ -32,7 +32,7 @@ def load_yaml(path):
     try:
         import yaml
     except ImportError as exc:
-        raise RuntimeError('PyYAML is required (the interpreter of the skill tests has it)') from exc
+        raise RuntimeError('PyYAML is required: run this with the L0 dependency interpreter (the one DESIGN_AUTHOR_PYTHON names; the interpreter of the skill tests has it)') from exc
     return yaml.safe_load(Path(path).read_text(encoding='utf-8'))
 
 

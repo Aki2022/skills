@@ -111,9 +111,10 @@ def test_the_built_page_passes_every_structural_constraint_of_the_html_media(bui
 
 
 def test_the_built_page_meets_the_text_contrast_in_the_light_and_the_dark_theme(built):
-    """audit_html's contrast check resolves `:root` variables last-wins, so on a page with a dark `prefers-color-scheme` block it
-    judges only the dark pairs (found when the L1 advisories of built screens were read). What the build draws in the light
-    theme is therefore pinned here: body text, the outlined action and the filled primary action, in both themes."""
+    """What the build draws in the light theme is pinned twice: by the page's own `:root` values (body text, the outlined action and
+    the filled primary action, in both themes) and by audit_html's L1 contrast check, which judges the base and the dark
+    `prefers-color-scheme` theme separately (it used to resolve `:root` last-wins and judged only the dark pairs; found when the L1
+    advisories of built screens were read)."""
     page, _ = built
     css = re.search(r'<style>(.*?)</style>', page, re.S).group(1)
     base = re.search(r'(?<![\w-])(?<!\{):root\{([^}]*)\}', css).group(1)
@@ -126,6 +127,14 @@ def test_the_built_page_meets_the_text_contrast_in_the_light_and_the_dark_theme(
         for what, (fg, bg) in pairs.items():
             ratio = audit_html.contrast_ratio(audit_html.parse_color(fg), audit_html.parse_color(bg))
             assert ratio >= minimum, f'{name} theme, {what}: {fg} on {bg} = {ratio:.2f}:1 (min {minimum})'
+    results = audit_html.check_contrast(page, minimum)
+    assert [label for ok, label in results if not ok] == []
+    judged = ' '.join(label for _, label in results)
+    # L1 judges a pair only when one rule sets both colours: body text and the filled primary action (the outlined action has no background)
+    for fg, bg in (('fg', 'bg'), ('bg', 'accent')):
+        for block in (base, dark):
+            v = dict(re.findall(r'--([\w-]+):([^;]+)', block))
+            assert f'{v[fg]} on {v[bg]}' in judged, f'L1 did not judge {v[fg]} on {v[bg]}'
 
 
 def test_the_build_refuses_a_failing_blueprint_and_an_existing_file(tmp_path):

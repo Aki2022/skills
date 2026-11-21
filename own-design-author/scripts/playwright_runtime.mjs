@@ -16,6 +16,7 @@ import {existsSync, readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
 import {dirname, join, resolve} from 'node:path';
 import os from 'node:os';
+import {layerRel} from './layer_paths.mjs';
 
 export function sharedHome(env = process.env) {
   return env.OWN_PLAYWRIGHT_HOME || join(os.homedir(), '.cache', 'own-playwright');
@@ -67,7 +68,7 @@ export function locatePlaywright({cwd = process.cwd(), version = null, env = pro
       `端末に一度だけ入れる: ${installCommand(version, env)}`);
   }
   throw new Error(`playwright が見つからない。探した場所: ${tried.join(' / ')}。` +
-    'design/render-environment.json で版を固定するか、project に playwright を入れる。');
+    `${layerRel('render_environment')} で版を固定するか、project に playwright を入れる。`);
 }
 
 // Loads Playwright or exits 2 with the reason; scripts call this once at start.

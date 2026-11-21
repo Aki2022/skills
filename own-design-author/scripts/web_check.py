@@ -5,15 +5,22 @@ import copy
 import json
 import os
 import re
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import signal
 import subprocess
 import sys
+import layer_paths
 from design_author import check_design, git_root, inside, read_data, CATALOG
 from reporting import empty_report,stage,skip
 from page_inventory import check_pages
 from afm_judge import judge, AfmUnavailable
 from item_checks import L2_GATED
+
+
+def layer_file(root,key):
+    """A layer file the rule names, kept inside the layers root (a symlink may not lead out of it)."""
+    layers=layer_paths.path(root,'layers')
+    return inside(layers,PurePosixPath(layer_paths.rel(key)).relative_to(layer_paths.LAYERS_ROOT))
 
 
 def validation_endpoint(row):
@@ -65,7 +72,7 @@ def page_evidence(root,targets,spec):
     pages=[]
     for index,target in enumerate(targets):
         env=target['label'];index=target.get('l2_index',index)  # report-all skips unrendered targets
-        measured=read_data(inside(root/'design/.resolved','l2-'+str(index)+'.json'))
+        measured=read_data(inside(layer_paths.path(root,'resolved'),'l2-'+str(index)+'.json'))
         runs=[r for r in measured.get('runs',[]) if r.get('repeat',0)==0]
         if not runs or any(not isinstance(r.get('item_checks'),dict) for r in runs):
             raise ValueError('L2 item check evidence missing')
@@ -127,7 +134,7 @@ def verify_items(root,l0,targets,report,final=True,mode=None,unrendered=()):
     for checker in sorted(c for c in spec['collect'] if c.startswith('rule:')) if final else ():
         if all(page['presence'][checker]==0 for page in pages):
             report.setdefault('warnings',[]).append(f"rule {checker[5:]} never applied on any rendered page; check its selectors")
-    record=inside(root/'design/.resolved','items.json')
+    record=inside(layer_paths.path(root,'resolved'),'items.json')
     row={'schema_version':1,'pages':[p['env'] for p in pages],'machine':machine,'afm_pairs':afm_pairs,'failures':failures}
     if mode:row.update(mode=mode,unrendered=list(unrendered))  # a diagnostic record, never ship evidence
     record.write_text(json.dumps(row,ensure_ascii=False,indent=1))
@@ -156,7 +163,7 @@ def run_afm(root,l0,config,pages,afm_pairs,report):
         chosen=[r for r in page['runs'] if r.get('width')==width and r.get('scheme')==scheme]
         if len(chosen)!=1:raise ValueError('L2 capture for AFM missing')
         digest=chosen[0].get('render_evidence',{}).get('screenshot_sha256','')
-        path=inside(root/'design/.resolved','screens/'+digest+'.png')
+        path=inside(layer_paths.path(root,'resolved'),'screens/'+digest+'.png')
         if not path.is_file():raise ValueError('L2 screenshot for AFM missing')
         artifact={'id':f"L2:{page['env']}:{width}:{scheme}",'kind':'image','path':str(path)}
         artifacts.append(artifact['id'])
@@ -172,7 +179,7 @@ def run_afm(root,l0,config,pages,afm_pairs,report):
                              'judged':len(merged['screened']),'calls':merged['calls'],'cached':merged['cached'],
                              'shrunk':merged['shrunk']})
     stage(report['report'],'AFM',code,len(artifacts))
-    inside(root/'design/.resolved','afm.json').write_text(json.dumps({'schema_version':1,'pairs':afm_pairs,
+    inside(layer_paths.path(root,'resolved'),'afm.json').write_text(json.dumps({'schema_version':1,'pairs':afm_pairs,
         'artifacts':artifacts,'verdicts':merged['screened'],'uncovered':merged['uncovered']},ensure_ascii=False,indent=1))
     report['report']['uncovered'].extend({'id':'AFM:'+r['id']+'@'+str(r['artifact']),'reason':r['reason']} for r in merged['uncovered'])
     report['report']['screened'].append({'id':'AFM','judged':len(merged['screened']),'advisory_violations':len(merged['warnings'])})
@@ -196,6 +203,7 @@ def main():
     unrendered=[]
     try:
         root=git_root(args.repo)
+        layer_paths.guard(root)  # before L0: a moved repository stops, it is never reported as 0 targets
         l0=check_design(root,catalog_dir=args.catalog_dir)
         report['report']=copy.deepcopy(l0['report'])
         skip(report['report'],'L1','not reached after L0 or unavailable validation inputs')
@@ -204,7 +212,7 @@ def main():
         if l0['exit_code']==2:
             report['errors']=l0['errors']
             print(json.dumps(report,ensure_ascii=False));return 2
-        config=read_data(inside(root/'design','validation.json'))
+        config=read_data(layer_file(root,'validation'))
         if not isinstance(config,dict) or set(config)-{'pages','parallel'}!={'schema_version','html','urls','viewports','schemes'} or config['schema_version']!=1:
             raise ValueError('invalid validation configuration')
         parallel=config.get('parallel',1)
@@ -223,7 +231,7 @@ def main():
             raise ValueError('zero L1/L2 targets')
         targets=render_targets(config)
         files=[inside(root,path) for path in html]
-        resolved=root/'design/.resolved/web.json'
+        resolved=layer_paths.path(root,'resolved','web.json')
         skills=Path(__file__).resolve().parents[2]
         l1=subprocess.run([sys.executable,str(skills/'own-web-build/scripts/audit_html.py'),
                            *map(str,files),'--manifest',str(resolved)],cwd=root,capture_output=True,text=True)
@@ -237,17 +245,17 @@ def main():
             raise ValueError('zero or invalid viewport targets')
         if not isinstance(config['schemes'],list) or not config['schemes'] or any(v not in ('light','dark') for v in config['schemes']):
             raise ValueError('zero or invalid scheme targets')
-        environment=inside(root/'design','render-environment.json')
+        environment=layer_file(root,'render_environment')
         if not environment.is_file():raise ValueError('fixed rendering environment missing')
         uncovered=set(l0['manifest']['web']['coverage']['uncovered'])
-        screens=root/'design/.resolved/screens'
+        screens=layer_paths.path(root,'resolved','screens')
         for target in targets:
             if not os.environ.get(target['env'],'').startswith(('http://','https://')):
                 raise ValueError('missing or invalid rendering URL: '+target['env'])
 
         def launch(index):
             target=targets[index]
-            output=inside(root/'design/.resolved','l2-'+str(index)+'.json')
+            output=inside(layer_paths.path(root,'resolved'),'l2-'+str(index)+'.json')
             output.unlink(missing_ok=True)
             state=['--state',json.dumps(target['state'],ensure_ascii=False)] if target['state'] else []
             return subprocess.Popen([os.environ.get('DESIGN_AUDIT_NODE','node'),
@@ -264,7 +272,7 @@ def main():
             for ahead in range(index,min(index+parallel,len(targets))):
                 if ahead not in running:running[ahead]=launch(ahead)
             row={'env':target_env}
-            output=inside(root/'design/.resolved','l2-'+str(index)+'.json')
+            output=inside(layer_paths.path(root,'resolved'),'l2-'+str(index)+'.json')
             l2=running.pop(index);l2.wait()
             if not output.is_file():
                 report['report']['missing'].append({'id':'L2:'+row['env'],'reason':'no fresh fixed rendering report'})
@@ -335,6 +343,10 @@ def main():
         l2_code=max((s['exit_code'] for s in report['stages'] if s['stage']=='L2'),default=0)
         report['exit_code']=max(l0['exit_code'],afm_code,failed,l2_code,1 if report.get('warnings') else 0)
         report['uncovered']=sorted(uncovered)
+    except layer_paths.LayerLayoutError as error:  # a ValueError: named before the catch-all below swallows it
+        report['exit_code']=2
+        report['errors'].append(str(error))
+        report['report']['missing'].append({'id':'layout','reason':'repository layout not readable by this version'})
     except AfmUnavailable as error:
         report['exit_code']=2
         report['errors'].append(str(error)+'; AFM judgment is required and was not run')

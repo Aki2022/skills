@@ -23,6 +23,9 @@ import sys
 from pathlib import Path
 
 SKILLS = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(SKILLS / 'own-design-author/scripts'))
+import layer_paths  # noqa: E402  (the one rule for where a repository keeps its layers)
+
 MEASURE = Path(__file__).resolve().parent / 'measure_screen.mjs'
 RULES = SKILLS / 'own-design-author/references/allocation-rules.json'
 VIEWPORTS = [{'name': 'desktop', 'width': 1280, 'height': 800}, {'name': 'mobile', 'width': 375, 'height': 812}]
@@ -59,12 +62,25 @@ def load_yaml(path):
 
 def measure(html, viewports=VIEWPORTS, repo=None):
     """Draw the page at each width and measure it. The Playwright version is the one the repository pins in
-    design/render-environment.json (`repo`, default: the current directory): the same fixed environment the other checks use."""
+    its render environment file (`repo`, default: the current directory): the same fixed environment the other checks use."""
     env = {**os.environ, **({'SCREEN_PLAYWRIGHT_DIR': str(repo)} if repo else {})}
     proc = subprocess.run(['node', str(MEASURE), str(html), json.dumps(viewports)], capture_output=True, text=True, timeout=120, env=env)
     if proc.returncode != 0:
         raise RuntimeError(f'measure_screen が失敗した（exit {proc.returncode}）: {proc.stderr.strip()[:300]}')
     return json.loads(proc.stdout)
+
+
+def guard_repository(repo, overrides=None):
+    """Stop on a repository that moved to a layout this version does not read. The repository is `repo`, else the one the
+    overrides file sits in (when it sits where the rule puts it), else the current directory; none of them is read around."""
+    guard_roots = [Path(repo) if repo else Path.cwd()]
+    if overrides:
+        want = Path(layer_paths.rel('layout_overrides')).parts
+        parts = Path(overrides).resolve().parts
+        if len(parts) > len(want) and parts[len(parts) - len(want):] == want:
+            guard_roots.append(Path(*parts[:len(parts) - len(want)]))
+    for root in guard_roots:
+        layer_paths.guard(root)
 
 
 def overrides_for(path, screen_id):
@@ -129,15 +145,16 @@ def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument('--screen', required=True)
     ap.add_argument('--html', required=True)
-    ap.add_argument('--repo', help='repository root: its design/render-environment.json pins the browser (default: the current directory)')
-    ap.add_argument('--overrides')
+    ap.add_argument('--repo', help=f'repository root: its {layer_paths.rel("render_environment")} pins the browser (default: the current directory)')
+    ap.add_argument('--overrides', help=f'the overrides file ({layer_paths.rel("layout_overrides")} of the repository); none when not given')
     ap.add_argument('--rules', default=str(RULES))
     args = ap.parse_args(argv)
     try:
+        guard_repository(args.repo, args.overrides)
         screen = load_yaml(args.screen)
         rules = json.loads(Path(args.rules).read_text(encoding='utf-8'))
         findings, stats = audit(screen, measure(args.html, repo=args.repo), overrides_for(args.overrides, screen['id']), rules['order']['tolerance_px'])
-    except (ValueError, OSError, RuntimeError) as exc:
+    except (ValueError, OSError, RuntimeError) as exc:  # LayerLayoutError is a ValueError: its message is the layout one
         print(json.dumps({'exit_code': 2, 'error': str(exc)}, ensure_ascii=False))
         return 2
     code = max([{'fail': 2, 'warn': 1, 'info': 0}[lvl] for lvl, _, _ in findings], default=0)

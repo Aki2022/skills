@@ -31,7 +31,7 @@
     "form": "入力が主役。主操作を入力の直後に置く"
   },
   "override": {
-    "file": "design/layout-overrides.yaml",
+    "file_entry": "layout_overrides",
     "entry": {"screen": "scr-…", "above": "rgn-…（規則では下になる領域）", "below": "rgn-…（規則では上になる領域）", "reason": "人が決めた理由（必須）", "viewports": ["desktop", "mobile"]},
     "note": "規則に反して優先度の低い領域を上に置くときは、このファイルに理由つきで書く。書いていない逆転は audit_screen が失格にし、書いてあれば報告に info として残す。"
   }

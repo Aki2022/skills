@@ -360,10 +360,12 @@ def main():
     args=parser.parse_args()
     if (args.command=='rekey')==(args.replacement is not None):
         parser.error('rekey takes no --replacement; record, migrate and refresh require one')
-    from design_author import git_root,inside,read_data,write_data
+    from design_author import design_dir,git_root,inside,read_data,write_data
+    import layer_paths
     try:
-        design=git_root(args.repo)/'design';path=design/'judgments.json'
-        directory=design/'.resolved'
+        root=git_root(args.repo)
+        design=design_dir(root);path=layer_paths.path(root,'judgments')
+        directory=layer_paths.path(root,'resolved')
         if design.is_symlink() or path.is_symlink() or directory.is_symlink():
             raise ValueError('symlinked judgment input/output')
         directory.mkdir(parents=True,exist_ok=True)
@@ -387,6 +389,9 @@ def main():
         if 'refresh' in updated:report['refresh']=updated['refresh']
         print(json.dumps(report,ensure_ascii=False))
         return 0
+    except layer_paths.LayerLayoutError as exc:
+        print(json.dumps({'status':'rejected','error':str(exc)},ensure_ascii=False))
+        return 2
     except (OSError,ValueError,KeyError,TypeError):
         print(json.dumps({'status':'rejected','error':'judgment record/refresh/migration/rekey requires valid current policy and matching input evidence'}))
         return 2

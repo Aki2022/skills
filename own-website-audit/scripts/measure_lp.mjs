@@ -20,8 +20,8 @@
  * 終了コード: 0 = 失格なし / 1 = 失格あり / 2 = 実行不能
  */
 
-import { writeFileSync, existsSync, realpathSync, unlinkSync } from "node:fs";
-import {dirname} from "node:path";
+import { writeFileSync, existsSync, unlinkSync } from "node:fs";
+import { layerRel, repoFromResolved } from "../../own-design-author/scripts/layer_paths.mjs";
 import {loadEnvironment,verifyRuntime,configureFonts,trackFonts,renderEvidence,compareRepeats,fixedLaunchOptions,describeRenderFailure,parseState,applyState,settleFonts,stableCapture} from "../../own-design-author/scripts/fixed_render.mjs";
 import { loadManifest, collectDesign, collectItemChecks } from "../../own-design-author/scripts/resolved_contract.mjs";
 import {loadPlaywright as locateRuntime, pinnedVersion, locateCompanion} from "../../own-design-author/scripts/playwright_runtime.mjs";
@@ -35,7 +35,7 @@ function loadPlaywright() {
 const args = process.argv.slice(2);
 const url = args.find((a) => !a.startsWith("--"));
 if (!url) {
-  console.error("使い方: node measure_lp.mjs <url> --manifest design/.resolved/web.json [--viewports 375,1280]");
+  console.error(`使い方: node measure_lp.mjs <url> --manifest ${layerRel('resolved', 'web.json')} [--viewports 375,1280]`);
   process.exit(2);
 }
 const flag = (name, fallback) => {
@@ -55,10 +55,21 @@ const viewports = flag("viewports", "375,1280")
   .filter(Boolean);
 const jsonOut = flag("json", null);
 const schemes = flag("schemes", "dark,light").split(",").filter(Boolean);
+// A report left by an earlier run must not outlive a run that stops, whatever the reason.
+let staleReportError = null;
+try { if (jsonOut && flag('environment', null) && existsSync(jsonOut)) unlinkSync(jsonOut); } catch (error) { staleReportError = error; }
+const manifestPath = flag('manifest', layerRel('resolved', 'web.json'));
+// The repository comes from the manifest path text alone, before any file is touched: a repository that moved to a
+// layout this version does not read stops here with the layout message (not a bare ENOENT, and before any browser).
+let repoRoot;
+try { repoRoot = repoFromResolved(manifestPath); }
+catch (error) {
+  if (String(error.message).startsWith('LAYER_LAYOUT_FOREIGN_ROOT')) { console.error(error.message); process.exit(2); }
+}
 let manifest;
 try {
-  if(jsonOut && flag('environment',null) && existsSync(jsonOut))unlinkSync(jsonOut);
-  manifest = loadManifest(flag('manifest', 'design/.resolved/web.json'));
+  if (staleReportError) throw staleReportError;
+  manifest = loadManifest(manifestPath);
 }
 catch { console.error('resolved manifest unavailable, invalid or stale; rerun L0'); process.exit(2); }
 if (!viewports.length || !schemes.length) { console.error('zero measurement runs'); process.exit(2); }
@@ -674,8 +685,7 @@ const axePath = process.env.AXE_CORE_PATH || locateCompanion('axe-core/axe.min.j
 let fixed=null,environment=null;
 try {
   if(flag('environment',null)){
-    const root=dirname(dirname(dirname(realpathSync(flag('manifest','design/.resolved/web.json')))));
-    fixed=loadEnvironment(flag('environment',null),root,viewports,schemes);
+    fixed=loadEnvironment(flag('environment',null),repoRoot,viewports,schemes);
 
   }
 } catch {console.error('fixed rendering environment unavailable or mismatched');process.exit(2);}

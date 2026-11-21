@@ -29,10 +29,11 @@ import check
 import common
 import ia_module
 import judge
+import layer_paths  # on sys.path through common
 import positioning as pos
 
 V5_PIN = '0.3.0'
-APPROVALS = 'design/approvals.yaml'
+APPROVALS = layer_paths.rel('ledger')  # repository-relative name; reading goes through layer_paths.path
 PROV = 'extracted:infoarch-author migrate-v6'
 # v5 section role -> v6 section role (aware / pain / compare / trust / act). A fixed table, printed in the report.
 ROLE = {'pain': 'pain', 'benefit': 'aware', 'vision': 'aware', 'proof': 'trust', 'how': 'trust',
@@ -42,7 +43,7 @@ LEGACY_ATTRS = ('data-ia-problem', 'data-ia-msg', 'data-ia-pain', 'data-ia-frame
 LEGACY_RE = re.compile(r'\b(?:' + '|'.join(LEGACY_ATTRS) + r')\s*=')
 V4_PREFIXES = ('prf', 'fct', 'ent', 'vce', 'seg', 'job', 'pan', 'gan', 'val', 'alt', 'str', 'cat')
 FORCES = ('push', 'pull', 'anxiety', 'habit')
-HEADER = ('# design/info_arch/info_arch.yaml — 伝え方の SSOT（スキーマ版 4）\n'
+HEADER = (f'# {layer_paths.rel("positioning_file")} — 伝え方の SSOT（スキーマ版 4）\n'
           '# v5 から infoarch-author migrate-v6 で移した。提供価値の kind・カテゴリー・満たす度合いなどは下書きが要る。\n')
 OUTLINE_HEADER = '# v5 の outline から infoarch-author migrate-v6 で移した（版 3）。\n'
 
@@ -427,7 +428,7 @@ def rewrite_html(text, placed):
 # ---- design.yaml, ledgers --------------------------------------------------------------------------------------------
 
 def _design_pin(root, r, writes):
-    path = Path(root) / 'design/design.yaml'
+    path = layer_paths.path(Path(root), 'design_config')
     if not path.is_file():
         return None
     raw = path.read_text(encoding='utf-8')
@@ -436,7 +437,7 @@ def _design_pin(root, r, writes):
     if pin is None or pin == ia_module.VERSION:
         return {'from': pin, 'to': pin}
     if pin != V5_PIN:
-        r.fail('design/design.yaml modules.ia', 'module-pin-unknown', pin=pin, expected=[V5_PIN, ia_module.VERSION])
+        r.fail(f'{layer_paths.rel("design_config")} modules.ia', 'module-pin-unknown', pin=pin, expected=[V5_PIN, ia_module.VERSION])
         return {'from': pin, 'to': None}
     cfg['modules']['ia'] = ia_module.VERSION
     writes[path] = json.dumps(cfg, ensure_ascii=False, indent=2 if raw.startswith('{\n') else None) + ('\n' if raw.endswith('\n') else '')
@@ -446,7 +447,7 @@ def _design_pin(root, r, writes):
 def stops_applying(root):
     """Owner approvals and judgments of the v5 tree that no v6 key reads (listed, never written)."""
     out = {'approvals': [], 'judgments': []}
-    path = Path(root) / APPROVALS
+    path = layer_paths.path(Path(root), 'ledger')
     if path.is_file():
         for row in common.load_yaml(path) or []:
             key = str((row or {}).get('key', ''))
@@ -472,8 +473,9 @@ def stops_applying(root):
 def plan(root):
     """-> (report, {path: new text}, [paths to delete]) without writing anything."""
     root = Path(root)
-    base = root / check.INFO_ARCH_DIR
-    ssot = common.load_yaml(base / 'info_arch.yaml')
+    base = layer_paths.path(root, 'infoarch')
+    ssot_file = layer_paths.path(root, 'positioning_file')
+    ssot = common.load_yaml(ssot_file)
     version = (ssot or {}).get('schema_version')
     if version == 4:
         return {'status': 'already-v6', 'unmigrated': [], 'unmigrated_count': 0, 'exit_code': 0, 'written': False}, {}, []
@@ -481,7 +483,7 @@ def plan(root):
         raise ValueError(f'info_arch.yaml のスキーマ版 {version!r} は v5（3）でも v6（4）でもない')
     r = _Run()
     new_ssot, seg_of = migrate_ssot(ssot, r)
-    writes, deletes, used, html_parts = {base / 'info_arch.yaml': HEADER + _dump(new_ssot)}, [], set(), {}
+    writes, deletes, used, html_parts = {ssot_file: HEADER + _dump(new_ssot)}, [], set(), {}
     for f in sorted((base / 'outlines').glob('*.yaml')):
         o = common.load_yaml(f)
         if o.get('schema_version') != 2:
@@ -521,7 +523,7 @@ def plan(root):
         elif (any(g.match(rel) for g in globs) or 'data-ia-' in text) and LEGACY_RE.search(text):
             r.fail(rel, 'html-unmatched', detail='どの outline の成果物でもない描画物に旧い印がある')
     pin = _design_pin(root, r, writes)
-    prose = base / 'INFO_ARCH.md'
+    prose = layer_paths.path(root, 'infoarch', 'INFO_ARCH.md')
     mentions = sorted(set(re.findall(r'\b(?:aud|msg|prm|cpt)-\d{4,}\b', prose.read_text(encoding='utf-8')))) if prose.is_file() else []
     created = sorted(p.relative_to(root).as_posix() for p in writes if not p.exists())
     report = {
@@ -531,7 +533,7 @@ def plan(root):
         'unmigrated': r.unmigrated, 'unmigrated_count': len(r.unmigrated),
         'dropped': r.dropped, 'drafting_required': r.drafting, 'role_map': ROLE,
         'stops_applying': stops_applying(root),
-        'module_pin': pin, 'prose_mentions': {'design/info_arch/INFO_ARCH.md': mentions} if mentions else {},
+        'module_pin': pin, 'prose_mentions': {layer_paths.rel('infoarch', 'INFO_ARCH.md'): mentions} if mentions else {},
         'set_ids': 'drafting_required を済ませて check が緑になってから infoarch-author set --outline <id> で出す（v5 の対応表の置き換え）',
         'files': {'write': sorted(p.relative_to(root).as_posix() for p in writes if p.exists()), 'create': created,
                   'delete': sorted(p.relative_to(root).as_posix() for p in deletes)},
@@ -539,7 +541,7 @@ def plan(root):
             'この道具は commit しない。--write の後、commit する前なら git restore -- <files.write と files.delete> で戻し、'
             'files.create のファイルを 1 つずつ消す',
             'commit した後なら git revert <移行の commit>（info_arch.yaml・outlines・描画物・design.yaml が v5 に戻る）',
-            'design/approvals.yaml と design/judgments.json は書いていないので戻すものは無い。v6 で足した ia:path: の行と判定は、'
+            f'{layer_paths.rel("ledger")} と {layer_paths.rel("judgments")} は書いていないので戻すものは無い。v6 で足した ia:path: の行と判定は、'
             'v5 の道具では数えられない',
         ],
         'written': False,

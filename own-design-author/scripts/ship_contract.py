@@ -4,6 +4,8 @@ import json
 from pathlib import Path, PurePosixPath
 import re
 
+import layer_paths
+
 
 def _relative(value):
     if not isinstance(value,str) or not value or '\\' in value or value.startswith('/') or any(p in ('','.','..') for p in value.split('/')):
@@ -117,10 +119,11 @@ def read_json(path):
 def validate_web_result(root,result,urls):
     """Reject a zero/partial result even when an orchestrator exits successfully."""
     root=Path(root)
+    layer_paths.guard(root)  # a repository this version does not read is never ship evidence
     if result.get('exit_code') not in (0,1) or result.get('errors'):
         raise ValueError('L0/L1/L2 result failed')
     if 'mode' in result:raise ValueError('a diagnostic report-all run is not ship evidence')
-    config=read_json(root/'design/validation.json')
+    config=read_json(layer_paths.path(root,'validation'))
     from web_check import render_targets  # deferred: web_check imports the L0 checker
     targets=render_targets(config)
     expected=[t['label'] for t in targets]
@@ -128,7 +131,7 @@ def validate_web_result(root,result,urls):
     if not servers or len(set(servers))!=len(servers) or set(servers)!=set(urls):
         raise ValueError('render servers must cover exactly all validation endpoints')
     stages=result.get('stages',[])
-    items=read_json(root/'design/.resolved/items.json')
+    items=read_json(layer_paths.path(root,'resolved','items.json'))
     pairs=items.get('afm_pairs')
     if not isinstance(pairs,list) or items.get('failures') or items.get('pages')!=expected or 'mode' in items:
         raise ValueError('missing or failed adopted item verification')
@@ -138,7 +141,7 @@ def validate_web_result(root,result,urls):
     if checked.get('exit_code')!=0 or checked.get('afm_pairs')!=len(pairs) or checked.get('failures'):
         raise ValueError('partial or failed adopted item verification')
     if pairs:
-        afm=stages[-1];record=read_json(root/'design/.resolved/afm.json')
+        afm=stages[-1];record=read_json(layer_paths.path(root,'resolved','afm.json'))
         if (afm.get('exit_code') not in (0,1) or record.get('pairs')!=pairs or record.get('uncovered')
                 or afm.get('judged')!=len(pairs) or len(record.get('verdicts',[]))!=len(pairs)):
             raise ValueError('partial or failed AFM stage')
@@ -146,14 +149,15 @@ def validate_web_result(root,result,urls):
         raise ValueError('zero or failed L0 stage')
     if stages[1].get('exit_code')!=0 or stages[1].get('targets')!=len(config['html']) or not config['html']:
         raise ValueError('zero, partial or failed L1 stage')
-    environment=root/'design/render-environment.json';fixed=read_json(environment)
+    environment=layer_paths.path(root,'render_environment');fixed=read_json(environment)
     environment_hash=hashlib.sha256(environment.read_bytes()).hexdigest()
     evidence={}
     for i,target in enumerate(targets):
         stage=stages[i+2];env=target['env']
         if stage.get('exit_code')!=0 or stage.get('target_env')!=target['label']:
             raise ValueError('partial or failed L2 stage')
-        path=safe_path(root,'design/.resolved/l2-'+str(i)+'.json');measured=read_json(path)
+        l2_rel=layer_paths.rel('resolved','l2-'+str(i)+'.json')
+        path=safe_path(root,l2_rel);measured=read_json(path)
         if measured.get('state')!=target['state']:
             raise ValueError('interaction state evidence does not match the declared steps')
         profile=target['profile']
@@ -171,5 +175,5 @@ def validate_web_result(root,result,urls):
             a={k:v for k,v in first.items() if k!='repeat'};b={k:v for k,v in second.items() if k!='repeat'}
             if a!=b or not re.fullmatch(r'[a-f0-9]{64}',a.get('render_evidence',{}).get('screenshot_sha256','')):
                 raise ValueError('fixed rendering repeats differ')
-        evidence['design/.resolved/l2-'+str(i)+'.json']=hashlib.sha256(path.read_bytes()).hexdigest()
+        evidence[l2_rel]=hashlib.sha256(path.read_bytes()).hexdigest()
     return evidence

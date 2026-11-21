@@ -22,6 +22,9 @@ import tempfile
 from pathlib import Path
 
 SKILLS = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(SKILLS / 'own-design-author/scripts'))
+import layer_paths  # noqa: E402  (the one rule for where a repository keeps its layers)
+
 INFOARCH = SKILLS / 'own-infoarch-author/scripts/infoarch_author.py'
 RULES = SKILLS / 'own-design-author/references/allocation-rules.json'
 
@@ -71,6 +74,7 @@ def classify(page):
 
 
 def build(repo, screen, rules_path=RULES):
+    layer_paths.guard(repo)  # a repository that moved to a layout this version does not read stops here, before any read
     rules = load_rules(rules_path)
     with tempfile.TemporaryDirectory() as tmp:
         css = Path(tmp) / 'screen.css'
@@ -90,6 +94,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
     out = Path(args.out)
     try:
+        layer_paths.guard(args.repo)  # before anything else, so a moved repository is never reported as an existing file
         if out.exists() or out.is_symlink():
             raise ValueError(f'上書きしない: {out}')
         page = build(args.repo, args.screen)

@@ -5,6 +5,7 @@ from pathlib import Path
 import tempfile
 import fcntl
 from approvals import SCHEME,repository_id,verify_rows
+import layer_paths
 
 
 # Approval gaps, not structural errors: preparing that very approval must not be refused because of them.
@@ -25,8 +26,8 @@ ALLOWED=('must n-a approval hash missing/mismatch:','approval hash mismatch:','I
 
 
 def _ia_only(root):
-    """A repository with design/info_arch and no design/design.yaml: the IA resolver alone gives the targets."""
-    return not (Path(root)/'design/design.yaml').exists() and (Path(root)/'design/info_arch').is_dir()
+    """A repository with an infoarch layer and no design configuration: the IA resolver alone gives the targets."""
+    return not layer_paths.path(root,'design_config').exists() and layer_paths.path(root,'infoarch').is_dir()
 
 
 def _ia_resolver():
@@ -101,12 +102,12 @@ def _approve_request(root,catalog_dir,request,approver,owner_words,approved_on):
     current,_=_snapshot(root,catalog_dir)
     if repository_id(root)!=identity or any(current.get(row['key'])!=row['value_hash'] for row in rows):
         raise ValueError('reviewed inputs changed during recording; no rows written')
-    path=Path(root)/'design/approvals.yaml'
+    path=layer_paths.path(root,'ledger')
     ledger=(read_data(path) or []) if path.is_file() else []
     # Preserve unrelated owner approvals. No partial writes if validation fails.
     combined=[row for row in ledger if row['key'] not in keys]+recorded
     verify_rows(combined,root)
-    target=Path(root)/'design/approvals.yaml'
+    target=path
     temporary=None
     try:
         with tempfile.NamedTemporaryFile(mode='w',encoding='utf-8',dir=target.parent,delete=False) as stream:
@@ -129,9 +130,10 @@ def _approve_request(root,catalog_dir,request,approver,owner_words,approved_on):
 
 def approve_request(root,catalog_dir,request,approver,*,owner_words=None,approved_on=None):
     root=Path(root)
+    layer_paths.guard(root)
     _owner_approval(owner_words,approved_on)
-    if (root/'design/approvals.yaml').is_symlink():raise ValueError('symlinked ledger is unsupported')
-    directory=root/'design/.resolved'
+    if layer_paths.path(root,'ledger').is_symlink():raise ValueError('symlinked ledger is unsupported')
+    directory=layer_paths.path(root,'resolved')
     if directory.is_symlink():raise ValueError('symlinked output directory is unsupported')
     directory.mkdir(parents=True,exist_ok=True)
     with (directory/'approval.lock').open('a') as lock:

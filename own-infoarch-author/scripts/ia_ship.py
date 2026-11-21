@@ -32,7 +32,8 @@ import check
 import dictionary
 import dom
 import judge
-from common import INFO_ARCH_DIR, SKILL, YamlError, load_ref, load_yaml
+from common import SKILL, YamlError, load_ref, load_yaml
+import layer_paths  # on sys.path through common
 
 EXTENSION = 'pre-push.d/61-infoarch-ship'
 MARKER = Path('.vibe-guard/infoarch-ship.enabled')
@@ -107,7 +108,7 @@ def _kind(root, commit, path):
 def _input_findings(root, commit):
     """The IA inputs the gate reads must be committed as files: a symlink would make the check read elsewhere."""
     out = []
-    base = INFO_ARCH_DIR.as_posix()
+    base = layer_paths.rel('infoarch')
     kind = _kind(root, commit, base)
     if kind == 'symlink':
         out.append(('IA_SHIP_SYMLINK', f'{base} はシンボリックリンク（出荷する木の中身として読めない）', base))
@@ -160,6 +161,7 @@ def gate(root, date, *, commit=None, source=None, predicted=False):
     Without `commit` the clean HEAD of `root` is gated (and must still be the same commit afterwards).
     """
     root = Path(root).resolve()
+    layer_paths.guard(root)
     bound = commit is None
     if bound:
         commit, tree = _clean_commit(root)
@@ -261,6 +263,7 @@ def _evaluate(root, commit, tree, date, source, predicted):
 
 def ship_channel(root, name, date):
     root = Path(root).resolve()
+    layer_paths.guard(root)
     _, m = check.check(root, date)
     row = (m.channels.get(name) or (None, {}))[1]
     if not row.get('ship'):
@@ -285,7 +288,7 @@ def ship_channel(root, name, date):
 
 def _channels_at(root, commit):
     """Shipping channels as committed in `commit` (the pushed tree decides its own merge base)."""
-    names = _git(root, 'ls-tree', '--name-only', commit, (INFO_ARCH_DIR / 'channels').as_posix() + '/').splitlines()
+    names = _git(root, 'ls-tree', '--name-only', commit, layer_paths.rel('infoarch', 'channels') + '/').splitlines()
     rows = {}
     for path in names:
         if not path.endswith('.yaml'):
@@ -351,6 +354,7 @@ def _bases(root, base_ref, pushed):
 
 def pre_push(root, refs_file, date):
     root = Path(root).resolve()
+    layer_paths.guard(root)
     if refs_file is None:
         raise ValueError('pre-push requires the preserved refs file')
     updates, pushed = _base().read_push_refs(root, refs_file)  # deleted refs ship nothing
@@ -415,9 +419,9 @@ def _dispatcher_propagates(text):
 def doctor(root):
     root = Path(root).resolve()
     errors, shipping = [], []
-    base = root / INFO_ARCH_DIR / 'channels'
+    base = layer_paths.path(root, 'infoarch', 'channels')  # a repository that moved stops here
     if not base.is_dir():
-        errors.append('design/info_arch/channels/ absent; no IA ship channel to protect')
+        errors.append(f'{layer_paths.rel("infoarch", "channels")}/ absent; no IA ship channel to protect')
     for path in sorted(base.glob('*.yaml')) if base.is_dir() else []:
         try:
             row = load_yaml(path)
@@ -489,8 +493,9 @@ def maintain(root, date, within_days=None):
     root = Path(root).resolve()
     result = {'exit_code': 0, 'status': 'skipped', 'errors': [], 'warnings': [], 'due': [], 'changed_paths': [],
               'impacted_outlines': [], 'uncovered_judgments': 0}
-    if not (root / INFO_ARCH_DIR).is_dir():
-        return {'exit_code': 0, 'status': 'skipped', 'reason': 'design/info_arch/ absent'}
+    # A skip is only for a repository that never had the layer: a moved one raises here (never a skip, never "0 found").
+    if not layer_paths.path(root, 'infoarch').is_dir():
+        return {'exit_code': 0, 'status': 'skipped', 'reason': f'{layer_paths.rel("infoarch")}/ absent'}
     today = dt.date.fromisoformat(date)
     expiry = load_ref('expiry.json')
     within = expiry['due_within_days'] if within_days is None else within_days
@@ -514,7 +519,7 @@ def maintain(root, date, within_days=None):
             result['due'].append({'id': aid, 'expires': exp.isoformat(), 'outlines': users, 'shipped': bool(shipped & set(users))})
 
     # What changed since the shipping merge base (committed) and in the working tree (uncommitted).
-    prefix = INFO_ARCH_DIR.as_posix() + '/'
+    prefix = layer_paths.rel('infoarch') + '/'
     dict_prefix = dictionary.DICTIONARY_DIR.as_posix() + '/'  # the values and names an outline copies live here
     changed, old_ref = set(p for p in _dirty(root) if p.startswith((prefix, dict_prefix))), 'HEAD'
     bases = sorted({row.get('merge_base') for _, row in m.channels.values() if row['ship'] and row.get('merge_base')})

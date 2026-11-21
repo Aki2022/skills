@@ -13,8 +13,18 @@ from pathlib import Path
 
 SKILL = Path(__file__).resolve().parents[1]
 REFS = SKILL / 'references'
+
+# Where the layers live is own-design-author's one rule (references/layer-paths.json, read by layer_paths.py). A missing
+# sibling is an error, never a silent fallback to a spelled path.
+_DESIGN_SCRIPTS = SKILL.parent / 'own-design-author' / 'scripts'
+if not (_DESIGN_SCRIPTS / 'layer_paths.py').is_file():
+    raise RuntimeError('own-design-author/scripts/layer_paths.py が無い（layer の置き場所の規則は design が持つ）')
+if str(_DESIGN_SCRIPTS) not in sys.path:
+    sys.path.append(str(_DESIGN_SCRIPTS))
+import layer_paths  # noqa: E402
+
 VERSION = '0.4.0'
-INFO_ARCH_DIR = Path('design/info_arch')
+INFO_ARCH_DIR = Path(layer_paths.rel('infoarch'))  # the repository-relative name only; a road that touches a repo uses layer_paths.path
 LEVELS = {'fail': 2, 'warn': 1, 'info': 0}
 
 

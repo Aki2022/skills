@@ -5,6 +5,10 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'own-design-author/scripts'))
+import layer_paths  # noqa: E402  (the one rule for where a repository keeps its layers)
 
 
 def main():
@@ -12,6 +16,11 @@ def main():
     parser.add_argument('--repo', default='.')
     parser.add_argument('--catalog-dir', type=Path)
     args = parser.parse_args()
+    try:
+        layer_paths.guard(args.repo)  # the layout message must reach the caller, never an "L0 unavailable"
+    except layer_paths.LayerLayoutError as exc:
+        print(json.dumps({'exit_code': 2, 'errors': [str(exc)]}, ensure_ascii=False))
+        return 2
     command = os.environ.get('DESIGN_AUTHOR_COMMAND') or str(
         Path(__file__).resolve().parents[2] / 'own-design-author/scripts/design-author')
     argv = [command, 'check', '--repo', args.repo]

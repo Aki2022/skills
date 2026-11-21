@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 # vibe-guard passes the preserved refs file after its scanner has consumed stdin.
-# Every repository with a design system (design/design.yaml) is checked; no per-repo opt-in is needed.
+# Every repository with a design system (found by design-ship --probe) is checked; no per-repo opt-in is needed.
 # The legacy marker may remain but cannot disable the gate: anything other than "1" stops the push.
 set -eu
 repo=$(git rev-parse --show-toplevel) || exit 2
@@ -10,8 +10,20 @@ if [ -e "$marker" ] || [ -L "$marker" ]; then
     echo 'invalid design ship marker; shipment stopped' >&2
     exit 2
   }
-elif [ ! -e "$repo/design/design.yaml" ] && [ ! -L "$repo/design/design.yaml" ]; then
-  exit 0
+else
+  # Whether a design system is present (and whether its layout is readable) is design-ship's to say, so the
+  # place stays the rule's: 0 present, 3 none (nothing to check), anything else (a layout it cannot read) stops.
+  ship="${DESIGN_SHIP_COMMAND:-design-ship}"
+  rc=0
+  "$ship" --probe --repo "$repo" || rc=$?
+  case "$rc" in
+    0) ;;
+    3) exit 0 ;;
+    *)
+      echo 'design layout probe failed; shipment stopped' >&2
+      exit 2
+      ;;
+  esac
 fi
 [ "$#" -eq 1 ] && [ -f "$1" ] || {
   echo 'missing preserved push refs; shipment stopped' >&2

@@ -9,6 +9,14 @@ import re
 import subprocess
 import sys
 
+# This bridge is imported by own-design-author's L0 and has no sibling imports of its own; the layer rule is design's.
+_DESIGN_SCRIPTS = Path(__file__).resolve().parents[2] / 'own-design-author' / 'scripts'
+if not (_DESIGN_SCRIPTS / 'layer_paths.py').is_file():
+    raise RuntimeError('own-design-author/scripts/layer_paths.py が無い（layer の置き場所の規則は design が持つ）')
+if str(_DESIGN_SCRIPTS) not in sys.path:
+    sys.path.append(str(_DESIGN_SCRIPTS))
+import layer_paths  # noqa: E402
+
 VERSION = '0.4.0'
 CONTRACT = 'ia-git-history-v4'
 # ia:item:<item id>: one row per product item of a blueprint (the item's own hash, SPEC-product-ui-infoarch requirement 3).
@@ -69,9 +77,9 @@ def resolve(*, root, approvals, profiles):
     git = subprocess.run(['git', '-C', str(root), 'rev-parse', '--show-toplevel'], capture_output=True, text=True)
     if git.returncode or Path(git.stdout.strip()).resolve() != root:
         raise ValueError('IA root must be the git repository root')
-    base = root / 'design/info_arch'
+    base = layer_paths.path(root, 'infoarch')  # a repository that moved stops here (LAYER_LAYOUT_FOREIGN_ROOT)
     # Check every component and input before handing paths to the upstream loader.
-    for path in [root / 'design', base, *sorted(base.rglob('*'))]:
+    for path in [layer_paths.path(root, 'layers'), base, *sorted(base.rglob('*'))]:
         if path.is_symlink() or not path.resolve().is_relative_to(root):
             raise ValueError('IA input symlink or escape')
         if not path.is_file() and not path.is_dir():

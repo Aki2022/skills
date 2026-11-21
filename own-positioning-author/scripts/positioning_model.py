@@ -1,4 +1,4 @@
-"""The positioning SSOT (design/info_arch/info_arch.yaml, schema 5): loading, id and ledger checks, approval reading, and
+"""The positioning SSOT (design/info_arch/info_arch.yaml, schema 5; the place is layer-paths.json's `positioning_file`): loading, id and ledger checks, approval reading, and
 the readable form of what an approval request binds.
 
 What is checked here is structure and references, never meaning. The positioning layer knows nothing of outlines:
@@ -16,7 +16,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import positioning as pos
-from ia_common import INFO_ARCH_DIR, YamlError, load_yaml, validator_for
+from ia_common import YamlError, load_yaml, validator_for  # first: it puts own-design-author/scripts on sys.path
+import layer_paths  # noqa: E402
 
 SCHEMA = 5
 LEGACY_SCHEMA = 4
@@ -29,7 +30,7 @@ POSITIONING = dict(pos.ATOM_BLOCKS)
 BLOCKS = {'proofs': 'prf', **POSITIONING}
 PREFIX_BLOCK = {v: k for k, v in BLOCKS.items()}
 ID_RE = re.compile(r'(' + '|'.join(BLOCKS.values()) + r')-((?!0000)[0-9]{4}|[1-9][0-9]{4,})')  # always fullmatch: $ would accept a trailing newline
-SSOT_PATH = INFO_ARCH_DIR / 'info_arch.yaml'
+SSOT_PATH = Path(layer_paths.rel('positioning_file'))  # repository-relative name; reading goes through layer_paths.path
 
 
 @dataclass
@@ -75,12 +76,12 @@ def lift_v4(data):
 
 def load_ssot(root, report):
     """-> (ssot in the schema 5 shape or None, legacy terms or None). Failures go to the report (exit 2)."""
-    root = Path(root)
-    if not (root / SSOT_PATH).is_file():
+    ssot_file = layer_paths.path(Path(root), 'positioning_file')  # a repository that moved stops here, never "missing"
+    if not ssot_file.is_file():
         report.add('fail', 'IA_MISSING', f'{SSOT_PATH} がない', SSOT_PATH)
         return None, None
     try:
-        data = load_yaml(root / SSOT_PATH)
+        data = load_yaml(ssot_file)
     except YamlError as exc:
         report.add('fail', 'IA_YAML', f'YAML として読めない: {exc}', SSOT_PATH)
         return None, None

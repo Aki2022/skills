@@ -32,10 +32,12 @@ import check
 import dom
 import outline as ol
 from common import Report
+import layer_paths  # on sys.path through common
 
 DESIGN_SCRIPTS = Path(__file__).resolve().parents[2] / 'own-design-author/scripts'
-LEDGER = Path('design/judgments.json')
-ACCEPTED = Path('design/info_arch/accepted_reviews.yaml')
+# Repository-relative names, derived from the layer rule; every read and write goes through layer_paths.path (the guard).
+LEDGER = Path(layer_paths.rel('judgments'))
+ACCEPTED = Path(layer_paths.rel('accepted_reviews'))
 # Fact and proof listings (trust) and the call to action (act) are not there to convey a value: in the I16 example
 # and the officeohana pilot the owner labeled every such copy "does not convey", so asking only produced reviews.
 VALUE_FIT_SKIP_ROLES = ('trust', 'act')
@@ -199,7 +201,7 @@ def read_dom_reports(paths, expected, report):
 
 
 def read_ledger(root):
-    path = Path(root) / LEDGER
+    path = layer_paths.path(Path(root), 'judgments')
     if any(p.is_symlink() for p in (path, path.parent)):
         raise ValueError('判定台帳が symlink')
     if not path.exists():
@@ -209,7 +211,7 @@ def read_ledger(root):
 
 def read_accepted(root):
     """-> {judgment hash: row} of reviews the owner accepted; {} when there is no record. Raises on any damage."""
-    path = Path(root) / ACCEPTED
+    path = layer_paths.path(Path(root), 'accepted_reviews')
     if any(p.is_symlink() for p in (path, path.parent)):
         raise ValueError(f'{ACCEPTED} が symlink')
     if not path.exists():
@@ -370,12 +372,16 @@ def run(root, date, dom_reports=(), answers=None, replacement_out=None):
                             'reason': 'dom の報告（first_screens）が渡されていない'})
     try:
         accepted = read_accepted(root)
+    except layer_paths.LayerLayoutError:
+        raise  # a moved repository stops the command; it is not a damaged record
     except (ValueError, OSError) as exc:
         accepted = {}  # a broken record never hides a review
         pre.add('fail', 'IA_JUDGE_ACCEPTED_FILE', f'認めた要確認の記録が読めない: {exc}', ACCEPTED)
     try:
         ledger = read_ledger(root)
         report = evaluate(rows, ledger, missing=missing, policy=policy, jl=jl, accepted=accepted)
+    except layer_paths.LayerLayoutError:
+        raise
     except (ValueError, KeyError, TypeError) as exc:
         report = Report(level='judge', evaluated_on=date)
         report.screened, report.missing, ledger = [], missing, None
@@ -418,7 +424,7 @@ def accept_reviews(root, date, dom_reports, ids, owner_words, approved_on, write
            'ids': list(dict.fromkeys(ids)), 'owner_approval': owner,
            'commit_trailer': f'Owner-Approval: 「{owner["words"]}」 ({owner["date"]})'}
     if write and new:
-        path = Path(root) / ACCEPTED
+        path = layer_paths.path(Path(root), 'accepted_reviews')
         data = {'schema_version': 1, 'rows': sorted(list(rows.values()) + new, key=lambda r: (r['id'], r['judgment_hash']))}
         tmp = path.with_name(path.name + '.tmp')
         if tmp.is_symlink() or tmp.exists():

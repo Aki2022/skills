@@ -24,6 +24,8 @@ def test_the_order_rule_does_not_depend_on_the_width():
 
 
 def test_the_override_notation_requires_a_reason_and_is_written_down():
-    assert RULES['override']['file'] == 'design/layout-overrides.yaml' and 'reason' in RULES['override']['entry']
+    layout = json.loads((SKILLS / 'own-design-author/references/layer-paths.json').read_text(encoding='utf-8'))['entries']
+    assert 'file' not in RULES['override'] and layout[RULES['override']['file_entry']] == 'design/layout-overrides.yaml'  # a key into layer-paths.json, not a path
+    assert 'reason' in RULES['override']['entry']
     text = (SKILLS / 'own-design-author/references/allocation-rules.md').read_text(encoding='utf-8')
     assert 'design/layout-overrides.yaml' in text and '理由' in text and all(t in text for t in ('dashboard', 'detail', 'list', 'form'))

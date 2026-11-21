@@ -108,7 +108,7 @@ def is_test(path):
 
 
 def is_extensionless_script(path):
-    if path.suffix or not path.is_file() or path.parent.name != 'scripts':
+    if path.suffix or not path.is_file() or not ({'scripts', 'pre-push.d', 'pre-commit.d'} & set(path.parent.parts)):
         return False
     return path.read_bytes()[:2] == b'#!'
 
@@ -121,7 +121,7 @@ def scanned_files():
             continue
         if path in RULE_FILES:
             continue
-        in_scripts = 'scripts' in rel
+        in_scripts = 'scripts' in rel or 'hooks' in rel
         in_refs = 'references' in rel and path.suffix == '.json'
         if (in_scripts and (path.suffix in CODE_SUFFIXES or is_extensionless_script(path))) or in_refs:
             files.append(path)
@@ -159,6 +159,7 @@ def test_the_scan_looked_at_real_code_in_every_language():
     assert len(files) >= 60, 'a scan of %d files is not a scan (0 files must not pass)' % len(files)
     assert by_suffix.get('.py', 0) >= 40 and by_suffix.get('.mjs', 0) >= 5, by_suffix
     assert any(p.name == 'design-author' for p in files), 'extensionless entry points must be scanned too'
+    assert any(p.name == '60-design-ship' for p in files), 'the git hooks read the layers too and must be scanned'
 
 
 def test_no_code_outside_the_rule_spells_the_layer_root():

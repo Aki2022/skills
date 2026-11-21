@@ -29,6 +29,7 @@ from pathlib import Path
 import check
 import common
 import dictionary
+import layer_paths  # on sys.path through common
 import positioning_model as pm
 
 DOMAIN = 'product'
@@ -153,13 +154,13 @@ def run(root, mapping, domain=DOMAIN, write=False, date=None):
     if clash:
         unmigrated.append({'id': ','.join(clash), 'reason': 'dictionary-id-taken', 'text': '辞書にすでにある id'})
     dict_doc = {'schema_version': dictionary.SCHEMA_VERSION, 'domain': domain,
-                'summary': '製品の正式名称と固定値（infoarch-author migrate-dictionary が design/info_arch/ から移した）',
+                'summary': f'製品の正式名称と固定値（infoarch-author migrate-dictionary が {layer_paths.rel("infoarch")}/ から移した）',
                 'entries': new_entries}
     shape = dictionary.shape_errors({f'{domain}.json': dict_doc}) if new_entries else []
     for e in shape:
         unmigrated.append({'id': str(target), 'reason': 'dictionary-shape', 'text': e})
     # the SSOT, textually, and read back
-    ssot_path = root / pm.SSOT_PATH
+    ssot_path = layer_paths.path(root, 'positioning_file')
     new_text = rewrite_ssot(ssot_path.read_text(encoding='utf-8'))
     try:
         if common.safe_load_text(new_text) != pm.lift_v4(common.load_yaml(ssot_path))[0]:
@@ -168,7 +169,7 @@ def run(root, mapping, domain=DOMAIN, write=False, date=None):
         unmigrated.append({'id': str(pm.SSOT_PATH), 'reason': 'ssot-rewrite', 'text': str(exc)})
     changes[str(pm.SSOT_PATH)] = new_text
     # outlines and their rendered outputs
-    base = root / common.INFO_ARCH_DIR
+    base = layer_paths.path(root, 'infoarch')
     for f in sorted((base / 'outlines').glob('*.yaml')) if (base / 'outlines').is_dir() else []:
         rel = f.relative_to(root)
         text = f.read_text(encoding='utf-8')
@@ -189,13 +190,13 @@ def run(root, mapping, domain=DOMAIN, write=False, date=None):
     # prove the migrated tree in a scratch copy: its failures must not exceed the original's
     with tempfile.TemporaryDirectory() as tmp:
         scratch = Path(tmp)
-        for sub in ('design', 'docs'):
+        for sub in (layer_paths.LAYERS_ROOT, 'docs'):
             if (root / sub).is_dir():
                 shutil.copytree(root / sub, scratch / sub, symlinks=True)
         (scratch / target).parent.mkdir(parents=True, exist_ok=True)
         (scratch / target).write_text(json.dumps(dict_doc, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
         for rel, text in changes.items():
-            if not rel.startswith('design/'):
+            if not rel.startswith(layer_paths.LAYERS_ROOT + '/'):
                 continue
             (scratch / rel).write_text(text, encoding='utf-8')
         before, _ = check.check(root, date)

@@ -8,7 +8,7 @@
     "positioning_file": "design/info_arch/info_arch.yaml",
     "infoarch": "design/info_arch",
     "accepted_reviews": "design/info_arch/accepted_reviews.yaml",
-    "design": "design",
+    "design_dir": "design",
     "design_config": "design/design.yaml",
     "ledger": "design/approvals.yaml",
     "judgments": "design/judgments.json",

@@ -16,6 +16,8 @@ An item the map does not route, or a machine item whose tokens the design system
 import json
 from pathlib import Path
 
+import layer_paths
+
 MAP = Path(__file__).resolve().parents[1] / 'references/item-checks.json'
 ROUTES = ('machine', 'decision', 'judgment')
 # Failures of these already stop L2; reaching item verification means they passed on the page.
@@ -115,7 +117,7 @@ def route(item, evidence, tokens, rules, mapping, active):
         return 'uncovered', [], 'the skill map does not route this catalog item'
     if row['route'] == 'decision':
         return 'uncovered', [], ('design decision has no declared check: declare a count/text/style rule '
-                                 '(or a judgment statement) in design/checks and cite it as rule:<id>')
+                                 f"(or a judgment statement) in {layer_paths.rel('checks')} and cite it as rule:<id>")
     if row['route'] == 'judgment':
         return 'afm', [], ''
     missing = sorted(TOKEN_NEEDS[c] for c in row['checkers'] if c not in active)

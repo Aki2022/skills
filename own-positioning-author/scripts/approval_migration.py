@@ -18,13 +18,15 @@ import tempfile
 from pathlib import Path
 
 import positioning as pos
+import layer_paths  # on sys.path through positioning -> ia_common
 
-LEDGER = 'design/approvals.yaml'
+LEDGER = layer_paths.rel('ledger')  # repository-relative name; reading and writing go through layer_paths.path
 TRAILER = re.compile(r'^Owner-Approval:\s*「(?P<words>.+)」\s*\((?P<date>\d{4}-\d{2}-\d{2})\)\s*$')
 
 
 def owner_words(root):
     """[(words, date)] of every Owner-Approval trailer on the commits that touched the ledger, oldest first."""
+    layer_paths.guard(root)
     run = subprocess.run(['git', '-C', str(root), 'log', '--reverse', '--format=%B%x00', '--', LEDGER],
                          capture_output=True, text=True)
     if run.returncode:
@@ -88,7 +90,7 @@ def migrate(root, m, rows, write=False):
         return result
     result['exit_code'] = 0
     if write:
-        _write(Path(root) / LEDGER, kept + new_rows)
+        _write(layer_paths.path(Path(root), 'ledger'), kept + new_rows)
         result['written'] = True
     return result
 

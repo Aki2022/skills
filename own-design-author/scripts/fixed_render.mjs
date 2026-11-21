@@ -3,6 +3,7 @@ import {readFileSync, realpathSync, writeFileSync, mkdirSync} from 'node:fs';
 import {resolve, relative, sep} from 'node:path';
 import {createHash} from 'node:crypto';
 import os from 'node:os';
+import {layerPath} from './layer_paths.mjs';
 
 export const sha = data => createHash('sha256').update(data).digest('hex');
 const canonical = value => Array.isArray(value) ? value.map(canonical) :
@@ -99,7 +100,7 @@ export async function probe(chromium, playwrightVersion) {
 
 export function loadEnvironment(path,root,widths,schemes) {
   path=resolve(path);root=realpathSync(root);
-  if(path!==resolve(root,'design/render-environment.json') || realpathSync(path)!==path)throw Error('invalid environment location');
+  if(path!==resolve(layerPath(root,'render_environment')) || realpathSync(path)!==path)throw Error('invalid environment location');
   const bytes=readFileSync(path);const config=JSON.parse(bytes);
   const keys='schema_version,runtime,clock,locale,timezone,device_scale_factor,reduced_motion,viewports,schemes,fonts';
   const remote=config&&config.remote_fonts!==undefined?remoteFonts(config.remote_fonts):null;

@@ -110,6 +110,24 @@ def test_the_built_page_passes_every_structural_constraint_of_the_html_media(bui
     assert [label for ok, label in results if not ok] == []
 
 
+def test_the_built_page_meets_the_text_contrast_in_the_light_and_the_dark_theme(built):
+    """audit_html's contrast check resolves `:root` variables last-wins, so on a page with a dark `prefers-color-scheme` block it
+    judges only the dark pairs (found when the L1 advisories of built screens were read). What the build draws in the light
+    theme is therefore pinned here: body text, the outlined action and the filled primary action, in both themes."""
+    page, _ = built
+    css = re.search(r'<style>(.*?)</style>', page, re.S).group(1)
+    base = re.search(r'(?<![\w-])(?<!\{):root\{([^}]*)\}', css).group(1)
+    dark = re.search(r'prefers-color-scheme:dark\)\{:root\{([^}]*)\}', css).group(1)
+    minimum = 4.5
+    for name, block in (('light', base), ('dark', dark)):
+        v = dict(re.findall(r'--([\w-]+):([^;]+)', block))
+        pairs = {'body': (v['fg'], v['bg']), 'outlined action': (v['accent'], v['bg']), 'primary action': (v['bg'], v['accent'])}
+        assert len(pairs) == 3
+        for what, (fg, bg) in pairs.items():
+            ratio = audit_html.contrast_ratio(audit_html.parse_color(fg), audit_html.parse_color(bg))
+            assert ratio >= minimum, f'{name} theme, {what}: {fg} on {bg} = {ratio:.2f}:1 (min {minimum})'
+
+
 def test_the_build_refuses_a_failing_blueprint_and_an_existing_file(tmp_path):
     repo = tmp_path / 'repo'
     repo.mkdir()
@@ -245,3 +263,46 @@ def test_audit_screen_without_the_dependency_interpreter_stops_and_says_which_va
 def test_audit_screen_does_not_start_itself_again_in_a_loop(tmp_path):
     proc = _run_without_yaml(tmp_path, {'DESIGN_AUTHOR_PYTHON': sys.executable, 'AUDIT_SCREEN_REEXEC': '1'})
     assert proc.returncode == 2 and 'PyYAML' in proc.stdout, proc.stdout + proc.stderr
+
+
+# ---- the dependency interpreter is broken ------------------------------------------------------------------------
+# DESIGN_AUTHOR_PYTHON may point at something that cannot run the script: a path that does not exist, a directory, a file that
+# is not executable, or a python without PyYAML. Every one of them must stop with exit 2 and name the variable, and must never
+# loop. Stopping is the safe side; a traceback (exit 1) or a hang is not.
+
+def _yamlless_interpreter(tmp_path):
+    """A stand-in for a python without PyYAML: it runs the script it is given with `import yaml` made to fail, and logs each start."""
+    log = tmp_path / 'starts.log'
+    wrapper = tmp_path / 'python-without-yaml'
+    wrapper.write_text(
+        '#!/bin/sh\n'
+        f'echo started >> "{log}"\n'
+        f'exec "{sys.executable}" -c "import sys, runpy; sys.modules[\'yaml\'] = None; sys.argv = sys.argv[1:]; '
+        'runpy.run_path(sys.argv[0], run_name=\'__main__\')" "$@"\n', encoding='utf-8')
+    wrapper.chmod(0o755)
+    return wrapper, log
+
+
+def _broken_targets(tmp_path):
+    not_executable = tmp_path / 'not-executable'
+    not_executable.write_text('#!/bin/sh\n', encoding='utf-8')
+    not_executable.chmod(0o644)
+    return {'absent': tmp_path / 'no-such-python', 'directory': tmp_path, 'not-executable': not_executable}
+
+
+@pytest.mark.parametrize('kind', ['absent', 'directory', 'not-executable'])
+def test_audit_screen_stops_when_the_dependency_interpreter_cannot_be_started(kind, tmp_path):
+    target = _broken_targets(tmp_path)[kind]
+    proc = _run_without_yaml(tmp_path, {'DESIGN_AUTHOR_PYTHON': str(target)})
+    assert proc.returncode == 2, proc.stdout + proc.stderr
+    assert 'PyYAML' in proc.stdout and 'DESIGN_AUTHOR_PYTHON' in proc.stdout, proc.stdout + proc.stderr
+    assert 'Traceback' not in proc.stderr, proc.stderr
+
+
+def test_audit_screen_stops_once_when_the_dependency_interpreter_has_no_pyyaml(tmp_path):
+    wrapper, log = _yamlless_interpreter(tmp_path)
+    proc = _run_without_yaml(tmp_path, {'DESIGN_AUTHOR_PYTHON': str(wrapper)})
+    assert proc.returncode == 2, proc.stdout + proc.stderr
+    assert 'PyYAML' in proc.stdout and 'DESIGN_AUTHOR_PYTHON' in proc.stdout, proc.stdout + proc.stderr
+    # started exactly once: the interpreter was really tried (the branch exists), and it was not tried again (no loop)
+    assert log.read_text(encoding='utf-8').splitlines() == ['started']

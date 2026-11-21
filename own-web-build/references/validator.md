@@ -65,6 +65,10 @@ L0失格で生成を止め、L1/L2失格で非決定論レビューを止める�
 `[静的]` は `audit_html.py` で常に取れる。CSS変数・継承・メディアクエリ・テーマ切替が絡む項目は
 静的で PASS でも `[実測]` で最終確定する（人間がL2実施を認めた場合）。
 
+`audit_html.py` のコントラストは、基底と `@media (prefers-color-scheme:dark|light)` の各テーマを別々に判定する
+（media の中の `:root` を基底の表に混ぜない。混ぜると後ろが勝ち、基底の組が判定されなかった）。
+`:root[data-theme=...]` による切替は判定できないので、`[実測]` か `[自己点検]` に回す。
+
 ## PPTX Validator（参考Tier — 機械validateしない）
 
 PPTXは実行可能なDOMを持たないため、本Skillでは機械validateの対象外。以下は生成時の`[自己点検]`

@@ -15,7 +15,8 @@ media/html の type: constraint を機械検証する。LLMの自己申告に頼
   - 判定可能な範囲のコントラスト（同一ルール内 color+background、CSS変数解決を含む）
 外部 <link rel="stylesheet"> のローカルCSSも読み、@media/focus/リテラルcolor+background を評価する
 （実サイトのように CSS を別ファイルに分けても誤検出しない）。
-コントラストは画像上テキスト・グラデーション・CSS変数のテーマ切替(data-theme)・JS動的スタイルは判定不能。
+コントラストは、基底と @media (prefers-color-scheme:dark|light) の各テーマを別々に判定する。
+画像上テキスト・グラデーション・CSS変数のテーマ切替(data-theme)・JS動的スタイルは判定不能。
 その分は [自己点検]（validators/common/contrast.md）に委ねる旨を出力する。
 """
 import argparse
@@ -89,23 +90,62 @@ def parse_color(v):
     return None
 
 
-def resolve_vars(text):
-    """基底 :root {} の --var: value のみを集め、var(--x) を解決した文字列を返す（1段）。
+_SCHEME_MEDIA = re.compile(r"@media[^{]*prefers-color-scheme\s*:\s*(dark|light)\b[^{]*\{", re.I)
 
-    テーマ上書き（:root[data-theme=...]{}）の変数は集めない。集めると最後に定義された
-    テーマ値が勝ち、別テーマの背景と組み合わさった「実在しないペア」を誤検出するため。
-    テーマ切替時のコントラストは判定不能として [自己点検]（validators/common/contrast.md）に委ねる。
-    基底 :root が無い場合は、後方互換で全 --var を集める（単一テーマのHTML断片向け）。
+
+def split_scheme_media(text):
+    """`@media (prefers-color-scheme:dark|light){...}` の中身と、それ以外に分けて返す（base_text, {scheme: 中身}）。
+    波括弧の対応を数えて閉じ括弧を探す（入れ子の :root{} やルールの {} に惑わされない）。
+    閉じていなければ、末尾までをそのテーマの中身として扱う。"""
+    base, schemes, pos = [], {}, 0
+    while True:
+        m = _SCHEME_MEDIA.search(text, pos)
+        if not m:
+            base.append(text[pos:])
+            break
+        base.append(text[pos:m.start()])
+        depth, i = 1, m.end()
+        while i < len(text) and depth:
+            depth += (text[i] == "{") - (text[i] == "}")
+            i += 1
+        body = text[m.end():i - 1] if depth == 0 else text[m.end():]
+        scheme = m.group(1).lower()
+        schemes[scheme] = schemes.get(scheme, "") + body
+        pos = i
+    return "".join(base), schemes
+
+
+def _root_vars(text):
+    """:root {} の --var: value を後勝ちで集める。:root[data-theme=...] は :root\\s*\\{ に合わないので集めない。"""
+    varmap = {}
+    for block in re.findall(r":root\s*\{([^{}]*)\}", text):
+        for k, val in re.findall(r"(--[\w-]+)\s*:\s*([^;{}]+)", block):
+            varmap[k] = val.strip()
+    return varmap
+
+
+def themes(text):
+    """テキストの中のテーマを [(名前, そのテーマで効く CSS テキスト, 変数表)] で返す。
+
+    - base（基底）: prefers-color-scheme の @media を除いたテキストと、基底 :root の変数。基底が明るいか暗いかは問わない。
+    - dark / light: その @media (prefers-color-scheme:...) がある時だけ。基底のルールに、その media のルールを足した
+      テキストと、基底の変数をその media の :root で上書きした変数表。
+    media の中の :root を基底と同じ表に混ぜると後ろが勝ち、基底（や別テーマ）の組が判定されない（この関数が分ける理由）。
     """
-    base_blocks = re.findall(r":root\s*\{([^{}]*)\}", text)
-    if base_blocks:
-        varmap = {}
-        for block in base_blocks:
-            for k, val in re.findall(r"(--[\w-]+)\s*:\s*([^;{}]+)", block):
-                varmap[k] = val.strip()
-    else:
-        varmap = dict(re.findall(r"(--[\w-]+)\s*:\s*([^;{}]+)", text))
+    base_text, schemes = split_scheme_media(text)
+    base_vars = _root_vars(base_text)
+    if not base_vars and not re.search(r":root\s*\{", base_text):
+        # 基底 :root が無い場合は後方互換で全 --var を集める（単一テーマのHTML断片向け）
+        base_vars = {k: v.strip() for k, v in re.findall(r"(--[\w-]+)\s*:\s*([^;{}]+)", base_text)}
+    result = [("base", base_text, base_vars)]
+    for scheme in ("dark", "light"):
+        body = schemes.get(scheme, "")
+        if body.strip():
+            result.append((scheme, base_text + body, {**base_vars, **_root_vars(body)}))
+    return result
 
+
+def _substitute(text, varmap):
     def sub(m):
         name = m.group(1).strip()
         fallback = m.group(2)
@@ -116,22 +156,63 @@ def resolve_vars(text):
     return re.sub(r"var\(\s*(--[\w-]+)\s*(?:,\s*([^)]*))?\)", sub, text)
 
 
+def resolve_vars(text, theme="base"):
+    """指定テーマ（既定は base＝基底）の --var を集め、var(--x) を解決した文字列を返す（1段）。
+
+    @media (prefers-color-scheme:dark|light) の中の :root は別のテーマ（dark / light）として扱い、基底の表に混ぜない。
+    混ぜると後ろが勝ち、その値で基底の組が上書きされて判定されなかった。dark / light を指定した時は、基底の変数を
+    その media の :root で上書きした表で解決し、その media のルールも含めた文字列を返す。base の文字列には
+    prefers-color-scheme の @media の中身を含めない。
+    :root[data-theme=...]{} によるテーマ切替の変数は集めない。集めると最後に定義されたテーマ値が勝ち、別テーマの
+    背景と組み合わさった「実在しないペア」を誤検出するため。data-theme の切替は判定不能として
+    [自己点検]（validators/common/contrast.md）に委ねる。
+    基底 :root が無い場合は、後方互換で全 --var を集める（単一テーマのHTML断片向け）。
+    """
+    for name, css, varmap in themes(text):
+        if name == theme:
+            return _substitute(css, varmap)
+    raise ValueError(f"theme {theme!r} is not in this text")
+
+
+def per_theme(text, judge):
+    """テーマごとに var() を解決した文字列に judge(resolved) -> [(ok, label)] を当て、結果をまとめる。
+    base しかなければ従来どおり 1 回だけ。複数あるときは、全テーマに同じ組が出るものを 1 件にし、
+    一部のテーマにだけ出る組の label に [テーマ名] を付ける。"""
+    runs = [(name, judge(_substitute(css, varmap))) for name, css, varmap in themes(text)]
+    if len(runs) == 1:
+        return runs[0][1]
+    sets = [set(found) for _, found in runs]
+    merged, seen = [], set()
+    for (name, found), _ in zip(runs, sets):
+        for item in found:
+            ok, label = item
+            if all(item in other for other in sets):
+                if item not in seen:  # 全テーマ共通は 1 件
+                    seen.add(item)
+                    merged.append(item)
+            else:
+                merged.append((ok, f"{label} [{name}]"))
+    return merged
+
+
 def literal_color_pairs(css_text, minimum, source="css"):
     """CSSテキストのルール単位で color+background の両指定を探し、解決可能なら判定を返す。
-    <style>ブロックでも外部CSSでも共通で使う。"""
-    results = []
-    resolved = resolve_vars(css_text)
-    for block in re.findall(r"\{([^{}]*)\}", resolved):
-        fg = re.search(r"(?<!-)\bcolor\s*:\s*([^;]+)", block)
-        bg = re.search(r"background(?:-color)?\s*:\s*([^;{]+)", block)
-        if fg and bg:
-            fgc = parse_color(fg.group(1))
-            bgc = parse_color(bg.group(1))
-            if fgc and bgc:
-                r = round(contrast_ratio(fgc, bgc), 2)
-                results.append((r >= minimum,
-                                f"[{source}] contrast {fg.group(1).strip()} on {bg.group(1).strip()} = {r}:1 (min {minimum})"))
-    return results
+    <style>ブロックでも外部CSSでも共通で使う。基底と prefers-color-scheme の各テーマ（dark / light）は別々に判定する。"""
+    def judge(resolved):
+        results = []
+        for block in re.findall(r"\{([^{}]*)\}", resolved):
+            fg = re.search(r"(?<!-)\bcolor\s*:\s*([^;]+)", block)
+            bg = re.search(r"background(?:-color)?\s*:\s*([^;{]+)", block)
+            if fg and bg:
+                fgc = parse_color(fg.group(1))
+                bgc = parse_color(bg.group(1))
+                if fgc and bgc:
+                    r = round(contrast_ratio(fgc, bgc), 2)
+                    results.append((r >= minimum,
+                                    f"[{source}] contrast {fg.group(1).strip()} on {bg.group(1).strip()} = {r}:1 (min {minimum})"))
+        return results
+
+    return per_theme(css_text, judge)
 
 
 def load_linked_css(html, base_dir):
@@ -165,15 +246,20 @@ def check_contrast(html, minimum, linked_css=""):
     for style in re.findall(r"<style[^>]*>(.*?)</style>", html, re.S | re.I):
         results += literal_color_pairs(style, minimum, source="style")
     # インライン style="color:..;background:.."
-    resolved = resolve_vars(html)
-    for st in re.findall(r'style\s*=\s*"([^"]*)"', resolved):
-        fg = re.search(r"(?<!-)\bcolor\s*:\s*([^;]+)", st)
-        bg = re.search(r"background(?:-color)?\s*:\s*([^;]+)", st)
-        if fg and bg:
-            fgc, bgc = parse_color(fg.group(1)), parse_color(bg.group(1))
-            if fgc and bgc:
-                r = round(contrast_ratio(fgc, bgc), 2)
-                results.append((r >= minimum, f"[inline] contrast = {r}:1 (min {minimum})"))
+    def judge_inline(resolved):
+        found = []
+        for st in re.findall(r'style\s*=\s*"([^"]*)"', resolved):
+            fg = re.search(r"(?<!-)\bcolor\s*:\s*([^;]+)", st)
+            bg = re.search(r"background(?:-color)?\s*:\s*([^;]+)", st)
+            if fg and bg:
+                fgc, bgc = parse_color(fg.group(1)), parse_color(bg.group(1))
+                if fgc and bgc:
+                    r = round(contrast_ratio(fgc, bgc), 2)
+                    found.append((r >= minimum,
+                                  f"[inline] contrast {fg.group(1).strip()} on {bg.group(1).strip()} = {r}:1 (min {minimum})"))
+        return found
+
+    results += per_theme(html, judge_inline)
     # 外部リンクCSS（:root のCSS変数も resolve_vars で解決）
     if linked_css:
         results += literal_color_pairs(linked_css, minimum, source="linked-css")

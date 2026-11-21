@@ -29,9 +29,9 @@ OUTLINE_TARGETS = ('channels', 'outlines', 'sections')
 BLUEPRINT_TARGETS = ('screens', 'items')
 TARGET_KEYS = OUTLINE_TARGETS + BLUEPRINT_TARGETS
 CATEGORIES = ('executed', 'skipped', 'missing', 'uncovered', 'screened')
-# The fixed values and official names the checker compares against are the docs dictionary's, outside design/. They are
+# The fixed values and official names the checker compares against are the docs dictionary's, outside ux/. They are
 # inputs too: one file per domain, `docs/dictionary/<domain>.json` (own-doc-update/scripts/dictionary.py reads exactly
-# `DICTIONARY_DIR/*.json`; a test pins the two together). Its hashes sit beside the design/info_arch/ ones in
+# `DICTIONARY_DIR/*.json`; a test pins the two together). Its hashes sit beside the ux/infoarch/ and ux/positioning/ ones in
 # governance.input_hashes, so a changed word changes them (design L0's consumers compare them against the tree).
 DICTIONARY_DIR = 'docs/dictionary'
 
@@ -79,13 +79,17 @@ def resolve(*, root, approvals, profiles):
         raise ValueError('IA root must be the git repository root')
     base = layer_paths.path(root, 'infoarch')  # a repository that moved stops here (LAYER_LAYOUT_FOREIGN_ROOT)
     # Check every component and input before handing paths to the upstream loader.
-    for path in [layer_paths.path(root, 'layers'), base, *sorted(base.rglob('*'))]:
+    positioning = layer_paths.path(root, 'positioning_dir')
+    # Either IA input tree may exist alone (a positioning with no infoarch yet is a real state, reported by check as
+    # red); only a repository with neither stops here as "missing".
+    trees = [t for t in (base, positioning) if t.exists() or t.is_symlink()] or [base]  # a dangling link is not absence
+    for path in [layer_paths.path(root, 'layers'), *trees, *[p for tree in trees for p in sorted(tree.rglob('*'))]]:
         if path.is_symlink() or not path.resolve().is_relative_to(root):
             raise ValueError('IA input symlink or escape')
         if not path.is_file() and not path.is_dir():
             raise ValueError('IA input is missing or not a regular file/directory')
     inputs = {p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
-              for p in sorted(base.rglob('*')) if p.is_file()}
+              for tree in trees for p in sorted(tree.rglob('*')) if p.is_file()}
     inputs.update(dictionary_inputs(root))
     cli = Path(__file__).resolve().parent / 'infoarch_author.py'
     evaluated_on = dt.date.today().isoformat()
@@ -140,7 +144,7 @@ def resolve(*, root, approvals, profiles):
     elif run.returncode != 2:
         raise ValueError('IA approval targets failed on a loadable SSOT')
     now = {p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
-           for p in sorted(base.rglob('*')) if p.is_file() and not p.is_symlink()}
+           for tree in trees for p in sorted(tree.rglob('*')) if p.is_file() and not p.is_symlink()}
     now.update(dictionary_inputs(root))
     if now != inputs:
         raise ValueError('IA inputs changed during check')

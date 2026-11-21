@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "note": "v5 から v6 への一括移行（infoarch-author migrate-v6、SPEC-information-architecture-standardization v6 の要件 17）で「移しそこね」と数える条件と、それを起こす赤のフィクスチャの対応表。移しそこねが 1 件でもあれば終了コード 2 で、--write でも何も書かない。scripts/tests/test_migrate_v6.py が、全条件に赤のケースが 1 つ以上あること（対応の無い条件 0 件）、全ケースが既知の条件を指すこと、全ケースが終了コード 2・その条件の reason・書かないことを確かめる。ケースは基準の v5 フィクスチャ（test_migrate_v6 の V5_SSOT・V5_OUTLINES・V5_HTML・design.yaml）への操作で書く。file は ssot・outline:<id>・design・html:<repo 相対パス>。",
+  "note": "v5 から v6 への一括移行（infoarch-author migrate-v6、SPEC-information-architecture-standardization v6 の要件 17）で「移しそこね」と数える条件と、それを起こす赤のフィクスチャの対応表。移しそこねが 1 件でもあれば終了コード 2 で、--write でも何も書かない。scripts/tests/test_migrate_v6.py が、全条件に赤のケースが 1 つ以上あること（対応の無い条件 0 件）、全ケースが既知の条件を指すこと、全ケースが終了コード 2・その条件の reason・書かないことを確かめる。ケースは基準の v5 フィクスチャ（test_migrate_v6 の V5_SSOT・V5_OUTLINES・V5_HTML・design の設定ファイル）への操作で書く。file は ssot（positioning の SSOT）・outline:<id>・design（design の設定ファイル）・html:<repo 相対パス>。ファイルが repo のどこに置かれるかはケースに書かず、テストが layer-paths の規則（references/layer-paths.json）から決める。",
   "conditions": [
     {"id": "message-value-none", "reason": "message-value-none", "text": "outline が使う v5 のメッセージが、target のセグメントの提供価値を 1 つも指さない（serves と約束の values をたどっても 0 件）"},
     {"id": "message-value-several", "reason": "message-value-several", "text": "outline が使う v5 のメッセージが、target のセグメントの提供価値を 2 つ以上指す（どれにするかは判断）"},
@@ -11,7 +11,7 @@
     {"id": "section-without-message", "reason": "section-without-message", "text": "メッセージを持たないセクション（痛みだけのセクションで、その痛みを扱う outline のメッセージが 1 つに決まらないものを含む）"},
     {"id": "pages-outputs-mismatch", "reason": "pages-outputs-mismatch", "text": "複数ページの outline で、ページ数と outputs の数が違う（1 ページ＝1 outline に分けられない）"},
     {"id": "html-unmatched", "reason": "html-unmatched", "text": "描画物の v5 の印（data-ia-role・data-ia-msg・data-ia-pain）が outline のセクションと数・id で合わない、または outline に属さない描画物に旧い印がある"},
-    {"id": "module-pin-unknown", "reason": "module-pin-unknown", "text": "design/design.yaml の modules.ia が v5（0.3.0）でも v6 の版でもない"}
+    {"id": "module-pin-unknown", "reason": "module-pin-unknown", "text": "design の設定ファイル（layer-paths の design_config）の modules.ia が v5（0.3.0）でも v6 の版でもない"}
   ],
   "cases": [
     {"id": "message-serves-other-segment", "condition": "message-value-none",

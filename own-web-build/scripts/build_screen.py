@@ -5,7 +5,7 @@
 stylesheet that design's allocation rules (own-design-author/references/allocation-rules.json) derive from each region's
 shape and the screen's breakpoints: width by shape, one column on a phone, the primary action filled and the rest outlined.
 It never moves a region: the order on the page stays the priority order, and `audit_screen.py` measures the result.
-The stylesheet colours are neutral placeholders; the repository's design/ tokens replace them in a real build (L0/L1).
+The stylesheet colours are neutral placeholders; the repository's ux/design/ tokens replace them in a real build (L0/L1).
 
 Usage: build_screen.py --repo <repo root> --screen scr-… --out page.html
 Exit: 0 written, 2 refused (the blueprint fails, the screen is unknown, the file exists) or the rules are unreadable.

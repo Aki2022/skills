@@ -1,6 +1,6 @@
 # 情報設計
 
-このファイルは原子を id で参照するだけで、値を持たない。値は `info_arch.yaml` にある。
+このファイルは原子を id で参照するだけで、値を持たない。値は positioning（`ux/positioning/positioning.yaml`）にある。
 成果物ごとの構成は `outlines/<成果物 id>.yaml`（AI が書く）。
 
 ## セグメントと positioning（承認はオーナーが原子と矢印ごとに）

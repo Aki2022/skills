@@ -17,6 +17,7 @@ from threading import Thread
 import pytest
 
 from test_core import SKILL, project, check, write  # noqa: F401
+import layer_paths as lp
 from test_fixed_render import NODE, pin
 from test_remote_fonts import Quiet
 
@@ -45,7 +46,7 @@ def late_font(project, tmp_path):
     if env.get('DESIGN_TEST_NODE_MODULES'):
         env['NODE_PATH'] = env['DESIGN_TEST_NODE_MODULES']
     config = pin(root, env)
-    font = (root / 'design/assets/fixture.woff2').read_bytes()
+    font = (lp.path(root, 'assets', 'fixture.woff2')).read_bytes()
     cdn = tmp_path / 'cdn'
     (cdn / 's').mkdir(parents=True)
     (cdn / 's/inter.woff2').write_bytes(font)
@@ -65,7 +66,7 @@ def late_font(project, tmp_path):
         tokens['color'][name] = {'$value': {'colorSpace': 'srgb', 'components': components,
                                  'hex': '#ffffff' if name == 'white' else '#000000', 'alpha': alpha},
                                  '$extensions': {'org.own.design': {'origin': 'proposal'}}}
-    write(root / 'design/tokens/brand.tokens.json', tokens)
+    write(lp.path(root, 'design_dir', 'tokens', 'brand.tokens.json'), tokens)
     (root / 'index.html').write_text(
         '<html lang="en"><head><title>Fixture</title><link rel="stylesheet" href="' + origin + '/style.css"><style>'
         'body{font:16px/1.5 Inter,sans-serif;background:white;color:black}p{margin:0 0 16px}'
@@ -77,7 +78,7 @@ def late_font(project, tmp_path):
     remote = {'origins': [origin], 'families': ['Inter'],
               'files': {origin + '/style.css': sha((cdn / 'style.css').read_bytes()),
                         origin + '/s/inter.woff2': sha(font), origin + '/s/late.woff2': sha(font)}}
-    write(root / 'design/render-environment.json', {**config, 'fonts': [], 'remote_fonts': remote})
+    write(lp.path(root, 'render_environment'), {**config, 'fonts': [], 'remote_fonts': remote})
 
     page = (root / 'index.html').read_text()
 
@@ -87,11 +88,11 @@ def late_font(project, tmp_path):
         (root / 'index.html').write_text(page if script else page.replace(LATE, ''))
         l0 = check(project)
         assert l0['exit_code'] != 2, l0['errors']
-        output = root / 'design/.resolved/settle-test.json'
+        output = lp.path(root, 'resolved', 'settle-test.json')
         output.unlink(missing_ok=True)
         run = subprocess.run([NODE, str(SKILL.parent / 'own-website-audit/scripts/measure_lp.mjs'), site + '/index.html',
-                              '--manifest', str(root / 'design/.resolved/web.json'),
-                              '--environment', str(root / 'design/render-environment.json'),
+                              '--manifest', str(lp.path(root, 'resolved', 'web.json')),
+                              '--environment', str(lp.path(root, 'render_environment')),
                               '--viewports', '375', '--schemes', 'light', '--json', str(output)],
                              cwd=root, env=env, capture_output=True, text=True, timeout=120)
         return run, json.loads(output.read_text()) if output.exists() else None

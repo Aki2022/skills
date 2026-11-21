@@ -1,13 +1,12 @@
 # 変更・期限・版更新の維持検査
 
 `design-author maintain --repo .` をセッション終了のStep 2.5から呼ぶ。
-`design/`のないrepoは1行のJSONでskipする。`design/`に`info_arch/`と共有の判定台帳（`judgments.json`）しか無く
-`design.yaml`も無いrepo（IAだけ）もdesignの段は1行でskipする。IAの段（`infoarch-author maintain`）は、designの段が早く終わっても毎回走らせ、結果を`ia`に入れる。`design/info_arch/`が無ければ`ia`は1行でskip。終了コードは2つの段の悪い方（ADR-20261115-design-ia-two-skills-shared-base、biz_ops）。それ以外の物があって`design.yaml`が無ければ失格。
+`ux/design/`のないrepoは1行のJSONでskipする。IAだけのrepo（`ux/positioning/`・`ux/infoarch/`と、`ux/`直下の承認台帳・判定台帳しか無い）も`ux/design/`が無いのでdesignの段は1行でskipする。IAの段（`infoarch-author maintain`）は、designの段が早く終わっても毎回走らせ、結果を`ia`に入れる。`ux/infoarch/`も`ux/positioning/`も無ければ`ia`は1行でskip。終了コードは2つの段の悪い方（ADR-20261115-design-ia-two-skills-shared-base、biz_ops）。`ux/design/`があって`design.yaml`が無ければ失格。
 モデル・ネットワーク・承認記録を使わない。
 `--force` は変更の有無にかかわらずL0を再実行する。
 
 成功した検査のcommitと実装/policy/カタログの指紋を
-`design/.resolved/maintenance-stamp.json`へ保存する。これは生成物であり、正典や承認ではない。
+`ux/design/.resolved/maintenance-stamp.json`へ保存する。これは生成物であり、正典や承認ではない。
 初回・不正stamp・commit差分・未commit変更・期限・指紋の変更でL0を実行し、
 マニフェストを再生成する。差分はgitの`--diff-filter=ACDMRT`と`status --porcelain`で取得する。
 作業ツリーに変更が残っていれば、次の実行でも検査する。

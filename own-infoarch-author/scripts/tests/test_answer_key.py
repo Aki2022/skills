@@ -27,12 +27,13 @@ from test_check import DECK, OUTLINE, SSOT_VIEW as SSOT, cli, write_repo  # noqa
 DESIGN = Path(__file__).resolve().parents[3] / 'own-design-author/scripts'
 sys.path.insert(0, str(DESIGN))
 import judgment_ledger as jl  # noqa: E402
+import layer_paths  # noqa: E402  (own-design-author's layer rule: where each layer lives)
 
 
 def model(ssot=SSOT, outlines=(OUTLINE, DECK)):
     m = ia_check.Model(root=Path('.'), ssot=ssot)
     for o in outlines:
-        m.outlines[o['id']] = (Path(f'design/info_arch/outlines/{o["id"]}.yaml'), o)
+        m.outlines[o['id']] = (Path(layer_paths.rel('infoarch', 'outlines', f'{o["id"]}.yaml')), o)
     return m, positioning.approved_keys(m, positioning.approval_targets(m))
 
 
@@ -262,7 +263,7 @@ def test_cli_writes_the_key_and_measures_from_the_shared_ledger(tmp_path):
     policy = jl.load_policy()
     by_id = {c['input']['catalog_id']: c for c in cands}
     rows = [{'candidate': by_id[own], 'score': 0.0}, {'candidate': by_id[swap], 'score': 0.99}]
-    (tmp_path / 'design/judgments.json').write_text(json.dumps({'schema_version': 3, 'policy': policy, 'rows': rows,
+    layer_paths.path(tmp_path, 'judgments').write_text(json.dumps({'schema_version': 3, 'policy': policy, 'rows': rows,
                                                                 'holdout': {'source': 'unmeasured'}}), encoding='utf-8')
     rc, measured = cli('answer-key', '--root', str(tmp_path), '--measure', str(tmp_path / 'labels.json'),
                        '--key', str(out / 'answer-key.json'))

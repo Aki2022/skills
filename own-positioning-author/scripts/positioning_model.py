@@ -1,4 +1,4 @@
-"""The positioning SSOT (design/info_arch/info_arch.yaml, schema 5; the place is layer-paths.json's `positioning_file`): loading, id and ledger checks, approval reading, and
+"""The positioning SSOT (ux/positioning/positioning.yaml, schema 5; the place is layer-paths.json's `positioning_file`): loading, id and ledger checks, approval reading, and
 the readable form of what an approval request binds.
 
 What is checked here is structure and references, never meaning. The positioning layer knows nothing of outlines:
@@ -218,5 +218,5 @@ def review_markdown(m, keys, hashes):
 
 
 def read_approvals(root, report):
-    """The owner's ia:path rows of design/approvals.yaml. Its full validation belongs to own-design-author."""
+    """The owner's ia:path rows of ux/approvals.yaml. Its full validation belongs to own-design-author."""
     return pos.read_approvals(Path(root), report, load_yaml, YamlError)

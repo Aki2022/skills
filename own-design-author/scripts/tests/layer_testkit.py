@@ -66,3 +66,5 @@ def assert_foreign_failure(result):
     text = result.stdout + result.stderr
     assert result.returncode != 0, 'the command passed on a repository this version does not read:\n' + text
     assert FOREIGN_CODE in text, 'it failed, but not with the layout message:\n' + text
+    if LAYOUT.get('hint'):
+        assert 'migrate-layout' in text, 'it failed, but did not show the migration command:\n' + text

@@ -5,6 +5,7 @@ import subprocess
 
 import pytest
 from test_core import SKILL, project, check, write
+import layer_paths as lp
 
 NODE = os.environ.get('DESIGN_TEST_NODE', 'node')
 MEASURE = SKILL.parent / 'own-website-audit/scripts/measure_lp.mjs'
@@ -29,7 +30,7 @@ def prepare(project):
     for key, value in tokens.items():
         for token in ([value] if '$value' in value else [v for k, v in value.items() if not k.startswith('$')]):
             token['$extensions'] = {'org.own.design': {'origin': 'proposal'}}
-    write(root / 'design/tokens/brand.tokens.json', tokens)
+    write(lp.path(root, 'design_dir', 'tokens', 'brand.tokens.json'), tokens)
     assert check(project)['exit_code'] != 2
     return root
 
@@ -37,7 +38,7 @@ def prepare(project):
 def measure(root, html, profile=None):
     page = root / 'index.html'; page.write_text(html)
     output = root / 'measurement.json'
-    argv = [NODE, str(MEASURE), page.as_uri(), '--manifest', str(root / 'design/.resolved/web.json'),
+    argv = [NODE, str(MEASURE), page.as_uri(), '--manifest', str(lp.path(root, 'resolved', 'web.json')),
             '--viewports', '375', '--schemes', 'light', '--json', str(output)]
     if profile is not None: argv += ['--profile', profile]
     run = subprocess.run(argv, cwd=root, env=os.environ.copy(), capture_output=True, text=True)
@@ -99,7 +100,7 @@ def test_ship_rejects_measurement_using_another_profile(tmp_path):
     from ship_contract import validate_web_result
     from test_ship_contract import result_fixture
     result = result_fixture(tmp_path)
-    path = tmp_path / 'design/.resolved/l2-0.json'
+    path = lp.path(tmp_path, 'resolved', 'l2-0.json')
     measured = json.loads(path.read_text())
     measured['profile'] = 'product-ui'
     write(path, measured)

@@ -5,7 +5,7 @@ media/html の type: constraint を機械検証する。LLMの自己申告に頼
 生成したHTMLファイルを実際に解析してPASS/FAILを出す。手順10で必ず実行する。
 
 使い方:
-    python3 scripts/audit_html.py <file.html> --manifest design/.resolved/web.json [--tailwind tailwind.config.cjs]
+    python3 scripts/audit_html.py <file.html> --manifest ux/design/.resolved/web.json [--tailwind tailwind.config.cjs]
 
 終了コード: 全PASSなら0、FAILが1つでもあれば1。
 純標準ライブラリのみ（外部依存なし・system python3で動く）。

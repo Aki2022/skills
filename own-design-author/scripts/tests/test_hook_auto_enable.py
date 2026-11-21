@@ -7,7 +7,9 @@ import sys
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from layer_testkit import FOREIGN_CODE, ROOT, moved_repo
+import layer_paths as lp  # noqa: E402
 
 HOOK = Path(__file__).resolve().parents[2] / 'hooks/pre-push.d/60-design-ship'
 REAL_SHIP = Path(__file__).resolve().parents[1] / 'design-ship'
@@ -36,8 +38,9 @@ def run(root, fake, refs, log, **env):
 
 def test_design_system_without_marker_runs_ship(repo):
     root, fake, refs, log = repo
-    (root / 'design').mkdir()
-    (root / 'design/design.yaml').write_text('{}')
+    config = lp.path(root, 'design_config')
+    config.parent.mkdir(parents=True)
+    config.write_text('{}')
     result = run(root, fake, refs, log)
     assert result.returncode == 0, result.stderr
     assert log.read_text().startswith('called --repo')
@@ -45,8 +48,9 @@ def test_design_system_without_marker_runs_ship(repo):
 
 def test_ship_failure_blocks_the_push(repo):
     root, fake, refs, log = repo
-    (root / 'design').mkdir()
-    (root / 'design/design.yaml').write_text('{}')
+    config = lp.path(root, 'design_config')
+    config.parent.mkdir(parents=True)
+    config.write_text('{}')
     assert run(root, fake, refs, log, FAKE_EXIT='2').returncode == 2
 
 

@@ -80,7 +80,9 @@ def test_a_renamed_layer_root_is_followed_end_to_end(tmp_path):
     skills = copy_skills(tmp_path / 'skills', ALL_SKILLS, mutate)
     repo, init = _initialised(tmp_path, skills, 'repo-renamed')
     assert init.returncode == 0, init.stdout + init.stderr
-    assert (repo / renamed / 'design.yaml').is_file()
+    moved_entries = json.loads((skills / 'own-design-author/references/layer-paths.json').read_text())['entries']
+    assert (repo / moved_entries['design_config']).is_file() and moved_entries['design_config'].startswith(renamed + '/')
+    assert (repo / moved_entries['ledger']).is_file(), 'init puts the approval ledger where the rule says'
     assert not (repo / ROOT).exists(), 'a command still wrote the old root'
     check = run([skills / 'own-design-author/scripts/design-author', 'check', '--repo', repo,
                  '--catalog-dir', _catalogs(tmp_path)])

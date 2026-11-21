@@ -10,6 +10,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from page_inventory import check_pages, derive_route, route_matches  # noqa: E402
 from test_core import project, write, check, approve, approve_rows  # noqa: F401  (fixture reuse)
+import layer_paths as lp  # noqa: E402  (test_core puts scripts/ on the path)
 from test_page_inventory import repo, config  # noqa: E402
 
 
@@ -90,11 +91,11 @@ def web_repo(project, pages):
                   'viewports': [375], 'schemes': ['light']}
     if pages is not None:
         validation['pages'] = pages
-    write(root / 'design/validation.json', validation)
-    config_ = json.loads((root / 'design/design.yaml').read_text())
+    write(lp.path(root, 'validation'), validation)
+    config_ = json.loads(lp.path(root, 'design_config').read_text())
     config_['integration_gate'] = {'media': 'web', 'merge_base': 'origin/main', 'render_servers': {
         'DESIGN_WEB_URL': {'command': ['python3', '-m', 'http.server', '{port}'], 'path': '/'}}}
-    write(root / 'design/design.yaml', config_)
+    write(lp.path(root, 'design_config'), config_)
 
 
 L0_PAGES = {'sources': ['app/**/page.tsx', 'index.html'], 'covered': {'app/page.tsx': ['DESIGN_WEB_URL'], 'index.html': ['html']},
@@ -131,9 +132,9 @@ def test_excluded_page_needs_the_owners_approval_bound_to_its_reason(project):
 def test_l0_checks_page_routes_against_the_declared_render_paths(project):
     root, _ = project
     web_repo(project, L0_PAGES)
-    config_ = json.loads((root / 'design/design.yaml').read_text())
+    config_ = json.loads(lp.path(root, 'design_config').read_text())
     config_['integration_gate']['render_servers']['DESIGN_WEB_URL']['path'] = '/login'
-    write(root / 'design/design.yaml', config_)
+    write(lp.path(root, 'design_config'), config_)
     errors = check(project)['errors']
     assert any('DESIGN_WEB_URL renders /login, which is not the route / of app/page.tsx' in e for e in errors), errors
 

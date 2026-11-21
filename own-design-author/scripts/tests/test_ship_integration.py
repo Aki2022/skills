@@ -10,6 +10,7 @@ import sys
 
 import pytest
 from test_core import SKILL, project, approve, check, write
+import layer_paths as lp
 from test_fixed_render import pin
 from test_ship_contract import channel
 
@@ -60,8 +61,8 @@ def browser_project(project,env):
     for name,components,alpha in [('primary',[0,0,0],1),('white',[1,1,1],1),('clear',[0,0,0],0)]:
         tokens['color'][name]={'$value':{'colorSpace':'srgb','components':components,'hex':'#ffffff' if name=='white' else '#000000','alpha':alpha},
             '$extensions':{'org.own.design':{'origin':'proposal'}}}
-    write(root/'design/tokens/brand.tokens.json',tokens)
-    write(root/'design/render-environment.json',pin(root,env))
+    write(lp.path(root, 'design_dir', 'tokens', 'brand.tokens.json'),tokens)
+    write(lp.path(root, 'render_environment'),pin(root,env))
     (root/'index.html').write_text('<html lang="en"><head><title>Fixture</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>'
         '@font-face{font-family:Inter;src:url(/fixture.woff2)}'
         'body{font:16px/1.5 Inter,sans-serif;background:white;color:black}'
@@ -69,16 +70,16 @@ def browser_project(project,env):
         ':focus-visible{outline:2px solid black}@media(min-width:375px){body{max-width:100%}}'
         '</style></head><body><main><h1>Fixture</h1><p>Stable text.</p></main></body></html>')
     (root/'build.py').write_text('from pathlib import Path\nimport shutil\np=Path("dist");p.mkdir(exist_ok=True)\n'
-        'shutil.copyfile("index.html",p/"index.html")\nshutil.copyfile("design/assets/fixture.woff2",p/"fixture.woff2")\n')
+        'shutil.copyfile("index.html",p/"index.html")\nshutil.copyfile("'+lp.rel('assets','fixture.woff2')+'",p/"fixture.woff2")\n')
     (root/'deploy.py').write_text('import json,os\nfrom pathlib import Path\n'
         'Path(".shipment.json").write_text(json.dumps({k:os.environ[k] for k in '
         '["DESIGN_SHIP_COMMIT","DESIGN_SHIP_TREE","DESIGN_SHIP_ARTIFACTS_JSON"]}))\n')
-    (root/'.gitignore').write_text('design/.resolved/\ndesign/assets.json\ndist/\n.shipment.json\n')
-    cfg=json.loads((root/'design/design.yaml').read_text());row=channel()
+    (root/'.gitignore').write_text(lp.rel('resolved')+'/\n'+lp.rel('assets_index')+'\ndist/\n.shipment.json\n')
+    cfg=json.loads((lp.path(root, 'design_config')).read_text());row=channel()
     row['build_command']=['python3','build.py'];row['ship_command']=['python3','deploy.py']
-    cfg['channels']={'web':row};write(root/'design/design.yaml',cfg)
+    cfg['channels']={'web':row};write(lp.path(root, 'design_config'),cfg)
     # Shipping needs a page inventory: the one page is the L1 target and the rendered URL at its route.
-    write(root/'design/validation.json',{'schema_version':1,'html':['index.html'],
+    write(lp.path(root, 'validation'),{'schema_version':1,'html':['index.html'],
         'urls':[{'env':'DESIGN_WEB_URL'}],'viewports':[375],'schemes':['light'],
         'pages':{'sources':['index.html'],'covered':{'index.html':['html','DESIGN_WEB_URL']},'excluded':{},
                  'routes':{'index.html':'/'}}})
@@ -197,7 +198,7 @@ def test_two_green_branches_fail_on_the_predicted_merge_tree(project, tmp_path):
     env=browser_env();root=browser_project(project,env);_,catalogs=project
     run_git(root,env,'config','user.name','Fixture Owner')
     run_git(root,env,'config','user.email','fixture@example.org')
-    token_file=root/'design/tokens/brand.tokens.json'
+    token_file=lp.path(root, 'design_dir', 'tokens', 'brand.tokens.json')
     data=json.loads(token_file.read_text())
     data['color']['optional']={'$value':{'colorSpace':'srgb','components':[0,0,0],'hex':'#000000'},
         '$extensions':{'org.own.design':{'origin':'proposal'}}}
@@ -212,10 +213,10 @@ def test_two_green_branches_fail_on_the_predicted_merge_tree(project, tmp_path):
     first=subprocess.run(argv,cwd=root,env=env,capture_output=True,text=True)
     assert first.returncode==0,first.stdout+first.stderr
     run_git(root,env,'checkout','-b','fixture-approval',base)
-    ledger=json.loads((root/'design/approvals.yaml').read_text())
+    ledger=json.loads((lp.path(root, 'ledger')).read_text())
     ledger.append({'key':'ds:web:token:color.optional','value_hash':old_hash,
                    'approver':'fixture-owner','date':'2026-10-23'})
-    write(root/'design/approvals.yaml',ledger);commit(root,env,'fixture approve old nice value')
+    write(lp.path(root, 'ledger'),ledger);commit(root,env,'fixture approve old nice value')
     second=subprocess.run(argv,cwd=root,env=env,capture_output=True,text=True)
     assert second.returncode==0,second.stdout+second.stderr
     run_git(root,env,'update-ref','refs/remotes/origin/main','HEAD')

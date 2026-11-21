@@ -9,6 +9,7 @@ import sys
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import layer_paths as lp
 from design_author import check_design, init_design, migrate_design, value_hash
 from dtcg import resolve_tokens
 from classify import load_policy, classify_response
@@ -44,10 +45,10 @@ def project(tmp_path, monkeypatch):
         'entries': [{'id': 'dads-000001', 'match_key': 'dads-000001', 'retired': False}]})
     subprocess.run(['git','-C',str(root),'remote','add','origin','https://example.org/fixture.git'],check=True)
     init_design(root, 'product-ui', 'test-v1', catalog_dir=catalogs)
-    config = json.loads((root / 'design/design.yaml').read_text())
+    config = json.loads(lp.path(root, 'design_config').read_text())
     config['items'] = {'dads-000001': {'state': 'defined', 'evidence': ['token:color.primary']}}
-    write(root / 'design/design.yaml', config)
-    write(root / 'design/tokens/brand.tokens.json', {'color': {'$type': 'color', 'primary': {
+    write(lp.path(root, 'design_config'), config)
+    write(lp.path(root, 'design_dir', 'tokens/brand.tokens.json'), {'color': {'$type': 'color', 'primary': {
         '$value': {'colorSpace': 'srgb', 'components': [0, 0, 0], 'hex': '#000000'},
         '$extensions': {'org.own.design': {'origin': 'proposal'}}}}})
     return root, catalogs
@@ -60,7 +61,7 @@ def check(project, **kw):
 
 def approve_rows(project,rows):
     root,_=project
-    write(root/'design/approvals.yaml',[
+    write(lp.path(root, 'ledger'),[
         {**row,'approver':'fixture-owner','date':'2026-10-22'} for row in rows])
 
 
@@ -75,13 +76,13 @@ def test_proposed_warning_and_ship_rejection(project):
     assert result['exit_code'] == 1
     assert result['counts']['proposed'] == 1
     assert check(project, ship=True)['exit_code'] == 2
-    assert not (project[0] / 'design/.resolved/web.json').exists()
+    assert not lp.path(project[0], 'resolved', 'web.json').exists()
 
 
 def test_approved_green_then_changed_value_is_red(project):
     approve(project)
     assert check(project, ship=True)['exit_code'] == 0
-    p = project[0] / 'design/tokens/brand.tokens.json'
+    p = lp.path(project[0], 'design_dir', 'tokens/brand.tokens.json')
     data = json.loads(p.read_text())
     data['color']['primary']['$value']['components'] = [1, 1, 1]
     data['color']['primary']['$value']['hex'] = '#ffffff'
@@ -94,19 +95,19 @@ def test_approved_green_then_changed_value_is_red(project):
 @pytest.mark.parametrize('case', ['must-empty', 'approval-mismatch', 'relaxed-minimum', 'zero-target', 'unknown-id'])
 def test_five_required_red_cases(project, case):
     root, catalogs = project
-    config = json.loads((root / 'design/design.yaml').read_text())
+    config = json.loads(lp.path(root, 'design_config').read_text())
     if case == 'must-empty':
         config['items'] = {}
     elif case == 'approval-mismatch':
-        write(root / 'design/approvals.yaml', [{'token_path': 'color.primary', 'value_hash': 'bad',
+        write(lp.path(root, 'ledger'), [{'token_path': 'color.primary', 'value_hash': 'bad',
                                                'approver': 'fixture-owner', 'date': '2026-10-21'}])
     elif case == 'relaxed-minimum':
-        write(root / 'design/profiles/web.json', {'media': 'web', 'minimums': {'text_contrast': 1}})
+        write(lp.path(root, 'design_dir', 'profiles/web.json'), {'media': 'web', 'minimums': {'text_contrast': 1}})
     elif case == 'zero-target':
         write(catalogs / 'test-v1.json', {'schema_version': 1, 'version': 'test-v1', 'items': []})
     else:
         config['items']['unknown-id'] = {'state': 'n-a', 'reason': 'not applicable'}
-    write(root / 'design/design.yaml', config)
+    write(lp.path(root, 'design_config'), config)
     result = check(project)
     assert result['exit_code'] == 2, result
     assert result['errors']
@@ -124,11 +125,11 @@ def test_cli_real_git_root_and_five_cases(project):
     assert run.returncode == 1, run.stderr + run.stdout
     data = json.loads(run.stdout)
     assert data['counts']['items'] == 1
-    assert (root / 'design/.resolved/web.json').exists()
-    (root / 'design/design.yaml').write_text('{"catalog_version":"missing"}')
+    assert lp.path(root, 'resolved', 'web.json').exists()
+    lp.path(root, 'design_config').write_text('{"catalog_version":"missing"}')
     run = subprocess.run(cmd, cwd=root, capture_output=True, text=True)
     assert run.returncode == 2
-    assert not (root / 'design/.resolved/web.json').exists()
+    assert not lp.path(root, 'resolved', 'web.json').exists()
 
 
 def test_unknown_version_unclassified_and_unknown_preset_fail(project):
@@ -146,22 +147,22 @@ def test_unknown_version_unclassified_and_unknown_preset_fail(project):
 
 def test_defined_requires_real_evidence_and_doc_body(project):
     root, _ = project
-    p = root / 'design/design.yaml'
+    p = lp.path(root, 'design_config')
     config = json.loads(p.read_text())
     config['items']['dads-000001']['evidence'] = ['doc:DESIGN.md#missing']
     write(p, config)
     assert check(project)['exit_code'] == 2
     config['items']['dads-000001']['evidence'] = ['doc:DESIGN.md#dads-000001']
     write(p, config)
-    (root / 'design/DESIGN.md').write_text('# Brand\n\n## dads-000001\n\n')
+    lp.path(root, 'design_dir', 'DESIGN.md').write_text('# Brand\n\n## dads-000001\n\n')
     assert check(project)['exit_code'] == 2
-    (root / 'design/DESIGN.md').write_text('# Brand\n\n## dads-000001\nUse token:color.primary for primary actions.\n')
+    lp.path(root, 'design_dir', 'DESIGN.md').write_text('# Brand\n\n## dads-000001\nUse token:color.primary for primary actions.\n')
     assert check(project)['exit_code'] == 1
 
 
 def test_must_na_needs_reason_and_hash_bound_approval(project):
     root, _ = project
-    p = root / 'design/design.yaml'
+    p = lp.path(root, 'design_config')
     config = json.loads(p.read_text())
     config['items']['dads-000001'] = {'state': 'n-a', 'reason': 'No interactive surface.'}
     write(p, config)
@@ -176,50 +177,50 @@ def test_must_na_needs_reason_and_hash_bound_approval(project):
 
 def test_origin_reference_requires_notice(project):
     root, _ = project
-    p = root / 'design/tokens/brand.tokens.json'
+    p = lp.path(root, 'design_dir', 'tokens/brand.tokens.json')
     data = json.loads(p.read_text())
     data['color']['primary']['$extensions']['org.own.design']['origin'] = 'reference:example'
     write(p, data)
     assert check(project)['exit_code'] == 2
-    write(root / 'design/NOTICE', {'sources': [{'id': 'example', 'url': 'https://example.org/',
+    write(lp.path(root, 'design_dir', 'NOTICE'), {'sources': [{'id': 'example', 'url': 'https://example.org/',
         'commit': 'v1', 'license': 'MIT', 'copyright': 'Example contributors', 'edited': True}]})
     assert check(project)['exit_code'] == 1
 
 
 def test_rule_uncovered_is_visible_and_ship_fails(project):
     root, _ = project
-    config = json.loads((root / 'design/design.yaml').read_text())
+    config = json.loads(lp.path(root, 'design_config').read_text())
     config['items']['dads-000001']['evidence'] = ['rule:contrast-text']
-    write(root / 'design/design.yaml', config)
-    write(root / 'design/checks/web.yaml', {'rules': [{'id': 'contrast-text', 'kind': 'contrast',
+    write(lp.path(root, 'design_config'), config)
+    write(lp.path(root, 'checks', 'web.yaml'), {'rules': [{'id': 'contrast-text', 'kind': 'contrast',
         'targets': ['body'], 'minimum': 4.5}]})
     assert check(project)['counts']['uncovered'] == 1
     approve(project)
     assert check(project, ship=True)['exit_code'] == 2
-    write(root / 'design/checks/web.yaml', {'rules': [{'id': 'evil', 'command': 'echo bypass'}]})
+    write(lp.path(root, 'checks', 'web.yaml'), {'rules': [{'id': 'evil', 'command': 'echo bypass'}]})
     assert check(project)['exit_code'] == 2
 
 
 def test_duplicate_yaml_key_path_escape_and_duplicate_approval_fail(project):
     root, _ = project
-    original = (root / 'design/design.yaml').read_text()
-    (root / 'design/design.yaml').write_text('catalog_version: test-v1\ncatalog_version: test-v1\n')
+    original = lp.path(root, 'design_config').read_text()
+    lp.path(root, 'design_config').write_text('catalog_version: test-v1\ncatalog_version: test-v1\n')
     assert check(project)['exit_code'] == 2
-    (root / 'design/design.yaml').write_text(original)
+    lp.path(root, 'design_config').write_text(original)
     config = json.loads(original)
     config['items']['dads-000001']['evidence'] = ['doc:../../secret#entry']
-    write(root / 'design/design.yaml', config)
+    write(lp.path(root, 'design_config'), config)
     assert check(project)['exit_code'] == 2
-    write(root / 'design/design.yaml', json.loads(original))
+    write(lp.path(root, 'design_config'), json.loads(original))
     approve(project)
-    rows = json.loads((root / 'design/approvals.yaml').read_text())
-    write(root / 'design/approvals.yaml', rows * 2)
+    rows = json.loads(lp.path(root, 'ledger').read_text())
+    write(lp.path(root, 'ledger'), rows * 2)
     assert check(project)['exit_code'] == 2
 
 
 def test_migrate_only_adds_deferred_and_keeps_old_until_command(project):
     root, catalogs = project
-    old = (root / 'design/design.yaml').read_text()
+    old = lp.path(root, 'design_config').read_text()
     write(catalogs / 'test-v2.json', {'schema_version': 1, 'version': 'test-v2',
         'items': [item(), item('dads-000002')]})
     ledger = json.loads((catalogs / 'id-ledger.json').read_text())
@@ -227,21 +228,21 @@ def test_migrate_only_adds_deferred_and_keeps_old_until_command(project):
     ledger['next_id'] = 3
     write(catalogs / 'id-ledger.json', ledger)
     assert check(project)['exit_code'] == 1
-    assert (root / 'design/design.yaml').read_text() == old
+    assert lp.path(root, 'design_config').read_text() == old
     result = migrate_design(root, 'test-v2', catalog_dir=catalogs)
     assert result['added'] == ['dads-000002']
     assert check(project)['exit_code'] == 2
-    assert json.loads((root / 'design/design.yaml').read_text())['items']['dads-000001']['state'] == 'defined'
+    assert json.loads(lp.path(root, 'design_config').read_text())['items']['dads-000001']['state'] == 'defined'
     with pytest.raises(ValueError):
         init_design(root, 'lp', 'test-v2', catalog_dir=catalogs)
 
 
 def test_asset_manifest_has_content_hash_and_no_absolute_paths(project):
     root, _ = project
-    (root / 'design/assets').mkdir(exist_ok=True)
-    (root / 'design/assets/logo.svg').write_text('<svg/>')
+    lp.path(root, 'assets').mkdir(exist_ok=True)
+    lp.path(root, 'assets', 'logo.svg').write_text('<svg/>')
     assert check(project)['exit_code'] == 1
-    assets = json.loads((root / 'design/assets.json').read_text())
+    assets = json.loads(lp.path(root, 'assets_index').read_text())
     assert assets['assets'][0]['path'] == 'assets/logo.svg'
     assert len(assets['assets'][0]['sha256']) == 64
 
@@ -276,20 +277,20 @@ def test_nice_na_approval_is_still_hash_bound(project):
     catalog = json.loads((catalogs / 'test-v1.json').read_text())
     catalog['items'][0] = item(grade='nice-to-have')
     write(catalogs / 'test-v1.json', catalog)
-    config = json.loads((root / 'design/design.yaml').read_text())
+    config = json.loads(lp.path(root, 'design_config').read_text())
     config['items']['dads-000001'] = {'state':'n-a','reason':'No such surface.'}
-    write(root / 'design/design.yaml',config)
-    write(root / 'design/approvals.yaml',[{'item_id':'dads-000001','value_hash':'wrong',
+    write(lp.path(root, 'design_config'),config)
+    write(lp.path(root, 'ledger'),[{'item_id':'dads-000001','value_hash':'wrong',
         'approver':'fixture-owner','date':'2026-10-21'}])
     assert check(project)['exit_code'] == 2
 
 
 def test_fake_markdown_anchor_inside_code_fence_is_not_evidence(project):
     root, _ = project
-    config = json.loads((root / 'design/design.yaml').read_text())
+    config = json.loads(lp.path(root, 'design_config').read_text())
     config['items']['dads-000001']['evidence'] = ['doc:DESIGN.md#dads-000001']
-    write(root / 'design/design.yaml',config)
-    (root / 'design/DESIGN.md').write_text('# Brand\n```md\n## dads-000001\nUse token:color.primary.\n```\n')
+    write(lp.path(root, 'design_config'),config)
+    lp.path(root, 'design_dir', 'DESIGN.md').write_text('# Brand\n```md\n## dads-000001\nUse token:color.primary.\n```\n')
     assert check(project)['exit_code'] == 2
 
 
@@ -325,11 +326,11 @@ def test_removed_unresolved_must_remains_a_gate_after_migration(project):
     write(catalogs/'test-v2.json',{'schema_version':1,'version':'test-v2','items':[item()]})
     migrate_design(root,'test-v2',catalog_dir=catalogs)
     assert check(project)['exit_code']==2
-    config=json.loads((root/'design/design.yaml').read_text())
+    config=json.loads(lp.path(root, 'design_config').read_text())
     assert config['retired_items']['dads-000002']['state']=='deferred'
     write(catalogs/'test-v3.json',{'schema_version':1,'version':'test-v3','items':old['items']})
     migrate_design(root,'test-v3',catalog_dir=catalogs)
-    restored=json.loads((root/'design/design.yaml').read_text())
+    restored=json.loads(lp.path(root, 'design_config').read_text())
     assert not restored.get('retired_items')
     assert restored['items']['dads-000002']['state']=='deferred'
 
@@ -337,14 +338,14 @@ def test_removed_unresolved_must_remains_a_gate_after_migration(project):
 def test_failed_check_invalidates_asset_index_and_unlinks_derived_symlink(project):
     root,_=project
     assert check(project)['exit_code']==1
-    assert (root/'design/assets.json').exists()
-    resolved=root/'design/.resolved'
+    assert lp.path(root, 'assets_index').exists()
+    resolved=lp.path(root, 'resolved')
     old=root/'previous-resolved'
     resolved.rename(old)
     resolved.symlink_to(old,target_is_directory=True)
     result=check(project)
     assert result['exit_code']==2
-    assert not (root/'design/assets.json').exists()
+    assert not lp.path(root, 'assets_index').exists()
     assert not resolved.exists() and not resolved.is_symlink()
     assert (old/'web.json').is_file()  # No deletion through a link to another directory.
 
@@ -358,14 +359,14 @@ def test_export_failure_leaves_no_partial_generated_contract(project,monkeypatch
         return original(path,*args,**kwargs)
     monkeypatch.setattr(Path,'write_text',fail_css)
     assert check(project)['exit_code']==2
-    assert not (root/'design/assets.json').exists()
-    assert not (root/'design/.resolved/web.json').exists()
+    assert not lp.path(root, 'assets_index').exists()
+    assert not lp.path(root, 'resolved', 'web.json').exists()
 
 
 def test_fresh_init_reports_empty_must_even_before_first_token(project):
     root,catalogs=project
     import shutil
-    shutil.rmtree(root/'design')
+    shutil.rmtree(lp.path(root, 'design_dir'))
     init_design(root,'product-ui','test-v1',catalog_dir=catalogs)
     result=check(project)
     assert result['exit_code']==2
@@ -381,11 +382,11 @@ def test_factory_preflight_preserves_warning_and_failure(project):
     run = subprocess.run(argv, env=env, capture_output=True, text=True)
     assert run.returncode == 1
     assert json.loads(run.stdout)['counts']['proposed'] == 1
-    assert (root / 'design/.resolved/web.json').is_file()
-    write(root / 'design/design.yaml', {})
+    assert lp.path(root, 'resolved', 'web.json').is_file()
+    write(lp.path(root, 'design_config'), {})
     run = subprocess.run(argv, env=env, capture_output=True, text=True)
     assert run.returncode == 2
-    assert not (root / 'design/.resolved/web.json').exists()
+    assert not lp.path(root, 'resolved', 'web.json').exists()
 
 
 def test_l0_generates_tailwind_contract_from_resolved_values(project):
@@ -393,11 +394,11 @@ def test_l0_generates_tailwind_contract_from_resolved_values(project):
     result = check(project)
     manifest = result['manifest']['web']
     artifact = manifest['artifacts']['tailwind.config.cjs']
-    generated = root / 'design/.resolved/tailwind.config.cjs'
+    generated = lp.path(root, 'resolved', 'tailwind.config.cjs')
     assert generated.read_text() == artifact['content']
     assert 'color-primary' in generated.read_text()
     # Generated contracts must not survive failed validation.
-    write(root / 'design/design.yaml', {})
+    write(lp.path(root, 'design_config'), {})
     assert check(project)['exit_code'] == 2
     assert not generated.exists()
 
@@ -410,18 +411,18 @@ def test_l1_checks_real_generated_config_and_zero_targets(project):
     html.write_text('<html lang="ja"><meta name="viewport"><main><h1>fixture</h1></main>'
                     '<style>:focus-visible{} @media(min-width:1px){}</style></html>')
     config = root / 'tailwind.config.cjs'
-    config.write_bytes((root / 'design/.resolved/tailwind.config.cjs').read_bytes())
-    argv = [sys.executable, str(audit), str(html), '--manifest', str(root / 'design/.resolved/web.json'),
+    config.write_bytes(lp.path(root, 'resolved', 'tailwind.config.cjs').read_bytes())
+    argv = [sys.executable, str(audit), str(html), '--manifest', str(lp.path(root, 'resolved', 'web.json')),
             '--tailwind', str(config)]
     assert subprocess.run(argv, capture_output=True).returncode == 0
     config.write_text('module.exports = {theme: {colors: {primary: "black"}}}')
     assert subprocess.run(argv, capture_output=True).returncode == 2
-    config.write_bytes((root / 'design/.resolved/tailwind.config.cjs').read_bytes())
+    config.write_bytes(lp.path(root, 'resolved', 'tailwind.config.cjs').read_bytes())
     html.write_text('<html><body></body></html>')
     run = subprocess.run(argv, capture_output=True, text=True)
     assert run.returncode == 1 and 'RESULT: FAIL' in run.stdout, run.stdout + run.stderr
     # Change an input outside the validator: a stale generated manifest must fail.
-    (root / 'design/DESIGN.md').write_text('changed')
+    lp.path(root, 'design_dir', 'DESIGN.md').write_text('changed')
     assert subprocess.run(argv, capture_output=True).returncode == 2
 
 
@@ -444,9 +445,9 @@ def test_real_l2_palette_empty_targets_and_layout_regression(project, tmp_path):
                     token['$extensions']={'org.own.design':{'origin':'proposal'}}
     # Keep fixture catalog evidence valid.
     tokens['color']['primary'] = tokens['color']['black']
-    write(root / 'design/tokens/brand.tokens.json', tokens)
+    write(lp.path(root, 'design_dir', 'tokens/brand.tokens.json'), tokens)
     assert check(project)['exit_code'] == 1
-    manifest = root / 'design/.resolved/web.json'
+    manifest = lp.path(root, 'resolved', 'web.json')
     page = root / 'index.html'
     normal = ('<!doctype html><html lang="en"><head><title>Fixture</title>'
               '<style>body{background:white;font:16px/1.5 sans-serif}'
@@ -509,7 +510,7 @@ def test_l0_approval_alone_does_not_satisfy_formal_ship_gate(project):
 def test_l0_nice_warning_does_not_bypass_missing_formal_ship_channel(project):
     approve(project)
     root, catalogs = project
-    p = root / 'design/tokens/brand.tokens.json'
+    p = lp.path(root, 'design_dir', 'tokens/brand.tokens.json')
     data = json.loads(p.read_text())
     data['color']['optional'] = {'$value':{'colorSpace':'srgb','components':[1,1,1],'hex':'#ffffff'},
                                   '$extensions':{'org.own.design':{'origin':'proposal'}}}
@@ -525,20 +526,20 @@ def test_l0_nice_warning_does_not_bypass_missing_formal_ship_channel(project):
 
 def test_vanilla_design_without_color_tokens_does_not_require_tailwind(project):
     root, _ = project
-    write(root / 'design/tokens/brand.tokens.json', {'size':{'$type':'dimension',
+    write(lp.path(root, 'design_dir', 'tokens/brand.tokens.json'), {'size':{'$type':'dimension',
           '$value':{'value':1,'unit':'rem'},'$extensions':{'org.own.design':{'origin':'proposal'}}}})
-    config = json.loads((root / 'design/design.yaml').read_text())
+    config = json.loads(lp.path(root, 'design_config').read_text())
     config['items']['dads-000001']['evidence'] = ['token:size']
-    write(root / 'design/design.yaml', config)
+    write(lp.path(root, 'design_config'), config)
     result = check(project)
     assert result['exit_code'] == 1
     assert result['manifest']['web']['artifacts'] == {}
-    assert not (root / 'design/.resolved/tailwind.config.cjs').exists()
+    assert not lp.path(root, 'resolved', 'tailwind.config.cjs').exists()
 
 
 def test_project_tailwind_templates_keep_content_and_plugin(project):
     root, _ = project
-    write(root / 'design/tailwind.json', {'schema_version':1,'configs':[{
+    write(lp.path(root, 'tailwind'), {'schema_version':1,'configs':[{
         'target':'apps/web/tailwind.config.js','content':['./src/**/*.tsx'],
         'theme':{'extend':{'colors':{'primary':{'$token':'color.primary'}}}},
         'plugins':[{'module':'@tailwindcss/forms','options':{'strategy':'class'}}]}]})
@@ -549,7 +550,7 @@ def test_project_tailwind_templates_keep_content_and_plugin(project):
     assert './src/**/*.tsx' in artifact['content']
     assert 'require("@tailwindcss/forms")({"strategy": "class"})' in artifact['content']
     assert '"primary": "#000000"' in artifact['content']
-    assert (root / 'design/.resolved' / artifact['file']).read_text() == artifact['content']
+    assert (lp.path(root, 'resolved') / artifact['file']).read_text() == artifact['content']
     from resolved_contract import check_tailwind
     config = root / 'apps/web/tailwind.config.js'
     config.parent.mkdir(parents=True)
@@ -558,7 +559,7 @@ def test_project_tailwind_templates_keep_content_and_plugin(project):
     config.write_text(artifact['content'].replace('#000000','#ffffff'))
     with pytest.raises(ValueError):
         check_tailwind(config, manifest, repo=root)
-    write(root / 'design/tailwind.json', {'schema_version':1,'configs':[{
+    write(lp.path(root, 'tailwind'), {'schema_version':1,'configs':[{
         'target':'apps/web/tailwind.config.js','content':['./src/**/*.tsx'],
         'theme':{'colors':{'primary':'#000000'}},'plugins':[]}]})
     assert check(project)['exit_code'] == 2
@@ -573,23 +574,23 @@ def test_item_approval_binds_referenced_token_values(project):
     assert result['exit_code'] == 0
     assert result['counts']['proposed'] == 0
     assert result['manifest']['web']['tokens']['color.primary']['state'] == 'approved'
-    data=json.loads((root / 'design/tokens/brand.tokens.json').read_text())
+    data=json.loads(lp.path(root, 'design_dir', 'tokens/brand.tokens.json').read_text())
     data['color']['primary']['$value']={'colorSpace':'srgb','components':[1,1,1],'hex':'#ffffff'}
-    write(root / 'design/tokens/brand.tokens.json',data)
+    write(lp.path(root, 'design_dir', 'tokens/brand.tokens.json'),data)
     assert check(project, ship=True)['exit_code'] == 2
 
 
 def test_asset_hash_rule_is_measured_and_approval_binds_actual_bytes(project):
     import hashlib
     root, _ = project
-    asset = root / 'design/assets/logo.png'
+    asset = lp.path(root, 'assets', 'logo.png')
     asset.write_bytes(b'fixture-logo-a')
     digest = hashlib.sha256(asset.read_bytes()).hexdigest()
-    write(root / 'design/checks/assets.yaml',{'rules':[{'id':'logo-bytes','kind':'source-hash',
-          'targets':['design/assets/logo.png'],'allowlist':[digest]}]})
-    config=json.loads((root / 'design/design.yaml').read_text())
+    write(lp.path(root, 'checks', 'assets.yaml'),{'rules':[{'id':'logo-bytes','kind':'source-hash',
+          'targets':[lp.rel('assets', 'logo.png')],'allowlist':[digest]}]})
+    config=json.loads(lp.path(root, 'design_config').read_text())
     config['items']['dads-000001']['evidence'].append('rule:logo-bytes')
-    write(root / 'design/design.yaml',config)
+    write(lp.path(root, 'design_config'),config)
     result=check(project)
     assert result['counts']['uncovered'] == 0
     assert check(project,ship=True)['exit_code'] == 2
@@ -602,24 +603,44 @@ def test_asset_hash_rule_is_measured_and_approval_binds_actual_bytes(project):
     assert any('source hash' in e for e in result['errors'])
 
 
+def test_asset_rule_evidence_is_hashed_with_the_frozen_prefix_not_the_current_layout(project):
+    """An asset rule and its measured files are hashed into the approvals of the items that cite it. They carry the
+    prefix the rule file calls `identity.asset_path_prefix` (the form before the layers moved), so moving the files
+    does not drop those approvals. The evidence must not follow the layout."""
+    import hashlib
+    import design_author
+    root, _ = project
+    asset = lp.path(root, 'assets', 'logo.png')
+    asset.write_bytes(b'fixture-logo-a')
+    digest = hashlib.sha256(asset.read_bytes()).hexdigest()
+    target = lp.rel('assets', 'logo.png')
+    rules = {'logo-bytes': {'id': 'logo-bytes', 'kind': 'source-hash', 'targets': [target], 'allowlist': [digest]}}
+    errors = []
+    measured = design_author._asset_rule_evidence(root, rules, errors)
+    frozen = lp.identity('asset_path_prefix') + '/logo.png'
+    assert errors == []
+    assert measured['logo-bytes']['files'] == {frozen: digest}
+    assert measured['logo-bytes']['rule']['targets'] == [frozen]
+
+
 def test_sync_checks_l0_before_writing_configs_and_asset_copies(project):
     root,catalogs=project
-    (root / 'design/assets/logo.png').write_bytes(b'fixture-logo')
-    write(root / 'design/asset-exports.json',{'schema_version':1,'exports':[
+    lp.path(root, 'assets', 'logo.png').write_bytes(b'fixture-logo')
+    write(lp.path(root, 'asset_exports'),{'schema_version':1,'exports':[
           {'source':'assets/logo.png','targets':['public/logo.png']}]})
     argv=[sys.executable,str(SKILL / 'scripts/design_author.py'),'sync','--repo',str(root),
           '--catalog-dir',str(catalogs)]
     run=subprocess.run(argv,capture_output=True,text=True)
     assert run.returncode == 1
     assert (root / 'public/logo.png').read_bytes() == b'fixture-logo'
-    assert (root / 'tailwind.config.cjs').read_bytes() == (root / 'design/.resolved/tailwind.config.cjs').read_bytes()
+    assert (root / 'tailwind.config.cjs').read_bytes() == lp.path(root, 'resolved', 'tailwind.config.cjs').read_bytes()
     from resolved_contract import load_manifest,check_asset_exports
-    manifest=load_manifest(root / 'design/.resolved/web.json')
+    manifest=load_manifest(lp.path(root, 'resolved', 'web.json'))
     check_asset_exports(root,manifest)
     (root / 'public/logo.png').write_bytes(b'wrong-logo')
     with pytest.raises(ValueError):check_asset_exports(root,manifest)
-    config=json.loads((root / 'design/design.yaml').read_text());config['items']={}
-    write(root / 'design/design.yaml',config)
+    config=json.loads(lp.path(root, 'design_config').read_text());config['items']={}
+    write(lp.path(root, 'design_config'),config)
     run=subprocess.run(argv,capture_output=True,text=True)
     assert run.returncode == 2
     assert (root / 'public/logo.png').read_bytes() == b'wrong-logo'
@@ -627,15 +648,15 @@ def test_sync_checks_l0_before_writing_configs_and_asset_copies(project):
 
 def test_web_check_stops_on_failed_l0_and_empty_validation_targets(project):
     root,catalogs=project
-    config=json.loads((root / 'design/design.yaml').read_text());config['items']={}
-    write(root / 'design/design.yaml',config)
+    config=json.loads(lp.path(root, 'design_config').read_text());config['items']={}
+    write(lp.path(root, 'design_config'),config)
     argv=[sys.executable,str(SKILL / 'scripts/web_check.py'),'--repo',str(root),'--catalog-dir',str(catalogs)]
     run=subprocess.run(argv,capture_output=True,text=True)
     assert run.returncode==2
     assert [s['stage'] for s in json.loads(run.stdout)['stages']]==['L0']
     config['items']={'dads-000001':{'state':'defined','evidence':['token:color.primary']}}
-    write(root / 'design/design.yaml',config)
-    write(root / 'design/validation.json',{'schema_version':1,'html':[],'urls':[],'viewports':[375],'schemes':['light']})
+    write(lp.path(root, 'design_config'),config)
+    write(lp.path(root, 'validation'),{'schema_version':1,'html':[],'urls':[],'viewports':[375],'schemes':['light']})
     run=subprocess.run(argv,capture_output=True,text=True)
     assert run.returncode==2
     assert [s['stage'] for s in json.loads(run.stdout)['stages']]==['L0']
@@ -650,17 +671,17 @@ def test_web_check_runs_real_l1_and_l2_and_detects_palette_mutation(project):
     root,catalogs=project
     env=dict(os.environ,DESIGN_AUDIT_NODE=os.environ['DESIGN_TEST_NODE'])
     if os.environ.get('DESIGN_TEST_NODE_MODULES'):env['NODE_PATH']=os.environ['DESIGN_TEST_NODE_MODULES']
-    write(root/'design/render-environment.json',pin(root,env))
-    tokens=json.loads((root / 'design/tokens/brand.tokens.json').read_text())
+    write(lp.path(root, 'render_environment'),pin(root,env))
+    tokens=json.loads(lp.path(root, 'design_dir', 'tokens/brand.tokens.json').read_text())
     for name,components,hex_value,alpha in [('white',[1,1,1],'#ffffff',1),('clear',[0,0,0],'#000000',0)]:
         tokens['color'][name]={'$value':{'colorSpace':'srgb','components':components,'hex':hex_value,'alpha':alpha},
                                '$extensions':{'org.own.design':{'origin':'proposal'}}}
     tokens['font']={'$type':'fontFamily','$value':['Inter','sans-serif'],'$extensions':{'org.own.design':{'origin':'proposal'}}}
     tokens['radius']={'$type':'dimension','$value':{'value':0,'unit':'px'},'$extensions':{'org.own.design':{'origin':'proposal'}}}
-    write(root / 'design/tokens/brand.tokens.json',tokens)
+    write(lp.path(root, 'design_dir', 'tokens/brand.tokens.json'),tokens)
     result=check(project)
     approve(project)
-    write(root / 'design/validation.json',{'schema_version':1,'html':['index.html'],
+    write(lp.path(root, 'validation'),{'schema_version':1,'html':['index.html'],
           'urls':[{'env':'DESIGN_FIXTURE_URL'}],'viewports':[375],'schemes':['light']})
     normal=('<html lang="en"><head><title>Fixture</title><meta name="viewport" content="width=device-width">'
             '<style>@font-face{font-family:Inter;src:url(/fixture.woff2)}body{font:16px/1.5 Inter,sans-serif;background:white;color:black}'
@@ -690,10 +711,10 @@ def test_web_check_runs_real_l1_and_l2_and_detects_palette_mutation(project):
         assert run.returncode==1,result
         assert result['stages'][-1]=={'stage':'L2','exit_code':1,'target_env':'DESIGN_FIXTURE_URL','profile':'lp'}
         (root/'index.html').write_text(normal)
-        fixed=json.loads((root/'design/render-environment.json').read_text())
+        fixed=json.loads(lp.path(root, 'render_environment').read_text())
         fixed['runtime']['browser_version']='wrong-version'
-        write(root/'design/render-environment.json',fixed)
-        stale=root/'design/.resolved/l2-0.json';assert stale.exists()
+        write(lp.path(root, 'render_environment'),fixed)
+        stale=lp.path(root, 'resolved', 'l2-0.json');assert stale.exists()
         run=subprocess.run(argv,env=env,capture_output=True,text=True)
         result=json.loads(run.stdout)
         assert run.returncode==2 and not stale.exists(),result
@@ -704,7 +725,7 @@ def test_web_check_runs_real_l1_and_l2_and_detects_palette_mutation(project):
 
 def test_l1_rejects_missing_declared_tailwind_target(project):
     root,_=project
-    write(root/'design/tailwind.json',{'schema_version':1,'configs':[{
+    write(lp.path(root, 'tailwind'),{'schema_version':1,'configs':[{
         'target':'app/tailwind.config.cjs','content':['./src/**/*.tsx'],
         'theme':{'colors':{'primary':{'$token':'color.primary'}}},'plugins':[]}]})
     check(project)
@@ -714,7 +735,7 @@ def test_l1_rejects_missing_declared_tailwind_target(project):
     assert audit.is_file(),'sibling audit_html.py is missing; exit code 2 alone would not prove the tailwind check'
     assert not (root/'app/tailwind.config.cjs').exists()
     run=subprocess.run([sys.executable,str(audit),
-        str(root/'index.html'),'--manifest',str(root/'design/.resolved/web.json')],capture_output=True,text=True)
+        str(root/'index.html'),'--manifest',str(lp.path(root, 'resolved', 'web.json'))],capture_output=True,text=True)
     assert run.returncode==2,run.stdout+run.stderr
     assert json.loads(run.stdout)=={'exit_code':2,'errors':['FileNotFoundError: invalid or unavailable input']},run.stdout+run.stderr
 
@@ -743,7 +764,7 @@ def test_sync_rejects_symlinked_targets_and_rolls_back_partial_failure(project,m
 def test_unsigned_legacy_approval_is_rejected(project):
     root,_=project
     digest=check(project)['manifest']['web']['tokens']['color.primary']['value_hash']
-    write(root/'design/approvals.yaml',[{'token_path':'color.primary','value_hash':digest,
+    write(lp.path(root, 'ledger'),[{'token_path':'color.primary','value_hash':digest,
         'approver':'fixture-owner','date':'2026-10-22'}])
     assert check(project,ship=True)['exit_code']==2
 
@@ -752,16 +773,16 @@ def test_profile_change_invalidates_approval(project):
     approve(project)
     assert check(project,ship=True)['exit_code']==0
     root,_=project
-    write(root/'design/profiles/web.json',{'media':'web','minimums':{'text_contrast':7}})
+    write(lp.path(root, 'design_dir', 'profiles/web.json'),{'media':'web','minimums':{'text_contrast':7}})
     assert check(project,ship=True)['exit_code']==2
 
 
 def test_spec_reference_metadata_is_allowed_without_duplicating_the_docs_validator(project):
     root, _ = project
-    config = json.loads((root / 'design/design.yaml').read_text())
+    config = json.loads(lp.path(root, 'design_config').read_text())
     expected = check(project)['approval_targets']
     config['spec'] = 'docs/specs/visual.md'
-    write(root / 'design/design.yaml', config)
+    write(lp.path(root, 'design_config'), config)
     result = check(project)
     assert result['exit_code'] == 1
     assert not any('unknown design configuration' in error for error in result['errors'])

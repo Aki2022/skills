@@ -11,6 +11,7 @@ import json
 import pytest
 
 from test_core import project, write  # noqa: F401  (fixture reuse)
+import layer_paths as lp  # noqa: E402  (test_core puts scripts/ on the path)
 from test_item_coverage import catalog_item, use_catalog_item, set_items, rendered, stages  # noqa: F401
 from web_check import render_targets
 from ship_contract import validate_web_result
@@ -61,18 +62,18 @@ def test_malformed_states_are_rejected(states):
 # --- ship evidence -------------------------------------------------------------------------------
 
 def ship_fixture(tmp_path, states, recorded):
-    write(tmp_path / 'design/validation.json', {**config(), 'html': ['dist/index.html'],
+    write(lp.path(tmp_path, 'validation'), {**config(), 'html': ['dist/index.html'],
           'urls': [{'env': 'DESIGN_WEB_URL', 'states': states}]})
     env = {'runtime': {'browser': 'fixture'}, 'viewports': [{'width': 375, 'height': 812}], 'schemes': ['light']}
-    write(tmp_path / 'design/render-environment.json', env)
-    digest = hashlib.sha256((tmp_path / 'design/render-environment.json').read_bytes()).hexdigest()
+    write(lp.path(tmp_path, 'render_environment'), env)
+    digest = hashlib.sha256(lp.path(tmp_path, 'render_environment').read_bytes()).hexdigest()
     row = {'scheme': 'light', 'width': 375, 'render_evidence': {'screenshot_sha256': 'a' * 64}}
     labels = ['DESIGN_WEB_URL'] + ['DESIGN_WEB_URL#' + name for name in states]
     for i, state in enumerate([None] + recorded):
-        write(tmp_path / f'design/.resolved/l2-{i}.json', {'url': 'http://127.0.0.1:12345/', 'state': state,
+        write(lp.path(tmp_path, 'resolved', f'l2-{i}.json'), {'url': 'http://127.0.0.1:12345/', 'state': state,
               'environment': {'runtime': env['runtime'], 'config_sha256': digest, 'repeat_equal': True},
               'runs': [{**row, 'repeat': 0}, {**row, 'repeat': 1}], 'failures': [], 'uncovered': []})
-    write(tmp_path / 'design/.resolved/items.json', {'schema_version': 1, 'pages': labels,
+    write(lp.path(tmp_path, 'resolved', 'items.json'), {'schema_version': 1, 'pages': labels,
           'machine': {}, 'afm_pairs': [], 'failures': []})
     return {'exit_code': 0, 'errors': [], 'stages': [{'stage': 'L0', 'exit_code': 0, 'counts': {'items': 1}},
             {'stage': 'L1', 'exit_code': 0, 'targets': 1},
@@ -110,13 +111,13 @@ RULE = {'id': 'dialog-title', 'kind': 'count', 'scope': ["[role='dialog']"], 'ta
 def run_states(rendered, project, inner, states):
     run, root, _ = rendered
     use_catalog_item(project, catalog_item(*DECISION, grade='nice-to-have'))
-    write(root / 'design/checks/web.yaml', {'rules': [RULE]})
+    write(lp.path(root, 'checks', 'web.yaml'), {'rules': [RULE]})
     set_items(root, {'dads-000001': {'state': 'defined', 'evidence': ['rule:dialog-title']}})
-    validation = json.loads((root / 'design/validation.json').read_text())
+    validation = json.loads(lp.path(root, 'validation').read_text())
     validation['urls'] = [{'env': 'DESIGN_FIXTURE_URL', **({'states': states} if states else {})}]
-    write(root / 'design/validation.json', validation)
+    write(lp.path(root, 'validation'), validation)
     code, result = run(BUTTON + DIALOG.format(inner=json.dumps(inner)))
-    path = root / 'design/.resolved/items.json'
+    path = lp.path(root, 'resolved', 'items.json')
     items = json.loads(path.read_text()) if path.exists() else {}
     return code, result, items.get('machine', {}).get('dads-000001', {})
 

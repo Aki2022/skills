@@ -209,8 +209,19 @@ commit SHA and the expected workflow. Use
 The helper queries `gh run list --commit` and checks each returned `headSha`.
 No matching run means "not registered yet" and remains pending; a run from an
 older SHA cannot satisfy the wait. A matching failed, cancelled, or skipped run
-stops with failure, while a query error or timeout never reports success. Do
-not infer completion from `gh run list --limit 1` or from the non-pending checks
+stops with failure (exit 1) and is never retried. A timeout stops as a timeout
+(exit 2). A query error never reports success.
+
+Only transient query errors are retried: `gh run list` timing out, or failing
+with a network or GitHub 5xx/429 error. The helper waits `--query-retry-interval`
+seconds (default 10) and retries up to `--query-retries` consecutive failures
+(default 3; `0` disables); a successful query resets the count. If the failures
+continue it stops with exit 3, as before. Permanent errors (authentication, HTTP
+4xx, an unknown workflow, `gh` missing, unreadable output) stop with exit 3 at
+once. Retries never extend `--timeout`; the retry wait is cut short at the
+deadline and the result is exit 2. Retry progress goes to stderr.
+
+Do not infer completion from `gh run list --limit 1` or from the non-pending checks
 currently visible on a PR. A successful helper result verifies only the named
 workflow on that SHA; inspect the other required PR checks before a merge.
 

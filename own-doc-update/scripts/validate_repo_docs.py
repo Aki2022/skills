@@ -340,6 +340,10 @@ PLACEMENT_FORBIDDEN_IN_SPEC = (
     "レビュー結果",
     "Next Question",
 )
+# 語と値は docs/dictionary/ の持ち分で、spec は用語表を持たない（SPEC-deliverable-production-layers の
+# Requirement 10、biz_ops）。この日以降に作られた spec だけを見る。それより前の spec の表は移さずに残す決まり。
+DICTIONARY_ROLLOUT_DATE = "2026-11-20"
+TERM_TABLE_HEADINGS = ("Domain Language", "用語", "用語集", "Glossary")
 # 見出しが実装の状態を名乗るなら、それは現況＝guide の持ち分である。
 PLACEMENT_STATUS_IN_HEADING = re.compile(r"実装(完了|済み?|中)|実装は段階")
 
@@ -535,6 +539,9 @@ def validate_spec_placement(
     seen: set[tuple[str, str]] = set()
     for path in sorted(specs_dir.glob("*.md")):
         rel = str(path.relative_to(root))
+        fm = parse_front_matter(path) or {}
+        created = as_text(fm.get("created_at", ""))
+        new_spec = bool(re.fullmatch(r"\d{4}-\d{2}-\d{2}", created)) and created >= DICTIONARY_ROLLOUT_DATE
         try:
             lines = path.read_text(encoding="utf-8").splitlines()
         except OSError as exc:  # pragma: no cover
@@ -556,6 +563,9 @@ def validate_spec_placement(
                 reason = "work unit の持ち分（受入条件・ゲート・既存への影響・レビュー結果）"
             elif PLACEMENT_STATUS_IN_HEADING.search(heading):
                 reason = "実装状態を名乗る見出しは現況＝guide の持ち分"
+            elif new_spec and heading in TERM_TABLE_HEADINGS:
+                reason = ("語は docs/dictionary/ の持ち分（" + DICTIONARY_ROLLOUT_DATE
+                          + " 以降に作られた spec は用語表を持たない。重要な語は辞書に足す）")
             if reason is None:
                 continue
             seen.add((rel, heading))

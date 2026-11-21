@@ -212,3 +212,36 @@ def test_an_override_without_a_reason_is_refused(tmp_path):
     f.write_text('- {screen: scr-overview, above: rgn-0006, below: rgn-0002, reason: ""}\n', encoding='utf-8')
     with pytest.raises(ValueError):
         audit_screen.overrides_for(f, 'scr-overview')
+
+
+# ---- the interpreter ---------------------------------------------------------------------------------------------
+# `python3 audit_screen.py ...` is how the SKILL tells people to run it, and the python3 on PATH may not have PyYAML. The L0
+# dependency interpreter (DESIGN_AUTHOR_PYTHON) has it, and build_screen already uses it; audit_screen must too, or it stops
+# (exit 2) on a command that is written exactly as the SKILL says.
+
+def _run_without_yaml(tmp_path, env_extra=None, drop=()):
+    """Run audit_screen.py as a script in an interpreter where `import yaml` fails, like a python3 without PyYAML."""
+    script = ROOT / 'own-web-build/scripts/audit_screen.py'
+    screen = tmp_path / 'screen.yaml'
+    screen.write_text('id: scr-x\n', encoding='utf-8')
+    hide = ("import sys, runpy; sys.modules['yaml'] = None; sys.argv = ['audit_screen.py'] + sys.argv[1:]; "
+            f"runpy.run_path({str(script)!r}, run_name='__main__')")
+    env = {k: v for k, v in os.environ.items() if k not in ('DESIGN_AUTHOR_PYTHON', 'AUDIT_SCREEN_REEXEC', *drop)}
+    env.update(env_extra or {})
+    return subprocess.run([sys.executable, '-c', hide, '--screen', str(screen), '--html', str(tmp_path / 'absent.html')],
+                          capture_output=True, text=True, env=env, timeout=120)
+
+
+def test_audit_screen_starts_itself_again_under_the_dependency_interpreter(tmp_path):
+    proc = _run_without_yaml(tmp_path, {'DESIGN_AUTHOR_PYTHON': sys.executable})
+    assert 'PyYAML' not in proc.stdout + proc.stderr, proc.stdout + proc.stderr
+
+
+def test_audit_screen_without_the_dependency_interpreter_stops_and_says_which_variable(tmp_path):
+    proc = _run_without_yaml(tmp_path)
+    assert proc.returncode == 2 and 'PyYAML' in proc.stdout and 'DESIGN_AUTHOR_PYTHON' in proc.stdout, proc.stdout + proc.stderr
+
+
+def test_audit_screen_does_not_start_itself_again_in_a_loop(tmp_path):
+    proc = _run_without_yaml(tmp_path, {'DESIGN_AUTHOR_PYTHON': sys.executable, 'AUDIT_SCREEN_REEXEC': '1'})
+    assert proc.returncode == 2 and 'PyYAML' in proc.stdout, proc.stdout + proc.stderr

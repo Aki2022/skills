@@ -15,6 +15,44 @@ IA_VERSION = '0.4.0'
 # What the resolved result trusts is bound together; a change to any of them invalidates it (rerun L0).
 IA_TRUSTED_SKILLS = ('own-positioning-author',)
 IA_TRUSTED_FILES = ('own-doc-update/scripts/dictionary.py',)
+# What the checker reads outside design/info_arch/: the docs dictionary, one `docs/dictionary/<domain>.json` per domain
+# (the same folder and glob as ia_module.DICTIONARY_DIR; resolved_contract.mjs mirrors it).
+IA_DICTIONARY_DIR = 'docs/dictionary'
+
+
+def _ia_input_key_ok(key):
+    if not isinstance(key, str):
+        return False
+    parts = Path(key).parts
+    if '..' in parts or key != '/'.join(parts):
+        return False
+    if parts[:2] == ('design', 'info_arch') and len(parts) > 2:
+        return True
+    return len(parts) == 3 and parts[:2] == tuple(IA_DICTIONARY_DIR.split('/')) and parts[2].endswith('.json')
+
+
+def check_ia_dictionary_current(modules, root):
+    """A resolved manifest whose IA inputs include the docs dictionary is stale once a dictionary file changed,
+    appeared or went away (ISSUE-20261121). A manifest that recorded none is stale only if the repository has some."""
+    governance = (modules.get('ia') or {}).get('resolved', {}).get('governance')
+    if not isinstance(governance, dict):
+        return
+    prefix = IA_DICTIONARY_DIR + '/'
+    expected = {k: v for k, v in governance.get('input_hashes', {}).items() if k.startswith(prefix)}
+    root = Path(root)
+    folder = root / IA_DICTIONARY_DIR
+    actual = {}
+    if folder.exists() or folder.is_symlink():
+        for path in [root / 'docs', folder]:
+            if path.is_symlink() or not path.resolve().is_relative_to(root.resolve()):
+                raise ValueError('IA input symlink or escape')
+        for path in sorted(folder.glob('*.json')):
+            if path.is_symlink() or not path.resolve().is_relative_to(root.resolve()):
+                raise ValueError('IA input symlink or escape')
+            if path.is_file():
+                actual[path.relative_to(root).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
+    if actual != expected:
+        raise ValueError('stale manifest; rerun L0')
 
 
 def _digest(path, full=False):
@@ -69,7 +107,7 @@ def _git_contract(result):
             or not isinstance(governance['input_hashes'], dict) or not governance['input_hashes']):
         raise ValueError('invalid IA git-history provenance')
     for key, digest in governance['input_hashes'].items():
-        if (not isinstance(key, str) or not key.startswith('design/info_arch/') or '..' in Path(key).parts
+        if (not _ia_input_key_ok(key)
                 or not isinstance(digest, str) or not re.fullmatch(r'[0-9a-f]{64}', digest)):
             raise ValueError('invalid IA input hash')
     if not isinstance(result['media'], dict):

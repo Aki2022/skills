@@ -131,6 +131,7 @@ IAそのものの原子・抽出・検査はこの接続口だけでは実装済
 
 上記の承認対象を持つ旧resolver契約と、IA v4の承認状態を持たないSSOTは区別する。
 modules.ia: 0.4.0は、固定のia_module.pyから既存IAのcheckを同じPythonで呼ぶ。ia-git-history-v4契約（governance.schema_version 4）では、IAの提供価値ごとの経路（ia:path:<提供価値 id>）がapproval_hashesとして返り、出荷される outline が指す経路がmust_approval_keysになる。承認のハッシュは経路の原子と矢印すべての中身を束縛する（写しの出どころは入らない。媒体の解決は経ない。ADR-20261118-ia-approval-per-value-path、biz_ops）。原子と矢印ごとの旧い行（ia:positioning:）は対象に無いので、台帳に残っていれば検査は approval target absent で止まる。IA の migrate-approvals で一度だけ移す。記録はオーナーがapprove --prepare/--requestで行い、DS承認の必要条件は変えない。v3契約（0.3.0）以前は読まない。
-入力hashと実際のチャネル・アウトライン・セクション件数を持ち、対象0件・壊れた参照・期限違反は失格。IA入力や実装のsymlink/逸脱は拒否する。
+入力hash（design/info_arch/ の各ファイルと、docs/dictionary/*.json の各ファイル。辞書の固定値・正式名称はIAの検査が突き合わせる入力）と実際のチャネル・アウトライン・セクション件数を持ち、対象0件・壊れた参照・期限違反は失格。IA入力や実装のsymlink/逸脱は拒否する。
+辞書の語を変える・辞書のファイルを足す・消すと入力hashが変わり、Python/JS両consumerは「古いmanifest、L0を再実行」で拒否する（辞書を持たないrepoには何も増えない）。出荷ゲート（infoarch-author ship）はコミットの木でcheckを走らせるので、この変更で結果は変わらない。
 マニフェストのIA実装digestは橋渡しファイルだけでなく、固定のscripts/references/schema全体を束縛し、Python/JS両consumerが古い結果を拒否する。
 このL0接続はIAのDOM検査や未実装の意味判定を実行済みにはしない。後段のDOMは別に実行し、意味判定の欠落も報告する。

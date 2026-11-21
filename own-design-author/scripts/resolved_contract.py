@@ -24,8 +24,9 @@ def load_manifest(path):
     from judgment_ledger import POLICY
     if data.get('judgment_policy_sha256')!=hashlib.sha256(POLICY.read_bytes()).hexdigest():
         raise ValueError('judgment policy changed; rerun L0')
-    from design_modules import validate_module_state
+    from design_modules import validate_module_state, check_ia_dictionary_current
     validate_module_state(data.get('modules',{}))
+    check_ia_dictionary_current(data.get('modules',{}),design.parent)
     expected = data['input_hashes']
     actual = {}
     for source in sorted(design.rglob('*')):

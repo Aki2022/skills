@@ -16,6 +16,11 @@ CONTRACT = 'ia-git-history-v4'
 # Per-element keys (ia:positioning:...) are not targets: a ledger row with one is not counted as an approval.
 KEY = re.compile(r'ia:path:val-[0-9]{4,}|ia:item:(?:sto|pri|con|ojc|ntr)-[0-9]{4,}')  # a value's path; a product item (blueprint)
 CATEGORIES = ('executed', 'skipped', 'missing', 'uncovered', 'screened')
+# The fixed values and official names the checker compares against are the docs dictionary's, outside design/. They are
+# inputs too: one file per domain, `docs/dictionary/<domain>.json` (own-doc-update/scripts/dictionary.py reads exactly
+# `DICTIONARY_DIR/*.json`; a test pins the two together). Its hashes sit beside the design/info_arch/ ones in
+# governance.input_hashes, so a changed word changes them (design L0's consumers compare them against the tree).
+DICTIONARY_DIR = 'docs/dictionary'
 
 
 def _unique(pairs):
@@ -25,6 +30,25 @@ def _unique(pairs):
             raise ValueError('duplicate IA response key')
         out[key] = value
     return out
+
+
+def dictionary_inputs(root):
+    """{repo-relative path: sha256} of `docs/dictionary/*.json`; empty when the repository has no dictionary."""
+    folder = root / DICTIONARY_DIR
+    if not folder.exists() and not folder.is_symlink():
+        return {}
+    for path in [root / 'docs', folder]:
+        if path.is_symlink() or not path.resolve().is_relative_to(root):
+            raise ValueError('IA input symlink or escape')
+    if not folder.is_dir():
+        raise ValueError('IA input is missing or not a regular file/directory')
+    inputs = {}
+    for path in sorted(folder.glob('*.json')):
+        if path.is_symlink() or not path.resolve().is_relative_to(root):
+            raise ValueError('IA input symlink or escape')
+        if path.is_file():
+            inputs[path.relative_to(root).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return inputs
 
 
 def resolve(*, root, approvals, profiles):
@@ -41,6 +65,7 @@ def resolve(*, root, approvals, profiles):
             raise ValueError('IA input is missing or not a regular file/directory')
     inputs = {p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
               for p in sorted(base.rglob('*')) if p.is_file()}
+    inputs.update(dictionary_inputs(root))
     cli = Path(__file__).resolve().parent / 'infoarch_author.py'
     evaluated_on = dt.date.today().isoformat()
     run = subprocess.run([sys.executable, str(cli), 'check', '--root', str(root),
@@ -95,6 +120,7 @@ def resolve(*, root, approvals, profiles):
         raise ValueError('IA approval targets failed on a loadable SSOT')
     now = {p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
            for p in sorted(base.rglob('*')) if p.is_file() and not p.is_symlink()}
+    now.update(dictionary_inputs(root))
     if now != inputs:
         raise ValueError('IA inputs changed during check')
     head = subprocess.run(['git', '-C', str(root), 'rev-parse', '--verify', 'HEAD'], capture_output=True, text=True)

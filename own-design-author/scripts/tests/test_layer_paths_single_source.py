@@ -22,6 +22,7 @@ RULE_FILES = {
     SKILL / 'scripts/layer_paths.py',
     SKILL / 'scripts/layer_paths.mjs',
 }
+PROSE_KEYS = {'title', 'description', 'comment', '$comment'}
 CODE_SUFFIXES = {'.py', '.mjs', '.js', '.cjs', '.sh'}
 # Names the layout JSON owns. A string literal that is, starts with, or contains "<root>/" is a layer path;
 # a string that is exactly the root name is the path component of one.
@@ -94,7 +95,8 @@ def literals_of(path):
             elif isinstance(value, list):
                 [walk(v) for v in value]
             elif isinstance(value, dict):
-                [walk(v) for v in value.values()]
+                # titles, descriptions and comments are prose about a file, not a path any code reads
+                [walk(v) for k, v in value.items() if k not in PROSE_KEYS]
         walk(json.loads(text))
         return [v for v in found if v == ROOT or v.startswith(ROOT + '/')]  # data values that are paths
     return list(shell_literals(text))

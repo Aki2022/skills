@@ -75,7 +75,8 @@ def test_green_fixture_passes_and_counts_what_it_checked(tmp_path):
     assert rc == 0, report['findings']
     [info] = [f for f in report['findings'] if f['code'] == 'IA_BLUEPRINT_CHECKED']
     assert info['detail'] == {'screens': 2, 'items': 10}
-    assert report['targets'] == {'channels': 0, 'outlines': 0, 'sections': 0}  # the bridge's three counts stay as they were
+    # The bridge counts the blueprint beside the outline side: a product UI with no outline is a real target, not zero.
+    assert report['targets'] == {'channels': 0, 'outlines': 0, 'sections': 0, 'screens': 2, 'items': 10}
 
 
 def test_a_repository_with_no_blueprint_and_no_outline_still_fails(tmp_path):
@@ -168,6 +169,75 @@ def test_targets_list_every_proposed_item_and_the_ones_shipping_needs(tmp_path):
     must = set(out['must_approval_keys'])
     assert {'ia:item:sto-0001', 'ia:item:sto-0002', 'ia:item:pri-0001', 'ia:item:con-0001', 'ia:item:ojc-0001', 'ia:item:ojc-0002', 'ia:item:ojc-0003'} <= must
     assert 'ia:item:con-0002' not in must and 'ia:item:pri-0002' not in must  # no shipped screen cites them
+
+
+# ---- the bridge: a blueprint-only repository is not "zero targets"; an empty one still is ----------------------------
+
+ZERO_TARGETS = 'zero IA check targets'
+# (channels, outlines, sections, screens, items) -> is it an empty check (red)?
+TARGET_TABLE = [
+    ((2, 2, 5, 0, 0), False),   # outlines only (the existing LP / deck repositories)
+    ((0, 0, 0, 2, 10), False),  # a blueprint only (the product UI): the case this table exists for
+    ((2, 2, 5, 2, 10), False),  # both
+    ((0, 0, 0, 0, 0), True),    # nothing to check is never a pass
+    ((0, 0, 0, 2, 0), True),    # screens with no items
+    ((0, 0, 0, 0, 10), True),   # items with no screens
+    ((2, 0, 0, 0, 0), True),    # a half-empty outline side
+    ((2, 2, 0, 2, 10), True),   # a half-empty outline side beside a full blueprint
+    ((0, 0, 0, 2, 0), True),
+]
+
+
+@pytest.mark.parametrize('counts,empty', TARGET_TABLE)
+def test_the_zero_target_rule_by_table(counts, empty):
+    import ia_module
+    targets = dict(zip(('channels', 'outlines', 'sections', 'screens', 'items'), counts))
+    assert ia_module.zero_targets(targets) is empty
+
+
+def git_repo(root):
+    subprocess.run(['git', 'init', '-q', '-b', 'main', str(root)], check=True)
+
+
+def resolve(root):
+    import ia_module
+    return ia_module.resolve(root=root, approvals={}, profiles={'web': {}})
+
+
+def test_the_bridge_counts_a_blueprint_only_repository(tmp_path):
+    git_repo(tmp_path)
+    write_blueprint(tmp_path)  # a positioning and a blueprint; no outline, no channel
+    result = resolve(tmp_path)
+    assert result['errors'] == [], result['errors']
+    assert result['targets'] == {'channels': 0, 'outlines': 0, 'sections': 0, 'screens': 2, 'items': 10}
+    assert result['media']['web']['targets'] == result['targets']
+    assert any(k.startswith('ia:item:') for k in result['approval_hashes'])
+    [row] = result['report']['executed']
+    assert row['targets'] == 10 and row['counts'] == result['targets']  # the stage counts what it checked (items), not 0
+
+
+@pytest.mark.parametrize('how', ['no-screens', 'no-product', 'no-blueprint'])
+def test_the_bridge_stays_red_for_an_empty_blueprint(tmp_path, how):
+    git_repo(tmp_path)
+    if how == 'no-screens':
+        write_blueprint(tmp_path, screens=())
+    elif how == 'no-product':
+        write_blueprint(tmp_path, product=None, screens=())
+    else:
+        write_blueprint(tmp_path, screens=())
+        import shutil
+        shutil.rmtree(tmp_path / BP_DIR)  # a positioning, and nothing to check beside it
+    result = resolve(tmp_path)
+    assert ZERO_TARGETS in result['errors'], result['errors']
+
+
+def test_an_outline_repository_keeps_zero_blueprint_counts(tmp_path):
+    from test_check import write_repo
+    git_repo(tmp_path)
+    write_repo(tmp_path)
+    result = resolve(tmp_path)
+    assert result['errors'] == [], result['errors']
+    assert result['targets'] == {'channels': 2, 'outlines': 2, 'sections': 5, 'screens': 0, 'items': 0}
 
 
 def test_the_bridge_accepts_item_keys():

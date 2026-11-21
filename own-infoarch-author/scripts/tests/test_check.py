@@ -135,7 +135,7 @@ def test_green_fixture_passes_with_real_targets(tmp_path):
     write_repo(tmp_path)
     rc, report = check(tmp_path)
     assert rc == 0, report['findings']
-    assert report['targets'] == {'channels': 2, 'outlines': 2, 'sections': 5}
+    assert report['targets'] == {'channels': 2, 'outlines': 2, 'sections': 5, 'screens': 0, 'items': 0}
 
 
 def mutate(case, root):

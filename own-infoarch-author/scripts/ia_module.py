@@ -15,12 +15,25 @@ CONTRACT = 'ia-git-history-v4'
 # ia:path:<value id>: one row per value, its hash binding the whole path (ADR-20261118-ia-approval-per-value-path).
 # Per-element keys (ia:positioning:...) are not targets: a ledger row with one is not counted as an approval.
 KEY = re.compile(r'ia:path:val-[0-9]{4,}|ia:item:(?:sto|pri|con|ojc|ntr)-[0-9]{4,}')  # a value's path; a product item (blueprint)
+# The targets a check counted: the outline side (a deliverable) and the blueprint side (a product UI). The five keys are
+# fixed; design_modules._git_contract validates the same five, and a resolved manifest records them in media.*.targets.
+OUTLINE_TARGETS = ('channels', 'outlines', 'sections')
+BLUEPRINT_TARGETS = ('screens', 'items')
+TARGET_KEYS = OUTLINE_TARGETS + BLUEPRINT_TARGETS
 CATEGORIES = ('executed', 'skipped', 'missing', 'uncovered', 'screened')
 # The fixed values and official names the checker compares against are the docs dictionary's, outside design/. They are
 # inputs too: one file per domain, `docs/dictionary/<domain>.json` (own-doc-update/scripts/dictionary.py reads exactly
 # `DICTIONARY_DIR/*.json`; a test pins the two together). Its hashes sit beside the design/info_arch/ ones in
 # governance.input_hashes, so a changed word changes them (design L0's consumers compare them against the tree).
 DICTIONARY_DIR = 'docs/dictionary'
+
+
+def zero_targets(targets):
+    """True when the check counted nothing it can stand on. A side is all or nothing: a side with some counts and a zero
+    (channels with no outline, screens with no item) is empty, and so is a check where both sides are zero. One whole
+    side is enough, so a product UI with no outline is a target and a deliverable with no blueprint stays one."""
+    sides = [[targets[k] for k in OUTLINE_TARGETS], [targets[k] for k in BLUEPRINT_TARGETS]]
+    return any(any(side) and not all(side) for side in sides) or not any(all(side) for side in sides)
 
 
 def _unique(pairs):
@@ -82,12 +95,12 @@ def resolve(*, root, approvals, profiles):
             or any(not isinstance(value, str) for value in data['environment'].values()) or data['uncovered'] != []):
         raise ValueError('invalid upstream IA check response')
     targets = data['targets']
-    if not isinstance(targets, dict) or set(targets) != {'channels', 'outlines', 'sections'} or any(
+    if not isinstance(targets, dict) or set(targets) != set(TARGET_KEYS) or any(
             type(n) is not int or n < 0 for n in targets.values()):
         # A malformed SSOT can return no counts. Fail closed with its actual diagnostics.
         if run.returncode != 2 or targets != {}:
             raise ValueError('invalid upstream IA target counts')
-        targets = {'channels': 0, 'outlines': 0, 'sections': 0}
+        targets = dict.fromkeys(TARGET_KEYS, 0)
     counts = data['counts']
     findings = data['findings']
     if not isinstance(findings, list) or any(not isinstance(f, dict) or set(f) != {
@@ -101,7 +114,7 @@ def resolve(*, root, approvals, profiles):
         raise ValueError('inconsistent upstream IA exit code')
     errors = [f['code'] + ': ' + f['message'] for f in findings if f['level'] == 'fail']
     warnings = [f['code'] + ': ' + f['message'] for f in findings if f['level'] == 'warn']
-    if any(n == 0 for n in targets.values()):
+    if zero_targets(targets):
         errors.append('zero IA check targets')
     # Owner approvals per value path (SPEC-information-architecture-standardization requirement 18).
     targets_run = subprocess.run([sys.executable, str(cli), 'targets', '--root', str(root)], cwd=root,
@@ -131,7 +144,7 @@ def resolve(*, root, approvals, profiles):
                   'commit': commit, 'input_hashes': inputs}
     report = {key: [] for key in CATEGORIES}
     report['executed'].append({'id': 'ia-deterministic', 'exit_code': 2 if errors else run.returncode,
-                               'targets': targets['sections'], 'counts': targets})
+                               'targets': targets['sections'] + targets['items'], 'counts': targets})
     report['missing'].append({'id': 'ia-semantic-judgments', 'reason': 'design L0 does not read IA judgments; the IA ship gate (infoarch-author ship) reads them from the shared ledger'})
     report['skipped'].append({'id': 'ia-dom', 'reason': 'design L0 does not render; the IA ship gate (infoarch-author ship) runs dom on shipped HTML outputs'})
     return {'contract': CONTRACT, 'governance': governance, 'targets': targets,

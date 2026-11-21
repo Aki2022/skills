@@ -22,6 +22,7 @@ for p in (ROOT / 'own-infoarch-author/scripts/tests', ROOT / 'own-positioning-au
     sys.path.insert(0, str(p))
 
 import audit_screen  # noqa: E402
+import audit_html  # noqa: E402
 import build_screen  # noqa: E402
 from blueprint_fixtures import OVERVIEW, PERSON, PRODUCT, write_blueprint  # noqa: E402
 
@@ -98,6 +99,15 @@ def test_the_build_keeps_the_priority_order_and_marks_everything(built):
     assert page.count('data-ia-primary="true"') == 1 and 'class="btn primary"' in page
     assert all(f'data-ia-state="{s}"' in page for s in OVERVIEW['states'])
     assert '<style>' in page and 'grid-column:span' in page
+
+
+def test_the_built_page_passes_every_structural_constraint_of_the_html_media(built):
+    """own-web-build must satisfy media/html `html-*` before shipping: a built screen that fails them would make the gate red on a
+    page the skill itself produced (focus visibility was missing, found when a fresh session ran the whole table)."""
+    page, _ = built
+    results = audit_html.check_structure(page)
+    assert results, 'the structural check ran on nothing'
+    assert [label for ok, label in results if not ok] == []
 
 
 def test_the_build_refuses_a_failing_blueprint_and_an_existing_file(tmp_path):

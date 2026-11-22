@@ -1,4 +1,4 @@
-"""One migration of ux/infoarch/ from schema 4 (facts, entities and a voice inside the SSOT) to schema 5 and the
+"""One migration of design/info_arch/ from schema 4 (facts, entities and a voice inside the SSOT) to schema 5 and the
 docs dictionary (SPEC-deliverable-production-layers requirements 8 and 9).
 
 - every fact (`fct-NNNN`) becomes a dictionary `value` entry and every entity (`ent-NNNN`) a `name` entry, under the id
@@ -15,7 +15,7 @@ What cannot be moved mechanically (a fact or entity with no mapping, a value wit
 dictionary id, a placeholder or mark that names nothing, an existing dictionary file) is listed under `unmigrated`:
 one item is a failure (exit 2) and nothing is written. The dry run also checks the migrated tree in a scratch copy and
 reports its failures next to the original's: a migration that makes the check fail is refused. Nothing is committed.
-An already migrated tree is a no-op, so the tool is rerunnable. ux/approvals.yaml is not touched: approval hashes
+An already migrated tree is a no-op, so the tool is rerunnable. design/approvals.yaml is not touched: approval hashes
 cover the positioning paths, and facts, entities and voices are on none of them.
 """
 from __future__ import annotations

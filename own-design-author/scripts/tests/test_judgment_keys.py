@@ -7,7 +7,6 @@ import copy
 import subprocess
 import pytest
 from test_core import project  # noqa: F401 -- fixture; importing test_core also puts scripts/ on sys.path
-import layer_paths as lp  # noqa: E402  (test_core puts scripts/ on the path)
 from judgment_ledger import KINDS,candidate,evaluate,load_policy,rekey_ledger,validate_ledger
 
 TEXT='新規事業の人材を、学術尺度で見極める。'
@@ -103,16 +102,16 @@ def test_rekey_cli_moves_a_real_schema2_ledger_once(project):
     from test_core import SKILL,write
     root,_=project;policy=load_policy();before=without(policy,'ia-strategy-fit')
     old=[candidate(*CASES[0],policy=before,scheme=2)]
-    write(lp.path(root, 'judgments'),ledger(old,[0.2],before,version=2))
+    write(root/'design/judgments.json',ledger(old,[0.2],before,version=2))
     argv=[sys.executable,str(SKILL/'scripts/judgment_ledger.py'),'rekey','--repo',str(root)]
     with_replacement=subprocess.run(argv+['--replacement','x.json'],capture_output=True,text=True)
     assert with_replacement.returncode!=0
     preview=subprocess.run(argv,capture_output=True,text=True)
     assert preview.returncode==0,preview.stdout+preview.stderr
-    assert json.loads(lp.path(root, 'judgments').read_text())['schema_version']==2
+    assert json.loads((root/'design/judgments.json').read_text())['schema_version']==2
     run=subprocess.run(argv+['--write'],capture_output=True,text=True)
     assert run.returncode==0,run.stdout+run.stderr
-    data=json.loads(lp.path(root, 'judgments').read_text())
+    data=json.loads((root/'design/judgments.json').read_text())
     assert data['schema_version']==3 and data['rows'][0]['score']==0.2
     assert evaluate([candidate(*CASES[0])],data)['screened']
     again=subprocess.run(argv+['--write'],capture_output=True,text=True)

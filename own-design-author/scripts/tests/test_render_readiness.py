@@ -8,7 +8,6 @@ from threading import Event, Thread
 
 import pytest
 from test_core import SKILL, project, check
-import layer_paths as lp
 from test_ship_integration import browser_project, browser_env
 
 # Backstop for a hung run only, never the readiness discriminator. Measured on macOS: Chromium
@@ -36,10 +35,10 @@ def test_background_stream_does_not_replace_visible_resource_readiness(project):
             else: super().do_GET()
     server = ThreadingHTTPServer(('127.0.0.1',0),partial(Handler,directory=str(root)))
     thread = Thread(target=server.serve_forever,daemon=True); thread.start()
-    output = lp.path(root, 'resolved', 'readiness.json')
+    output = root / 'design/.resolved/readiness.json'
     argv = [os.environ.get('DESIGN_TEST_NODE','node'),str(SKILL.parent/'own-website-audit/scripts/measure_lp.mjs'),
-        'http://127.0.0.1:'+str(server.server_port),'--manifest',str(lp.path(root, 'resolved', 'web.json')),
-        '--environment',str(lp.path(root, 'render_environment')),'--viewports','375','--schemes','light',
+        'http://127.0.0.1:'+str(server.server_port),'--manifest',str(root/'design/.resolved/web.json'),
+        '--environment',str(root/'design/render-environment.json'),'--viewports','375','--schemes','light',
         '--profile','product-ui','--json',str(output)]
     try:
         run = subprocess.run(argv,cwd=root,env=env,capture_output=True,text=True,timeout=RUN_BUDGET_SECONDS)

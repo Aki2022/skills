@@ -9,7 +9,7 @@
 // first screen, and the visible text that belongs to no anchor (`unanchored`).
 // Playwright is found by own-design-author's playwright_runtime.mjs: OWN_PLAYWRIGHT_DIR, else the project
 // (INFOARCH_PLAYWRIGHT_DIR when set, else the current directory), else the per-machine runtime of the version
-// pinned in the project's ux/design/render-environment.json. It is never installed automatically; when it cannot
+// pinned in the project's design/render-environment.json. It is never installed automatically; when it cannot
 // be resolved this exits 2.
 import { pathToFileURL } from "node:url";
 import { loadPlaywright, pinnedVersion } from "../../own-design-author/scripts/playwright_runtime.mjs";

@@ -21,7 +21,6 @@ RULE_FILES = {
     SKILL / 'references/layer-paths.json',
     SKILL / 'scripts/layer_paths.py',
     SKILL / 'scripts/layer_paths.mjs',
-    SKILL / 'scripts/migrate_layout.py',  # the record of the old layout being migrated away from
 }
 PROSE_KEYS = {'title', 'description', 'comment', '$comment'}
 CODE_SUFFIXES = {'.py', '.mjs', '.js', '.cjs', '.sh'}

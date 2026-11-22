@@ -124,7 +124,7 @@ def gate(root,name,channel,catalogs,*,deploy=False,source_commit=None,predicted=
     commit,tree=clean_commit(root)
     env=hook_free_env()
     if local and deploy:raise ValueError('local integration cannot deploy')
-    # L0 reads only committed ux/ inputs, so it runs before the (slow) preparation: a design system that
+    # L0 reads only committed design/ inputs, so it runs before the (slow) preparation: a design system that
     # cannot ship never pays for installing or building the app.
     l0_command=env.get('DESIGN_AUTHOR_COMMAND') or str(SCRIPT/'design-author')
     l0=json_command([l0_command,'check','--ship','--repo',str(root),'--catalog-dir',str(catalogs),'--include-manifest'],root,env)
@@ -135,7 +135,7 @@ def gate(root,name,channel,catalogs,*,deploy=False,source_commit=None,predicted=
     if l0.get('counts',{}).get('items',0)<=0:raise ValueError('zero L0 ship targets')
     inputs=l0['manifest']['web']['input_hashes']
     tracked=set(git(root,'ls-files').splitlines())
-    if any(layer_paths.rel('layers',name) not in tracked for name in inputs):
+    if any(layer_paths.rel('design_dir',name) not in tracked for name in inputs):
         raise ValueError('all design inputs must be committed, including ignored inputs')
     validation=read_data(safe_path(root,layer_paths.rel('validation')))
     urls=validation.get('urls',[])

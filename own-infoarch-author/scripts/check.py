@@ -1,4 +1,4 @@
-"""Deterministic checks of ux/infoarch/ (token 0): the positioning SSOT, channel declarations, outlines (v6).
+"""Deterministic checks of design/info_arch/ (token 0): the positioning SSOT, channel declarations, outlines (v6).
 
 What is checked here is structure and references, never meaning. Meaning (term variants, emphasis, whether a
 sentence is a claim) belongs to the Jev judgement ledger; rendered artifacts belong to the DOM checks.
@@ -37,7 +37,7 @@ ANY_BRACES = re.compile(r'\{\{.*?\}\}', re.S)
 @dataclass
 class Model(pm.Model):
     channels: dict = field(default_factory=dict)  # media -> (rel path, data)
-    blueprint: object = None  # the product UI's infoarch (blueprint.Blueprint), when ux/infoarch/blueprint/ exists
+    blueprint: object = None  # the product UI's infoarch (blueprint.Blueprint), when design/info_arch/blueprint/ exists
     outlines: dict = field(default_factory=dict)  # id -> (rel path, data)
     # The dictionary as the rest of the checks read it: facts (kind value) and entities (kind name), keyed by the
     # dictionary id. Built at load time, so dom, judge, skeleton and the answer key read one shape wherever the
@@ -290,7 +290,7 @@ HTML_SUFFIXES = ('.html', '.htm')
 
 
 def check_pages(m, report):
-    """Shipped HTML outputs against ux/design/validation.json pages: the two declarations are kept, but must agree."""
+    """Shipped HTML outputs against design/validation.json pages: the two declarations are kept, but must agree."""
     path = layer_paths.path(m.root, 'validation')
     if not path.is_file():
         return

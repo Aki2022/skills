@@ -130,11 +130,3 @@ def test_node_manifest_root_matches_python(tmp_path):
     run = _node(code, str(manifest))
     assert run.returncode == 0, run.stderr
     assert run.stdout.strip() == str(lp.repo_from_resolved(manifest))
-
-
-def test_the_guard_message_shows_the_migration_command_when_the_layout_has_one(tmp_path):
-    (tmp_path / FOREIGN[0]).mkdir()
-    with pytest.raises(lp.LayerLayoutError) as caught:
-        lp.guard(tmp_path)
-    if LAYOUT.get('hint'):
-        assert 'migrate-layout' in str(caught.value)

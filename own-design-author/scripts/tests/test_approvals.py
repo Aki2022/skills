@@ -5,7 +5,6 @@ import subprocess
 import sys
 import pytest
 from test_core import project,check,approve,approve_rows,write,SKILL
-import layer_paths as lp  # noqa: E402  (test_core puts scripts/ on the path)
 from resolved_contract import load_manifest
 
 
@@ -23,7 +22,7 @@ def test_unsigned_approval_needs_no_key_agent_or_trust(project,monkeypatch):
         monkeypatch.delenv(name,raising=False)
     approve(project)
     assert check(project,ship=True)['exit_code']==0
-    data=load_manifest(lp.path(project[0], 'resolved', 'web.json'))
+    data=load_manifest(project[0]/'design/.resolved/web.json')
     assert data['approval_scheme']=='hash-jcs-v1'
     assert 'approval_context' not in data
 
@@ -33,14 +32,14 @@ def test_unsigned_approval_needs_no_key_agent_or_trust(project,monkeypatch):
     {'key':'unknown'},{'signature':'not supported'}])
 def test_invalid_approval_metadata_is_rejected(project,change):
     approve(project)
-    p=lp.path(project[0], 'ledger');rows=json.loads(p.read_text())
+    p=project[0]/'design/approvals.yaml';rows=json.loads(p.read_text())
     rows[0].update(change);write(p,rows)
     assert check(project)['exit_code']==2
 
 
 def test_alias_target_change_invalidates_approval(project):
     root,_=project
-    p=lp.path(root, 'design_dir', 'tokens/brand.tokens.json');tokens=json.loads(p.read_text())
+    p=root/'design/tokens/brand.tokens.json';tokens=json.loads(p.read_text())
     tokens['color']['alias']={'$value':'{color.primary}','$extensions':{'org.own.design':{'origin':'proposal'}}}
     write(p,tokens)
     value=check(project)['manifest']['web']['tokens']['color.alias']['value_hash']
@@ -53,19 +52,19 @@ def test_alias_target_change_invalidates_approval(project):
 
 def test_prepare_and_record_cli_keeps_review_boundary(project,tmp_path):
     root,catalogs=project
-    before=lp.path(root, 'ledger').read_bytes()
+    before=(root/'design/approvals.yaml').read_bytes()
     prepared=cli(root,catalogs,'--prepare','--must')
     assert prepared.returncode==0,prepared.stdout+prepared.stderr
     request=json.loads(prepared.stdout)
     assert request['approval_scheme']=='hash-jcs-v1' and len(request['rows'])==1
-    assert lp.path(root, 'ledger').read_bytes()==before
+    assert (root/'design/approvals.yaml').read_bytes()==before
     path=tmp_path/'review.json';write(path,request)
     recorded=cli(root,catalogs,'--request',str(path),'--approver','fixture-owner',
         '--owner-words','fixture: approve','--approved-on',request['rows'][0]['date'])
     assert recorded.returncode==0,recorded.stdout+recorded.stderr
     assert json.loads(recorded.stdout)['recorded_rows']==1
     assert check(project,ship=True)['exit_code']==0
-    rows=json.loads(lp.path(root, 'ledger').read_text())
+    rows=json.loads((root/'design/approvals.yaml').read_text())
     assert set(rows[0])=={'key','value_hash','approver','date'}
 
 
@@ -75,12 +74,12 @@ def test_reviewed_change_and_wrong_repo_are_rejected_before_write(project,tmp_pa
     request=prepare(root,catalogs,all_must=True)
     with pytest.raises(ValueError,match='another repository'):
         approve_request(root,catalogs,{**request,'repo_id':'wrong'},'fixture-owner',**OWNER(request))
-    data=json.loads(lp.path(root, 'design_dir', 'tokens/brand.tokens.json').read_text())
+    data=json.loads((root/'design/tokens/brand.tokens.json').read_text())
     data['color']['primary']['$value']={'colorSpace':'srgb','components':[1,1,1],'hex':'#ffffff'}
-    write(lp.path(root, 'design_dir', 'tokens/brand.tokens.json'),data)
+    write(root/'design/tokens/brand.tokens.json',data)
     with pytest.raises(ValueError,match='reviewed inputs changed'):
         approve_request(root,catalogs,request,'fixture-owner',**OWNER(request))
-    assert json.loads(lp.path(root, 'ledger').read_text())==[]
+    assert json.loads((root/'design/approvals.yaml').read_text())==[]
 
 
 def test_recording_race_preserves_ledger(project,monkeypatch):
@@ -92,20 +91,20 @@ def test_recording_race_preserves_ledger(project,monkeypatch):
     def changed(*args):
         calls.append(1)
         if len(calls)==2:
-            p=lp.path(root, 'design_dir', 'tokens/brand.tokens.json');data=json.loads(p.read_text())
+            p=root/'design/tokens/brand.tokens.json';data=json.loads(p.read_text())
             data['color']['primary']['$value']={'colorSpace':'srgb','components':[1,1,1],'hex':'#ffffff'}
             write(p,data)
         return snapshot(*args)
     monkeypatch.setattr(owner_approval,'_snapshot',changed)
     with pytest.raises(ValueError,match='changed during recording'):
         owner_approval.approve_request(root,catalogs,request,'fixture-owner',**OWNER(request))
-    assert json.loads(lp.path(root, 'ledger').read_text())==[]
+    assert json.loads((root/'design/approvals.yaml').read_text())==[]
 
 
 @pytest.mark.parametrize('scheme',[None,'ssh-jcs-v1'])
 def test_consumers_reject_previous_manifest_schemes(project,scheme):
     root,_=project;check(project)
-    p=lp.path(root, 'resolved', 'web.json');data=json.loads(p.read_text())
+    p=root/'design/.resolved/web.json';data=json.loads(p.read_text())
     if scheme is None:data.pop('approval_scheme')
     else:data['approval_scheme']=scheme
     write(p,data)
@@ -116,8 +115,8 @@ def test_javascript_consumer_reads_approved_manifest_and_rejects_stale_ledger(pr
     root,_=project;approve(project);assert check(project,ship=True)['exit_code']==0
     module=(SKILL/'scripts/resolved_contract.mjs').as_uri()
     script='import {loadManifest} from '+json.dumps(module)+'; loadManifest(process.argv.at(-1));'
-    args=[os.environ.get('DESIGN_TEST_NODE','node'),'--input-type=module','-e',script,str(lp.path(root, 'resolved', 'web.json'))]
+    args=[os.environ.get('DESIGN_TEST_NODE','node'),'--input-type=module','-e',script,str(root/'design/.resolved/web.json')]
     assert subprocess.run(args,capture_output=True).returncode==0
-    write(lp.path(root, 'ledger'),[])
+    write(root/'design/approvals.yaml',[])
     assert subprocess.run(args,capture_output=True).returncode!=0
-    with pytest.raises(ValueError,match='stale manifest'):load_manifest(lp.path(root, 'resolved', 'web.json'))
+    with pytest.raises(ValueError,match='stale manifest'):load_manifest(root/'design/.resolved/web.json')

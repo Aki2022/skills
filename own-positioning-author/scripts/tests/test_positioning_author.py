@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from ia_fixtures import SSOT, apply, confirm, write_positioning
+from ia_fixtures import SSOT, apply, confirm, dump
 
 SCRIPTS = Path(__file__).resolve().parents[1]
 SKILL = SCRIPTS.parent
@@ -25,7 +25,7 @@ def cli(*args):
 
 
 def write(root, ssot=SSOT, confirmed=True, skip=()):
-    write_positioning(root, ssot)
+    dump(root / 'design/info_arch/info_arch.yaml', ssot)
     if confirmed:
         confirm(root, ssot, skip=skip)
 

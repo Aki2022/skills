@@ -1,6 +1,4 @@
-# ux/design/ の契約
-
-置き場所の規則は `references/layer-paths.json` が唯一の正典（positioning は `ux/positioning/`、infoarch は `ux/infoarch/`、design は `ux/design/`、承認台帳と判定台帳は `ux/` の直下）。下のファイル名は、特に断りがなければ `ux/design/` の中のもの。
+# design/ の契約
 
 実装元: biz_ops `WS-20261021-design-system-standardization` ISSUE-01。
 
@@ -18,8 +16,8 @@ Python 3.10以上と、既存環境に導入済みの PyYAML / jsonschema（refe
 - `profiles/web.json`: `media: web` と `minimums`。skillの `minimums.json` より厳しい数値だけ上書き可。media不明・下限の緩和・未知キーは失格。
 - `checks/*.yaml`: `rules` 配列。宣言だけで、任意コマンドやコードを実行しない。画面の検査（count / text / style / judgment）はL2が画面ごとに測る。書き方は `web-validation.md` の「repoが決定ごとに宣言する検査」。それ以外の規則（id / kind / targetsまたはpaths / allowlist / minimum / pattern）で、実際のL1/L2実行を持たない規則は未カバー。
 - `assets/`: ファイルのsha256から `assets.json` を生成する。別の手書き台帳を正典にしない。
-- `ux/approvals.yaml`（`ux/design/` の外、`ux/` の直下）: 人間確認を根拠にした行の配列。positioning・infoarch の承認も同じ台帳に入る。
-- `ux/judgments.json`（同じく `ux/` の直下）: 任意。doc証拠とn-a理由への保存済み確率判定、pinされたpolicy、評価用ラベルの有無。schema2は完全なcandidateとscoreを持ち、人間ラベルが無い時は明示的に精度未測定とする。高scoreは補助指摘、未登録・古い入力・不正台帳は出荷停止。
+- `approvals.yaml`: 人間確認を根拠にした行の配列。
+- `judgments.json`: 任意。doc証拠とn-a理由への保存済み確率判定、pinされたpolicy、評価用ラベルの有無。schema2は完全なcandidateとscoreを持ち、人間ラベルが無い時は明示的に精度未測定とする。高scoreは補助指摘、未登録・古い入力・不正台帳は出荷停止。
 - `NOTICE`: JSON互換YAML、`sources` 配列。各参照のid / url / commit / license / copyright / editedを必須とする。`edited`は真偽値。
 - `tailwind.json`: 任意の生成設定。対象別content・宣言的plugin・tokenを参照するthemeを持つ。詳細は `web-validation.md`。
 - `asset-exports.json`: `schema_version: 1` と `exports` 配列。各行にassets/以下のsourceとrepo相対targetsを置き、syncで配置、L1で実バイトを照合する。
@@ -67,7 +65,7 @@ keyはds:web:item:<id> またはds:web:token:<path>。IAのキーは固定の信
 consumerはapproval_schemeと全入力hashを検査し、承認台帳の削除・変更後の古いmanifestも拒否する。
 
 一致するdefined item行は直接参照するtokenの承認にもなる。散文内のtoken文字列だけでは伝播しない。
-source-hash規則で全targetsがux/design/assets/以下なら実SHA256とallowlistをL0で検証し、
+source-hash規則で全targetsがdesign/assets/以下なら実SHA256とallowlistをL0で検証し、
 item証拠hashに規則と実測を含める。他の宣言規則を自己申告で対応済みにしない。
 
 判定台帳・5区分報告とIA接続は `judgments-and-modules.md`。design.yamlのmodules.iaに実装版をpinする。

@@ -90,15 +90,15 @@ usage_policy:
   フォント・ロゴ・テンプレート等の**資産**を成果物へ反映してはいけない。
 - 人間レビューで承認されたら `references.md` に承認記録を書き、`true` に更新する。
 
-## ux/design/ への参照提案
+## design/ への参照提案
 
-webの正典はrepoの `ux/design/`。上記Resolverと資産ゲートは既存pptx等の互換仕様で、web工場へ継承しない。
+webの正典はrepoの `design/`。上記Resolverと資産ゲートは既存pptx等の互換仕様で、web工場へ継承しない。
 import入口の `usage_policy` には次の任意フィールドを持てる。未指定は許可しない。
 
 - `allowed_repositories`: 第三者DESIGN.mdの許可元。`require_user_selected_site: true` で個別指示を要する。
-- `allow_token_copy: true`: 確認した権利の範囲で数値をproposedとしてux/design/へ写す。承認は付与しない。
+- `allow_token_copy: true`: 確認した権利の範囲で数値をproposedとしてdesign/へ写す。承認は付与しない。
 - `allow_asset_copy: false`: ロゴ・画像・アイコン・フォント等の実ファイルを禁止する。
 - `upstream_typography_copy: false`: 本家英語UIのtypography値を写さない。
 
-参照値の権利情報は同じrepoの `ux/design/NOTICE` に記録する。`license_gate_approved` は実アセットの
+参照値の権利情報は同じrepoの `design/NOTICE` に記録する。`license_gate_approved` は実アセットの
 互換利用に関する従来フィールドで、`allow_token_copy` の前提やブランド値の承認には使わない。

@@ -18,7 +18,6 @@ import check as ia_check  # noqa: E402
 import outline as ia_outline  # noqa: E402
 import positioning  # noqa: E402
 from test_check import DECK, DICTIONARY, OUTLINE, SKILL, SSOT, check, cli, codes, confirm, dump, write_repo  # noqa: E402
-import layer_paths  # noqa: E402  (own-design-author's layer rule: where each layer lives)
 
 TABLE = json.loads((SKILL / 'fixtures/outline-red-cases.json').read_text(encoding='utf-8'))
 CONDITIONS = {c['id']: c for c in TABLE['conditions']}
@@ -149,7 +148,7 @@ def test_unapproved_value_only_warns_in_a_draft(tmp_path):
 def model(ssot=SSOT, outlines=(OUTLINE, DECK), skip=()):
     m = ia_check.Model(root=Path('.'), ssot=ssot)
     for o in outlines:
-        m.outlines[o['id']] = (Path(layer_paths.rel('infoarch', 'outlines', f'{o["id"]}.yaml')), o)
+        m.outlines[o['id']] = (Path(f'design/info_arch/outlines/{o["id"]}.yaml'), o)
     rows = {k: v for k, v in positioning.approval_targets(m).items() if k[len(positioning.APPROVAL_PREFIX):] not in skip}
     return m, positioning.approved_keys(m, rows)
 
@@ -297,7 +296,7 @@ def test_changed_evidence_of_a_shipped_value_stops_shipping(tmp_path):
     write_repo(tmp_path)
     changed = copy.deepcopy(SSOT)
     changed['proofs']['prf-0001']['text'] = '導入自治体の数（改）'
-    dump(layer_paths.path(tmp_path, 'positioning_file'), changed)
+    dump(tmp_path / 'design/info_arch/info_arch.yaml', changed)
     rc, report = check(tmp_path)
     hits = [f for f in report['findings'] if f['code'] == 'IA_POSITIONING_UNAPPROVED' and f['level'] == 'fail']
     assert rc == 2 and hits and hits[0]['detail']['values'] == ['val-0001'], report['findings']

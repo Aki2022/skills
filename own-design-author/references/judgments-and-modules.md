@@ -22,7 +22,7 @@ model_digestはproviderと版付きmodel idの識別情報のdigestであり、�
 
 ## 保存形式と読み取り
 
-ux/judgments.jsonのschema3は、記録した時点のpolicy、rows、holdoutを持つ。共有の値（schema_version・model・theta・prompt_version）は今のpolicyと一致しなければならない。各行は記録した時点のpolicyで再計算して照合し、合わなければ改ざんとして拒否する。その種類のプロンプトが今のpolicyと違う行は、失効した行として何も覆わない（拒否はしない）。schema2は今のpolicy全体と一致する時だけ読む。
+design/judgments.jsonのschema3は、記録した時点のpolicy、rows、holdoutを持つ。共有の値（schema_version・model・theta・prompt_version）は今のpolicyと一致しなければならない。各行は記録した時点のpolicyで再計算して照合し、合わなければ改ざんとして拒否する。その種類のプロンプトが今のpolicyと違う行は、失効した行として何も覆わない（拒否はしない）。schema2は今のpolicy全体と一致する時だけ読む。
 rowsは`{"candidate": <check --include-candidatesの候補全体>, "score": <実回答>}`の配列。
 candidateの入力・文脈・全hashを再計算し、policyとの一致を確認する。scoreはNoulのYes確率で、説明不足を確定する値ではない。
 ラベルが無い場合は`"holdout": {"source": "unmeasured"}`を明示し、recall・誤検出率を作らない。
@@ -36,8 +36,8 @@ Noulのyes確率を「問題がある確率」として保存する。版付き�
 
 ```sh
 design-author check --repo . --include-candidates > candidates.json
-python3 <skill>/scripts/judgment_run.py --candidates candidates.json --answers ux/design/judgment-answers.json --limit 50
-python3 <skill>/scripts/judgment_run.py --candidates candidates.json --answers ux/design/judgment-answers.json --limit 50 --execute
+python3 <skill>/scripts/judgment_run.py --candidates candidates.json --answers design/judgment-answers.json --limit 50
+python3 <skill>/scripts/judgment_run.py --candidates candidates.json --answers design/judgment-answers.json --limit 50 --execute
 ```
 
 checkが未承認mustでexit 2でも候補は取得できる。候補以外のcheck結果を合格扱いにしない。
@@ -122,7 +122,7 @@ resolverはresolve(root=..., approvals=..., profiles=...)を1回だけ呼ばれ�
 errors、warnings、5区分report。正常なのに承認対象0件なら拒否する。
 runnerは共用台帳を全targetへ照合し、approveのprepareにもDS/IA両方の対象hashを渡す。
 
-解決結果はux/design/.resolved/<media>.jsonのmodules.iaへ入り、後段は再解決しない。
+解決結果はdesign/.resolved/<media>.jsonのmodules.iaへ入り、後段は再解決しない。
 resolver実装のdigestが変わればconsumerも拒否する。解決中の実装変更も失格。
 IA入力があるのに版がない、宣言したのに実装がない、版や契約が違う場合は失格で古いmanifestを削除する。
 IAそのものの原子・抽出・検査はこの接続口だけでは実装済みにならない。
@@ -131,7 +131,7 @@ IAそのものの原子・抽出・検査はこの接続口だけでは実装済
 
 上記の承認対象を持つ旧resolver契約と、IA v4の承認状態を持たないSSOTは区別する。
 modules.ia: 0.4.0は、固定のia_module.pyから既存IAのcheckを同じPythonで呼ぶ。ia-git-history-v4契約（governance.schema_version 4）では、IAの提供価値ごとの経路（ia:path:<提供価値 id>）がapproval_hashesとして返り、出荷される outline が指す経路がmust_approval_keysになる。承認のハッシュは経路の原子と矢印すべての中身を束縛する（写しの出どころは入らない。媒体の解決は経ない。ADR-20261118-ia-approval-per-value-path、biz_ops）。原子と矢印ごとの旧い行（ia:positioning:）は対象に無いので、台帳に残っていれば検査は approval target absent で止まる。IA の migrate-approvals で一度だけ移す。記録はオーナーがapprove --prepare/--requestで行い、DS承認の必要条件は変えない。v3契約（0.3.0）以前は読まない。
-入力hash（ux/infoarch/ の各ファイルと、docs/dictionary/*.json の各ファイル。辞書の固定値・正式名称はIAの検査が突き合わせる入力）と実際のチャネル・アウトライン・セクション件数を持ち、対象0件・壊れた参照・期限違反は失格。IA入力や実装のsymlink/逸脱は拒否する。
+入力hash（design/info_arch/ の各ファイルと、docs/dictionary/*.json の各ファイル。辞書の固定値・正式名称はIAの検査が突き合わせる入力）と実際のチャネル・アウトライン・セクション件数を持ち、対象0件・壊れた参照・期限違反は失格。IA入力や実装のsymlink/逸脱は拒否する。
 辞書の語を変える・辞書のファイルを足す・消すと入力hashが変わり、Python/JS両consumerは「古いmanifest、L0を再実行」で拒否する（辞書を持たないrepoには何も増えない）。出荷ゲート（infoarch-author ship）はコミットの木でcheckを走らせるので、この変更で結果は変わらない。
 マニフェストのIA実装digestは橋渡しファイルだけでなく、固定のscripts/references/schema全体を束縛し、Python/JS両consumerが古い結果を拒否する。
 このL0接続はIAのDOM検査や未実装の意味判定を実行済みにはしない。後段のDOMは別に実行し、意味判定の欠落も報告する。

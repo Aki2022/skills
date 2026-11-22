@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create/check/migrate a repository's sole ux/ layers directory. Owner approve command is the only ledger writer."""
+"""Create/check/migrate a repository's sole design/ directory. Owner approve command is the only ledger writer."""
 import argparse
 import copy
 from datetime import date, datetime, timezone
@@ -83,10 +83,10 @@ def design_dir(root):
 
 
 def inside_layer(root, key, *rest):
-    """A layer path (guarded) that must stay under the layers root, symlinks resolved."""
+    """A layer path (guarded) that must stay under the design directory, symlinks resolved."""
     path = layer_paths.path(root, key, *rest).resolve()
-    if not path.is_relative_to(layer_paths.path(root, 'layers').resolve()):
-        raise ValueError(f'path outside the layers root: {layer_paths.rel(key, *rest)}')
+    if not path.is_relative_to(design_dir(root).resolve()):
+        raise ValueError(f'path outside design directory: {layer_paths.rel(key, *rest)}')
     return path
 
 
@@ -136,10 +136,6 @@ def init_design(root, preset, version, *, catalog_dir=CATALOG):
     if design.exists():
         raise ValueError(f"{design_rel()}/ already exists; use migrate")
     shutil.copytree(SKILL / 'templates/design', design)
-    ledger = layer_paths.path(root, 'ledger')  # the approval ledger sits next to the layers, not inside the design layer
-    ledger.parent.mkdir(parents=True, exist_ok=True)
-    if not ledger.exists():
-        shutil.copyfile(SKILL / 'templates/approvals.yaml', ledger)
     layer_paths.path(root, 'assets').mkdir(parents=True, exist_ok=True)
     layer_paths.path(root, 'checks').mkdir(parents=True, exist_ok=True)
     write_data(layer_paths.path(root, 'design_config'), {'schema_version': 1, 'skill_version': VERSION,
@@ -336,11 +332,6 @@ def _asset_rule_evidence(root, rules, errors):
         if not isinstance(allowed,list) or not allowed or any(not isinstance(v,str) or not re.fullmatch('[0-9a-f]{64}',v) for v in allowed):
             raise ValueError('asset source hash allowlist must contain SHA256 values')
         files = {}
-        # The rule and its measured files are hashed into the approvals of the items that cite it. They are hashed in the
-        # form they had before the layers moved (a frozen prefix), so a move does not drop those approvals.
-        assets_prefix = layer_paths.rel('assets') + '/'
-        def canonical(target):
-            return layer_paths.identity('asset_path_prefix') + '/' + target[len(assets_prefix):]
         for target in targets:
             if '..' in Path(target).parts or Path(target).is_absolute():
                 raise ValueError('invalid asset source hash path')
@@ -351,14 +342,10 @@ def _asset_rule_evidence(root, rules, errors):
                 if not path.is_file() or not path.resolve().is_relative_to(layer_paths.path(root, 'assets').resolve()):
                     raise ValueError('asset source hash target escapes assets')
                 digest = hashlib.sha256(path.read_bytes()).hexdigest()
-                files[canonical(path.relative_to(root).as_posix())] = digest
+                files[path.relative_to(root).as_posix()] = digest
                 if digest not in allowed:
                     errors.append(f'asset source hash mismatch: {ident}')
-        canonical_rule = dict(rule)
-        for field in ('targets', 'paths'):
-            if field in canonical_rule:
-                canonical_rule[field] = [canonical(t) for t in canonical_rule[field]]
-        measured[ident] = {'rule':canonical_rule,'files':files}
+        measured[ident] = {'rule':rule,'files':files}
     return measured
 
 
@@ -699,11 +686,8 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
             if path.is_file():
                 inside(design,os.path.relpath(path,design))
                 assets.append({'path':path.relative_to(design).as_posix(), 'sha256':hashlib.sha256(path.read_bytes()).hexdigest()})
-        # Every file of every layer, the approval ledger and the judgment record included (keys are relative to the
-        # layers root): a change to any of them after L0 makes the manifest stale. Generated files are not inputs.
-        layers = layer_paths.path(root,'layers')
-        input_hashes = {p.relative_to(layers).as_posix():hashlib.sha256(p.read_bytes()).hexdigest()
-            for p in sorted(layers.rglob('*')) if p.is_file() and _leaf('resolved') not in p.relative_to(layers).parts
+        input_hashes = {p.relative_to(design).as_posix():hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in sorted(design.rglob('*')) if p.is_file() and _leaf('resolved') not in p.relative_to(design).parts
             and p.name not in (_leaf('assets_index'),'migration.json')}
         source_hash = value_hash(input_hashes)
         asset_exports = _asset_exports(root)
@@ -851,7 +835,7 @@ def git_root(path):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='command',required=True)
-    for command in ('init','check','migrate','sync','approve','maintain','migrate-layout'):
+    for command in ('init','check','migrate','sync','approve','maintain'):
         p = sub.add_parser(command)
         p.add_argument('--repo',default='.')
         p.add_argument('--catalog-dir',type=Path,default=CATALOG)
@@ -865,8 +849,6 @@ def main(argv=None):
             p.add_argument('--include-candidates',action='store_true')
         if command == 'maintain':
             p.add_argument('--force',action='store_true')
-        if command == 'migrate-layout':
-            p.add_argument('--apply',action='store_true',help='move the files (without it: a dry run that only says what would move)')
         if command == 'approve':
             p.add_argument('--prepare',action='store_true')
             p.add_argument('--must',action='store_true')
@@ -879,15 +861,6 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         root = git_root(args.repo)
-        if args.command == 'migrate-layout':
-            import migrate_layout
-            try:
-                result = migrate_layout.apply(root) if args.apply else migrate_layout.plan(root)
-            except migrate_layout.MigrationError as exc:
-                print(json.dumps({'exit_code':2,'errors':[str(exc)]},ensure_ascii=False))
-                return 2
-            print(json.dumps(result,ensure_ascii=False,sort_keys=True))
-            return 0
         if args.command == 'maintain':
             from maintenance import maintain_all
             result = maintain_all(root, catalog_dir=args.catalog_dir, force=args.force)

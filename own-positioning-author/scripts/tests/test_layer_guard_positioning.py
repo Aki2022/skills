@@ -13,7 +13,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'own-design-author/scripts/tests'))
 from layer_testkit import (ALL_SKILLS, ROOT, SKILLS, assert_foreign_failure, copy_skills, moved_repo,  # noqa: E402
                            run)
-from ia_fixtures import SSOT, confirm, dump, write_positioning  # noqa: E402
+from ia_fixtures import SSOT, confirm, dump  # noqa: E402
 
 CLI = SKILLS / 'own-positioning-author/scripts/positioning-author'
 # None is explicitly out of the guard: every subcommand takes --root and reads a layer.
@@ -97,7 +97,7 @@ def test_a_renamed_layer_root_is_followed_end_to_end(tmp_path):
     baseline = copy_skills(tmp_path / 'skills-baseline', ALL_SKILLS)
     base_repo, moved = tmp_path / 'repo-baseline', tmp_path / 'repo-renamed'
     for repo in (base_repo, moved):
-        write_positioning(repo, SSOT)
+        dump(repo / ROOT / 'info_arch/info_arch.yaml', SSOT)
         confirm(repo, SSOT)
     (moved / ROOT).rename(moved / renamed)
     assert not (moved / ROOT).exists()

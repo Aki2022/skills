@@ -1,6 +1,7 @@
 """`evaluate`: one entry that runs check -> dom -> judge and returns one exit code; optional bounded Jev acquisition."""
 import copy
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -12,7 +13,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 import dom  # noqa: E402
 import evaluate  # noqa: E402
-from test_check import DATE, install_templates, write_repo  # noqa: E402
+from test_check import DATE, write_repo  # noqa: E402
 from test_dom import green_snapshot  # noqa: E402
 from test_judge import write_ledger  # noqa: E402
 
@@ -20,7 +21,6 @@ DESIGN = SCRIPTS.parents[1] / 'own-design-author'
 sys.path.insert(0, str(DESIGN / 'scripts'))
 import judgment_ledger as jl  # noqa: E402
 import classify  # noqa: E402
-import layer_paths  # noqa: E402  (own-design-author's layer rule: where each layer lives)
 
 
 def fake_snapshot(mutate=None):
@@ -93,7 +93,7 @@ def test_unanchored_text_fails_the_render(repo, monkeypatch):
 
 def test_failing_check_stops_before_rendering(repo, monkeypatch):
     monkeypatch.setattr(dom, 'snapshot', lambda *a: pytest.fail('rendered although check failed'))
-    outline = layer_paths.path(repo, 'infoarch', 'outlines', 'lp-municipal.yaml')
+    outline = repo / 'design/info_arch/outlines/lp-municipal.yaml'
     outline.write_text(outline.read_text(encoding='utf-8').replace('msg-0001', 'msg-0099', 1), encoding='utf-8')
     result = evaluate.run(repo, DATE, ['lp-municipal'])
     assert result['exit_code'] == 2 and result['stages'] == {'check': 2, 'dom': 'skipped', 'judge': 'skipped'}
@@ -113,7 +113,7 @@ def test_unknown_outline_fails(repo):
 def test_findings_are_not_repeated_per_stage(repo):
     # A check warning is also carried by every dom report: it must still appear once.
     import yaml
-    path = layer_paths.path(repo, 'positioning_file')
+    path = repo / 'design/info_arch/info_arch.yaml'
     ssot = yaml.safe_load(path.read_text(encoding='utf-8'))
     del ssot['proofs']['prf-0002']
     ssot['edges'] = [e for e in ssot['edges'] if e['from'] != 'prf-0002']
@@ -126,7 +126,8 @@ def test_findings_are_not_repeated_per_stage(repo):
 
 def test_cli_prints_one_report_without_candidate_text(tmp_path):
     root = tmp_path / 'empty'
-    install_templates(root)
+    shutil.copytree(SCRIPTS.parent / 'templates/design', root / 'design')
+    shutil.copytree(SCRIPTS.parents[1] / 'own-positioning-author/templates/design', root / 'design', dirs_exist_ok=True)
     proc = subprocess.run([sys.executable, str(SCRIPTS / 'infoarch_author.py'), 'evaluate', '--root', str(root), '--date', DATE],
                           capture_output=True, text=True, check=False)
     out = json.loads(proc.stdout)
@@ -166,7 +167,7 @@ def test_acquire_preview_calls_nothing_and_writes_nothing(repo, tmp_path, monkey
         'limit': 5, 'answers_dir': answers, 'execute': False, '_usage_path': usage_ledger(tmp_path),
         '_transport': lambda *a: pytest.fail('network on preview')})
     assert result['acquisition']['status'] == 'dry-run' and result['acquisition']['selected'] == 5
-    assert not (answers / 'judgment-answers.json').exists() and not layer_paths.path(repo, 'judgments').exists()
+    assert not (answers / 'judgment-answers.json').exists() and not (repo / 'design/judgments.json').exists()
 
 
 def test_acquire_execute_records_the_ledger_and_re_evaluates(repo, tmp_path, monkeypatch):
@@ -205,7 +206,7 @@ def test_acquire_is_refused_when_the_evaluation_failed(repo, tmp_path, monkeypat
 
 
 def test_acquire_is_refused_when_the_judge_failed(repo, tmp_path):
-    layer_paths.path(repo, 'judgments').write_text('{"not": "a ledger"}', encoding='utf-8')
+    (repo / 'design/judgments.json').write_text('{"not": "a ledger"}', encoding='utf-8')
     answers = tmp_path / 'answers'
     answers.mkdir()
     result = evaluate.run(repo, DATE, ['lp-municipal'], acquire={

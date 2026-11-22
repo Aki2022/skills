@@ -23,7 +23,6 @@ import check as ia_check  # noqa: E402
 import outline as ol  # noqa: E402
 import positioning as pos  # noqa: E402
 from test_check import OUTLINE, SSOT, check, cli, codes, confirm, dump, write_repo  # noqa: E402
-import layer_paths  # noqa: E402  (own-design-author's layer rule: where each layer lives)
 
 VALUE_PATHS = ('val-0001', 'val-0002', 'val-0003')
 
@@ -125,7 +124,7 @@ def test_changing_any_member_drops_the_path_hash(key):
 # ---- shared and non-shared changes (Quality 3, requirement 15) ------------------------------------------------
 
 def _set_and_ship(tmp_path, ssot):
-    dump(layer_paths.path(tmp_path, 'positioning_file'), ssot)
+    dump(tmp_path / 'design/info_arch/info_arch.yaml', ssot)
     rc, report = check(tmp_path)
     m = ia_check.load(tmp_path, ia_check.Report('t', '2026-11-18'))
     approved = pos.approved_keys(m, ia_check.read_approvals(tmp_path, ia_check.Report('t', '2026-11-18')))
@@ -241,7 +240,7 @@ def test_approved_paths_pass(tmp_path):
 
 
 def _ledger(tmp_path):
-    return yaml.safe_load(layer_paths.path(tmp_path, 'ledger').read_text(encoding='utf-8'))
+    return yaml.safe_load((tmp_path / 'design/approvals.yaml').read_text(encoding='utf-8'))
 
 
 def test_legacy_per_element_rows_are_not_counted(tmp_path):
@@ -249,7 +248,7 @@ def test_legacy_per_element_rows_are_not_counted(tmp_path):
     m = model()
     legacy = [{'key': pos.LEGACY_PREFIX + k, 'value_hash': pos.element_hash(k, x), 'approver': 'owner',
                'date': '2026-11-18'} for k, x in sorted({**pos.atoms(m), **pos.edges(m)}.items())]
-    dump(layer_paths.path(tmp_path, 'ledger'), legacy)
+    dump(tmp_path / 'design/approvals.yaml', legacy)
     rc, report = check(tmp_path)
     assert rc == 2 and unapproved(report) == ['val-0001', 'val-0003'], report['findings']
     assert 'IA_APPROVALS_LEGACY' in codes(report, 'warn')
@@ -260,7 +259,7 @@ def test_an_approval_is_not_reused_for_another_path(tmp_path):
     h = hashes()
     rows = [{'key': 'ia:path:val-0001', 'value_hash': h['val-0003'], 'approver': 'owner', 'date': '2026-11-18'},
             {'key': 'ia:path:val-0003', 'value_hash': h['val-0001'], 'approver': 'owner', 'date': '2026-11-18'}]
-    dump(layer_paths.path(tmp_path, 'ledger'), rows)
+    dump(tmp_path / 'design/approvals.yaml', rows)
     rc, report = check(tmp_path)
     assert rc == 2 and unapproved(report) == ['val-0001', 'val-0003'], report['findings']
 
@@ -326,7 +325,7 @@ def _legacy_repo(tmp_path, skip=(), trailer=True):
     rows = [{'key': pos.LEGACY_PREFIX + k, 'value_hash': pos.element_hash(k, x), 'approver': 'owner',
              'date': '2026-11-18'} for k, x in sorted({**pos.atoms(m), **pos.edges(m)}.items()) if k not in skip]
     rows.append({'key': 'ds:web:token:color.primary', 'value_hash': 'a' * 64, 'approver': 'owner', 'date': '2026-11-10'})
-    dump(layer_paths.path(tmp_path, 'ledger'), rows)
+    dump(tmp_path / 'design/approvals.yaml', rows)
     _git(tmp_path, 'init', '-q')
     _git(tmp_path, 'add', '-A')
     message = 'record approvals' + ('\n\nOwner-Approval: 「positioningは承認する」 (2026-11-18)\n'
@@ -342,7 +341,7 @@ def test_migration_replaces_per_element_rows_with_path_rows(tmp_path):
     assert out['legacy_rows'] == len({**pos.atoms(model()), **pos.edges(model())})
     assert out['commit_trailers'] == ['Owner-Approval-Migrated: 「positioningは承認する」 (2026-11-18)',
                                       'Owner-Approval-Migrated: 「代替の案は承認する」 (2026-11-18)']
-    assert layer_paths.path(tmp_path, 'ledger').read_text(encoding='utf-8').count(pos.LEGACY_PREFIX) > 0  # dry run
+    assert (tmp_path / 'design/approvals.yaml').read_text(encoding='utf-8').count(pos.LEGACY_PREFIX) > 0  # dry run
     rc, out = cli('migrate-approvals', '--root', str(tmp_path), '--write')
     assert rc == 0 and out['written'] is True
     keys = [r['key'] for r in _ledger(tmp_path)]

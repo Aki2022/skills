@@ -7,12 +7,11 @@ import yaml
 
 SCRIPTS = Path(__file__).resolve().parents[1]
 SKILL = SCRIPTS.parent
-for _p in (SCRIPTS, SKILL.parent / 'own-design-author/scripts', SKILL.parent / 'own-positioning-author/scripts', SKILL.parent / 'own-positioning-author/scripts/tests',
+for _p in (SCRIPTS, SKILL.parent / 'own-positioning-author/scripts', SKILL.parent / 'own-positioning-author/scripts/tests',
            SKILL.parent / 'own-doc-update/scripts'):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 from ia_fixtures import SSOT, confirm, dump  # noqa: E402
-import layer_paths  # noqa: E402  (own-design-author's layer rule: where each layer lives)
 
 
 def _i(**kw):
@@ -62,7 +61,7 @@ PERSON = {
 }
 
 SCREENS = (OVERVIEW, PERSON)
-BP_DIR = layer_paths.rel('infoarch', 'blueprint')
+BP_DIR = 'design/info_arch/blueprint'
 
 
 def item_hashes(product):
@@ -75,7 +74,7 @@ def confirm_items(root, product, skip=()):
     """Record the owner's approval of every proposed product item (as the owner would with design-author approve)."""
     rows = [{'key': key, 'value_hash': digest, 'approver': 'fixture-owner', 'date': '2026-11-20'}
             for key, digest in sorted(item_hashes(product).items()) if key[len('ia:item:'):] not in skip]
-    path = layer_paths.path(root, 'ledger')
+    path = root / 'design/approvals.yaml'
     kept = yaml.safe_load(path.read_text(encoding='utf-8')) if path.is_file() else []
     kept = [r for r in (kept or []) if not str(r.get('key', '')).startswith('ia:item:')]
     dump(path, kept + rows)
@@ -83,7 +82,7 @@ def confirm_items(root, product, skip=()):
 
 def write_blueprint(root, product=PRODUCT, screens=SCREENS, ssot=SSOT, confirmed=True, skip=()):
     """A repository with a positioning and a blueprint, and no outline (a product UI only)."""
-    dump(layer_paths.path(root, 'positioning_file'), ssot)
+    dump(root / 'design/info_arch/info_arch.yaml', ssot)
     confirm(root, ssot)
     if product is not None:
         dump(root / BP_DIR / 'product.yaml', product)

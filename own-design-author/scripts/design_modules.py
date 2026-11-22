@@ -27,10 +27,9 @@ def _ia_input_key_ok(key):
     parts = Path(key).parts
     if '..' in parts or key != '/'.join(parts):
         return False
-    for key_name in ('infoarch', 'positioning_dir'):  # the infoarch tree and the positioning tree are the IA's inputs
-        layer = PurePosixPath(layer_paths.rel(key_name)).parts
-        if parts[:len(layer)] == layer and len(parts) > len(layer):
-            return True
+    layer = PurePosixPath(layer_paths.rel('infoarch')).parts
+    if parts[:len(layer)] == layer and len(parts) > len(layer):
+        return True
     return len(parts) == 3 and parts[:2] == tuple(IA_DICTIONARY_DIR.split('/')) and parts[2].endswith('.json')
 
 
@@ -131,7 +130,7 @@ def resolve_ia(root,config,approvals,profiles,report):
     declared=config.get('modules',{})
     if not isinstance(declared,dict) or set(declared)-{'ia'}:
         raise ValueError('unknown design module declaration')
-    present=layer_paths.has_ia(root)
+    present=layer_paths.path(root,'infoarch').exists()
     if not declared and not present:
         report['skipped'].append({'id':'ia','reason':'IA module not declared and no IA inputs'})
         return None

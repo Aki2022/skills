@@ -63,5 +63,5 @@
 ## 参照の扱い
 
 この箱は過去の観察メモ。web工場へ値を直接合成しない。指示された参照はimport-policyに従って
-repoの `ux/design/` にproposedとして写し、出所・権利情報を `ux/design/NOTICE` に記録する。
+repoの `design/` にproposedとして写し、出所・権利情報を `design/NOTICE` に記録する。
 実ブランドアセットは出力に使わない。`license_gate_approved: false` を維持する。

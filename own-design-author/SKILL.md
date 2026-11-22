@@ -55,6 +55,8 @@ L1/L2と生成Tailwindの使い方・制約は `references/web-validation.md` �
 
 プロダクト UI の画面の位置と幅は、割り付け規則 `references/allocation-rules.md`（機械が読む形は `allocation-rules.json`）が、infoarch（blueprint）の優先度・グループ・shape から導く。グリッド・breakpoint・画面の型・部品の選択（表かカードか、どのグラフか）・規則に反する配置を人が指定するときの書き方（`ux/design/layout-overrides.yaml`）はここにある。作るのは own-web-build の `build_screen.py`、確かめるのは `audit_screen.py`。
 
+規則に反する配置は、1 行（id・画面・領域の組・幅・理由。幅は省けない）ずつオーナーが承認する。理由だけでは通らない。承認は台帳の `ds:web:override:<id>` で、行の中身と指す領域の宣言にハッシュで縛られる（行を変える・領域が変わる・写すと引き継がない）。承認依頼のページは `design-author override-request --repo <repo> --out <dir>`（プロダクト単位の項目と同じ台帳・同じページの形。`--read-decisions` で答えを読み戻す）で作り、記録はオーナーの言葉と日付を受けた `design-author approve --prepare --target ds:web:override:<id>` → `approve --request …` で行う。詳細は `references/allocation-rules.md`。
+
 ## 判定台帳と共有runner
 
 散文のdoc証拠とn-a理由は、保存済みの判定だけを読む。未登録入力は未カバーとして報告し、全候補の現在の記録が揃わなければ出荷失格。

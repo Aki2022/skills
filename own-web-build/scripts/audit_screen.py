@@ -8,9 +8,11 @@ The page is drawn in a real browser at two widths (desktop and phone) and measur
 - exactly one action is drawn as primary (filled), and it is the declared one (none when the screen declares `no_primary`);
 - every declared state exists on the page with its declared text (so it can be drawn).
 A page with no marks at all is NOT CHECKED (exit 2, SCREEN_NOT_CHECKED), never a pass. An inversion the owner decided on is
-declared in ux/design/layout-overrides.yaml with a reason; it is reported (info) and does not fail.
+declared in ux/design/layout-overrides.yaml, one row per (screen, pair of regions, widths), and each row holds the owner's approval
+in the ledger (own-design-author's layout_overrides.py says what binds it). An approved row allows its screen, its pair and its widths
+only, and is reported (info). A row with no approval, a reason alone, no width, no screen or region, or a copy of another row fails.
 
-Usage: audit_screen.py --screen <screen yaml> --html <page> [--overrides ux/design/layout-overrides.yaml] [--rules allocation-rules.json]
+Usage: audit_screen.py --screen <screen yaml> --html <page> [--repo <repo>] [--overrides ux/design/layout-overrides.yaml] [--rules allocation-rules.json]
 Exit: 0 conforming, 1 warnings, 2 failing or not checked.
 """
 from __future__ import annotations
@@ -25,6 +27,7 @@ from pathlib import Path
 SKILLS = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(SKILLS / 'own-design-author/scripts'))
 import layer_paths  # noqa: E402  (the one rule for where a repository keeps its layers)
+import layout_overrides  # noqa: E402  (what an override row stands on, and whether the owner approved it)
 
 MEASURE = Path(__file__).resolve().parent / 'measure_screen.mjs'
 RULES = SKILLS / 'own-design-author/references/allocation-rules.json'
@@ -70,34 +73,41 @@ def measure(html, viewports=VIEWPORTS, repo=None):
     return json.loads(proc.stdout)
 
 
-def guard_repository(repo, overrides=None):
-    """Stop on a repository that moved to a layout this version does not read. The repository is `repo`, else the one the
-    overrides file sits in (when it sits where the rule puts it), else the current directory; none of them is read around."""
-    guard_roots = [Path(repo) if repo else Path.cwd()]
+def repository_roots(repo, overrides=None):
+    """The repository `repo`, else the one the overrides file sits in (when it sits where the rule puts it), else the current
+    directory. -> [root, ...]: the first is the one the ledger and the blueprint are read from; none of them is read around."""
+    roots = [Path(repo) if repo else Path.cwd()]
     if overrides:
         want = Path(layer_paths.rel('layout_overrides')).parts
         parts = Path(overrides).resolve().parts
         if len(parts) > len(want) and parts[len(parts) - len(want):] == want:
-            guard_roots.append(Path(*parts[:len(parts) - len(want)]))
-    for root in guard_roots:
+            derived = Path(*parts[:len(parts) - len(want)])
+            roots = [derived] + roots if not repo else roots + [derived]
+    return roots
+
+
+def guard_repository(repo, overrides=None):
+    """Stop on a repository that moved to a layout this version does not read. The repository is `repo`, else the one the
+    overrides file sits in (when it sits where the rule puts it), else the current directory; none of them is read around."""
+    for root in repository_roots(repo, overrides):
         layer_paths.guard(root)
 
 
-def overrides_for(path, screen_id):
-    if not path or not Path(path).is_file():
-        return []
-    rows = load_yaml(path) or []
-    out = []
-    for r in rows:
-        if r.get('screen') == screen_id:
-            if not str(r.get('reason', '')).strip():
-                raise ValueError('layout-overrides の行に理由（reason）が無い: ' + json.dumps(r, ensure_ascii=False))
-            out.append(r)
-    return out
+def override_state(repo, overrides, screen_id):
+    """-> (rows that hold the owner's current approval for this screen, [(code, message)] this audit must fail on).
+
+    The file is `overrides` (the rows are read there); the ledger and the blueprint are the repository's. Nothing here widens a row:
+    a row that is not complete, not approved or no longer standing on its screen and regions is a failure and allows nothing."""
+    if not overrides or not Path(overrides).is_file():
+        return [], []
+    root = repository_roots(repo, overrides)[0]
+    state = layout_overrides.evaluate(root, layout_overrides.read_rows(overrides), layout_overrides.read_approvals(root))
+    return state.approved_for(screen_id), state.problems_for(screen_id)
 
 
 def audit(screen, snapshots, overrides=(), tolerance=4):
-    """-> (findings [(level, code, message)], stats). `screen`: the blueprint screen; `snapshots`: measure() output."""
+    """-> (findings [(level, code, message)], stats). `screen`: the blueprint screen; `snapshots`: measure() output; `overrides`: the
+    rows that hold the owner's current approval for this screen (`override_state`)."""
     f, sid = [], screen['id']
     declared = screen['regions']
     marked_anywhere = any(s['regions'] or s['actions'] or s['states'] for s in snapshots)
@@ -119,9 +129,10 @@ def audit(screen, snapshots, overrides=(), tolerance=4):
         for a in ids:
             for b in ids:
                 if declared[a]['priority'] < declared[b]['priority'] and drawn[a]['top'] > drawn[b]['top'] + tolerance:
-                    covered = [o for o in overrides if o['above'] == b and o['below'] == a and vp in o.get('viewports', [vp])]
+                    # a row allows the pair and the widths it names: a width left out allows none (it used to allow every width)
+                    covered = [o for o in overrides if o.get('above') == b and o.get('below') == a and vp in (o.get('viewports') or [])]
                     if covered:
-                        f.append(('info', 'SCREEN_ORDER_OVERRIDDEN', f'{vp}: {b} が {a} より上にある（規則では下）。人が決めた：{covered[0]["reason"]}'))
+                        f.append(('info', 'SCREEN_ORDER_OVERRIDDEN', f'{vp}: {b} が {a} より上にある（規則では下）。オーナーが承認した例外 {covered[0].get("id", "?")}：{covered[0]["reason"]}'))
                     else:
                         f.append(('fail', 'SCREEN_ORDER', f'{vp}: 優先度 {declared[a]["priority"]} の {a} が、優先度 {declared[b]["priority"]} の {b} より下に描かれている'))
         actions = {a['id']: a for a in snap['actions']}
@@ -153,7 +164,9 @@ def main(argv=None):
         guard_repository(args.repo, args.overrides)
         screen = load_yaml(args.screen)
         rules = json.loads(Path(args.rules).read_text(encoding='utf-8'))
-        findings, stats = audit(screen, measure(args.html, repo=args.repo), overrides_for(args.overrides, screen['id']), rules['order']['tolerance_px'])
+        rows, problems = override_state(args.repo, args.overrides, screen['id'])
+        findings, stats = audit(screen, measure(args.html, repo=args.repo), rows, rules['order']['tolerance_px'])
+        findings = [('fail', code, message) for code, message in problems] + findings
     except (ValueError, OSError, RuntimeError) as exc:  # LayerLayoutError is a ValueError: its message is the layout one
         print(json.dumps({'exit_code': 2, 'error': str(exc)}, ensure_ascii=False))
         return 2

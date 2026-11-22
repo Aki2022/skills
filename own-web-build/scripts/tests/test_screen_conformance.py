@@ -232,16 +232,17 @@ def test_an_inversion_the_owner_decided_on_is_reported_not_failed(browser, built
     for m in inversions:
         a, b = re.findall(r'rgn-\d+', m)[:2]
         pairs.add((a, b))
-    declared = [{'screen': 'scr-overview', 'above': b, 'below': a, 'reason': 'オーナーが指定した'} for a, b in pairs]
+    declared = [{'id': f'ovr-{n:04d}', 'screen': 'scr-overview', 'above': b, 'below': a, 'viewports': ['desktop', 'mobile'], 'reason': 'オーナーが指定した'}
+                for n, (a, b) in enumerate(sorted(pairs), 1)]  # rows as `override_state` hands them over: approved, with their widths
     findings, _ = run(broken, tmp, overrides=declared)
     assert codes(findings) == [] and 'SCREEN_ORDER_OVERRIDDEN' in codes(findings, 'info')
 
 
 def test_an_override_without_a_reason_is_refused(tmp_path):
     f = tmp_path / 'o.yaml'
-    f.write_text('- {screen: scr-overview, above: rgn-0006, below: rgn-0002, reason: ""}\n', encoding='utf-8')
-    with pytest.raises(ValueError):
-        audit_screen.overrides_for(f, 'scr-overview')
+    f.write_text('- {id: ovr-0001, screen: scr-overview, above: rgn-0002, below: rgn-0001, viewports: [desktop], reason: ""}\n', encoding='utf-8')
+    rows, problems = audit_screen.override_state(tmp_path, f, 'scr-overview')
+    assert rows == [] and [code for code, _ in problems] == ['OVERRIDE_NO_REASON']
 
 
 # ---- the interpreter ---------------------------------------------------------------------------------------------

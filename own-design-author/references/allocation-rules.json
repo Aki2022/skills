@@ -32,7 +32,8 @@
   },
   "override": {
     "file_entry": "layout_overrides",
-    "entry": {"screen": "scr-…", "above": "rgn-…（規則では下になる領域）", "below": "rgn-…（規則では上になる領域）", "reason": "人が決めた理由（必須）", "viewports": ["desktop", "mobile"]},
-    "note": "規則に反して優先度の低い領域を上に置くときは、このファイルに理由つきで書く。書いていない逆転は audit_screen が失格にし、書いてあれば報告に info として残す。"
+    "entry": {"id": "ovr-…（行の名前。承認はこの名前に付く）", "screen": "scr-…", "above": "rgn-…（規則では下になる領域）", "below": "rgn-…（規則では上になる領域）", "viewports": ["desktop", "mobile"], "reason": "人が決めた理由（必須）"},
+    "approval_key": "ds:web:override:<id>",
+    "note": "規則に反して優先度の低い領域を上に置くときは、このファイルに 1 行ずつ書き、オーナーが 1 行ずつ承認する。1 行が許すのは書いた画面・領域の組・幅だけで、viewports は省けない（省くと全部の幅に広がるため）。承認の無い行・理由だけの行・幅や画面や領域が無い行・写した行は audit_screen が失格にし、承認のある行が許した逆転は info として報告に残る。承認は行の中身と指す 2 つの領域の宣言にハッシュで縛られ、変わると外れる。"
   }
 }

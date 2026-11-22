@@ -23,6 +23,7 @@ from reporting import empty_report,stage,skip
 from design_modules import resolve_ia
 import item_checks
 import layer_paths
+import layout_overrides
 
 VERSION = '1.0.0'
 SKILL = Path(__file__).resolve().parents[1]
@@ -402,6 +403,24 @@ def _page_inventory(root, design, config, approvals, counts, errors, warnings, s
     return keys
 
 
+def _layout_overrides(root, approvals, counts, errors, warnings, ship):
+    """A placement against the allocation rules is the owner's decision, row by row (SPEC-deliverable-production-layers requirement 4).
+    -> ({key: hash} of the rows that can be approved, the keys a ledger row may name: every row's and every stale one's)."""
+    state = layout_overrides.evaluate_repo(root, approvals)
+    errors.extend(f'{code}: {message}' for code, message in state.findings)
+    unapproved = state.unapproved()
+    if state.rows:
+        counts['overrides'] = {'rows': len(state.rows), 'approved': sum(r.status == 'approved' for r in state.rows)}
+    if unapproved and ship:
+        errors.append(f'ship gate: unapproved layout overrides {len(unapproved)}')
+    elif unapproved:
+        warnings.append(f'layout overrides awaiting owner approval: {len(unapproved)}')
+    stale = layout_overrides.stale_keys(state, approvals)
+    if stale:  # the row is gone from the file: its approval reads nothing, but it is not left unsaid
+        warnings.append(f'approvals for layout overrides no longer in the file: {len(stale)}')
+    return state.targets, state.declared_keys | set(stale)
+
+
 def _approvals(root):
     return verify_rows(read_data(layer_paths.path(root, 'ledger')), root)
 
@@ -516,6 +535,8 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
         if ia:valid_targets.update(ia['approval_hashes'])
         page_keys = _page_inventory(root, design, config, approvals, counts, errors, warnings, ship)
         valid_targets.update(page_keys)
+        override_keys, override_names = _layout_overrides(root, approvals, counts, errors, warnings, ship)
+        valid_targets.update(override_names)
         if set(approvals) - valid_targets:
             raise ValueError('approval target absent from catalog/tokens')
         for path, token in tokens.items():
@@ -739,6 +760,7 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
                     result['approval_targets'][key]=row['value_hash']
                     if kind=='item' and row['must']:result['approval_required'].append(key)
         result['approval_targets'].update(page_keys)
+        result['approval_targets'].update(override_keys)  # not in approval_required: an exception is approved one row at a time, never with the must items
         if ia:
             result['approval_targets'].update(ia['approval_hashes'])
             result['approval_required'].extend(ia['must_approval_keys'])
@@ -848,6 +870,35 @@ def git_root(path):
     return Path(run.stdout.strip()).resolve()
 
 
+def _override_request(root, args):
+    """Write the approval request page for the layout overrides, or read the owner's saved answers back. Never writes the ledger."""
+    import override_request
+    layer_paths.guard(root)
+    state = layout_overrides.evaluate_repo(root)
+    if state.findings:
+        return {'exit_code': 2, 'error': '配置の例外の行が失格している（先に直す。直せない行は承認の依頼に載せない）',
+                'findings': [f'{code}: {message}' for code, message in state.findings]}
+    items = override_request.build(root, state)
+    if not items:
+        return {'exit_code': 2, 'error': '承認の対象（配置の例外の行）が 0 件'}
+    if args.read_decisions:
+        decided = override_request.ar.decisions_from_rows(items, override_request.ar.load_rows(args.read_decisions))
+        decided['exit_code'] = 0 if not (decided['stale'] or decided['unknown']) else 1
+        return decided
+    out_dir = Path(args.out)
+    files = {out_dir / 'approval-request.html': override_request.page(items, args.title),
+             out_dir / 'approval-request.json': json.dumps({'rows': override_request.ar.request_rows(items)}, ensure_ascii=False, indent=2)}
+    existing = [str(p) for p in files if p.exists() or p.is_symlink()]
+    if existing:
+        return {'exit_code': 2, 'error': f'上書きしない: {existing}'}
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for path, text in files.items():
+        path.write_text(text + ('' if text.endswith('\n') else '\n'), encoding='utf-8')
+    return {'exit_code': 0, 'cards': len(items), 'approved': sum(i['approved'] for i in items), 'written': sorted(str(p) for p in files),
+            'publish': 'この html を非公開の Artifact として出す（capabilities: {db: {}}）。保存先は decisions/<行の id>',
+            'record': 'オーナーの言葉を受けたら、design-author approve --prepare --target <キー> で束を作り、approve --request … --owner-words … --approved-on … で台帳に記録する'}
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='command',required=True)
@@ -876,9 +927,18 @@ def main(argv=None):
             p.add_argument('--owner-words')
             p.add_argument('--approved-on')
             p.add_argument('--date')
+    rq = sub.add_parser('override-request', help='the approval request page for the layout overrides (○ / ×), or read the answers back')
+    rq.add_argument('--repo', default='.')
+    rq.add_argument('--out', default='override-approval-request', help='directory to write into (files are never overwritten)')
+    rq.add_argument('--title', default='配置の例外の承認依頼')
+    rq.add_argument('--read-decisions', help="the owner's saved answers (the Artifact db `decisions` rows, or the page's copied JSON)")
     args = parser.parse_args(argv)
     try:
         root = git_root(args.repo)
+        if args.command == 'override-request':
+            result = _override_request(root, args)
+            print(json.dumps(result, ensure_ascii=False, sort_keys=True))
+            return result['exit_code']
         if args.command == 'migrate-layout':
             import migrate_layout
             try:

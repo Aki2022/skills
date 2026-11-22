@@ -17,12 +17,20 @@ infoarch（blueprint）は、領域の**優先度**・**グループ**・**中�
 
 ## 規則に反する配置を人が指定するとき
 
-`ux/design/layout-overrides.yaml` に、規則では下になる領域を上に置く理由を書く。理由の無い逆転は `audit_screen.py` が失格にし、書いてあれば報告に残る（合格にはなるが、消えない）。
+規則では下になる領域を上に置くときは、`ux/design/layout-overrides.yaml` に **1 行ずつ** 書き、**オーナーが 1 行ずつ承認する**。理由を書くだけでは何も通らない（理由は誰でも書けるので、AI が理由を書くだけでどの配置も通ってしまうため）。
 
 ```yaml
-- screen: scr-overview
-  above: rgn-0006        # 規則では rgn-0002 より下
+- id: ovr-0001          # 行の名前。承認はこの名前に付く。2 行で同じ名前を使わない
+  screen: scr-overview
+  above: rgn-0006       # 規則では rgn-0002 より下
   below: rgn-0002
+  viewports: [desktop]  # 許す幅。省けない（省くと全部の幅に広がるため）。desktop・tablet・mobile から選ぶ
   reason: 「部署別の一覧」を先に見たいと、オーナーが指定した（2026-11-20）
-  viewports: [desktop]
 ```
+
+- **1 行が許すのは、書いた画面・領域の組・幅だけ。** ほかの画面、ほかの組、ほかの幅は、規則どおりに置かれていなければ失格のまま。
+- **承認はその範囲ごとハッシュで縛る。** ハッシュは、行の中身（id・画面・組・幅・理由）と、行が指す 2 つの領域の blueprint の宣言を束ねる。行のどこか 1 か所を変えると、その行だけが未承認に戻る。指す領域の宣言が変わっても、領域や画面が消えても、承認は引き継がれない。行を足しても、ほかの行の承認は外れない。
+- **写した行は引き継がない。** 行を写すと、同じ id（`OVERRIDE_DUPLICATE`）か同じ範囲（`OVERRIDE_DUPLICATE_SCOPE`）の行が 2 つになり、両方が失格になる。新しい id には承認が無い。
+- **失格になる行**：承認の無い行（`OVERRIDE_UNAPPROVED`）、理由だけの行・画面か領域が無い行（`OVERRIDE_NO_TARGET`）、幅が無い・知らない幅・重複した幅の行（`OVERRIDE_NO_WIDTH`・`OVERRIDE_WIDTH_UNKNOWN`）、理由が無い行（`OVERRIDE_NO_REASON`）、画面や領域が無い行（`OVERRIDE_SCREEN_MISSING`・`OVERRIDE_REGION_MISSING`）、知らない欄のある行。`audit_screen.py` はその画面の承認の無い行と、ファイル全体の失格を失敗にする。承認のある行が許した逆転は、報告（info）に残る（合格にはなるが、消えない）。
+- **承認の台帳の key** は `ds:web:override:<id>`（プロダクト単位の項目と同じ台帳 `ux/approvals.yaml`、同じ行の形）。`design-author check` は承認の無い行を警告にし、`--ship` で失格にする。must の項目と一緒には承認しない（`approve --prepare --must` に入らない。`--target ds:web:override:<id>` で 1 行ずつ指す）。
+- **承認依頼の表示**は own-design-author が作る：`design-author override-request --repo <repo> --out <dir>`（1 行 1 枚のカード。○ と × を Artifact の db に保存する、プロダクト単位の項目と同じページ）。オーナーの答えは `--read-decisions` で読み戻す。台帳に書くのは、オーナーの承認の言葉と日付を受けた AI の `design-author approve` だけ。

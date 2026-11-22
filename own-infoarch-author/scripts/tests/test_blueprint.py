@@ -9,6 +9,7 @@ import pytest
 
 from blueprint_fixtures import BP_DIR, OVERVIEW, PERSON, PRODUCT, SCREENS, apply_ops, confirm_items, item_hashes, write_blueprint
 from ia_fixtures import SSOT, dump
+import layer_paths  # noqa: E402  (own-design-author's layer rule: where each layer lives)
 
 SCRIPTS = Path(__file__).resolve().parents[1]
 SKILL = SCRIPTS.parent
@@ -80,7 +81,7 @@ def test_green_fixture_passes_and_counts_what_it_checked(tmp_path):
 
 
 def test_a_repository_with_no_blueprint_and_no_outline_still_fails(tmp_path):
-    dump(tmp_path / 'design/info_arch/info_arch.yaml', SSOT)
+    dump(layer_paths.path(tmp_path, 'positioning_file'), SSOT)
     rc, report = check(tmp_path)
     assert rc == 2 and 'IA_NO_OUTLINES' in codes(report)
 
@@ -114,7 +115,7 @@ def test_a_stale_approval_is_not_an_approval(tmp_path):
 def test_unapproved_values_under_a_principle_warn_without_stopping(tmp_path):
     write_blueprint(tmp_path)
     from ia_fixtures import confirm
-    rows = tmp_path / 'design/approvals.yaml'
+    rows = layer_paths.path(tmp_path, 'ledger')
     import yaml
     kept = [r for r in yaml.safe_load(rows.read_text(encoding='utf-8')) if r['key'] != 'ia:path:val-0001']
     dump(rows, kept)
@@ -283,7 +284,7 @@ def test_the_blueprint_command_reports_its_own_counts(tmp_path):
 
 
 def test_the_blueprint_command_is_not_a_pass_without_a_blueprint(tmp_path):
-    dump(tmp_path / 'design/info_arch/info_arch.yaml', SSOT)
+    dump(layer_paths.path(tmp_path, 'positioning_file'), SSOT)
     rc, report = cli('blueprint', '--root', str(tmp_path), '--date', DATE)
     assert rc == 2 and 'IA_BLUEPRINT_NO_SCREENS' in codes(report)
 

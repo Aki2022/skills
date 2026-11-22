@@ -14,6 +14,7 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 import positioning  # noqa: E402
 import positioning_model as pm  # noqa: E402
+import layer_paths  # noqa: E402  (ia_common, imported by positioning, put own-design-author/scripts on sys.path)
 
 def _a(**kw):
     return {'state': 'proposed', 'provenance': 'owner', **kw}
@@ -87,6 +88,11 @@ SSOT = {
 }
 
 
+def write_positioning(root, ssot):
+    """Write the positioning SSOT where the layout rule says a repository keeps it."""
+    dump(layer_paths.path(root, 'positioning_file'), ssot)
+
+
 def dump(path, data):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding='utf-8')
@@ -99,7 +105,7 @@ def confirm(root, ssot, skip=()):
     rows = [{'key': key, 'value_hash': digest, 'approver': 'fixture-owner', 'date': '2026-11-16'}
             for key, digest in sorted(positioning.approval_targets(m).items())
             if key[len(positioning.APPROVAL_PREFIX):] not in skip]
-    path = root / 'design/approvals.yaml'
+    path = layer_paths.path(root, 'ledger')
     kept = yaml.safe_load(path.read_text(encoding='utf-8')) if path.is_file() else []
     kept = [r for r in (kept or []) if not str(r.get('key', '')).startswith(positioning.APPROVAL_PREFIX)]
     dump(path, kept + rows)  # keep the design rows (ds:*) the owner already recorded

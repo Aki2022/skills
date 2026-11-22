@@ -16,7 +16,7 @@ L0失格で生成を止め、L1/L2失格で非決定論レビューを止める�
 ## 検証方式
 
 - `[静的]`（軽量・ほぼ無コスト）: ブラウザを起動せず、ソースを解析して機械判定する。
-  `python3 scripts/audit_html.py <file> --manifest design/.resolved/web.json`（リンクされたローカルCSSも追跡）。
+  `python3 scripts/audit_html.py <file> --manifest ux/design/.resolved/web.json`（リンクされたローカルCSSも追跡）。
   - lang / viewport / landmark（main/header/footer）/ SVG・imgの代替テキスト / focus-visible の有無
   - リテラルに書かれた前景/背景色ペアの WCAG コントラスト計算（4.5:1 以上等）
 - `[実測]`（コストあり・人間承認後）: `playwright-cli` Skill で実ブラウザを起動し、**computedスタイル**で点検。

@@ -1,4 +1,4 @@
-"""One batch migration of design/info_arch/ from v5 to v6 (SPEC-information-architecture-standardization v6, requirement 17).
+"""One batch migration of ux/infoarch/ from v5 to v6 (SPEC-information-architecture-standardization v6, requirement 17).
 
 v5 is info_arch.yaml schema 3 with outlines schema 2; v6 is schema 4 with outlines schema 3. Mechanical moves only:
 - promises (prm) and concepts (cpt) are dropped; the four forces of a job are dropped (v6 does not hold them);
@@ -12,7 +12,7 @@ v5 is info_arch.yaml schema 3 with outlines schema 2; v6 is schema 4 with outlin
   data-ia-copy, and design.yaml's modules.ia moves from 0.3.0 to the v6 contract version.
 What needs judgment (value kinds, categories, fulfills degrees, recalls/includes, a normal message beside a CTA) is
 listed under drafting_required and never invented. Anything that has no mechanical destination is unmigrated: one
-item is a failure (exit 2) and nothing is written (one batch). design/approvals.yaml and design/judgments.json are
+item is a failure (exit 2) and nothing is written (one batch). ux/approvals.yaml and ux/judgments.json are
 only read, to list what stops applying. Nothing is committed. A v6 tree is a no-op, so the tool is rerunnable.
 """
 from __future__ import annotations

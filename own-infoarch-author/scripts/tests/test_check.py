@@ -15,6 +15,7 @@ sys.path.insert(0, str(POSITIONING_TESTS))
 for _p in (SCRIPTS, SKILL.parent / 'own-positioning-author/scripts', SKILL.parent / 'own-doc-update/scripts'):
     sys.path.insert(0, str(_p))  # also when a sibling skill's tests load this file by path (runpy)
 from ia_fixtures import EDGES, SSOT, _a, _e, confirm, dump  # noqa: E402,F401  (the positioning the outlines stand on)
+import layer_paths  # noqa: E402  (own-design-author's layer rule: where each layer lives)
 DATE = '2026-10-23'
 RED = json.loads((SKILL / 'fixtures/red-cases.json').read_text(encoding='utf-8'))['cases']
 
@@ -83,8 +84,8 @@ def write_dictionary(root, dictionary):
 
 
 def write_repo(root, ssot=SSOT, channels=(CHANNEL, DRAFT), outlines=(OUTLINE, DECK), confirmed=True, dictionary=DICTIONARY):
-    base = root / 'design/info_arch'
-    dump(base / 'info_arch.yaml', ssot)
+    base = layer_paths.path(root, 'infoarch')
+    dump(layer_paths.path(root, 'positioning_file'), ssot)
     if dictionary is not None:
         write_dictionary(root, dictionary)
     if confirmed:
@@ -94,6 +95,16 @@ def write_repo(root, ssot=SSOT, channels=(CHANNEL, DRAFT), outlines=(OUTLINE, DE
     for o in outlines:
         dump(base / 'outlines' / f'{o["id"]}.yaml', o)
     return base
+
+
+def install_templates(root):
+    """A new repository from the skills' templates: the channels and the guide (this skill's, the infoarch layer) and
+    the empty SSOT (the positioning layer's). Each template directory is named after its layer and lands where the
+    layout rule puts that layer."""
+    import shutil
+    shutil.copytree(SKILL / 'templates/infoarch', layer_paths.path(root, 'infoarch'), dirs_exist_ok=True)
+    shutil.copytree(SKILL.parent / 'own-positioning-author/templates/positioning', layer_paths.path(root, 'positioning_dir'),
+                    dirs_exist_ok=True)
 
 
 def record_red_case(command, rc, report):
@@ -188,7 +199,7 @@ def mutate(case, root):
         del channels[0]['ship_command']
     elif case == 'ssot-duplicate-key':
         write_repo(root, ssot, channels, [o for o in (outline, deck) if o], dictionary=dic)
-        p = root / 'design/info_arch/info_arch.yaml'
+        p = layer_paths.path(root, 'positioning_file')
         p.write_text(p.read_text(encoding='utf-8') + 'schema_version: 2\n', encoding='utf-8')
         return
     elif case == 'outline-placeholder-multiline':
@@ -278,9 +289,7 @@ def test_crash_is_exit_2(tmp_path):
 
 
 def test_template_is_schema_valid(tmp_path):
-    import shutil
-    shutil.copytree(SKILL / 'templates/design', tmp_path / 'design')  # channels and the guide: this skill's
-    shutil.copytree(SKILL.parent / 'own-positioning-author/templates/design', tmp_path / 'design', dirs_exist_ok=True)  # the empty SSOT
+    install_templates(tmp_path)
     rc, report = check(tmp_path)
     assert 'IA_SCHEMA' not in codes(report), report['findings']
     assert rc == 2 and 'IA_NO_OUTLINES' in codes(report)

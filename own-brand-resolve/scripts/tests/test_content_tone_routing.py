@@ -1,4 +1,4 @@
-"""Content Tone routes to the outline tone, not to design/DESIGN.md.
+"""Content Tone routes to the outline tone, not to the design layer's DESIGN.md.
 
 SPEC-deliverable-production-layers requirement 8 (biz_ops): the repository-wide voice is retired; the tone of a
 deliverable belongs to its outline (infoarch). A reference DESIGN.md's Content Tone is handed to own-infoarch-author

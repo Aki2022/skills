@@ -13,7 +13,7 @@ import pytest
 import approval_request as ar
 import positioning as pos
 import positioning_model as pm
-from ia_fixtures import SSOT, confirm, dump
+from ia_fixtures import SSOT, confirm, write_positioning
 
 SCRIPTS = Path(__file__).resolve().parents[1]
 
@@ -155,7 +155,7 @@ def cli(*args):
 
 
 def repo(tmp_path, ssot=SSOT):
-    dump(tmp_path / 'design/info_arch/info_arch.yaml', ssot)
+    write_positioning(tmp_path, ssot)
     confirm(tmp_path, ssot)
     return tmp_path
 
@@ -199,7 +199,7 @@ def test_no_paths_is_not_a_page(tmp_path):
     for block in ('segments', 'jobs', 'pains', 'gains', 'alternatives', 'categories', 'strengths', 'values', 'proofs'):
         ssot[block] = {}
     ssot['edges'] = []
-    dump(tmp_path / 'design/info_arch/info_arch.yaml', ssot)
+    write_positioning(tmp_path, ssot)
     rc, res = cli('request', '--root', str(tmp_path), '--out', str(tmp_path / 'o'))
     assert rc == 2 and not (tmp_path / 'o').exists()
 

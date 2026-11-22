@@ -71,4 +71,4 @@ def test_the_usage_line_and_the_default_manifest_follow_a_renamed_layer_root(tmp
     skills = copy_skills(tmp_path / 'skills', ALL_SKILLS, mutate)
     result = run(['node', skills / 'own-website-audit/scripts/measure_lp.mjs'], cwd=tmp_path, env=NO_RUNTIME)
     assert result.returncode == 2
-    assert renamed + '/.resolved/web.json' in result.stderr and (ROOT + '/') not in result.stderr, result.stderr
+    assert RESOLVED.replace(ROOT, renamed, 1) + '/web.json' in result.stderr and (ROOT + '/') not in result.stderr, result.stderr

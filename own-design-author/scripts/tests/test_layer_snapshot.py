@@ -25,6 +25,8 @@ def snap():
                    'ia:path:val-0001': {'value_hash': H2, 'current_hash': H3, 'valid': False}},
         'targets': {'ds:web:item:dads-000001': H1, 'ia:path:val-0001': H3, 'ds:web:item:dads-000002': H2},
         'rules': ['R-a', 'R-b'],
+        'judgments': {'na-rationale:x': {'hash': H2, 'answered': True}},
+        'ia': {'present': True, 'exit_code': 1, 'counts': {'sections': 5}, 'findings': ['warn IA_X <infoarch>/a.yaml']},
         'verdict': {'exit_code': 1, 'stages': {'L0': {'exit_code': 1, 'targets': 3}, 'ia': {'exit_code': 0, 'targets': 2}},
                     'errors': [], 'warnings': ['<design>/x awaiting approval: 2']},
     }
@@ -33,12 +35,13 @@ def snap():
 def test_identical_snapshots_compare_equal_and_count_what_they_compared():
     result = ls.compare(snap(), snap())
     assert result['differences'] == []
-    assert result['compared'] == {'ledger': 2, 'targets': 3, 'rules': 2, 'stages': 2}
+    assert result['compared'] == {'ledger': 2, 'targets': 3, 'rules': 2, 'stages': 2, 'findings': 1, 'judgments': 1}
     assert ls.exit_code(result, minimum=1) == 0
 
 
 def test_an_empty_comparison_is_not_a_pass():
-    empty = {'schema_version': 1, 'ledger': {}, 'targets': {}, 'rules': [],
+    empty = {'schema_version': 1, 'ledger': {}, 'targets': {}, 'rules': [], 'judgments': {},
+             'ia': {'present': False, 'exit_code': None, 'counts': {}, 'findings': []},
              'verdict': {'exit_code': 0, 'stages': {}, 'errors': [], 'warnings': []}}
     result = ls.compare(empty, copy.deepcopy(empty))
     assert result['differences'] == []
@@ -60,6 +63,13 @@ def test_fewer_records_than_stated_is_not_a_pass():
     ('verdict', lambda s: s['verdict'].update(exit_code=2)),
     ('stage', lambda s: s['verdict']['stages']['ia'].update(exit_code=1)),
     ('warning', lambda s: s['verdict']['warnings'].append('new')),
+    ('judgment key', lambda s: s['judgments'].update({'na-rationale:x': {'hash': H3, 'answered': True}})),
+    ('judgment answered', lambda s: s['judgments']['na-rationale:x'].update(answered=False)),
+    ('judgment set', lambda s: s['judgments'].pop('na-rationale:x')),
+    ('ia finding', lambda s: s['ia']['findings'].append('fail IA_Y <infoarch>/b.yaml')),
+    ('ia verdict', lambda s: s['ia'].update(exit_code=2)),
+    ('ia counts', lambda s: s['ia']['counts'].update(sections=4)),
+    ('ia presence', lambda s: s['ia'].update(present=False)),
 ])
 def test_each_kind_of_difference_is_found(field, change):
     after = snap()

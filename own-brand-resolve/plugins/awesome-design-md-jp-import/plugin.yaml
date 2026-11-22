@@ -8,14 +8,14 @@ source:
 name: Design Reference Import Plugin
 version: 0.2.0
 status: experimental
-license: "取得した版のライセンス実物を確認し、repo の design/NOTICE に記録する。"
+license: "取得した版のライセンス実物を確認し、repo の ux/design/NOTICE に記録する。"
 design_md_version: draft
 language:
   primary: ja
   supported: [ja]
 extends: []
 
-# 指示制の参照入口。repo の design/ への提案専用で、工場へ継承しない。
+# 指示制の参照入口。repo の ux/design/ への提案専用で、工場へ継承しない。
 supported_media: [html, pptx, dashboard]
 
 priority:
@@ -37,9 +37,9 @@ usage_policy:
     - kzhrknt/awesome-design-md-jp
     - VoltAgent/awesome-design-md
   require_user_selected_site: true
-  allow_token_copy: true # 確認したライセンスの範囲で proposed として design/ へ写す
+  allow_token_copy: true # 確認したライセンスの範囲で proposed として ux/design/ へ写す
   allow_asset_copy: false # ロゴ・画像・アイコン・フォント等の実ファイル
-  require_attribution: true # 写した値と同じ repo の design/NOTICE
+  require_attribution: true # 写した値と同じ repo の ux/design/NOTICE
   prohibit_font_redistribution: true
   upstream_typography_copy: false # 本家の英語UIから typography の値を写さない
   license_gate_approved: false # 実アセットの利用許可やブランド値の承認は付与しない

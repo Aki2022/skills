@@ -27,7 +27,7 @@ ALLOWED=('must n-a approval hash missing/mismatch:','approval hash mismatch:','I
 
 def _ia_only(root):
     """A repository with an infoarch layer and no design configuration: the IA resolver alone gives the targets."""
-    return not layer_paths.path(root,'design_config').exists() and layer_paths.path(root,'infoarch').is_dir()
+    return not layer_paths.path(root,'design_config').exists() and layer_paths.has_ia(root)
 
 
 def _ia_resolver():

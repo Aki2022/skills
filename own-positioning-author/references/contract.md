@@ -1,10 +1,10 @@
-# positioning の契約（design/info_arch/info_arch.yaml）
+# positioning の契約（ux/positioning/positioning.yaml）
 
 方針は、利用側の repo の spec `information-architecture-standardization`（v6）と `deliverable-production-layers`（layer の切り方）に従う。positioning（なぜ・誰に・何を）は repo に 1 つで、オーナーが提供価値ごとの経路を承認する。outline（成果物ごとの infoarch）は own-infoarch-author が持ち、positioning の id を引く。
 
 ## ファイル
 
-`design/info_arch/info_arch.yaml`（スキーマ版 5。JSON Schema は `references/schema/info_arch.v5.schema.json`）。承認の状態は持たない（承認台帳 `design/approvals.yaml` が持つ）。変更は他の変更と同じく、検査が緑なら自律マージする（人のレビューは置かない）。記録は git の履歴が持つ。`design/` の下にあるのは名前と合わないが、パスを check と hook が参照しているので変えない（SPEC-deliverable-production-layers の Deferred Decisions）。
+`ux/positioning/positioning.yaml`（スキーマ版 5。JSON Schema は `references/schema/info_arch.v5.schema.json`）。承認の状態は持たない（承認台帳 `ux/approvals.yaml` が持つ）。変更は他の変更と同じく、検査が緑なら自律マージする（人のレビューは置かない）。記録は git の履歴が持つ。置き場所は `ux/positioning/`（infoarch の `ux/infoarch/`、design の `ux/design/` とは別のフォルダ）。どの置き場所も `own-design-author/references/layer-paths.json` が唯一の規則で、旧い `design/info_arch/info_arch.yaml` にある repo は `design-author migrate-layout` で移す（移すまで、どのコマンドも止まる）。
 
 スキーマ版 4（固定値・正式名称・声を SSOT に持つ形）は、警告（IA_SSOT_LEGACY_V4）つきで読む。固定値と正式名称は辞書の値として扱い、声は読まない。`infoarch-author migrate-dictionary` で版 5 と辞書に移す。他の版は失格（IA_SCHEMA）。
 
@@ -48,7 +48,7 @@ id は種別の接頭辞＋連番。連番は 4 桁（0001〜9999。0000 は不�
 | `satisfies` | val → pan・gan | 提供価値が満たす隙間か同等であるべき点 |
 | `supports` | prf → 原子・矢印のキー | 証拠が支える |
 
-**承認**：オーナーが提供価値ごとに、その経路をまとめて承認する（ADR-20261118-ia-approval-per-value-path、biz_ops）。`design/approvals.yaml` の行のキーは `ia:path:<提供価値 id>`、ハッシュは経路の原子と矢印すべての中身（`copied_from`・`provenance` を除く）を id でそろえ重複を除いて正規化した JSON の SHA-256（`positioning.extract`）。経路は次の 4 つの役からなり、下書きを含む proposed の全要素から毎回抜き出す（承認済みのものだけから抜き出さない。代替や度合いの矢印の追加・削除が必ずハッシュに映る）。
+**承認**：オーナーが提供価値ごとに、その経路をまとめて承認する（ADR-20261118-ia-approval-per-value-path、biz_ops）。`ux/approvals.yaml` の行のキーは `ia:path:<提供価値 id>`、ハッシュは経路の原子と矢印すべての中身（`copied_from`・`provenance` を除く）を id でそろえ重複を除いて正規化した JSON の SHA-256（`positioning.extract`）。経路は次の 4 つの役からなり、下書きを含む proposed の全要素から毎回抜き出す（承認済みのものだけから抜き出さない。代替や度合いの矢印の追加・削除が必ずハッシュに映る）。
 
 | 役 | 原子と矢印 |
 | --- | --- |

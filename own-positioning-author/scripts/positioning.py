@@ -6,7 +6,7 @@ ADR-20261118-ia-approval-per-value-path (biz_ops).
 
 - An element is an atom (positioning blocks, and proofs that belong to a segment) or an arrow. An arrow's key is
   `<kind>:<from>:<to>`; a `supports` arrow may point at another arrow's key.
-- Approval is per value: design/approvals.yaml rows `ia:path:<value id>` whose value_hash is the hash of every atom
+- Approval is per value: ux/approvals.yaml rows `ia:path:<value id>` whose value_hash is the hash of every atom
   and arrow on that value's path (claim, basis of the difference, premises, evidence). The path is extracted from
   every proposed element, so adding or removing an alternative or a degree arrow moves it. Per-element rows
   (`ia:positioning:`) are not read; `migrate-approvals` replaces them once.
@@ -440,7 +440,7 @@ def _verify_rows():
 
 
 def read_approvals(root, report, load_yaml, yaml_error):
-    """The owner's ia:path rows (and the blueprint's ia:item rows) of design/approvals.yaml: {key: value_hash}.
+    """The owner's ia:path rows (and the blueprint's ia:item rows) of ux/approvals.yaml: {key: value_hash}.
 
     Validated by own-design-author's verify_rows (fields, key namespace, hash, approver, ISO date, no duplicate key)
     plus a symlink refusal. Any violation fails closed: IA_APPROVALS_INVALID and nothing counts as approved.

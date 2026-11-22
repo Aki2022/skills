@@ -14,6 +14,7 @@ import sys
 import pytest
 
 from test_core import project, write  # noqa: F401
+import layer_paths as lp  # noqa: E402  (test_core puts scripts/ on the path)
 from test_item_coverage import catalog_item, use_catalog_item, set_items, rendered, stages  # noqa: F401
 from test_interaction_states import ship_fixture, OPEN
 from ship_contract import validate_web_result
@@ -26,16 +27,16 @@ TWO = '<details><summary style="display:block;padding:16px">Q1</summary>A</detai
 def setup(run_fixture, project, urls):
     run, root, _ = run_fixture
     use_catalog_item(project, catalog_item(*DECISION, grade='nice-to-have'))
-    write(root / 'design/checks/web.yaml', {'rules': [RULE]})
+    write(lp.path(root, 'checks', 'web.yaml'), {'rules': [RULE]})
     set_items(root, {'dads-000001': {'state': 'defined', 'evidence': ['rule:few']}})
-    validation = json.loads((root / 'design/validation.json').read_text())
+    validation = json.loads(lp.path(root, 'validation').read_text())
     validation['urls'] = urls
-    write(root / 'design/validation.json', validation)
+    write(lp.path(root, 'validation'), validation)
     return run, root
 
 
 def items(root):
-    return json.loads((root / 'design/.resolved/items.json').read_text())
+    return json.loads(lp.path(root, 'resolved', 'items.json').read_text())
 
 
 TWO_PAGES = [{'env': 'DESIGN_FIXTURE_URL'}, {'env': 'DESIGN_FIXTURE_URL_2'}]
@@ -88,8 +89,8 @@ def test_a_report_all_result_is_never_ship_evidence(tmp_path):
     assert validate_web_result(tmp_path, result, urls)
     with pytest.raises(ValueError):
         validate_web_result(tmp_path, {**copy.deepcopy(result), 'mode': 'report-all'}, urls)
-    record = json.loads((tmp_path / 'design/.resolved/items.json').read_text())
-    write(tmp_path / 'design/.resolved/items.json', {**record, 'mode': 'report-all'})
+    record = json.loads(lp.path(tmp_path, 'resolved', 'items.json').read_text())
+    write(lp.path(tmp_path, 'resolved', 'items.json'), {**record, 'mode': 'report-all'})
     with pytest.raises(ValueError):
         validate_web_result(tmp_path, result, urls)
 

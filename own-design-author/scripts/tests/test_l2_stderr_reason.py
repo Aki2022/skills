@@ -9,10 +9,10 @@ import web_check
 
 def test_the_last_line_is_the_reason_and_absolute_paths_are_blanked(tmp_path):
     log = tmp_path / 'l2-0.stderr'
-    log.write_text('warming up\n\nfixed runtime mismatch at /Users/someone/.cache/own-playwright/1.63.0/node_modules\n\n')
+    log.write_text('warming up\n\nfixed runtime mismatch at /opt/team/cache/playwright/node_modules\n\n')
     detail = stderr_detail(log)
     assert detail.startswith('fixed runtime mismatch at <path>'), detail
-    assert '/Users' not in detail and 'someone' not in detail
+    assert '/opt' not in detail and 'team' not in detail
 
 
 def test_a_long_line_is_cut_and_nothing_printed_is_none(tmp_path):

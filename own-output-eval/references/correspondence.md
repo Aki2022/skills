@@ -25,7 +25,7 @@ title: 既存3実装との対応表
 | 評価対象の形 | テキスト or 画像・対象単独 | URL＋スクショ | HTML・CSS・生成画像・スクショ |
 | 回数 | 3 | 単発＋再入 | 3 |
 | モデル | opus（審査員・読者・アドバイザー）／sonnet／haiku | — | opus |
-| 前段の決定論ゲート | VLM 構図比較・数値監査 | `measure_lp.mjs` | playwright 実測 |
+| 前段の決定論ゲート | VLM 構図比較・数値監査 | `measure_render.mjs` | playwright 実測 |
 
 ## 本 skill が変えた点（ws と両立させるため）
 

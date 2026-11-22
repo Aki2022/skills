@@ -15,7 +15,7 @@ method: auto
 
 ## 検証方法
 
-- HTML: 前景色/背景色のペアを抽出し、相対輝度からコントラスト比を計算して閾値判定する。
+- HTML: 描画後の実測（`scripts/measure_render.mjs`。計算は `own-design-author/scripts/contrast_kit.mjs` の 1 か所）だけが判定する。`audit_html.py` は判定せず、「未カバー」と出す。
 - 判定できない色指定（画像上テキスト、グラデーション）は `[自己点検]` に降格し、目視確認を促す。
 
 ## 不合格時

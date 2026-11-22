@@ -46,7 +46,7 @@ pptxは従属WS完了までux/design/を読まないため、その制約を報�
 | 構造（優先度と描画後の位置） | LP は outline の順序と文言の一致（`infoarch-author dom`） | `own-web-build` の `audit_screen.py`（blueprint の優先度と、実ブラウザで測った位置。PC とスマホの 2 つの幅） | 対象外 |
 | 骨格（主操作・領域の印） | 対象外 | 同スクリプト（主操作が 1 つだけ塗られている・宣言した領域がすべて描かれている・印が 0 件なら「確かめていない」） | 対象外 |
 | 状態（loading・empty・error など） | 対象外 | 同スクリプト（宣言した状態が、宣言した文言でページにある） | 対象外 |
-| 審美・レイアウト実測（決定論）   | `own-website-audit` の `measure_lp.mjs` | 同スクリプト流用可。ただし `fold-cta` 等 LP 前提の検査は解釈を添える | HTML資料はL0/L1/L2。pptxは `own-pptx-build` の既存決定論検査（ux/design/連携は未カバー） |
+| 審美・レイアウト実測（決定論）   | `own-web-build` の `measure_render.mjs`（`--profile lp`） | 同じ道具（`--profile product-ui`。`fold-cta` はプロファイルが当てない） | HTML資料はL0/L1/L2。pptxは `own-pptx-build` の既存決定論検査（ux/design/連携は未カバー）。印刷のプロファイルは無い（印刷の build を始めるとき） |
 | マーケ定性（独立レビュアー採点） | `own-website-audit` の rubric           | **欠落**                                                             | **欠落**                                            |
 | 広告審査・法務・SEO・計測        | `own-website-audit`                     | `own-website-audit`（該当節のみ）                                    | 対象外                                              |
 | UI ガイドライン準拠              | `web-design-guidelines`                 | `web-design-guidelines`                                              | 対象外                                              |
@@ -58,8 +58,10 @@ pptxは従属WS完了までux/design/を読まないため、その制約を報�
 
 補足:
 
-- `own-website-audit` は LP の「審美実測 + マーケ定性 + ゲート」を 1 つで持つ。
-  LP のときは個別に並べず、まず `own-website-audit` を呼ぶ。
+- 描画後の実測の道具は 1 つ（`own-web-build` の `measure_render.mjs`）。何を当てるかは成果物の型ごとのプロファイル
+  （`own-design-author` の `references/measurement-profiles.json`。当てる検査・当てない検査と理由・幅と配色）が決める。
+  結果の `measured` は実際に測った件数で、0 件・実行の失敗・プロファイルが無い型は合格にしない。
+- `own-website-audit` は外部基準とマーケの採点だけを持つ。LP のときは、実測が緑になってから `own-website-audit` を呼ぶ。
 - 重複 skill の検出は `own-skill-commonize` の `skill_lint.sh`（S7）が担う。
   `source-command-*` の対応先は現在の正典には存在しない（2026-10-12 確認）。
   ルーターは常に通常名（`baseline-ui` 等）を使う。
@@ -83,6 +85,17 @@ pptxは従属WS完了までux/design/を読まないため、その制約を報�
 本来見たかった評価が汚染される。非決定論の検査は高い（レビュアー 1 名で数万トークン）。
 
 コピーや構造を直したら、必ず決定論からやり直す。
+
+**独立レビュアー（`own-website-audit` のマーケ採点など）は、次のゲートを通ってからだけ起動する。**
+
+```bash
+python3 <own-web-build>/scripts/reviewer_gate.py --route entry --report <実測の report.json> --ledger <ledger.jsonl>
+```
+
+`/own-web-build/scripts/reviewer_gate.py` は exit 0 のときだけ起動を許す。exit 3（止める）は、実測の結果が無い・
+読めない／実行が失敗した／プロファイルが無い・知らない／測った件数が 0／失格が残っている、のどれか。止めたら
+レビュアーを起動せず、報告の「スキップした検査」に理由（`reason`）を書く。`own-website-audit` を直接呼ぶ道（`--route direct`）でも
+同じゲートが効き、どちらの道の起動も ledger に残る。
 
 ### 4. 報告の契約 — 沈黙させない
 

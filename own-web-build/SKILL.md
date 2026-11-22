@@ -29,7 +29,7 @@ repo の git toplevel の `ux/design/` を正典として HTML / dashboard を�
 5c. **プロダクト UI（ログイン後の画面・ダッシュボード）の blueprint を使う場合**: `ux/infoarch/blueprint/screens/<画面 id>.yaml` があり、その画面を作るなら、`python3 <このskill>/scripts/build_screen.py --repo <repo> --screen <画面 id> --out <HTML>` で作る。これは `infoarch-author skeleton --screen` の印つき HTML（`data-ia-region`・`data-ia-group`・`data-ia-action`・`data-ia-state`）に、`own-design-author/references/allocation-rules.json`（割り付け規則）から導いた幅の指定と主操作の塗りを足す。blueprint が失格なら作らない。領域の順は優先度のまま動かさず、位置と幅は規則が決める（人が規則に反して置くときは `ux/design/layout-overrides.yaml` に理由を書く）。作った後は必ず `python3 <このskill>/scripts/audit_screen.py --screen <画面の yaml> --html <HTML> --repo <repo> [--overrides ux/design/layout-overrides.yaml]` を流す（実ブラウザで PC とスマホの 2 つの幅に描いて、優先度と位置・主操作が 1 つだけ塗られている・宣言した状態が描ける・印がある、を確かめる。印が 0 件なら「確かめていない」で失格）。`audit_screen.py` は PyYAML が要る。PATH の `python3` に無いときは、`DESIGN_AUTHOR_PYTHON` の interpreter で自分を 1 回だけ起動し直す（変数が無ければ exit 2 で止まる）。
 6. `media/<media>/media.yaml` / `rules.md` と必要なassetを読み、
    `references/context-composer.md` に従って生成する。媒体最低値はマニフェストを読む。
-7. 生成後の L1（`scripts/audit_html.py <html> --manifest ux/design/.resolved/web.json`）は確認せず毎回実行する。
+7. 生成後の L1（`scripts/audit_html.py <html> --manifest ux/design/.resolved/web.json`）は確認せず毎回実行する。L1 はコントラストを判定しない（出力に「未カバー」と出る）。描画後の実測は `scripts/measure_render.mjs <url> --profile <id> --manifest ...`（`references/validator.md`）。
    描画の L2 は `references/validator.md` / `site-validation.md` に従い人間へ実施可否を確認する。
    ブラウザ利用時は `own-browser-route` と `playwright-cli` を使う。
 7b. アウトラインを使った場合、出力後に`infoarch-author evaluate --outline <id>`を必ず実行する（check → dom → judge を順に走らせ、終了コードを 1 つにまとめる）。終了コード2なら、文言の書き換え（IA_DOM_COPY_DRIFT）・印の欠落・セクションと文案の順序・文案のセクション違い・印の外の文言・固定値の表示を直す。終了コード1の警告（未カバーの判定・要確認）は報告に残す。直せない時や未実施は未解決として報告する。

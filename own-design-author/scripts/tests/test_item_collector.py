@@ -61,12 +61,14 @@ a{text-decoration:underline;color:#000000}p{margin:0}</style></head><body>
 RUNNER = '''
 import {createRequire} from "node:module";
 import {collectItemChecks} from %s;
+const {kitSource} = await import(%s.replace("resolved_contract", "contrast_kit"));
 const require = createRequire(process.cwd() + "/");
 const {chromium} = require("playwright");
 const [html, manifest] = JSON.parse(process.argv[2]);
 const browser = await chromium.launch();
 const page = await browser.newPage({viewport:{width:800, height:2000}});
 await page.setContent(html);
+await page.evaluate(kitSource);
 console.log(JSON.stringify(await page.evaluate(collectItemChecks, manifest)));
 await browser.close();
 '''
@@ -76,7 +78,7 @@ def collect(html, tmp_path):
     if os.environ.get('DESIGN_BROWSER_TEST') != '1':
         pytest.skip('explicit browser fixture run required')
     script = tmp_path / 'run.mjs'
-    script.write_text(RUNNER % json.dumps((SCRIPTS / 'resolved_contract.mjs').as_uri()))
+    script.write_text(RUNNER % ((json.dumps((SCRIPTS / 'resolved_contract.mjs').as_uri()),) * 2))
     manifest = {'item_checks': {'collect': DOM_CHECKS, 'applicability': {}},
                 'palette': {'dimension': ['0px', '8px', '16px', '32px', '40px'], 'fontWeight': ['400', '700'], 'shadow': []}}
     env = dict(os.environ)
@@ -105,7 +107,7 @@ def collect_shadow(html, token, tmp_path):
     if os.environ.get('DESIGN_BROWSER_TEST') != '1':
         pytest.skip('explicit browser fixture run required')
     script = tmp_path / 'run_shadow.mjs'
-    script.write_text(RUNNER % json.dumps((SCRIPTS / 'resolved_contract.mjs').as_uri()))
+    script.write_text(RUNNER % ((json.dumps((SCRIPTS / 'resolved_contract.mjs').as_uri()),) * 2))
     manifest = {'item_checks': {'collect': ['palette:shadow'], 'applicability': {}},
                 'palette': {'dimension': ['0px'], 'fontWeight': ['400'], 'shadow': [token]}}
     env = dict(os.environ)

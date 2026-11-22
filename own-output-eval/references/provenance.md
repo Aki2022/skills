@@ -20,7 +20,7 @@ title: provenance.json — 評価者の申告
     { "role": "reader", "id": "r1", "fresh": true, "inputs": ["artifact"] },
     { "role": "reviewer", "id": "code-review", "fresh": true, "inputs": ["artifact", "diff"] }
   ],
-  "gates_passed": ["audit_html.py exit 0", "measure_lp.mjs 失格ゼロ"],
+  "gates_passed": ["audit_html.py exit 0", "measure_render.mjs 失格ゼロ"],
   "cache_cleared": true
 }
 ```

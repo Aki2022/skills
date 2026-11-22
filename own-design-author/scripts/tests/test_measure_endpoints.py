@@ -1,4 +1,6 @@
-"""Endpoint profiles and native label hit areas use real Chromium measurements."""
+"""Endpoint profiles (ship contract, L2 launcher) and native label hit areas use real Chromium measurements.
+
+Which checks a profile applies is test_measurement_profiles.py's; this file keeps the label hit area and the endpoint rules."""
 import json
 import os
 import subprocess
@@ -8,7 +10,7 @@ from test_core import SKILL, project, check, write
 import layer_paths as lp
 
 NODE = os.environ.get('DESIGN_TEST_NODE', 'node')
-MEASURE = SKILL.parent / 'own-website-audit/scripts/measure_lp.mjs'
+MEASURE = SKILL.parent / 'own-web-build/scripts/measure_render.mjs'
 BROWSER = os.environ.get('DESIGN_BROWSER_TEST') == '1'
 NORMAL = ('<!doctype html><html lang="en"><head><title>Product fixture</title><style>'
           'body{font:16px/1.5 Arial;background:white;color:black;margin:0}'
@@ -35,33 +37,14 @@ def prepare(project):
     return root
 
 
-def measure(root, html, profile=None):
+def measure(root, html, profile):
     page = root / 'index.html'; page.write_text(html)
     output = root / 'measurement.json'
     argv = [NODE, str(MEASURE), page.as_uri(), '--manifest', str(lp.path(root, 'resolved', 'web.json')),
             '--viewports', '375', '--schemes', 'light', '--json', str(output)]
-    if profile is not None: argv += ['--profile', profile]
+    argv += ['--profile', profile]
     run = subprocess.run(argv, cwd=root, env=os.environ.copy(), capture_output=True, text=True)
     return run, json.loads(output.read_text()) if output.is_file() else None
-
-
-@pytest.mark.skipif(not BROWSER, reason='explicit real browser run required')
-def test_product_ui_skips_only_marketing_fold_cta(project):
-    root = prepare(project)
-    html = NORMAL.replace('CONTENT', '<button data-cta style="margin-top:900px">Submit</button>')
-    run, lp = measure(root, html)
-    assert run.returncode == 1 and any(row['id'] == 'fold-cta' for row in lp['failures'])
-    assert lp['profile'] == 'lp'
-    run, ui = measure(root, html, 'product-ui')
-    assert run.returncode == 0, run.stdout + run.stderr
-    assert ui['profile'] == 'product-ui'
-    assert ui['skipped'] == [{'id': 'fold-cta', 'reason': 'marketing first-fold CTA is not applicable to product-ui'}]
-    run, broken = measure(root, html.replace('color:black;background:white', 'color:#777777;background:white'), 'product-ui')
-    assert run.returncode == 1
-    assert any(row['id'] == 'design-palette' for row in broken['failures'])
-    assert any(row['id'] in ('contrast', 'axe-contrast') for row in broken['failures'])
-    run, _ = measure(root, html, 'unknown')
-    assert run.returncode == 2
 
 
 @pytest.mark.skipif(not BROWSER, reason='explicit real browser run required')

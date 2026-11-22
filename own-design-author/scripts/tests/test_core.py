@@ -455,12 +455,12 @@ def test_real_l2_palette_empty_targets_and_layout_regression(project, tmp_path):
               'background-color:transparent;border-radius:0}body{background-color:white}'
               '</style></head><body><main><h1>Fixture</h1><p>Readable fixture text.</p>'
               '</main></body></html>')
-    script = SKILL.parent / 'own-website-audit/scripts/measure_lp.mjs'
+    script = SKILL.parent / 'own-web-build/scripts/measure_render.mjs'
     def measure(source, html, name):
         page.write_text(html)
         output = tmp_path / (name + '.json')
         run = subprocess.run([node,str(source),page.as_uri(),'--manifest',str(manifest),
-                              '--viewports','375','--schemes','light','--json',str(output)],
+                              '--profile','lp','--viewports','375','--schemes','light','--json',str(output)],
                              cwd=SKILL.parent, capture_output=True, text=True)
         assert run.returncode in (0,1), run.stderr
         return json.loads(output.read_text())

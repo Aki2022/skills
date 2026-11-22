@@ -4,8 +4,12 @@ title: 審美・レイアウト実測の検査項目と閾値
 
 # 検査項目と閾値
 
-`scripts/measure_lp.mjs` が判定する内容。**閾値を変えたらこの表と理由を必ず更新する。**
+`own-web-build/scripts/measure_render.mjs` が判定する内容。数値は `measurement-profiles.json` の `thresholds` が持ち（道具は読むだけ）、
+この表は理由の記録。**閾値を変えたら JSON とこの表と理由を一緒に更新する。**
 目の前のページが通るように黙って緩めるのは、検査を殺す行為。
+
+どの検査をどの型に当てるか（当てない検査とその理由）は `measurement-profiles.json` の `profiles`。
+`fold-cta` だけが型で分かれる（説得する成果物に当て、プロダクト UI には当てない）。
 
 ## 失格レーン（決定論。exit 1）
 
@@ -26,7 +30,7 @@ title: 審美・レイアウト実測の検査項目と閾値
 | `element-overflow`     | 画面外へのはみ出し               | 無し                | 横スクロール可能な祖先の中は除外（意図した内部スクロール）                  |
 | `heading-jump`         | 見出し階層の飛び                 | 無し                | h2 → h4 等                                                                  |
 | `heading-orphan`       | 見出し最終行の孤立               | ≥ 3 文字            | 1〜2 文字だけ折り返すと読みが崩れる                                         |
-| `fold-h1` / `fold-cta` | ファーストビュー内に H1 と主 CTA | 収まる              | CTA は sticky があれば代替可                                                |
+| `fold-h1` / `fold-cta` | ファーストビュー内に H1 と主 CTA | 収まる              | CTA は sticky があれば代替可。`fold-cta` はプロファイルが当てる型だけ        |
 | `console-error`        | **自ホスト**の 4xx と JS エラー  | 0 件                | 第三者ホストは警告へ回す                                                    |
 | `image-over-crop`      | `object-fit: cover` の切り取り率 | ≤ 0.45              | これを超えると意図した構図が画面に出ていない                                |
 | `measurement-broken`   | 計測自体の破損                   | —                   | 未検証を緑に潰さないための番人                                              |

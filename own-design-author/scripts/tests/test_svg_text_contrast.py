@@ -7,7 +7,7 @@ at least as many SVG text elements.
 """
 import pytest
 from test_core import project  # noqa: F401  (pytest fixture)
-from test_measure_profiles import BROWSER, NORMAL, measure, prepare
+from test_measure_endpoints import BROWSER, NORMAL, measure, prepare
 
 pytestmark = pytest.mark.skipif(not BROWSER, reason='explicit real browser run required')
 

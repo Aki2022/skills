@@ -9,7 +9,7 @@ L0を実行してから、工場は次を使う。L0/L1は確認不要、L2は�
 ```sh
 design-author check --repo .
 python3 <own-web-build>/scripts/audit_html.py index.html --manifest ux/design/.resolved/web.json --tailwind tailwind.config.cjs
-node <own-website-audit>/scripts/measure_lp.mjs <url> --manifest ux/design/.resolved/web.json --viewports 375,1280 --schemes dark,light --json <report.json>
+node <own-web-build>/scripts/measure_render.mjs <url> --profile lp --manifest ux/design/.resolved/web.json --viewports 375,1280 --schemes dark,light --json <report.json>
 ```
 
 consumerはマニフェストの入力ハッシュを現行のux/design/と照合し（IAモジュールを宣言したrepoでは、IAの入力である docs/dictionary/*.json も照合する）、中央の判定policyと宣言したIA resolverのdigestも照合する。変更・追加・削除後の古い生成物を使わない。
@@ -229,12 +229,16 @@ AFMの結果の扱い:
 色・フォント・角の許可集合をマニフェストからブラウザのcomputed表現へ正規化する。
 bodyと子孫のうち描画される色・背景・境界・outline・装飾線・文字のfontFamilyと4隅のradiusを照合する。非描画の境界・透明な背景・非表示DOMは適合の証拠にせず、描画対象0件を拒否する。寸法tokenは負の変換値も持てるが、CSSが半径として許可する値だけを半径集合に使う。正規化用の見本はページのanimation/transitionから独立させる。
 透明色と角ゼロも必要なら明示的なtokenにする。検査対象0件は失格。
+## 描画後の実測のプロファイル
+
+実測の道具は `own-web-build/scripts/measure_render.mjs` の 1 つ。閾値と、成果物の型ごとのプロファイル（当てる検査・当てない検査と理由・測る幅と配色）は `references/measurement-profiles.json`、値の理由は `references/measurement-thresholds.md`。`--profile` を省く・知らないidを渡すと実行しない（exit 2）。結果の `measured`（`runs`・`targets`）は実際に測った件数で、0 件は失格（合格にしない）。当てない検査は結果の `skipped` に理由つきで残る。`validation.json` の `profile` が省かれた行は、レジストリの `endpoint_default` として読む。L2の起動は、測定が結果を書く前に止まったとき、その stderr の最後の1行（絶対パスは伏せる）を `missing` の理由に付ける。コントラストの計算は `scripts/contrast_kit.mjs` の1か所（L1の `audit_html.py` はコントラストを判定しない）。
+
 コントラストとターゲットサイズは媒体minimumsを読む。axeのcolor-contrastと従来の実効コントラスト検査を併用し、
 axeで測れない対象は未検証として残す。失敗したaxe実行を合格にしない。
 
 擬似要素・shadow DOM・iframe内・任意の宣言的追加規則は未カバー。
 固定検査はCDPの実描画glyph情報でfont fallbackを失格にする。
-環境指定のないmeasure_lp.mjs単独計測では従来のfont-silent-fallback警告を維持し、fixed-render-environmentを未カバーへ残す。この単独計測は固定L2の代用にしない。画像上のコントラスト近似等、従来検査の限界を準拠合格に読み替えない。
+環境指定のないmeasure_render.mjs単独計測では従来のfont-silent-fallback警告を維持し、fixed-render-environmentを未カバーへ残す。この単独計測は固定L2の代用にしない。画像上のコントラスト近似等、従来検査の限界を準拠合格に読み替えない。
 L1/L2が通っても、未カバー規則が消えたとは扱わない。出荷時のmust未カバーはL0 --shipで停止する。
 
 ## 検証
@@ -311,7 +315,7 @@ service workerはブロックし、各組合せを新しいcontextで実行す�
 環境指紋・実字体・glyph件数・時計・画素hashを結果JSONへ残し、終了時に環境設定とフォント・runtimeを再照合する。
 
 ```sh
-node <own-website-audit>/scripts/measure_lp.mjs <url> --manifest ux/design/.resolved/web.json --environment ux/design/render-environment.json --viewports 375,1280 --schemes light,dark --json ux/design/.resolved/l2.json
+node <own-web-build>/scripts/measure_render.mjs <url> --profile lp --manifest ux/design/.resolved/web.json --environment ux/design/render-environment.json --viewports 375,1280 --schemes light,dark --json ux/design/.resolved/l2.json
 ```
 
 viewports/schemesの順序と集合もpinに一致必須。ブラウザ版・フォントhash・環境欠落はexit 2、

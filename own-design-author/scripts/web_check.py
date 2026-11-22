@@ -10,6 +10,7 @@ import signal
 import subprocess
 import sys
 import layer_paths
+import measurement_profiles
 from design_author import check_design, git_root, inside, read_data, CATALOG
 from reporting import empty_report,stage,skip
 from page_inventory import check_pages
@@ -26,10 +27,19 @@ def layer_file(root,key):
 def validation_endpoint(row):
     if not isinstance(row,dict) or not {'env'}<=set(row)<={'env','profile','states'} or not isinstance(row.get('env'),str):
         raise ValueError('rendering URL must name an environment variable, an optional profile and optional states')
-    profile=row.get('profile','lp')
-    if profile not in ('lp','product-ui'):
-        raise ValueError('invalid rendering profile')
+    # A row without a profile means the registry's endpoint default (kept so older validation files still read); the
+    # profile ids themselves are the registry's, never spelled here.
+    profile=row.get('profile',measurement_profiles.load()['endpoint_default'])
+    measurement_profiles.profile(profile)
     return row['env'],profile
+
+
+def stderr_detail(path,limit=240):
+    """The last non-empty line a measurement printed to stderr, absolute paths blanked and cut to `limit`; None if nothing."""
+    try:lines=[l.strip() for l in Path(path).read_text(errors='replace').splitlines() if l.strip()]
+    except OSError:return None
+    if not lines:return None
+    return re.sub(r'(?<![\w<])/(?:[^\s/:"\']+/)*[^\s/:"\']*','<path>',lines[-1])[:limit]
 
 
 STATE_NAME=re.compile(r'[a-z0-9][a-z0-9-]{0,39}')
@@ -258,12 +268,17 @@ def main():
             output=inside(layer_paths.path(root,'resolved'),'l2-'+str(index)+'.json')
             output.unlink(missing_ok=True)
             state=['--state',json.dumps(target['state'],ensure_ascii=False)] if target['state'] else []
-            return subprocess.Popen([os.environ.get('DESIGN_AUDIT_NODE','node'),
-                str(skills/'own-website-audit/scripts/measure_lp.mjs'),os.environ[target['env']],'--manifest',str(resolved),
+            # stderr stays beside the report: a run that stops before writing one is explained by its last line.
+            log=inside(layer_paths.path(root,'resolved'),'l2-'+str(index)+'.stderr')
+            handle=open(log,'w')
+            try:
+              return subprocess.Popen([os.environ.get('DESIGN_AUDIT_NODE','node'),
+                str(skills/'own-web-build/scripts/measure_render.mjs'),os.environ[target['env']],'--manifest',str(resolved),
                 '--environment',str(environment),'--profile',target['profile'],*state,
                 '--viewports',','.join(map(str,config['viewports'])),'--schemes',','.join(config['schemes']),
-                '--json',str(output)],cwd=root,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,
+                '--json',str(output)],cwd=root,stdout=subprocess.DEVNULL,stderr=handle,
                 env={**os.environ,'DESIGN_SCREENSHOT_DIR':str(screens)},start_new_session=True)
+            finally:handle.close()
         # Up to `parallel` pages render at once; results are judged in declared order, and a failure stops the rest.
         running={}
         try:
@@ -275,7 +290,8 @@ def main():
             output=inside(layer_paths.path(root,'resolved'),'l2-'+str(index)+'.json')
             l2=running.pop(index);l2.wait()
             if not output.is_file():
-                report['report']['missing'].append({'id':'L2:'+row['env'],'reason':'no fresh fixed rendering report'})
+                why=stderr_detail(inside(layer_paths.path(root,'resolved'),'l2-'+str(index)+'.stderr'))
+                report['report']['missing'].append({'id':'L2:'+row['env'],'reason':'no fresh fixed rendering report'+(': '+why if why else '')})
                 raise ValueError('fresh fixed rendering report missing')
             measured=read_data(output)
             if measured.get('profile')!=profile:raise ValueError('rendering profile evidence mismatch')

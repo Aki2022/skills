@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * LP の審美・レイアウトを決定論的に実測する。
+ * 描画後の審美・レイアウトを決定論的に実測する（成果物の種類の名前は付けない。当てる検査は --profile が決める）。
  *
  * 設計方針: ここに主観を入れない。「美しいか」は判定しない。
  * 判定するのは「意図した設計が実際の画面で成立しているか」だけで、すべて数値で出す。
@@ -15,15 +15,21 @@
  * 反映されず「実際にどう見えているか」を測れない（v1 でこの誤りを踏んだ）。
  *
  * 使い方:
- *   node measure_lp.mjs <url> --manifest ux/design/.resolved/web.json [--viewports 375,1280] [--schemes dark,light] [--json out.json] [--state '{"name":"open","steps":[{"click":"#open"}]}']
+ *   node measure_render.mjs <url> --profile <id> --manifest ux/design/.resolved/web.json [--viewports 375,1280] [--schemes dark,light] [--json out.json] [--state '{"name":"open","steps":[{"click":"#open"}]}']
  *
- * 終了コード: 0 = 失格なし / 1 = 失格あり / 2 = 実行不能
+ * 閾値とプロファイル（当てる検査・当てない検査と理由・幅と配色）は own-design-author/references/measurement-profiles.json。
+ * プロファイルを省く・知らない id を渡すと実行しない（合格にしない）。
+ * 結果の measured は実際に測った件数（runs と targets）。0 件は合格にしない。
+ *
+ * 終了コード: 0 = 失格なし / 1 = 失格あり（測った件数 0 を含む） / 2 = 実行不能
  */
 
 import { writeFileSync, existsSync, unlinkSync } from "node:fs";
 import { layerRel, repoFromResolved } from "../../own-design-author/scripts/layer_paths.mjs";
 import {loadEnvironment,verifyRuntime,configureFonts,trackFonts,renderEvidence,compareRepeats,fixedLaunchOptions,describeRenderFailure,parseState,applyState,settleFonts,stableCapture} from "../../own-design-author/scripts/fixed_render.mjs";
 import { loadManifest, collectDesign, collectItemChecks } from "../../own-design-author/scripts/resolved_contract.mjs";
+import { contrastKit, kitSource } from "../../own-design-author/scripts/contrast_kit.mjs";
+import { loadRegistry, profileOf } from "../../own-design-author/scripts/measurement_profiles.mjs";
 import {loadPlaywright as locateRuntime, pinnedVersion, locateCompanion} from "../../own-design-author/scripts/playwright_runtime.mjs";
 
 // Playwright comes from the project, else the per-machine runtime of the version pinned in --environment.
@@ -35,26 +41,22 @@ function loadPlaywright() {
 const args = process.argv.slice(2);
 const url = args.find((a) => !a.startsWith("--"));
 if (!url) {
-  console.error(`使い方: node measure_lp.mjs <url> --manifest ${layerRel('resolved', 'web.json')} [--viewports 375,1280]`);
+  console.error(`使い方: node measure_render.mjs <url> --profile <id> --manifest ${layerRel('resolved', 'web.json')} [--viewports 375,1280]`);
   process.exit(2);
 }
 const flag = (name, fallback) => {
   const i = args.indexOf(`--${name}`);
   return i === -1 ? fallback : args[i + 1];
 };
-const profile = flag('profile', 'lp');
-if (!['lp', 'product-ui'].includes(profile)) {
-  console.error('invalid measurement profile; expected lp or product-ui');process.exit(2);
-}
+const registry = loadRegistry();
+const profile = flag('profile', null);
+let profileDef;
 let state;
 try { state = parseState(flag('state', null)); }
 catch { console.error('invalid --state; expected {"name":..., "steps":[...]} with click/focus/fill/submit steps'); process.exit(2); }
-const viewports = flag("viewports", "375,1280")
-  .split(",")
-  .map((v) => Number(v.trim()))
-  .filter(Boolean);
+const viewportsFlag = flag("viewports", null);
+const schemesFlag = flag("schemes", null);
 const jsonOut = flag("json", null);
-const schemes = flag("schemes", "dark,light").split(",").filter(Boolean);
 // A report left by an earlier run must not outlive a run that stops, whatever the reason.
 let staleReportError = null;
 try { if (jsonOut && flag('environment', null) && existsSync(jsonOut)) unlinkSync(jsonOut); } catch (error) { staleReportError = error; }
@@ -66,33 +68,34 @@ try { repoRoot = repoFromResolved(manifestPath); }
 catch (error) {
   if (String(error.message).startsWith('LAYER_LAYOUT_FOREIGN_ROOT')) { console.error(error.message); process.exit(2); }
 }
+// No profile, no measurement: which checks apply is the profile's decision, and a run without one is not a pass.
+try { profileDef = profileOf(registry, profile); }
+catch { console.error(`invalid measurement profile; expected one of: ${Object.keys(registry.profiles).join(', ')} (--profile <id>)`); process.exit(2); }
 let manifest;
 try {
   if (staleReportError) throw staleReportError;
   manifest = loadManifest(manifestPath);
 }
 catch { console.error('resolved manifest unavailable, invalid or stale; rerun L0'); process.exit(2); }
+const viewports = (viewportsFlag ?? profileDef.viewports.join(","))
+  .split(",")
+  .map((v) => Number(v.trim()))
+  .filter(Boolean);
+const schemes = (schemesFlag ?? profileDef.schemes.join(",")).split(",").filter(Boolean);
 if (!viewports.length || !schemes.length) { console.error('zero measurement runs'); process.exit(2); }
+// The checks this profile applies; a check outside it is never evaluated and is reported as skipped with its reason.
+const applies = new Set(profileDef.applies);
 
 
 /**
- * 閾値。根拠と、緩めた履歴は references/aesthetic-thresholds.md に残すこと。
- * 黙って緩めると検査が意味を失う。
+ * 閾値。値は own-design-author/references/measurement-profiles.json が持ち、根拠と緩めた履歴は
+ * references/measurement-thresholds.md に残す。ここには数値を書かない。黙って緩めると検査が意味を失う。
  */
 const T = {
-  fontSizeKinds: 8,
-  lineHeightKinds: 4,
-  radiusKinds: 5,
-  bodyLineHeightMin: 1.5,
-  bodyFontSizeMin: 15, // 本文（最頻サイズ）
-  textFontSizeFloor: 12, // 注記も含めた絶対下限
-  measureMaxCh: 48, // 和文の全角基準
+  ...registry.thresholds,
   contrastMin: manifest.minimums.text_contrast,
   largeContrastMin: manifest.minimums.large_text_contrast,
   tapTargetMin: manifest.minimums.target_size_px,
-  orphanMinChars: 3,
-  imageStandoutArea: 200, // 焦点画素の面積(CSS px²)。14x14 相当を下回れば絵が沈んでいる
-  imageCropMax: 0.45, // object-fit: cover の切り取り率。意図した構図が壊れる境
 };
 
 // ---- ページ内で走る DOM/CSSOM 計測（画素は扱わない） ----
@@ -113,17 +116,9 @@ function collect(T) {
     const [r, g, b, a = 1] = m.map(Number);
     return { r, g, b, a };
   };
-  const lum = ({ r, g, b }) => {
-    const f = (v) => {
-      v /= 255;
-      return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
-    };
-    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
-  };
-  const ratio = (a, b) => {
-    const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m);
-    return (x + 0.05) / (y + 0.05);
-  };
+  // The contrast arithmetic is the design skill's contrast kit, injected into the page before this runs.
+  if (!window.__contrastKit) throw new Error("contrast kit not injected");
+  const ratio = window.__contrastKit.ratio;
   // 透明を遡って合成する。透明のまま比べると常に緑になる。
   // 不透明な背景色を遡って探す。途中に背景画像・グラデ・重ねた <img> がある場合は
   // CSS だけでは合成結果が分からないので null を返し、Node 側の画素評価へ回す。
@@ -631,13 +626,9 @@ async function measureRegion(page, region) {
     const ctx = c.getContext("2d", { willReadFrequently: true });
     ctx.drawImage(img, 0, 0, w, h);
     const d = ctx.getImageData(0, 0, w, h).data;
-    const f = (v) => {
-      v /= 255;
-      return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
-    };
     const ls = [];
     for (let i = 0; i < d.length; i += 4) {
-      const Y = 0.2126 * f(d[i]) + 0.7152 * f(d[i + 1]) + 0.0722 * f(d[i + 2]);
+      const Y = window.__contrastKit.luminance(d[i], d[i + 1], d[i + 2]);
       // Y → L*（知覚明度 0..100）。線形輝度のまま比べると暗部の差を潰す。
       const t = Y > 0.008856 ? Math.cbrt(Y) : 7.787 * Y + 16 / 116;
       ls.push(116 * t - 16);
@@ -698,7 +689,10 @@ const report = {
   url,
   profile,
   state,
-  skipped: profile === 'product-ui' ? [{id:'fold-cta',reason:'marketing first-fold CTA is not applicable to product-ui'}] : [],
+  applied: [...profileDef.applies],
+  skipped: profileDef.skips.map((row) => ({id: row.id, reason: row.reason})),
+  // What was actually measured (completed runs, and the design targets they judged). Filled once the runs end.
+  measured: {runs: 0, targets: 0},
   measuredAt: fixed?fixed.config.clock:new Date().toISOString(),
   environment,
   runs: [],
@@ -761,6 +755,7 @@ for (const scheme of schemes) {
     // Every measurement reads the page with its fonts settled, not only the glyph evidence.
     if (fixed) await settleFonts(page);
     stage='collect';
+    await page.evaluate(kitSource);
     const data = await page.evaluate(collect, T);
     data.design = await page.evaluate(collectDesign, manifest);
     data.item_checks = await page.evaluate(collectItemChecks, manifest);
@@ -822,14 +817,8 @@ for (const scheme of schemes) {
         const q = await measureRegion(page, t);
         const L = q.mode; // 背後の代表明度（最頻値）
         const Y = L > 8 ? ((L + 16) / 116) ** 3 : L / 903.3;
-        const f = (v) => {
-          v /= 255;
-          return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
-        };
-        const fgY =
-          0.2126 * f(t.fg[0]) + 0.7152 * f(t.fg[1]) + 0.0722 * f(t.fg[2]);
-        const [hi, lo] = [fgY, Y].sort((a, b) => b - a);
-        const ratio = (hi + 0.05) / (lo + 0.05);
+        const fgY = contrastKit.luminance(t.fg[0], t.fg[1], t.fg[2]);
+        const ratio = contrastKit.ratioOfLuminances(fgY, Y);
         const large = t.fontSize >= 24 || (t.fontSize >= 18.66 && t.bold);
         const min = large ? T.largeContrastMin : T.contrastMin;
         if (ratio < min) {
@@ -885,6 +874,7 @@ for (const scheme of schemes) {
   }
 }
 }
+report.measured = {runs: report.runs.length, targets: report.runs.reduce((n, r) => n + (r.design?.targetCount || 0), 0)};
 if(fixed){
   stage='recheck';
   const reloaded=loadEnvironment(fixed.path,fixed.root,viewports,schemes);
@@ -894,6 +884,7 @@ if(fixed){
 } catch (error) {
   const failure=describeRenderFailure(error,stage);
   report.execution_error=failure.code;
+  report.measured = {runs: report.runs.length, targets: report.runs.reduce((n, r) => n + (r.design?.targetCount || 0), 0)};
   report.environment={...(report.environment||{}),repeat_equal:false};
   report.failures.push({id:'render-execution-failed',stage,error:failure.code,detail:failure.message,
     at:report.runs.length+' completed runs',...(Number.isInteger(error?.stateStep)?{state_step:error.stateStep}:{})});
@@ -906,11 +897,12 @@ if(fixed){
 }
 if(process.exitCode===2)process.exit(2);
 
-const fail = (id, detail) => report.failures.push({ id, ...detail });
+// A check outside the profile is never judged (its id is listed under `skipped` with the reason).
+const fail = (id, detail) => { if (applies.has(id)) report.failures.push({ id, ...detail }); };
 // 校正が足りない / 環境差が出る項目は警告に置く。失格に混ぜると
 // 「常に赤い検査」になり、本物の欠陥が埋もれる。
 report.warnings = [];
-const warn = (id, detail) => report.warnings.push({ id, ...detail });
+const warn = (id, detail) => { if (applies.has(id)) report.warnings.push({ id, ...detail }); };
 for (const r of report.runs) {
   const at = `${r.scheme}/${r.width}px`;
   if (!r.design.targetCount) fail('zero-targets', {at});
@@ -990,7 +982,7 @@ for (const r of report.runs) {
   if (r.consoleErrors.length)
     fail("console-error", { at, sample: r.consoleErrors.slice(0, 3) });
   if (r.fold.h1Visible === false) fail("fold-h1", { at });
-  if (profile === 'lp' && r.fold.primaryCtaVisible === false && !r.fold.hasStickyCta)
+  if (r.fold.primaryCtaVisible === false && !r.fold.hasStickyCta)
     fail("fold-cta", { at });
   for (const im of r.imageLightness) {
     // 切り取り率は要素の寸法から出るので、画素が測れなくても判定する

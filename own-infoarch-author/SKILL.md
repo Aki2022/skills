@@ -1,18 +1,18 @@
 ---
 name: own-infoarch-author
-description: "成果物ごとの infoarch（outline：target・メッセージ・セクション・文案）を、承認済みの positioning（own-positioning-author）と docs/dictionary/ の辞書の id を引いて読み書きし、Web サイト・LP・チラシ・ポスター・資料を作るときに、誰に・何を・どの順で・どう話すかをそろえる。描画後の確認・意味の判定・出荷ゲートも持つ。「情報設計を作って」「伝え方をそろえて」「SSOT から LP の構成を作って」「メッセージを整理して」「info_arch を検査して」で使う。positioning（セグメント・提供価値・承認）は own-positioning-author、見た目は own-design-author と工場 skill（own-web-build 等）。"
+description: "成果物ごとの infoarch（outline：target・メッセージ・セクション・文案）を、承認済みの positioning（own-positioning-author）と docs/dictionary/ の辞書の id を引いて読み書きし、Web サイト・LP・チラシ・ポスター・資料を作るときに、誰に・何を・どの順で・どう話すかをそろえる。描画後の確認・意味の判定・出荷ゲートも持つ。「情報設計を作って」「伝え方をそろえて」「SSOT から LP の構成を作って」「メッセージを整理して」「infoarch を検査して」で使う。positioning（セグメント・提供価値・承認）は own-positioning-author、見た目は own-design-author と工場 skill（own-web-build 等）。"
 ---
 
 # own-infoarch-author — outline（成果物ごとの infoarch）
 
-infoarch は 3 つの layer の真ん中で、成果物ごとに決める「何を・どの順で」。この skill は、承認済みの positioning（own-positioning-author。`design/info_arch/info_arch.yaml`）と辞書（`docs/dictionary/`）から、成果物ごとの
+infoarch は 3 つの layer の真ん中で、成果物ごとに決める「何を・どの順で」。この skill は、承認済みの positioning（own-positioning-author。`ux/positioning/positioning.yaml`）と辞書（`docs/dictionary/`）から、成果物ごとの
 **outline**（1 ページ＝1 outline）を作り（作る側）、outline の失格・id・別案の差分を検査する（保守する側）。positioning の検査もこの skill の `check` が一緒に走らせる（outline が指す経路だけが出荷を止めるため）。
 工場 skill はアウトラインを受け取って描画するだけで、情報設計の判断はしない。描画した物は `evaluate` で、
 設計どおりか（文言・順序・固定値は決定論、意味は Jev の判定台帳）を確かめ、warn / error を出す。
 
 ## 重要ルール
 
-- **承認の状態を書かない。** `info_arch.yaml` の `state` は `empty` / `proposed` だけ。positioning の変更も、検査が緑なら
+- **承認の状態を書かない。** `ux/positioning/positioning.yaml` の `state` は `empty` / `proposed` だけ。positioning の変更も、検査が緑なら
   他の変更と同じく自律マージする（人のレビューは置かない）。値の出所は `provenance` に必ず書く。
 - **制作中に positioning を書き換えない。** 足りない・合わないと分かったら、outline を直すか、positioning の変更をオーナーに提案する（承認はオーナーが提供価値ごとの経路で。依頼のページは own-positioning-author が作る）。
 - **固定値と正式名称は辞書の id で書く。** アウトラインの文案では、数値・連絡先・免責などは `{{value-<辞書の id>}}` で参照し、値を直接書かない。製品名などは辞書の `name` の表記で書く。声（repo 全体の話し方の正典）は無い。トーンは outline の `tone`。
@@ -20,7 +20,7 @@ infoarch は 3 つの layer の真ん中で、成果物ごとに決める「何�
 
 ## プロダクト UI は blueprint で書く
 
-ログイン後の画面・ダッシュボード・操作が主目的の成果物（プロダクト UI）の infoarch は、outline ではなく **blueprint**（`design/info_arch/blueprint/`）。型は SPEC-product-ui-infoarch（biz_ops の `docs/specs/product-ui-infoarch.md`）、契約は `references/contract.md` の「blueprint」。
+ログイン後の画面・ダッシュボード・操作が主目的の成果物（プロダクト UI）の infoarch は、outline ではなく **blueprint**（`ux/infoarch/blueprint/`）。型は SPEC-product-ui-infoarch（biz_ops の `docs/specs/product-ui-infoarch.md`）、契約は `references/contract.md` の「blueprint」。
 
 - `product.yaml`（プロダクトに 1 つ）：ストーリー・原則（並べ方の原則を含む）・制約（やらないこと）・オブジェクトと主役・入口。**オーナーが 1 件ずつ承認する**（行のキーは `ia:item:<項目 id>`、ハッシュは項目 1 件の中身だけ。1 件足しても、ほかの承認は外れない）。AI は案を作ってよいが、承認の台帳に記録するのは、オーナーの承認の言葉と日付があるものだけ。
 - `screens/<scr-…>.yaml`（画面ごと。AI が作る）：応えるストーリー、グループ（並べ方の原則が正当化する）と領域（優先度・中身の種類 `shape`）、主操作（ちょうど 1 つ）、状態、移動先。承認済みの項目の id だけを引く。位置・幅・部品は書かない（design の割り付け規則。部品の選択も design）。
@@ -29,7 +29,7 @@ infoarch は 3 つの layer の真ん中で、成果物ごとに決める「何�
 
 ## 作る：依頼からアウトラインまでの 6 段
 
-依頼を受けたら、次の 6 段を順に行い、`design/info_arch/outlines/<成果物 id>.yaml` を書く。各段では、その段のファイルと、作る媒体のファイルだけを読む。
+依頼を受けたら、次の 6 段を順に行い、`ux/infoarch/outlines/<成果物 id>.yaml` を書く。各段では、その段のファイルと、作る媒体のファイルだけを読む。
 
 | 段 | 読むファイル | アウトラインに書くもの |
 | --- | --- | --- |
@@ -45,7 +45,7 @@ infoarch は 3 つの layer の真ん中で、成果物ごとに決める「何�
 
 - 小さな依頼（単発のチラシなど）は `references/light-process.md` に従って簡略にしてよい。段 1 と段 6 は省かない。
 - 新しい repo で SSOT が空なら、先に `references/bootstrap.md` に従って既存の資料から下書きを起こし、検査を緑にしてマージする。
-- 例：`references/examples/design/info_arch/` に、2 つのセグメントの positioning と、それぞれに立つ outline（LP と資料）がある。
+- 例：`references/examples/ux/` に、2 つのセグメントの positioning と、それぞれに立つ outline（LP と資料）がある。
 
 ノウハウの数値に「出典なし・目安」とあるものは、検査に使わない。
 
@@ -62,7 +62,7 @@ infoarch-author evaluate --root . [--outline lp-xxx]   # 作った物の評価�
 infoarch-author evaluate --root . --outline lp-xxx --acquire --answers-dir DIR --limit 50 [--execute]  # 足りない Jev 判定を上限つきで取って台帳に記録し、評価し直す（--execute が無ければ見積もりだけ）
 infoarch-author ship --root . --channel web   # 出荷の正式の入口。出荷されるコミット（git の中身）で tree → check → dom → judge が緑の時だけ ship_command を実行する
 infoarch-author ship --root . --doctor        # ship_command・merge_base の無い出荷チャネル、pre-push の未導入、拡張の失格を伝えない dispatcher を失格にする
-infoarch-author maintain --root .             # セッション終了の Step 2.5。design/info_arch/ が無ければ 1 行で skip
+infoarch-author maintain --root .             # セッション終了の Step 2.5。ux/infoarch/ も ux/positioning/ も無ければ 1 行で skip
 infoarch-author set --root . --outline lp-xxx   # set の id（outline の id＋指す経路の id）と、outline の要素ごとのハッシュ
 infoarch-author diff --root . --a lp-a --b lp-b [--root-b DIR] [--dom-a A.json --dom-b B.json]  # 2 つの set の差分（変わった要素・層・同じ試験か）。印の外の文の違いは失格
 infoarch-author answer-key --root . --out DIR      # 意味の判定（文案 × 提供価値）の正解表：組・Jev の候補・オーナーが ○× を付けるページ
@@ -79,11 +79,11 @@ push される各コミットそのものと、その予測マージ木で止ま
 
 `scripts/infoarch-author` を PATH に置き、PyYAML と jsonschema のある Python を `DESIGN_AUTHOR_PYTHON` で選ぶ
 （自動インストールしない。無ければ終了コード 2）。repo の設定にローカルパスを書かない。
-新しい repo では `templates/design/info_arch/`（チャネルと散文）と own-positioning-author の `templates/design/info_arch/info_arch.yaml` を写す。
+新しい repo では `templates/infoarch/`（チャネルと散文）を `ux/infoarch/` に、own-positioning-author の `templates/positioning/positioning.yaml` を `ux/positioning/` に写す。
 
 ## 参照
 
 - `references/contract.md` — ディレクトリ・アウトラインの契約、辞書との関係、検査の code 一覧、期限の扱い、描画物の確認（工場が埋めるアンカー）、意味の判定（判定台帳）。positioning の契約は own-positioning-author の `references/contract.md`。
-- `references/schema/` — `channels/*.yaml`（版 2）・`outlines/*.yaml`（版 3）の JSON Schema。positioning（`info_arch.yaml`）の schema は own-positioning-author。
+- `references/schema/` — `channels/*.yaml`（版 2）・`outlines/*.yaml`（版 3）の JSON Schema。positioning（`ux/positioning/positioning.yaml`）の schema（ファイル名は `info_arch.v5.schema.json` のまま）は own-positioning-author。
 - `references/expiry.json` — 証拠の期限の初期値（固定値の期限は辞書が持つ）。
 - `fixtures/red-cases.json`・`outline-red-cases.json`・`migrate-red-cases.json`（と own-positioning-author の `positioning-red-cases.json`。ここでも outline 付きで走らせる）— 必須の赤ケースと、失格条件（移行では移しそこねの条件）との対応表。自己テストは `uv run --no-project --with-requirements <skill>/scripts/tests/requirements.txt -- pytest -q <skill>/scripts/tests`。

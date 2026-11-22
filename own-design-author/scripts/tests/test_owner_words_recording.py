@@ -3,7 +3,7 @@
 Recording is refused without the owner's own approval words and the date they were given, and the date must be the
 one in the reviewed request. The value hashes are recomputed right before writing. Positioning is approved before any
 outline exists, so a positioning-only IA (no outlines yet) can be prepared and recorded, also in a repository with
-no design/design.yaml at all.
+no design layer (design.yaml) at all.
 """
 import copy
 import json
@@ -14,6 +14,7 @@ import sys
 import pytest
 
 from test_core import SKILL, approve, check, project, write
+import layer_paths as lp  # noqa: E402  (test_core puts scripts/ on the path)
 from owner_approval import approve_request, prepare
 
 IA = SKILL.parent / 'own-infoarch-author'
@@ -36,7 +37,7 @@ def future_dictionary():
 
 
 def ia_only(tmp_path):
-    """A repository with design/info_arch only: no design.yaml, no outlines, nothing approved yet."""
+    """A repository with the positioning and infoarch layers only: no design.yaml, no outlines, nothing approved yet."""
     root = tmp_path / 'ia-only'
     root.mkdir()
     subprocess.run(['git', 'init', '-q', str(root)], check=True)
@@ -54,7 +55,7 @@ def ia_keys(root):
 
 
 def ledger(root):
-    path = root / 'design/approvals.yaml'
+    path = lp.path(root, 'ledger')
     return json.loads(path.read_text()) if path.is_file() else None
 
 
@@ -113,9 +114,9 @@ def test_positioning_without_outlines_can_be_prepared_in_a_design_repository(pro
     approve(project)
     root, catalogs = project
     FIXTURE['write_repo'](root, ssot(), outlines=(), confirmed=False, dictionary=future_dictionary())
-    config = json.loads((root / 'design/design.yaml').read_text())
+    config = json.loads(lp.path(root, 'design_config').read_text())
     config['modules'] = {'ia': '0.4.0'}
-    write(root / 'design/design.yaml', config)
+    write(lp.path(root, 'design_config'), config)
     assert any(e.startswith('IA_NO_OUTLINES') for e in check(project)['errors'])
     request = prepare(root, catalogs, targets=ia_keys(root), when=DAY)
     assert {r['key'] for r in request['rows']} == set(ia_keys(root))
@@ -125,7 +126,7 @@ def test_ia_only_repository_prepares_and_records_without_design_yaml(tmp_path):
     root = ia_only(tmp_path)
     keys = ia_keys(root)
     request = prepare(root, None, targets=keys, when=DAY)
-    assert len(request['rows']) == len(keys) and not (root / 'design/design.yaml').exists()
+    assert len(request['rows']) == len(keys) and not lp.path(root, 'design_config').exists()
     out = approve_request(root, None, request, 'owner', owner_words=WORDS, approved_on=DAY)
     assert out['recorded_rows'] == len(keys)
     assert {r['key'] for r in ledger(root)} == set(keys)
@@ -139,7 +140,7 @@ def test_ia_only_change_after_review_is_refused_before_write(tmp_path):
     request = prepare(root, None, targets=ia_keys(root), when=DAY)
     changed = ssot()
     changed['strengths']['str-0001']['text'] = '自動更新で保守がほぼ要らない'
-    FIXTURE['dump'](root / 'design/info_arch/info_arch.yaml', changed)
+    FIXTURE['dump'](lp.path(root, 'positioning_file'), changed)
     with pytest.raises(ValueError, match='reviewed inputs changed'):
         approve_request(root, None, request, 'owner', owner_words=WORDS, approved_on=DAY)
     assert ledger(root) is None
@@ -147,7 +148,7 @@ def test_ia_only_change_after_review_is_refused_before_write(tmp_path):
 
 def test_ia_only_refuses_a_structural_error(tmp_path):
     root = ia_only(tmp_path)
-    (root / 'design/info_arch/info_arch.yaml').write_text('schema_version: [', encoding='utf-8')
+    lp.path(root, 'positioning_file').write_text('schema_version: [', encoding='utf-8')
     with pytest.raises(ValueError, match='repair structural'):
         prepare(root, None, targets=['ia:path:val-0001'], when=DAY)
 
@@ -173,6 +174,6 @@ def test_a_broken_arrow_still_refuses_prepare(tmp_path):
     root = ia_only(tmp_path)
     broken = ssot()
     broken['edges'].append(copy.deepcopy(broken['edges'][0]))  # the same arrow twice is damage, not an approval gap
-    FIXTURE['dump'](root / 'design/info_arch/info_arch.yaml', broken)
+    FIXTURE['dump'](lp.path(root, 'positioning_file'), broken)
     with pytest.raises(ValueError, match='repair structural'):
         prepare(root, None, targets=ia_keys(root)[:1], when=DAY)

@@ -1,7 +1,7 @@
 """blueprint: the infoarch of a product UI (token 0).
 
 SPEC-product-ui-infoarch (and SPEC-deliverable-production-layers requirements 3, 4 and 5). Two kinds of files under
-design/info_arch/blueprint/:
+ux/infoarch/blueprint/:
 
 - `product.yaml`, one per product: stories, principles, constraints, objects (one of them the lead) and entries. The
   owner approves each item on its own: the approval row is `ia:item:<item id>` and its hash covers that item's
@@ -39,7 +39,7 @@ CONSTRAINT_FORM = re.compile(r'.*ない[。.]?\Z', re.S)  # the negative form (�
 @dataclass
 class Blueprint:
     root: Path
-    present: bool = False  # design/info_arch/blueprint/ exists
+    present: bool = False  # ux/infoarch/blueprint/ exists
     product: dict | None = None
     product_rel: Path = PRODUCT_PATH
     screens: dict = field(default_factory=dict)  # screen id -> (rel path, data)

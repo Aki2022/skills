@@ -65,15 +65,17 @@ def test_design_ship_follows_a_renamed_layer_root(tmp_path):
         data['entries'] = {k: v.replace(ROOT, renamed, 1) for k, v in data['entries'].items()}
     skills = copy_skills(tmp_path / 'skills', ALL_SKILLS, mutate)
     repo = git_init(tmp_path / 'repo')
-    (repo / renamed).mkdir()
-    (repo / renamed / 'design.yaml').write_text('{}')
+    moved_config = repo / json.loads((skills / 'own-design-author/references/layer-paths.json').read_text())['entries']['design_config']
+    assert moved_config.relative_to(repo).parts[0] == renamed
+    moved_config.parent.mkdir(parents=True)
+    moved_config.write_text('{}')
     result = run([skills / 'own-design-author/scripts/design-ship', '--repo', repo, '--doctor'])
     out = json.loads(result.stdout)
     assert any('no ship:true channels' in e for e in out['errors']), 'the renamed config was not read: ' + result.stdout
     assert not (repo / ROOT).exists(), 'a command wrote the old root'
     plain = git_init(tmp_path / 'plain')
-    (plain / ROOT).mkdir()
-    (plain / ROOT / 'design.yaml').write_text('{}')
+    (plain / LAYOUT['entries']['design_config']).parent.mkdir(parents=True)
+    (plain / LAYOUT['entries']['design_config']).write_text('{}')
     baseline = json.loads(run([SCRIPTS / 'design-ship', '--repo', plain, '--doctor']).stdout)
     assert baseline['errors'] == out['errors']  # same behaviour before and after the rename
 

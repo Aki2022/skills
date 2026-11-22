@@ -24,6 +24,8 @@ for p in (ROOT / 'own-infoarch-author/scripts/tests', ROOT / 'own-positioning-au
 import audit_screen  # noqa: E402
 import audit_html  # noqa: E402
 import build_screen  # noqa: E402
+sys.path.insert(0, str(ROOT / 'own-design-author/scripts'))
+import layer_paths  # noqa: E402  (the one rule for where a repository keeps its layers)
 from blueprint_fixtures import OVERVIEW, PERSON, PRODUCT, write_blueprint  # noqa: E402
 
 
@@ -32,14 +34,15 @@ PW_HOME = Path(os.environ.get('OWN_PLAYWRIGHT_HOME') or Path.home() / '.cache' /
 
 
 def pinned_project(tmp_path_factory):
-    """A project directory whose design/render-environment.json pins the Playwright version installed on this machine
+    """A project directory whose render environment file (layer-paths.json `render_environment`) pins the Playwright version installed on this machine
     (the fixed environment the measuring runs in). None when there is none."""
     versions = sorted(p.name for p in PW_HOME.iterdir() if (p / 'node_modules/playwright').is_dir()) if PW_HOME.is_dir() else []
     if not versions:
         return None
     project = tmp_path_factory.mktemp('pw-project')
-    (project / 'design').mkdir()
-    (project / 'design/render-environment.json').write_text(json.dumps({'runtime': {'playwright_version': versions[-1]}}), encoding='utf-8')
+    environment = layer_paths.path(project, 'render_environment')
+    environment.parent.mkdir(parents=True)
+    environment.write_text(json.dumps({'runtime': {'playwright_version': versions[-1]}}), encoding='utf-8')
     return project
 
 

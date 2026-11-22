@@ -1,7 +1,7 @@
 """own-positioning-author CLI: check, positioning, targets, migrate-approvals, review, request.
 
 The positioning layer is the owner-approved core of what a repository says: segments, jobs, pains, gains, alternatives,
-categories, strengths, values and evidence, with the arrows between them (design/info_arch/info_arch.yaml, schema 5).
+categories, strengths, values and evidence, with the arrows between them (ux/positioning/positioning.yaml, schema 5).
 This CLI reads and checks it alone. It never writes an approval: the owner approves per value path through
 own-design-author's ledger, and the request it shows the owner is built here from the same data the hash binds.
 """

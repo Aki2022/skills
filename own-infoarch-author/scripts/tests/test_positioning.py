@@ -21,6 +21,7 @@ import check as ia_check  # noqa: E402
 import positioning  # noqa: E402
 from ia_fixtures import apply  # noqa: E402,F401  (the red cases' operations live with the positioning fixture)
 from test_check import SKILL, SSOT, check, cli, codes, dump, write_repo  # noqa: E402
+import layer_paths  # noqa: E402  (own-design-author's layer rule: where each layer lives)
 
 TABLE = json.loads((SKILL.parent / 'own-positioning-author/fixtures/positioning-red-cases.json').read_text(encoding='utf-8'))
 CONDITIONS = {c['id']: c for c in TABLE['conditions']}
@@ -40,7 +41,7 @@ def write_case(root, case):
     confirm(root, ssot, skip=unapproved)
     if case.get('after'):
         changed, _ = apply(case['after'], ssot)
-        dump(root / 'design/info_arch/info_arch.yaml', changed)
+        dump(layer_paths.path(root, 'positioning_file'), changed)
 
 
 def model(ssot=SSOT, approve_all=True, skip=()):
@@ -251,7 +252,7 @@ def test_cli_ids_through_files_ignore_order_and_copy_provenance(tmp_path):
     assert one['gaps'] == ['gan-0001', 'pan-0001'] and one['parity'] == ['gan-0002'] and one['category'] == 'cat-0001'
 
     write_repo(tmp_path / 'b')
-    path = tmp_path / 'b/design/info_arch/info_arch.yaml'
+    path = layer_paths.path(tmp_path / 'b', 'positioning_file')
     data = yaml.safe_load(path.read_text(encoding='utf-8'))
     data['edges'] = list(reversed(data['edges']))
     data['alternatives']['alt-0003'].pop('copied_from')

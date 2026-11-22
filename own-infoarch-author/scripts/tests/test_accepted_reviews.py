@@ -2,7 +2,7 @@
 
 A score at or above theta goes to a human as IA_JUDGE_REVIEW. When the owner reads the copy and accepts it, the AI
 records that decision with the owner's words (ADR-20261118-ai-records-owner-approvals, biz_ops) in
-design/info_arch/accepted_reviews.yaml, bound to the judgment hash. An accepted review is no longer a warning; it is
+ux/infoarch/accepted_reviews.yaml (the layout rule's `accepted_reviews`), bound to the judgment hash. An accepted review is no longer a warning; it is
 reported as accepted. Changing the copy (or its context) changes the hash, so the record stops applying and the review
 comes back. The shared judgment ledger keeps its shape.
 """
@@ -13,12 +13,13 @@ import pytest
 
 from test_check import DATE, OUTLINE, dump
 from test_judge import candidates, cli, dom_report, jl, repo, write_ledger  # noqa: F401  (repo is a fixture)
+import layer_paths  # noqa: E402  (own-design-author's layer rule: where each layer lives)
 
 FLAGGED = 'ia-name-variant:lp-municipal/sec-0001/cpy-0002'
 OTHER = 'ia-unregistered-claim:lp-municipal/sec-0001/cpy-0001'
 WORDS = '認める'
 DAY = '2026-11-18'
-FILE = 'design/info_arch/accepted_reviews.yaml'
+FILE = layer_paths.rel('accepted_reviews')
 
 
 @pytest.fixture
@@ -79,7 +80,7 @@ def test_changed_copy_brings_the_review_back(flagged, tmp_path):
     assert accept(root, report, FLAGGED)[0] == 0
     changed = copy.deepcopy(OUTLINE)
     changed['copies']['cpy-0002']['text'] = '運用の手間がかなり減ります'
-    dump(root / 'design/info_arch/outlines/lp-municipal.yaml', changed)
+    dump(layer_paths.path(root, 'infoarch', 'outlines', 'lp-municipal.yaml'), changed)
     _, _, rows = candidates(root, '--dom-report', str(report))
     theta = jl.load_policy()['theta']
     write_ledger(root, [{'candidate': r, 'score': theta if r['id'] in (FLAGGED, OTHER) else 0.0} for r in rows])

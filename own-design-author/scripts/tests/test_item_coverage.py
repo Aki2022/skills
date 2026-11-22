@@ -9,18 +9,19 @@ import sys
 import pytest
 
 from test_core import project, write, check, approve, item, SKILL  # noqa: F401  (fixture reuse)
+import layer_paths as lp  # noqa: E402  (test_core puts scripts/ on the path)
 from classify import load_policy, classify_response
 from item_checks import load_map, document_key, heading_path, L2_GATED, COLLECTED
 
 
 def set_items(root, items):
-    config = json.loads((root / 'design/design.yaml').read_text())
+    config = json.loads(lp.path(root, 'design_config').read_text())
     config['items'] = items
-    write(root / 'design/design.yaml', config)
+    write(lp.path(root, 'design_config'), config)
 
 
 def doc_section(root, anchor, body):
-    path = root / 'design/DESIGN.md'
+    path = lp.path(root, 'design_dir', 'DESIGN.md')
     path.write_text(path.read_text() + f'\n\n## {anchor}\n\n{body}\n')
 
 
@@ -51,9 +52,9 @@ def approve_item(project):
 
 
 def add_tokens(root, extra):
-    tokens = json.loads((root / 'design/tokens/brand.tokens.json').read_text())
+    tokens = json.loads(lp.path(root, 'design_dir', 'tokens/brand.tokens.json').read_text())
     tokens.update(extra)
-    write(root / 'design/tokens/brand.tokens.json', tokens)
+    write(lp.path(root, 'design_dir', 'tokens/brand.tokens.json'), tokens)
 
 
 def dimension(value, unit='px'):
@@ -135,7 +136,7 @@ def test_nice_to_have_item_with_uncovered_rule_fails_ship(project):
     root, catalogs = project
     write(catalogs / 'test-v1.json', {'schema_version': 1, 'version': 'test-v1', 'items': [item(grade='nice-to-have')]})
     set_items(root, {'dads-000001': {'state': 'defined', 'evidence': ['rule:contrast-text']}})
-    write(root / 'design/checks/web.yaml', {'rules': [{'id': 'contrast-text', 'kind': 'contrast',
+    write(lp.path(root, 'checks', 'web.yaml'), {'rules': [{'id': 'contrast-text', 'kind': 'contrast',
         'targets': ['body'], 'minimum': 4.5}]})
     result = check(project, ship=True)
     assert result['exit_code'] == 2
@@ -162,8 +163,8 @@ def rendered(project, tmp_path):
     env = dict(os.environ, DESIGN_AUDIT_NODE=os.environ['DESIGN_TEST_NODE'])
     if os.environ.get('DESIGN_TEST_NODE_MODULES'):
         env['NODE_PATH'] = os.environ['DESIGN_TEST_NODE_MODULES']
-    write(root / 'design/render-environment.json', pin(root, env))
-    tokens = json.loads((root / 'design/tokens/brand.tokens.json').read_text())
+    write(lp.path(root, 'render_environment'), pin(root, env))
+    tokens = json.loads(lp.path(root, 'design_dir', 'tokens/brand.tokens.json').read_text())
     for name, components, hex_value, alpha in [('white', [1, 1, 1], '#ffffff', 1), ('clear', [0, 0, 0], '#000000', 0)]:
         tokens['color'][name] = {'$value': {'colorSpace': 'srgb', 'components': components, 'hex': hex_value, 'alpha': alpha},
                                  '$extensions': {'org.own.design': {'origin': 'proposal'}}}
@@ -171,8 +172,8 @@ def rendered(project, tmp_path):
     tokens['radius'] = dimension(0)
     tokens['size'] = dimension(32)
     tokens['body'] = dimension(16)
-    write(root / 'design/tokens/brand.tokens.json', tokens)
-    write(root / 'design/validation.json', {'schema_version': 1, 'html': ['index.html'],
+    write(lp.path(root, 'design_dir', 'tokens/brand.tokens.json'), tokens)
+    write(lp.path(root, 'validation'), {'schema_version': 1, 'html': ['index.html'],
           'urls': [{'env': 'DESIGN_FIXTURE_URL'}], 'viewports': [375], 'schemes': ['light']})
     stub = tmp_path / 'fm'
     stub.write_text(STUB.replace("if mode == 'drop'", "open(os.environ['STUB_ARGS'], 'a').write(json.dumps(sys.argv) + '\\n')\nif mode == 'drop'"))
@@ -209,7 +210,7 @@ def test_afm_judges_only_leftover_items_on_the_l2_capture(rendered, project):
     assert code == 1, result
     assert stages(result) == ['L0', 'L1', 'L2', 'ITEMS', 'AFM']
     assert result['stages'][-1]['judged'] == 1
-    record = json.loads((root / 'design/.resolved/afm.json').read_text())
+    record = json.loads(lp.path(root, 'resolved', 'afm.json').read_text())
     assert record['pairs'] == [['dads-000001', 'DESIGN_FIXTURE_URL']]
     calls = [json.loads(line) for line in (tmp_path / 'args.json').read_text().splitlines()]
     images = [a for argv_ in calls for a in argv_ if a.endswith('.png')]
@@ -242,11 +243,11 @@ def test_mapped_item_is_enforced_by_code_and_names_the_item(rendered, project):
     code, result = run('<p style="padding:16px">ok</p>')
     assert code in (0, 1), result
     assert stages(result) == ['L0', 'L1', 'L2', 'ITEMS']
-    items = json.loads((root / 'design/.resolved/items.json').read_text())
+    items = json.loads(lp.path(root, 'resolved', 'items.json').read_text())
     assert items['machine'] == {'dads-000001': {'DESIGN_FIXTURE_URL': 'pass'}}
     code, result = run('<p style="padding:13px">off scale</p>')
     assert code == 2, result
     assert any(e.startswith('DESIGN_FIXTURE_URL: palette:spacing') and '13px' in e and e.endswith('breaks adopted items dads-000001')
                for e in result['errors']), result['errors']
-    items = json.loads((root / 'design/.resolved/items.json').read_text())
+    items = json.loads(lp.path(root, 'resolved', 'items.json').read_text())
     assert items['machine'] == {'dads-000001': {'DESIGN_FIXTURE_URL': 'fail'}}

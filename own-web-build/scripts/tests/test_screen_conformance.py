@@ -113,31 +113,45 @@ def test_the_built_page_passes_every_structural_constraint_of_the_html_media(bui
     assert [label for ok, label in results if not ok] == []
 
 
+def _hex(value):
+    value = value.strip().lstrip('#')
+    value = ''.join(c * 2 for c in value) if len(value) == 3 else value
+    return [int(value[k:k + 2], 16) for k in (0, 2, 4)]
+
+
+def _kit_ratios(pairs):
+    """The ratios of colour pairs, from the design skill's contrast kit (the one place the arithmetic is written)."""
+    node = shutil.which(os.environ.get('DESIGN_TEST_NODE', 'node'))
+    if not node:
+        pytest.skip('node is not installed, so the contrast kit cannot be run')
+    kit = (ROOT / 'own-design-author/scripts/contrast_kit.mjs').as_uri()
+    script = (f'import {{contrastKit}} from {json.dumps(kit)};'
+              'const rows = JSON.parse(process.argv[1]);'
+              'console.log(JSON.stringify(rows.map(([a, b]) => contrastKit.ratio(a, b))));')
+    out = subprocess.run([node, '--input-type=module', '-e', script, json.dumps(pairs)], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    return json.loads(out.stdout)
+
+
 def test_the_built_page_meets_the_text_contrast_in_the_light_and_the_dark_theme(built):
-    """What the build draws in the light theme is pinned twice: by the page's own `:root` values (body text, the outlined action and
-    the filled primary action, in both themes) and by audit_html's L1 contrast check, which judges the base and the dark
-    `prefers-color-scheme` theme separately (it used to resolve `:root` last-wins and judged only the dark pairs; found when the L1
-    advisories of built screens were read)."""
+    """What the build draws is pinned by the page's own `:root` values (body text, the outlined action and the filled primary
+    action, in both themes), measured with the contrast kit. audit_html no longer judges contrast: it is measured once, after
+    rendering."""
     page, _ = built
     css = re.search(r'<style>(.*?)</style>', page, re.S).group(1)
     base = re.search(r'(?<![\w-])(?<!\{):root\{([^}]*)\}', css).group(1)
     dark = re.search(r'prefers-color-scheme:dark\)\{:root\{([^}]*)\}', css).group(1)
     minimum = 4.5
+    labels, pairs = [], []
     for name, block in (('light', base), ('dark', dark)):
         v = dict(re.findall(r'--([\w-]+):([^;]+)', block))
-        pairs = {'body': (v['fg'], v['bg']), 'outlined action': (v['accent'], v['bg']), 'primary action': (v['bg'], v['accent'])}
-        assert len(pairs) == 3
-        for what, (fg, bg) in pairs.items():
-            ratio = audit_html.contrast_ratio(audit_html.parse_color(fg), audit_html.parse_color(bg))
-            assert ratio >= minimum, f'{name} theme, {what}: {fg} on {bg} = {ratio:.2f}:1 (min {minimum})'
-    results = audit_html.check_contrast(page, minimum)
-    assert [label for ok, label in results if not ok] == []
-    judged = ' '.join(label for _, label in results)
-    # L1 judges a pair only when one rule sets both colours: body text and the filled primary action (the outlined action has no background)
-    for fg, bg in (('fg', 'bg'), ('bg', 'accent')):
-        for block in (base, dark):
-            v = dict(re.findall(r'--([\w-]+):([^;]+)', block))
-            assert f'{v[fg]} on {v[bg]}' in judged, f'L1 did not judge {v[fg]} on {v[bg]}'
+        for what, (fg, bg) in {'body': (v['fg'], v['bg']), 'outlined action': (v['accent'], v['bg']),
+                               'primary action': (v['bg'], v['accent'])}.items():
+            labels.append(f'{name} theme, {what}: {fg} on {bg}')
+            pairs.append([_hex(fg), _hex(bg)])
+    assert len(pairs) == 6
+    for label, ratio in zip(labels, _kit_ratios(pairs)):
+        assert ratio >= minimum, f'{label} = {ratio:.2f}:1 (min {minimum})'
 
 
 def test_the_build_refuses_a_failing_blueprint_and_an_existing_file(tmp_path):

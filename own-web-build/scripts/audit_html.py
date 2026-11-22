@@ -12,12 +12,12 @@ media/html の type: constraint を機械検証する。LLMの自己申告に頼
 
 検証範囲:
   - 完全に機械判定できる構造制約（lang / viewport / landmark / svg-label / focus / img-alt）
-  - 判定可能な範囲のコントラスト（同一ルール内 color+background、CSS変数解決を含む）
-外部 <link rel="stylesheet"> のローカルCSSも読み、@media/focus/リテラルcolor+background を評価する
+外部 <link rel="stylesheet"> のローカルCSSも読み、@media/focus を評価する
 （実サイトのように CSS を別ファイルに分けても誤検出しない）。
-コントラストは、基底と @media (prefers-color-scheme:dark|light) の各テーマを別々に判定する。
-画像上テキスト・グラデーション・CSS変数のテーマ切替(data-theme)・JS動的スタイルは判定不能。
-その分は [自己点検]（validators/common/contrast.md）に委ねる旨を出力する。
+コントラストはここでは判定しない。描画後の実測（own-web-build の measure_render.mjs）だけが持ち、
+計算は own-design-author の contrast_kit.mjs の 1 か所にある。以前はここで CSS の文字列から静的に
+も測っていて、同じ式が 2 か所にあった（静的な判定は、リテラルの色の組しか読めず、描画後の結果と食い違えた）。
+出力には「コントラストは未カバー」と必ず書く。
 """
 import argparse
 import json
@@ -43,179 +43,6 @@ class Targets(HTMLParser):
             self.count += 1
 
 
-# ---------- contrast ----------
-def _srgb_to_lin(c):
-    c = c / 255.0
-    return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
-
-
-def _luminance(rgb):
-    r, g, b = rgb
-    return 0.2126 * _srgb_to_lin(r) + 0.7152 * _srgb_to_lin(g) + 0.0722 * _srgb_to_lin(b)
-
-
-def contrast_ratio(fg, bg):
-    l1, l2 = _luminance(fg), _luminance(bg)
-    hi, lo = max(l1, l2), min(l1, l2)
-    return (hi + 0.05) / (lo + 0.05)
-
-
-_NAMED = {
-    "white": (255, 255, 255), "black": (0, 0, 0), "red": (255, 0, 0),
-    "gray": (128, 128, 128), "grey": (128, 128, 128), "silver": (192, 192, 192),
-    "transparent": None,
-}
-
-
-def parse_color(v):
-    """CSS色文字列を (r,g,b) に。解決できなければ None。"""
-    if v is None:
-        return None
-    v = v.strip().lower()
-    if v in _NAMED:
-        return _NAMED[v]
-    m = re.fullmatch(r"#([0-9a-f]{3})", v)
-    if m:
-        h = m.group(1)
-        return tuple(int(c * 2, 16) for c in h)
-    m = re.fullmatch(r"#([0-9a-f]{6})", v)
-    if m:
-        h = m.group(1)
-        return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
-    # rgb()/rgba(): アルファが 1 未満なら背景合成が必要で判定不能 → None
-    m = re.match(r"rgba?\(\s*([0-9]+)\s*,\s*([0-9]+)\s*,\s*([0-9]+)\s*(?:,\s*([0-9.]+)\s*)?\)", v)
-    if m:
-        if m.group(4) is not None and float(m.group(4)) < 1.0:
-            return None  # 半透明は合成なしに判定できない（[自己点検]へ）
-        return tuple(int(m.group(i)) for i in (1, 2, 3))
-    return None
-
-
-_SCHEME_MEDIA = re.compile(r"@media[^{]*prefers-color-scheme\s*:\s*(dark|light)\b[^{]*\{", re.I)
-
-
-def split_scheme_media(text):
-    """`@media (prefers-color-scheme:dark|light){...}` の中身と、それ以外に分けて返す（base_text, {scheme: 中身}）。
-    波括弧の対応を数えて閉じ括弧を探す（入れ子の :root{} やルールの {} に惑わされない）。
-    閉じていなければ、末尾までをそのテーマの中身として扱う。"""
-    base, schemes, pos = [], {}, 0
-    while True:
-        m = _SCHEME_MEDIA.search(text, pos)
-        if not m:
-            base.append(text[pos:])
-            break
-        base.append(text[pos:m.start()])
-        depth, i = 1, m.end()
-        while i < len(text) and depth:
-            depth += (text[i] == "{") - (text[i] == "}")
-            i += 1
-        body = text[m.end():i - 1] if depth == 0 else text[m.end():]
-        scheme = m.group(1).lower()
-        schemes[scheme] = schemes.get(scheme, "") + body
-        pos = i
-    return "".join(base), schemes
-
-
-def _root_vars(text):
-    """:root {} の --var: value を後勝ちで集める。:root[data-theme=...] は :root\\s*\\{ に合わないので集めない。"""
-    varmap = {}
-    for block in re.findall(r":root\s*\{([^{}]*)\}", text):
-        for k, val in re.findall(r"(--[\w-]+)\s*:\s*([^;{}]+)", block):
-            varmap[k] = val.strip()
-    return varmap
-
-
-def themes(text):
-    """テキストの中のテーマを [(名前, そのテーマで効く CSS テキスト, 変数表)] で返す。
-
-    - base（基底）: prefers-color-scheme の @media を除いたテキストと、基底 :root の変数。基底が明るいか暗いかは問わない。
-    - dark / light: その @media (prefers-color-scheme:...) がある時だけ。基底のルールに、その media のルールを足した
-      テキストと、基底の変数をその media の :root で上書きした変数表。
-    media の中の :root を基底と同じ表に混ぜると後ろが勝ち、基底（や別テーマ）の組が判定されない（この関数が分ける理由）。
-    """
-    base_text, schemes = split_scheme_media(text)
-    base_vars = _root_vars(base_text)
-    if not base_vars and not re.search(r":root\s*\{", base_text):
-        # 基底 :root が無い場合は後方互換で全 --var を集める（単一テーマのHTML断片向け）
-        base_vars = {k: v.strip() for k, v in re.findall(r"(--[\w-]+)\s*:\s*([^;{}]+)", base_text)}
-    result = [("base", base_text, base_vars)]
-    for scheme in ("dark", "light"):
-        body = schemes.get(scheme, "")
-        if body.strip():
-            result.append((scheme, base_text + body, {**base_vars, **_root_vars(body)}))
-    return result
-
-
-def _substitute(text, varmap):
-    def sub(m):
-        name = m.group(1).strip()
-        fallback = m.group(2)
-        if name in varmap:
-            return varmap[name].strip()
-        return (fallback or "").strip()
-
-    return re.sub(r"var\(\s*(--[\w-]+)\s*(?:,\s*([^)]*))?\)", sub, text)
-
-
-def resolve_vars(text, theme="base"):
-    """指定テーマ（既定は base＝基底）の --var を集め、var(--x) を解決した文字列を返す（1段）。
-
-    @media (prefers-color-scheme:dark|light) の中の :root は別のテーマ（dark / light）として扱い、基底の表に混ぜない。
-    混ぜると後ろが勝ち、その値で基底の組が上書きされて判定されなかった。dark / light を指定した時は、基底の変数を
-    その media の :root で上書きした表で解決し、その media のルールも含めた文字列を返す。base の文字列には
-    prefers-color-scheme の @media の中身を含めない。
-    :root[data-theme=...]{} によるテーマ切替の変数は集めない。集めると最後に定義されたテーマ値が勝ち、別テーマの
-    背景と組み合わさった「実在しないペア」を誤検出するため。data-theme の切替は判定不能として
-    [自己点検]（validators/common/contrast.md）に委ねる。
-    基底 :root が無い場合は、後方互換で全 --var を集める（単一テーマのHTML断片向け）。
-    """
-    for name, css, varmap in themes(text):
-        if name == theme:
-            return _substitute(css, varmap)
-    raise ValueError(f"theme {theme!r} is not in this text")
-
-
-def per_theme(text, judge):
-    """テーマごとに var() を解決した文字列に judge(resolved) -> [(ok, label)] を当て、結果をまとめる。
-    base しかなければ従来どおり 1 回だけ。複数あるときは、全テーマに同じ組が出るものを 1 件にし、
-    一部のテーマにだけ出る組の label に [テーマ名] を付ける。"""
-    runs = [(name, judge(_substitute(css, varmap))) for name, css, varmap in themes(text)]
-    if len(runs) == 1:
-        return runs[0][1]
-    sets = [set(found) for _, found in runs]
-    merged, seen = [], set()
-    for (name, found), _ in zip(runs, sets):
-        for item in found:
-            ok, label = item
-            if all(item in other for other in sets):
-                if item not in seen:  # 全テーマ共通は 1 件
-                    seen.add(item)
-                    merged.append(item)
-            else:
-                merged.append((ok, f"{label} [{name}]"))
-    return merged
-
-
-def literal_color_pairs(css_text, minimum, source="css"):
-    """CSSテキストのルール単位で color+background の両指定を探し、解決可能なら判定を返す。
-    <style>ブロックでも外部CSSでも共通で使う。基底と prefers-color-scheme の各テーマ（dark / light）は別々に判定する。"""
-    def judge(resolved):
-        results = []
-        for block in re.findall(r"\{([^{}]*)\}", resolved):
-            fg = re.search(r"(?<!-)\bcolor\s*:\s*([^;]+)", block)
-            bg = re.search(r"background(?:-color)?\s*:\s*([^;{]+)", block)
-            if fg and bg:
-                fgc = parse_color(fg.group(1))
-                bgc = parse_color(bg.group(1))
-                if fgc and bgc:
-                    r = round(contrast_ratio(fgc, bgc), 2)
-                    results.append((r >= minimum,
-                                    f"[{source}] contrast {fg.group(1).strip()} on {bg.group(1).strip()} = {r}:1 (min {minimum})"))
-        return results
-
-    return per_theme(css_text, judge)
-
-
 def load_linked_css(html, base_dir):
     """<link rel="stylesheet" href="..."> のローカルCSSを読み、結合テキストを返す。
     http(s):// や // で始まる外部URLはスキップ（読めないため誤検出しない）。"""
@@ -237,34 +64,6 @@ def load_linked_css(html, base_dir):
         except (OSError, UnicodeDecodeError):
             continue  # 読めないCSSは黙ってスキップ（[自己点検]に委ねる）
     return "\n".join(css_parts)
-
-
-def check_contrast(html, minimum, linked_css=""):
-    """同一CSSルール内で color と background が両方指定された箇所を判定。
-    <style>ブロック・インライン style・外部リンクCSS を対象にする。"""
-    results = []
-    # <style> ブロック
-    for style in re.findall(r"<style[^>]*>(.*?)</style>", html, re.S | re.I):
-        results += literal_color_pairs(style, minimum, source="style")
-    # インライン style="color:..;background:.."
-    def judge_inline(resolved):
-        found = []
-        for st in re.findall(r'style\s*=\s*"([^"]*)"', resolved):
-            fg = re.search(r"(?<!-)\bcolor\s*:\s*([^;]+)", st)
-            bg = re.search(r"background(?:-color)?\s*:\s*([^;]+)", st)
-            if fg and bg:
-                fgc, bgc = parse_color(fg.group(1)), parse_color(bg.group(1))
-                if fgc and bgc:
-                    r = round(contrast_ratio(fgc, bgc), 2)
-                    found.append((r >= minimum,
-                                  f"[inline] contrast {fg.group(1).strip()} on {bg.group(1).strip()} = {r}:1 (min {minimum})"))
-        return found
-
-    results += per_theme(html, judge_inline)
-    # 外部リンクCSS（:root のCSS変数も resolve_vars で解決）
-    if linked_css:
-        results += literal_color_pairs(linked_css, minimum, source="linked-css")
-    return results
 
 
 # ---------- structural constraints ----------
@@ -313,11 +112,9 @@ def audit(path, manifest):
     base_dir = os.path.dirname(os.path.abspath(path))
     linked_css = load_linked_css(html, base_dir)
     results = check_structure(html, linked_css)
-    contrast = check_contrast(html, manifest["minimums"]["text_contrast"], linked_css)
     targets = Targets()
     targets.feed(html)
     results.append((targets.count > 0, f"HTML targets: {targets.count}"))
-    results += contrast
 
     print(f"\n=== audit: {Path(path).name} ===")
     failed = 0
@@ -325,8 +122,7 @@ def audit(path, manifest):
         print(f"  [{'PASS' if ok else 'FAIL'}] {label}")
         if not ok:
             failed += 1
-    if not contrast:
-        print("  [note] 判定可能なcolor+backgroundペアなし。未カバー: コントラストはL2実測が必要")
+    print("  [未カバー] コントラスト: 描画後の実測（measure_render.mjs）だけが判定する。L1 の合格は文字の読みやすさを保証しない")
     print("  [未カバー] computed palette / axe / dynamic themes: L2 required")
     for ident in manifest.get("coverage", {}).get("uncovered", []):
         print(f"  [未カバー] {ident}: no executed rule runner")

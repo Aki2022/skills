@@ -12,7 +12,7 @@ title: 呼び出し規約と単発利用
 | --- | --- | --- |
 | 成果物 | レンダ済みページのスクショ＋HTML/CSS（読み手が受け取る形・単独） | 工場 |
 | ルーブリック | `rubric.template.md` を埋めたもの。Style 観点の値は `own-brand-resolve` の様式、禁則は web の媒体適合 | 工場（倉庫から取った値を上乗せ） |
-| 前提条件の宣言 | 「`audit_html.py` exit 0・`measure_lp.mjs` 失格ゼロを通過」 | 工場 |
+| 前提条件の宣言 | 「`audit_html.py` exit 0・`measure_render.mjs` 失格ゼロを通過」 | 工場 |
 | 方式の希望（任意） | 例: B は `web-design-guidelines`＋`baseline-ui`、C は AD ペルソナ | 工場（最終判断は本 skill） |
 
 渡さないもの: 設計意図・仕様書・過去版・pptx 固有の後処理・修正の実装。

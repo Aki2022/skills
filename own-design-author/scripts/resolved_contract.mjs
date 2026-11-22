@@ -246,9 +246,9 @@ export function collectItemChecks(manifest) {
     return null;
   };
   const over = (top, under) => top[3] >= 1 ? top : [0, 1, 2].map(i => top[i] * top[3] + under[i] * (1 - top[3])).concat([1]);
-  const luminance = c => { const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
-    return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); };
-  const ratio = (a, b) => { const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05); };
+  // The contrast arithmetic is contrast_kit.mjs, evaluated into the page (kitSource) before this collector runs.
+  if (!window.__contrastKit) throw new Error('contrast kit not injected');
+  const ratio = window.__contrastKit.ratio;
   const backdrop = el => {
     const layers = [];
     for (let node = el; node; node = node.parentElement) {

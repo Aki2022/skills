@@ -116,10 +116,10 @@ def cdn_site(project, tmp_path):
         assert l0['exit_code'] != 2, l0['errors']
         output = lp.path(root, 'resolved', 'remote-test.json')
         output.unlink(missing_ok=True)
-        run = subprocess.run([NODE, str(SKILL.parent / 'own-website-audit/scripts/measure_lp.mjs'), site + '/index.html',
+        run = subprocess.run([NODE, str(SKILL.parent / 'own-web-build/scripts/measure_render.mjs'), site + '/index.html',
                               '--manifest', str(lp.path(root, 'resolved', 'web.json')),
                               '--environment', str(lp.path(root, 'render_environment')),
-                              '--viewports', '375', '--schemes', 'light', '--json', str(output)],
+                              '--profile', 'lp', '--viewports', '375', '--schemes', 'light', '--json', str(output)],
                              cwd=root, env=env, capture_output=True, text=True)
         return run, json.loads(output.read_text()) if output.exists() else None
     yield measure, remote, cdn, root, env, site

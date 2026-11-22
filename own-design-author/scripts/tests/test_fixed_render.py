@@ -63,14 +63,14 @@ def test_fixed_two_runs_detect_fallback_instability_and_runtime_mismatch(project
         def log_message(self,*args):pass
     server=ThreadingHTTPServer(('127.0.0.1',0),partial(Handler,directory=str(root)))
     thread=Thread(target=server.serve_forever,daemon=True);thread.start()
-    script=SKILL.parent/'own-website-audit/scripts/measure_lp.mjs'
+    script=SKILL.parent/'own-web-build/scripts/measure_render.mjs'
     def measure(html):
         (root/'index.html').write_text(html);l0=check(project)
         assert l0['exit_code']!=2,l0['errors']
         output=lp.path(root, 'resolved', 'fixed-test.json')
         run=subprocess.run([NODE,str(script),'http://127.0.0.1:'+str(server.server_port),
             '--manifest',str(lp.path(root, 'resolved', 'web.json')),'--environment',str(lp.path(root, 'render_environment')),
-            '--viewports','375','--schemes','light','--json',str(output)],cwd=root,env=env,capture_output=True,text=True)
+            '--profile','lp','--viewports','375','--schemes','light','--json',str(output)],cwd=root,env=env,capture_output=True,text=True)
         return run,json.loads(output.read_text()) if output.exists() else None
     try:
         run,data=measure(normal);assert run.returncode==0,run.stderr+run.stdout
@@ -114,7 +114,7 @@ def test_fixed_launch_disables_gpu_rasterization_for_every_fixed_browser():
     assert '--disable-gpu-rasterization' in options['args']
     # Probe and measurement must launch the same way, or the pinned runtime describes another renderer.
     assert 'chromium.launch(fixedLaunchOptions(chromium))' in HELPER.read_text()
-    measure=(SKILL.parent/'own-website-audit/scripts/measure_lp.mjs').read_text()
+    measure=(SKILL.parent/'own-web-build/scripts/measure_render.mjs').read_text()
     assert 'fixedLaunchOptions(chromium)' in measure and 'executablePath:chromium.executablePath()}' not in measure
 
 

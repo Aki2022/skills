@@ -1,0 +1,211 @@
+{
+  "schema_version": 1,
+  "note": "描画後の実測の閾値とプロファイル。道具は own-web-build/scripts/measure_render.mjs で 1 つ。値の理由と校正の履歴は measurement-thresholds.md。applies と skips を足すと checks と過不足なく一致する（新しい id はどちらかに書く）。プロファイルが無い・未知の id は合格にしない。",
+  "endpoint_default": "lp",
+  "thresholds": {
+    "fontSizeKinds": 8,
+    "lineHeightKinds": 4,
+    "radiusKinds": 5,
+    "bodyLineHeightMin": 1.5,
+    "bodyFontSizeMin": 15,
+    "textFontSizeFloor": 12,
+    "measureMaxCh": 48,
+    "orphanMinChars": 3,
+    "imageStandoutArea": 200,
+    "imageCropMax": 0.45
+  },
+  "checks": {
+    "zero-targets": {
+      "lane": "fail"
+    },
+    "design-palette": {
+      "lane": "fail"
+    },
+    "axe-unavailable": {
+      "lane": "fail"
+    },
+    "axe-contrast": {
+      "lane": "fail"
+    },
+    "axe-incomplete": {
+      "lane": "fail"
+    },
+    "type-scale": {
+      "lane": "fail"
+    },
+    "line-height-scale": {
+      "lane": "fail"
+    },
+    "radius-scale": {
+      "lane": "fail"
+    },
+    "spacing-off-scale": {
+      "lane": "fail"
+    },
+    "contrast": {
+      "lane": "fail"
+    },
+    "tap-target": {
+      "lane": "fail"
+    },
+    "text-too-small": {
+      "lane": "fail"
+    },
+    "horizontal-scroll": {
+      "lane": "fail"
+    },
+    "element-overflow": {
+      "lane": "fail"
+    },
+    "line-length": {
+      "lane": "fail"
+    },
+    "body-font-size": {
+      "lane": "fail"
+    },
+    "body-line-height": {
+      "lane": "fail"
+    },
+    "heading-jump": {
+      "lane": "fail"
+    },
+    "heading-orphan": {
+      "lane": "fail"
+    },
+    "console-error": {
+      "lane": "fail"
+    },
+    "fold-h1": {
+      "lane": "fail"
+    },
+    "image-over-crop": {
+      "lane": "fail"
+    },
+    "image-unstable": {
+      "lane": "fail"
+    },
+    "measurement-broken": {
+      "lane": "fail"
+    },
+    "font-fallback": {
+      "lane": "fail"
+    },
+    "render-environment-mismatch": {
+      "lane": "fail"
+    },
+    "render-execution-failed": {
+      "lane": "fail"
+    },
+    "fold-cta": {
+      "lane": "fail"
+    },
+    "contrast-over-image": {
+      "lane": "warn"
+    },
+    "image-sunk": {
+      "lane": "warn"
+    },
+    "image-unverified": {
+      "lane": "warn"
+    },
+    "font-silent-fallback": {
+      "lane": "warn"
+    }
+  },
+  "profiles": {
+    "lp": {
+      "viewports": [
+        375,
+        1280
+      ],
+      "schemes": [
+        "dark",
+        "light"
+      ],
+      "applies": [
+        "zero-targets",
+        "design-palette",
+        "axe-unavailable",
+        "axe-contrast",
+        "axe-incomplete",
+        "type-scale",
+        "line-height-scale",
+        "radius-scale",
+        "spacing-off-scale",
+        "contrast",
+        "tap-target",
+        "text-too-small",
+        "horizontal-scroll",
+        "element-overflow",
+        "line-length",
+        "body-font-size",
+        "body-line-height",
+        "heading-jump",
+        "heading-orphan",
+        "console-error",
+        "fold-h1",
+        "image-over-crop",
+        "image-unstable",
+        "measurement-broken",
+        "font-fallback",
+        "render-environment-mismatch",
+        "render-execution-failed",
+        "fold-cta",
+        "contrast-over-image",
+        "image-sunk",
+        "image-unverified",
+        "font-silent-fallback"
+      ],
+      "skips": []
+    },
+    "product-ui": {
+      "viewports": [
+        375,
+        1280
+      ],
+      "schemes": [
+        "dark",
+        "light"
+      ],
+      "applies": [
+        "zero-targets",
+        "design-palette",
+        "axe-unavailable",
+        "axe-contrast",
+        "axe-incomplete",
+        "type-scale",
+        "line-height-scale",
+        "radius-scale",
+        "spacing-off-scale",
+        "contrast",
+        "tap-target",
+        "text-too-small",
+        "horizontal-scroll",
+        "element-overflow",
+        "line-length",
+        "body-font-size",
+        "body-line-height",
+        "heading-jump",
+        "heading-orphan",
+        "console-error",
+        "fold-h1",
+        "image-over-crop",
+        "image-unstable",
+        "measurement-broken",
+        "font-fallback",
+        "render-environment-mismatch",
+        "render-execution-failed",
+        "contrast-over-image",
+        "image-sunk",
+        "image-unverified",
+        "font-silent-fallback"
+      ],
+      "skips": [
+        {
+          "id": "fold-cta",
+          "reason": "最初の画面に主 CTA が出ることは、広告流入の 1 画面目で転換を求める成果物の設計の話。操作が主目的の画面では主操作の数と位置を own-web-build の audit_screen.py（骨格）が blueprint から見るので、ここでは当てない。"
+        }
+      ]
+    }
+  }
+}

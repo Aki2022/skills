@@ -1,6 +1,6 @@
 ---
 name: own-website-audit
-description: "LP・サイトの総合監査（広告審査・法務・SEO・マーケ・デザイン/UX・a11y・技術・計測）。「LPを評価して」「このコピーは刺さるか」「LPを公開前に見て」「リデザインの良し悪しを判定して」、英語では review / audit / evaluate / QA / preflight の依頼で使う。審美と配置は scripts/measure_lp.mjs で決定論的に実測し、緑になってから独立レビュアーへ進む。生成と対象判定は行わない（own-deliverable-check / own-web-build）。"
+description: "LP・サイトの総合監査（広告審査・法務・SEO・マーケ・デザイン/UX・a11y・技術・計測）。「LPを評価して」「このコピーは刺さるか」「LPを公開前に見て」「リデザインの良し悪しを判定して」、英語では review / audit / evaluate / QA / preflight の依頼で使う。このskillが持つのは外部基準（広告審査・法務・SEO・計測・a11y）とマーケの採点だけ。描画後の実測は own-web-build の measure_render.mjs（閾値とプロファイルは own-design-author）が持ち、緑になってから独立レビュアーへ進む。生成と対象判定は行わない（own-deliverable-check / own-web-build）。"
 ---
 
 # Website Audit
@@ -31,21 +31,29 @@ If context is missing, continue with generic website best practices and mark ass
 1. Identify the site type, primary audience, main conversion goal, traffic sources, and target pages.
 2. Inspect the rendered experience when a URL is available. Test mobile, tablet, desktop, and wide desktop where practical.
 3. Read source files only as needed to validate findings or propose concrete fixes.
-4. **決定論を先に実測する（LP・単一ページのとき必須）。**
-   repoのux/design/と今回のL0生成物を確認する。不在・失格ならown-design-authorへ戻す。
-   L2は人間の実施確認後に実行する。依存を自動導入しない。
+4. **決定論を先に実測する（単一ページのとき必須）。このskillは測らない。**
+   描画後の実測は `/own-web-build/scripts/measure_render.mjs`（道具は 1 つ。当てる検査は `--profile` が決める。
+   プロファイルと閾値は `/own-design-author/references/measurement-profiles.json`、値の理由は
+   `/own-design-author/references/measurement-thresholds.md`）。repoのux/design/と今回のL0生成物を確認する。
+   不在・失格ならown-design-authorへ戻す。L2は人間の実施確認後に実行する。依存を自動導入しない。
    実行環境・範囲は `own-design-author/references/web-validation.md`。
 
    ```bash
-   node <skill>/scripts/measure_lp.mjs <url> --manifest ux/design/.resolved/web.json --viewports 375,1280 --schemes dark,light --json /tmp/lp.json
+   node <own-web-build>/scripts/measure_render.mjs <url> --profile <id> --manifest ux/design/.resolved/web.json --json <report.json>
    ```
 
-   合格閾値は `references/aesthetic-thresholds.md`。溢れ・重なり・切れ・コントラスト・
-   不安定な余白は、人が見る前に機械で落とす。
+   溢れ・重なり・切れ・コントラスト・不安定な余白は、人が見る前に機械で落とす。
 
-5. **ゲート — 決定論が緑になるまで、非決定論へ進まない。**
+5. **ゲート — 決定論が緑になるまで、非決定論へ進まない。独立レビュアーはこのゲートを通ってからだけ起動する。**
 
-   **失格が 1 件でも残っているうちは、独立レビュアーを走らせない。**
+   ```bash
+   python3 <own-web-build>/scripts/reviewer_gate.py --route direct --report <report.json> --ledger <ledger.jsonl>
+   ```
+
+   `/own-web-build/scripts/reviewer_gate.py` は exit 0 のときだけレビュアーの起動を許す。exit 3（止める）なら起動せず、理由（stdout の `reason`）を報告する。
+   止める理由：実測の結果が無い・読めない／実行が途中で失敗した／プロファイルが無い・知らない／測った件数が 0／
+   失格が 1 件でも残っている。どれも「測っていない・壊れている」ことを緑に読み替えない。
+   入口の `own-deliverable-check` から呼ばれたときは `--route entry`（同じゲート）。起動の回数は ledger に残る。
    理由は費用と信頼性の両方にある。レビュアーは 1 人あたり数万トークンを使う一方、
    表示が壊れたページを採点しても出てくるのは表示不良の指摘だけで、
    **本来見たかったコピーと訴求の評価は汚染される**。

@@ -5,6 +5,7 @@ from pathlib import Path, PurePosixPath
 import re
 
 import layer_paths
+import measurement_profiles
 
 
 def _relative(value):
@@ -161,7 +162,8 @@ def validate_web_result(root,result,urls):
         if measured.get('state')!=target['state']:
             raise ValueError('interaction state evidence does not match the declared steps')
         profile=target['profile']
-        if profile not in ('lp','product-ui') or stage.get('profile','lp')!=profile or measured.get('profile','lp')!=profile:
+        default=measurement_profiles.load()['endpoint_default']
+        if profile not in measurement_profiles.profile_ids() or stage.get('profile',default)!=profile or measured.get('profile',default)!=profile:
             raise ValueError('rendering profile evidence mismatch')
         actual=measured.get('environment',{})
         if measured.get('url')!=urls[env] or actual.get('repeat_equal') is not True or actual.get('runtime')!=fixed['runtime'] or actual.get('config_sha256')!=environment_hash or measured.get('failures'):

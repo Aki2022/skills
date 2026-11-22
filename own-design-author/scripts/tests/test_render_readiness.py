@@ -37,7 +37,7 @@ def test_background_stream_does_not_replace_visible_resource_readiness(project):
     server = ThreadingHTTPServer(('127.0.0.1',0),partial(Handler,directory=str(root)))
     thread = Thread(target=server.serve_forever,daemon=True); thread.start()
     output = lp.path(root, 'resolved', 'readiness.json')
-    argv = [os.environ.get('DESIGN_TEST_NODE','node'),str(SKILL.parent/'own-website-audit/scripts/measure_lp.mjs'),
+    argv = [os.environ.get('DESIGN_TEST_NODE','node'),str(SKILL.parent/'own-web-build/scripts/measure_render.mjs'),
         'http://127.0.0.1:'+str(server.server_port),'--manifest',str(lp.path(root, 'resolved', 'web.json')),
         '--environment',str(lp.path(root, 'render_environment')),'--viewports','375','--schemes','light',
         '--profile','product-ui','--json',str(output)]

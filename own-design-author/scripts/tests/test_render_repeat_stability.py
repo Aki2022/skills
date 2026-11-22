@@ -7,7 +7,7 @@ from pathlib import Path
 import subprocess
 
 import pytest
-from test_core import project  # noqa: F401  (fixture used by the measure_lp tests below)
+from test_core import project  # noqa: F401  (fixture used by the measure_render tests below)
 
 SCRIPTS = Path(__file__).resolve().parents[1]
 
@@ -30,12 +30,14 @@ def run_node(source, payload, tmp_path):
 FOCUS_RUNNER = '''
 import {createRequire} from "node:module";
 import {collectItemChecks} from %s;
+const {kitSource} = await import(%s.replace("resolved_contract", "contrast_kit"));
 const require = createRequire(process.cwd() + "/");
 const {chromium} = require("playwright");
 const [html, manifest] = JSON.parse(process.argv[2]);
 const browser = await chromium.launch();
 const page = await browser.newPage({viewport:{width:800, height:600}});
 await page.setContent(html);
+await page.evaluate(kitSource);
 const results = (await page.evaluate(collectItemChecks, manifest)).results;
 const scrollY = await page.evaluate(() => window.scrollY);
 console.log(JSON.stringify({results, scrollY}));
@@ -50,7 +52,7 @@ def focus_check(link_style, tmp_path):
             'state': 'focus', 'allowlist': ['solid']}
     manifest = {'item_checks': {'collect': ['rule:focus-ring'], 'applicability': {}},
                 'palette': {'dimension': ['0px'], 'fontWeight': ['400'], 'shadow': []}, 'rules': [rule]}
-    return run_node(FOCUS_RUNNER % json.dumps((SCRIPTS / 'resolved_contract.mjs').as_uri()), [html, manifest], tmp_path)
+    return run_node(FOCUS_RUNNER % ((json.dumps((SCRIPTS / 'resolved_contract.mjs').as_uri()),) * 2), [html, manifest], tmp_path)
 
 
 def test_focus_rule_measures_the_focused_style_without_scrolling(tmp_path):
@@ -112,7 +114,7 @@ def test_region_capture_refuses_pixels_that_never_settle(tmp_path):
     assert out['ok'] is False and 'stabilize' in out['error'], out
 
 
-# Through measure_lp itself, so reverting measureRegion to a single capture turns these red.
+# Through measure_render itself, so reverting measureRegion to a single capture turns these red.
 WIDE = ("data:image/svg+xml," "%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='200'%3E"
         "%3Crect width='600' height='200' fill='%23336699'/%3E%3C/svg%3E")
 TALL = ("data:image/svg+xml," "%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='400'%3E"
@@ -124,7 +126,7 @@ FLICKER = ('<div style="position:relative;width:300px;height:100px">'
 
 
 def measure_flicker(project, src, fit):
-    from test_measure_profiles import BROWSER, NORMAL, prepare, measure
+    from test_measure_endpoints import BROWSER, NORMAL, prepare, measure
     if not BROWSER:
         pytest.skip('explicit real browser run required')
     root = prepare(project)

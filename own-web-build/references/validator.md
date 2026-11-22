@@ -18,7 +18,7 @@ L0失格で生成を止め、L1/L2失格で非決定論レビューを止める�
 - `[静的]`（軽量・ほぼ無コスト）: ブラウザを起動せず、ソースを解析して機械判定する。
   `python3 scripts/audit_html.py <file> --manifest ux/design/.resolved/web.json`（リンクされたローカルCSSも追跡）。
   - lang / viewport / landmark（main/header/footer）/ SVG・imgの代替テキスト / focus-visible の有無
-  - リテラルに書かれた前景/背景色ペアの WCAG コントラスト計算（4.5:1 以上等）
+  - コントラストは判定しない（描画後の実測だけが持つ。下の「描画後の実測」）
 - `[実測]`（コストあり・人間承認後）: `playwright-cli` Skill で実ブラウザを起動し、**computedスタイル**で点検。
   静的では取れない「CSS変数・継承・メディアクエリ適用後の実際の色」「フォーカスリングの実表示」
   「テーマ切替後の各テーマ」を実測する。手順は `references/site-validation.md`。
@@ -65,9 +65,17 @@ L0失格で生成を止め、L1/L2失格で非決定論レビューを止める�
 `[静的]` は `audit_html.py` で常に取れる。CSS変数・継承・メディアクエリ・テーマ切替が絡む項目は
 静的で PASS でも `[実測]` で最終確定する（人間がL2実施を認めた場合）。
 
-`audit_html.py` のコントラストは、基底と `@media (prefers-color-scheme:dark|light)` の各テーマを別々に判定する
-（media の中の `:root` を基底の表に混ぜない。混ぜると後ろが勝ち、基底の組が判定されなかった）。
-`:root[data-theme=...]` による切替は判定できないので、`[実測]` か `[自己点検]` に回す。
+## 描画後の実測
+
+描画後の実測（溢れ・重なり・切れ・コントラスト・余白）の道具は `scripts/measure_render.mjs` の 1 つ。当てる検査は
+`--profile`（`own-design-author/references/measurement-profiles.json`。当てる検査・当てない検査と理由・幅と配色）が決め、
+閾値もそこにある。コントラストの計算は `own-design-author/scripts/contrast_kit.mjs` の 1 か所で、`audit_html.py` は
+判定しない（以前は CSS の文字列から静的にも測り、同じ式が 2 か所にあった）。`audit_html.py` の出力は
+「コントラストは未カバー」と必ず書き、L1 の合格を文字の読みやすさの保証に読み替えない。`:root[data-theme=...]` による
+切替の各テーマは、そのテーマに切り替えて測る（`site-validation.md`）。
+
+独立レビュアーは、この実測が緑になってから `scripts/reviewer_gate.py` を通した時だけ起動できる（`own-deliverable-check`・
+`own-website-audit`）。測った件数 0・実行の失敗・プロファイルなしでは起動しない。
 
 ## PPTX Validator（参考Tier — 機械validateしない）
 

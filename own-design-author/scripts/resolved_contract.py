@@ -13,7 +13,7 @@ def load_manifest(path):
         raise ValueError("symlinked manifest directory is unsupported")
     path = original.resolve()
     repo = layer_paths.repo_from_resolved(path)  # guard: a moved repository stops here, a misplaced manifest is rejected
-    design = layer_paths.path(repo, 'design_dir')
+    layers = layer_paths.path(repo, 'layers')  # input_hashes cover every layer's files, keyed relative to this root
     data = json.loads(path.read_text())
     if data.get('schema_version') != 1 or data.get('media') != 'web':
         raise ValueError('unsupported manifest schema/media')
@@ -29,12 +29,12 @@ def load_manifest(path):
     check_ia_dictionary_current(data.get('modules',{}),repo)
     expected = data['input_hashes']
     actual = {}
-    for source in sorted(design.rglob('*')):
-        rel = source.relative_to(design)
+    for source in sorted(layers.rglob('*')):
+        rel = source.relative_to(layers)
         if '.resolved' in rel.parts or source.name in ('assets.json', 'migration.json'):
             continue
         if source.is_file():
-            if not source.resolve().is_relative_to(design):
+            if not source.resolve().is_relative_to(layers):
                 raise ValueError('design input escapes repository')
             actual[rel.as_posix()] = hashlib.sha256(source.read_bytes()).hexdigest()
     if actual != expected:

@@ -7,6 +7,7 @@ import sys
 
 import pytest
 from test_core import SKILL, project, approve, write
+import layer_paths as lp
 from test_ship_contract import channel
 from test_ship_integration import browser_env, browser_project, commit, run_git, BROWSER
 from ship_contract import validate_integration_gate
@@ -32,7 +33,7 @@ def test_no_declared_local_gate_cannot_unlock_pre_push(project,tmp_path):
     root,catalogs=project
     env=browser_env()
     run_git(root,env,'config','user.name','Fixture Owner');run_git(root,env,'config','user.email','fixture@example.org')
-    (root/'.gitignore').write_text('design/.resolved/\n')
+    (root/'.gitignore').write_text(lp.rel('resolved')+'/\n')
     approve(project);commit(root,env,'fixture committed source')
     sha=run_git(root,env,'rev-parse','HEAD').stdout.strip()
     refs=tmp_path/'refs';refs.write_text('refs/heads/fixture '+sha+' refs/heads/fixture '+'0'*40+'\n')
@@ -45,12 +46,12 @@ def test_no_declared_local_gate_cannot_unlock_pre_push(project,tmp_path):
 def test_real_local_gate_binds_predicted_tree_and_rejects_source_endpoint_and_prepare_mutations(project,tmp_path):
     env=browser_env();root=browser_project(project,env);_,catalogs=project
     run_git(root,env,'config','user.name','Fixture Owner');run_git(root,env,'config','user.email','fixture@example.org')
-    config=json.loads((root/'design/design.yaml').read_text());config.pop('channels')
+    config=json.loads((lp.path(root, 'design_config')).read_text());config.pop('channels')
     config['integration_gate']={**local_gate(),'prepare_command':['python3','build.py']}
-    write(root/'design/design.yaml',config)
-    validation=json.loads((root/'design/validation.json').read_text())
+    write(lp.path(root, 'design_config'),config)
+    validation=json.loads((lp.path(root, 'validation')).read_text())
     validation['urls']=[{'env':'DESIGN_WEB_URL','profile':'product-ui'}]
-    write(root/'design/validation.json',validation)
+    write(lp.path(root, 'validation'),validation)
     approve(project);commit(root,env,'fixture local integration')
     source=run_git(root,env,'rev-parse','HEAD').stdout.strip()
     run_git(root,env,'update-ref','refs/remotes/origin/main',source)
@@ -83,12 +84,12 @@ def test_real_local_gate_binds_predicted_tree_and_rejects_source_endpoint_and_pr
     html.write_text(normal)
     # A missing endpoint is rejected even if an inherited URL points at another app.
     config['integration_gate']['render_servers']['OTHER_URL']=config['integration_gate']['render_servers'].pop('DESIGN_WEB_URL')
-    write(root/'design/design.yaml',config);commit(root,env,'fixture missing endpoint')
+    write(lp.path(root, 'design_config'),config);commit(root,env,'fixture missing endpoint')
     env['DESIGN_WEB_URL']='http://127.0.0.1:9/'
     rejected=call('--integration');assert rejected.returncode==2 and 'coverage' in rejected.stdout,rejected.stdout
     config['integration_gate']['render_servers']=local_gate()['render_servers']
     config['integration_gate']['prepare_command']=['python3','-c','from pathlib import Path;Path("index.html").write_text("changed")']
-    write(root/'design/design.yaml',config);commit(root,env,'fixture source mutating preparation')
+    write(lp.path(root, 'design_config'),config);commit(root,env,'fixture source mutating preparation')
     head=run_git(root,env,'rev-parse','HEAD').stdout.strip();rejected=push()
     assert rejected.returncode==2 and 'clean committed source' in rejected.stdout,rejected.stdout
     assert run_git(root,env,'rev-parse','HEAD').stdout.strip()==head
@@ -98,11 +99,11 @@ def test_real_local_gate_binds_predicted_tree_and_rejects_source_endpoint_and_pr
 def test_predicted_tree_cannot_add_an_unchecked_formal_channel(project,tmp_path):
     root,catalogs=project;env=browser_env()
     run_git(root,env,'config','user.name','Fixture Owner');run_git(root,env,'config','user.email','fixture@example.org')
-    (root/'.gitignore').write_text('design/.resolved/\n')
-    config=json.loads((root/'design/design.yaml').read_text());config['integration_gate']=local_gate()
-    write(root/'design/design.yaml',config);commit(root,env,'fixture common local gate')
+    (root/'.gitignore').write_text(lp.rel('resolved')+'/\n')
+    config=json.loads((lp.path(root, 'design_config')).read_text());config['integration_gate']=local_gate()
+    write(lp.path(root, 'design_config'),config);commit(root,env,'fixture common local gate')
     base=run_git(root,env,'rev-parse','HEAD').stdout.strip()
-    config['channels']={'web':channel()};write(root/'design/design.yaml',config)
+    config['channels']={'web':channel()};write(lp.path(root, 'design_config'),config)
     commit(root,env,'fixture upstream formal channel')
     run_git(root,env,'update-ref','refs/remotes/origin/main','HEAD')
     run_git(root,env,'checkout','-b','fixture-local',base)

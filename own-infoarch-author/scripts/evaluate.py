@@ -5,7 +5,7 @@ a failed render is not judged), merges the findings without repeating them, and 
 
 With `acquire`, it also fetches the missing Jev judgments, bounded by `limit` and the shared usage ledger:
 without `execute` it only previews (no key, no network, no writes); with `execute` it asks Jev through
-own-design-author's `judgment_run`, records the answers in `design/judgments.json` through
+own-design-author's `judgment_run`, records the answers in `ux/judgments.json` through
 `judgment_ledger.py` (record when no ledger exists, refresh otherwise), and evaluates again.
 """
 from __future__ import annotations

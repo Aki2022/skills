@@ -1,8 +1,11 @@
 """The allocation rules cover what the infoarch layer can say: every shape, and the order that does not change with the width."""
 import json
+import sys
 from pathlib import Path
 
 SKILLS = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import layer_paths as lp  # noqa: E402
 RULES = json.loads((SKILLS / 'own-design-author/references/allocation-rules.json').read_text(encoding='utf-8'))
 
 
@@ -25,7 +28,7 @@ def test_the_order_rule_does_not_depend_on_the_width():
 
 def test_the_override_notation_requires_a_reason_and_is_written_down():
     layout = json.loads((SKILLS / 'own-design-author/references/layer-paths.json').read_text(encoding='utf-8'))['entries']
-    assert 'file' not in RULES['override'] and layout[RULES['override']['file_entry']] == 'design/layout-overrides.yaml'  # a key into layer-paths.json, not a path
+    assert 'file' not in RULES['override'] and layout[RULES['override']['file_entry']] == lp.rel('layout_overrides')  # a key into layer-paths.json, not a path
     assert 'reason' in RULES['override']['entry']
     text = (SKILLS / 'own-design-author/references/allocation-rules.md').read_text(encoding='utf-8')
-    assert 'design/layout-overrides.yaml' in text and '理由' in text and all(t in text for t in ('dashboard', 'detail', 'list', 'form'))
+    assert lp.rel('layout_overrides') in text and '理由' in text and all(t in text for t in ('dashboard', 'detail', 'list', 'form'))

@@ -6,7 +6,7 @@ same catalog, so one reviewed map serves all of them. Every catalog item has exa
 - machine: code checks the item on each rendered page. A checker is either gated by L2 (its failure already
   stops the render stage) or collected by L2 per page and enforced per adopted item after rendering.
 - decision: the item is a choice each repository makes (which variant, when to use a component, what the text
-  says), so the skill cannot ship a check for it. The repository declares one in design/checks (a page rule:
+  says), so the skill cannot ship a check for it. The repository declares one in ux/design/checks (a page rule:
   count, text or style, run on every rendered page; or a judgment statement for AFM) and cites it as rule:<id>.
   Writing the choice in DESIGN.md and approving it is not verification: a decision without a declared check is
   uncovered. The owner still approves the item, and the approval hash covers the cited rule.

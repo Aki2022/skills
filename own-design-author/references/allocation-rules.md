@@ -17,7 +17,7 @@ infoarch（blueprint）は、領域の**優先度**・**グループ**・**中�
 
 ## 規則に反する配置を人が指定するとき
 
-`design/layout-overrides.yaml` に、規則では下になる領域を上に置く理由を書く。理由の無い逆転は `audit_screen.py` が失格にし、書いてあれば報告に残る（合格にはなるが、消えない）。
+`ux/design/layout-overrides.yaml` に、規則では下になる領域を上に置く理由を書く。理由の無い逆転は `audit_screen.py` が失格にし、書いてあれば報告に残る（合格にはなるが、消えない）。
 
 ```yaml
 - screen: scr-overview

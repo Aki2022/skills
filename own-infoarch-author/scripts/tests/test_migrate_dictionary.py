@@ -10,6 +10,7 @@ import yaml
 
 from ia_fixtures import SSOT, confirm
 from test_check import CHANNEL, DECK, DRAFT, OUTLINE, SCRIPTS, check, codes, dump, write_repo
+import layer_paths  # noqa: E402  (own-design-author's layer rule: where each layer lives)
 
 DATE = '2026-10-23'
 V4_BLOCKS = {
@@ -89,7 +90,7 @@ def test_dry_run_reports_the_plan_and_writes_nothing(repo):
 def test_write_migrates_the_tree_and_the_check_result_is_the_same_without_the_warning(repo):
     rc, out = migrate(repo, '--write')
     assert rc == 0 and out['written'] is True
-    ssot = yaml.safe_load((repo / 'design/info_arch/info_arch.yaml').read_text(encoding='utf-8'))
+    ssot = yaml.safe_load(layer_paths.path(repo, 'positioning_file').read_text(encoding='utf-8'))
     assert ssot['schema_version'] == 5 and not {'facts', 'entities', 'voices'} & set(ssot)
     assert set(ssot['ledger']['next']) == set(SSOT['ledger']['next'])
     dictionary = json.loads((repo / 'docs/dictionary/product.json').read_text(encoding='utf-8'))
@@ -98,7 +99,7 @@ def test_write_migrates_the_tree_and_the_check_result_is_the_same_without_the_wa
     assert by['value-customer-count']['expires'] == '2027-10-01' and by['value-customer-count']['as_of'] == '2026-10-01'
     assert by['value-phone']['evergreen'] is True and 'expires' not in by['value-phone']
     assert by['name-web-server']['variants'] == ['ウェブサーバー'] and by['name-web-server']['text'] == 'Webサーバー'
-    lp = yaml.safe_load((repo / 'design/info_arch/outlines/lp-municipal.yaml').read_text(encoding='utf-8'))
+    lp = yaml.safe_load(layer_paths.path(repo, 'infoarch', 'outlines', 'lp-municipal.yaml').read_text(encoding='utf-8'))
     assert '{{value-customer-count}}' in lp['copies']['cpy-0003']['text'] and 'fct-' not in json.dumps(lp)
     html = (repo / 'site/index.html').read_text(encoding='utf-8')
     assert 'data-dict="value-customer-count"' in html and 'data-dict="name-web-server"' in html and 'data-ia-fact' not in html
@@ -109,7 +110,7 @@ def test_write_migrates_the_tree_and_the_check_result_is_the_same_without_the_wa
 def test_the_ssot_comments_survive_the_rewrite(tmp_path):
     ssot = v4_ssot()
     write_repo(tmp_path, ssot, outlines=(outline_v4(OUTLINE), outline_v4(DECK)), dictionary=None)
-    p = tmp_path / 'design/info_arch/info_arch.yaml'
+    p = layer_paths.path(tmp_path, 'positioning_file')
     p.write_text('# 手で書いたコメント\n' + p.read_text(encoding='utf-8'), encoding='utf-8')
     rc, _ = migrate(tmp_path, '--write')
     assert rc == 0 and p.read_text(encoding='utf-8').startswith('# 手で書いたコメント\n')
@@ -160,10 +161,10 @@ def test_an_existing_dictionary_file_is_never_overwritten(repo):
 def test_a_placeholder_naming_no_fact_is_a_failure(repo):
     o = outline_v4(OUTLINE)
     o['copies']['cpy-0003']['text'] = '導入は{{fct-0099}}'
-    dump(repo / 'design/info_arch/outlines/lp-municipal.yaml', o)
+    dump(layer_paths.path(repo, 'infoarch', 'outlines', 'lp-municipal.yaml'), o)
     rc, out = migrate(repo, '--write')
     assert rc == 2 and 'placeholder' in [u['reason'] for u in out['unmigrated']]
-    assert yaml.safe_load((repo / 'design/info_arch/info_arch.yaml').read_text(encoding='utf-8'))['schema_version'] == 4
+    assert yaml.safe_load(layer_paths.path(repo, 'positioning_file').read_text(encoding='utf-8'))['schema_version'] == 4
 
 
 def test_a_rendered_mark_naming_no_entity_is_a_failure(repo):
@@ -178,10 +179,22 @@ def test_a_migration_that_would_make_the_check_fail_is_refused(repo):
     mapping['fct-0001']['expires'] = '2026-10-01'
     rc, out = migrate(repo, '--write', mapping=mapping)
     assert rc == 2 and 'check-regressed' in [u['reason'] for u in out['unmigrated']]
-    assert (repo / 'design/info_arch/info_arch.yaml').read_text(encoding='utf-8').count('schema_version: 4') == 1
+    assert layer_paths.path(repo, 'positioning_file').read_text(encoding='utf-8').count('schema_version: 4') == 1
+
+
+def test_a_tree_with_only_a_positioning_layer_is_migrated(tmp_path):
+    """The positioning file is where the SSOT lives: a repository with it and no infoarch layer yet is migrated too
+    (no outlines to rewrite), and the check it was already failing on stays the same."""
+    dump(layer_paths.path(tmp_path, 'positioning_file'), v4_ssot())
+    assert not layer_paths.path(tmp_path, 'infoarch').exists()
+    rc, out = migrate(tmp_path, '--write')
+    assert rc == 0 and out['written'] is True, out
+    assert layer_paths.rel('positioning_file') in out['changed'], out
+    assert yaml.safe_load(layer_paths.path(tmp_path, 'positioning_file').read_text(encoding='utf-8'))['schema_version'] == 5
+    assert out['check']['before']['fail_codes'] == out['check']['after']['fail_codes']
 
 
 def test_an_unreadable_ssot_is_a_failure(tmp_path):
-    (tmp_path / 'design/info_arch').mkdir(parents=True)
+    layer_paths.path(tmp_path, 'infoarch').mkdir(parents=True)
     rc, out = migrate(tmp_path)
     assert rc == 2 and out['unmigrated'][0]['reason'] == 'unreadable'

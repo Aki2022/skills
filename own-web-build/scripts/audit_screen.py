@@ -8,9 +8,9 @@ The page is drawn in a real browser at two widths (desktop and phone) and measur
 - exactly one action is drawn as primary (filled), and it is the declared one (none when the screen declares `no_primary`);
 - every declared state exists on the page with its declared text (so it can be drawn).
 A page with no marks at all is NOT CHECKED (exit 2, SCREEN_NOT_CHECKED), never a pass. An inversion the owner decided on is
-declared in design/layout-overrides.yaml with a reason; it is reported (info) and does not fail.
+declared in ux/design/layout-overrides.yaml with a reason; it is reported (info) and does not fail.
 
-Usage: audit_screen.py --screen <screen yaml> --html <page> [--overrides design/layout-overrides.yaml] [--rules allocation-rules.json]
+Usage: audit_screen.py --screen <screen yaml> --html <page> [--overrides ux/design/layout-overrides.yaml] [--rules allocation-rules.json]
 Exit: 0 conforming, 1 warnings, 2 failing or not checked.
 """
 from __future__ import annotations

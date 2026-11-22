@@ -7,7 +7,10 @@ from pathlib import Path
 import pytest
 import yaml
 
+import layer_paths  # own-design-author's layer rule (conftest puts it on sys.path)
+
 SKILL = Path(__file__).resolve().parents[2]
+EXAMPLES = SKILL / 'references/examples'  # a worked repository: its layers sit where the layout rule says
 SCRIPTS = SKILL / 'scripts'
 STEPS = ['01-brief', '02-audience', '03-select-and-cut', '04-structure', '05-copy', '06-review']
 MEDIA = ['lp', 'site', 'flyer-poster', 'deck', 'app-copy']
@@ -41,12 +44,12 @@ def test_numbers_with_units_are_marked_as_sourced_or_rough(path):
 
 
 def _example(name):
-    return yaml.safe_load((SKILL / f'references/examples/design/info_arch/outlines/{name}.yaml').read_text(encoding='utf-8'))
+    return yaml.safe_load(layer_paths.path(EXAMPLES, 'infoarch', 'outlines', f'{name}.yaml').read_text(encoding='utf-8'))
 
 
 def test_worked_example_checks_green():
     proc = subprocess.run([sys.executable, str(SCRIPTS / 'infoarch_author.py'), 'check', '--root',
-                           str(SKILL / 'references/examples'), '--date', '2026-10-23'], capture_output=True, text=True, check=False)
+                           str(EXAMPLES), '--date', '2026-10-23'], capture_output=True, text=True, check=False)
     assert proc.returncode == 0, proc.stdout
 
 
@@ -54,7 +57,7 @@ def test_worked_example_two_deliverables_stand_on_their_own_positioning():
     """Each outline stands on the positioning of its target's segment and leads with one message of its own."""
     lp, deck = _example('lp-municipal'), _example('deck-smb')
     assert lp['target']['segment'] != deck['target']['segment']
-    ssot = yaml.safe_load((SKILL / 'references/examples/design/info_arch/info_arch.yaml').read_text(encoding='utf-8'))
+    ssot = yaml.safe_load(layer_paths.path(EXAMPLES, 'positioning_file').read_text(encoding='utf-8'))
     for o in (lp, deck):
         values = {m['value'] for m in o['messages'].values()}
         assert all(ssot['values'][v]['segment'] == o['target']['segment'] for v in values), o['id']

@@ -9,7 +9,7 @@ import {layerPath, repoFromResolved} from './layer_paths.mjs';
 // dictionary reader. Keys are `<skill>/<path>`, sorted by UTF-8 bytes.
 const IA_TRUSTED_SKILLS = ['own-positioning-author'];
 const IA_TRUSTED_FILES = ['own-doc-update/scripts/dictionary.py'];
-// Mirrors design_modules.IA_DICTIONARY_DIR: the docs dictionary is an IA input outside design/ (one JSON file per domain).
+// Mirrors design_modules.IA_DICTIONARY_DIR: the docs dictionary is an IA input outside ux/ (one JSON file per domain).
 const IA_DICTIONARY_DIR = ['docs', 'dictionary'];
 
 // A resolved manifest that recorded the docs dictionary is stale once a file changed, appeared or went away; one that
@@ -80,7 +80,7 @@ export function loadManifest(path) {
   repoFromResolved(path); // from the path text, so a moved repository stops with the layout message even when the file is missing
   path = realpathSync(path);
   const repo = repoFromResolved(path);
-  const design = layerPath(repo, 'design_dir');
+  const layers = layerPath(repo, 'layers'); // input_hashes cover every layer's files, keyed relative to this root
   const data = JSON.parse(readFileSync(path, 'utf8'));
   if (data.schema_version !== 1 || data.media !== 'web' || !Object.keys(data.tokens || {}).length)
     throw new Error('unsupported or empty manifest');
@@ -102,14 +102,14 @@ export function loadManifest(path) {
       if (name === '.resolved') continue;
       const file = join(dir, name);
       const real = realpathSync(file);
-      if (real !== file || !real.startsWith(design + sep))
+      if (real !== file || !real.startsWith(layers + sep))
         throw new Error('symlinked design input is unsupported');
       if (statSync(file).isDirectory()) walk(file);
       else if (!['assets.json','migration.json'].includes(name))
-        actual[relative(design, file).split(sep).join('/')] = createHash('sha256').update(readFileSync(file)).digest('hex');
+        actual[relative(layers, file).split(sep).join('/')] = createHash('sha256').update(readFileSync(file)).digest('hex');
     }
   }
-  walk(design);
+  walk(layers);
   const keys = Object.keys(actual).sort();
   if (JSON.stringify(keys) !== JSON.stringify(Object.keys(data.input_hashes || {}).sort()) ||
       keys.some(k => actual[k] !== data.input_hashes[k])) throw new Error('stale manifest; rerun L0');
@@ -449,7 +449,7 @@ export function collectItemChecks(manifest) {
         if (style[property] !== 'normal' && !spaces.has(style[property])) add('palette:spacing', el, property + ' ' + style[property]);
     if (!shadows.has(style.boxShadow) && !shadows.has(visibleShadow(style.boxShadow))) add('palette:shadow', el, 'box-shadow');
   }
-  // rules the repository declared for its own design decisions (design/checks), run on every rendered page
+  // rules the repository declared for its own design decisions (ux/design/checks), run on every rendered page
   const declared = Object.fromEntries((manifest.rules || []).map(rule => [rule.id, rule]));
   for (const id of want) {
     if (!id.startsWith('rule:')) continue;

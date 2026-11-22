@@ -17,6 +17,7 @@ SCRIPTS = Path(__file__).resolve().parents[1]
 DESIGN_SCRIPTS = SCRIPTS.parents[1] / 'own-design-author/scripts'
 sys.path.insert(0, str(DESIGN_SCRIPTS))
 import judgment_ledger as jl  # noqa: E402
+import layer_paths  # noqa: E402  (own-design-author's layer rule: where each layer lives)
 
 IA_KINDS = ('ia-name-variant', 'ia-emphasis', 'ia-unregistered-claim', 'ia-audience-fit')
 # OUTLINE has 5 pieces of copy and DECK 3; SSOT has one official name, so every piece of copy gets a name and a claim
@@ -49,8 +50,9 @@ def candidates(root, *extra):
 def write_ledger(root, rows, holdout=None):
     policy = jl.load_policy()
     ledger = {'schema_version': 3, 'policy': policy, 'rows': rows, 'holdout': holdout or {'source': 'unmeasured'}}
-    (root / 'design').mkdir(exist_ok=True)
-    (root / 'design/judgments.json').write_text(json.dumps(ledger, ensure_ascii=False), encoding='utf-8')
+    path = layer_paths.path(root, 'judgments')
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(ledger, ensure_ascii=False), encoding='utf-8')
     return ledger
 
 
@@ -165,7 +167,7 @@ def test_changed_copy_invalidates_only_its_own_judgments(repo, tmp_path):
     write_ledger(repo, [{'candidate': r, 'score': 0.0} for r in rows])
     changed = copy.deepcopy(OUTLINE)
     changed['copies']['cpy-0002']['text'] = '運用の手間がかなり減ります'
-    dump(repo / 'design/info_arch/outlines/lp-municipal.yaml', changed)
+    dump(layer_paths.path(repo, 'infoarch', 'outlines', 'lp-municipal.yaml'), changed)
     code, out = cli('judge', '--root', str(repo), '--date', DATE, '--dom-report', str(report))
     assert code == 1
     # The copy itself (its name, claim and value fit), plus the outline-level fit that reads every piece of copy.
@@ -185,16 +187,16 @@ def test_design_rows_in_the_shared_ledger_do_not_disturb_ia(repo):
 
 
 def test_broken_or_symlinked_ledger_fails(repo, tmp_path):
-    (repo / 'design/judgments.json').write_text('{"schema_version": 2}', encoding='utf-8')
+    layer_paths.path(repo, 'judgments').write_text('{"schema_version": 2}', encoding='utf-8')
     code, out = cli('judge', '--root', str(repo), '--date', DATE)
     assert code == 2 and 'IA_JUDGE_LEDGER' in [f['code'] for f in out['findings']]
-    (repo / 'design/judgments.json').unlink()
+    layer_paths.path(repo, 'judgments').unlink()
     # A symlink to an otherwise valid, fully covering ledger: only the symlink guard can stop it.
     _, _, rows = candidates(repo)
     write_ledger(repo, [{'candidate': r, 'score': 0.0} for r in rows])
     target = tmp_path / 'elsewhere.json'
-    (repo / 'design/judgments.json').rename(target)
-    (repo / 'design/judgments.json').symlink_to(target)
+    layer_paths.path(repo, 'judgments').rename(target)
+    layer_paths.path(repo, 'judgments').symlink_to(target)
     code, out = cli('judge', '--root', str(repo), '--date', DATE)
     assert code == 2 and 'IA_JUDGE_LEDGER' in [f['code'] for f in out['findings']]
 
@@ -211,7 +213,7 @@ def test_shipped_html_without_first_screen_is_a_gap_other_media_are_only_reporte
 def test_failing_check_refuses_to_judge(repo):
     broken = copy.deepcopy(OUTLINE)
     broken['sections']['sec-0002']['places'] = ['msg-0099']
-    dump(repo / 'design/info_arch/outlines/lp-municipal.yaml', broken)
+    dump(layer_paths.path(repo, 'infoarch', 'outlines', 'lp-municipal.yaml'), broken)
     code, out = cli('judge', '--root', str(repo), '--date', DATE)
     assert code == 2 and 'IA_JUDGE_REFUSED' in [f['code'] for f in out['findings']]
 
@@ -244,7 +246,7 @@ def test_replacement_keeps_design_rows_and_takes_only_current_ia_answers(repo, t
     assert replacement['holdout'] == holdout
     jl.validate_ledger(replacement, policy)
     # The shared recorder accepts it as a refresh of the existing ledger.
-    jl.refresh_ledger(json.loads((repo / 'design/judgments.json').read_text(encoding='utf-8')), replacement, policy)
+    jl.refresh_ledger(json.loads(layer_paths.path(repo, 'judgments').read_text(encoding='utf-8')), replacement, policy)
 
 
 def test_replacement_rejects_answers_under_another_policy(repo, tmp_path):
@@ -297,14 +299,14 @@ def test_section_order_and_lead_are_part_of_the_audience_fit_and_emphasis_keys(r
     _, _, before = candidates(repo, '--dom-report', str(report))
     changed = copy.deepcopy(OUTLINE)
     changed['sections']['sec-0001']['order'], changed['sections']['sec-0002']['order'] = 2, 1
-    dump(repo / 'design/info_arch/outlines/lp-municipal.yaml', changed)
+    dump(layer_paths.path(repo, 'infoarch', 'outlines', 'lp-municipal.yaml'), changed)
     _, _, after = candidates(repo, '--dom-report', str(report))
     keys = lambda rows, kind: {r['id']: r['judgment_hash'] for r in rows if r['input']['kind'] == kind}
     assert keys(before, 'ia-audience-fit')['ia-audience-fit:lp-municipal'] != keys(after, 'ia-audience-fit')['ia-audience-fit:lp-municipal']
     # The other deliverable is untouched.
     assert keys(before, 'ia-audience-fit')['ia-audience-fit:deck-smb'] == keys(after, 'ia-audience-fit')['ia-audience-fit:deck-smb']
     changed['messages']['msg-0001']['rank'], changed['messages']['msg-0002']['rank'] = 'support', 'lead'
-    dump(repo / 'design/info_arch/outlines/lp-municipal.yaml', changed)
+    dump(layer_paths.path(repo, 'infoarch', 'outlines', 'lp-municipal.yaml'), changed)
     _, _, lead = candidates(repo, '--dom-report', str(report))
     assert keys(lead, 'ia-emphasis') and all(keys(lead, 'ia-emphasis')[k] != v for k, v in keys(after, 'ia-emphasis').items())
 

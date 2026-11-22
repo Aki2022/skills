@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import check as ia_check  # noqa: E402
 import judge  # noqa: E402
 from test_check import DECK, OUTLINE, SSOT, cli, dump, write_repo  # noqa: E402
+import layer_paths  # noqa: E402  (own-design-author's layer rule: where each layer lives)
 
 
 def test_impact_follows_the_positioning(tmp_path):
@@ -35,13 +36,13 @@ def test_set_id_moves_with_a_positioning_dependency(tmp_path):
     _, before = cli('set', '--root', str(tmp_path), '--outline', 'lp-municipal')
     changed = copy.deepcopy(SSOT)
     changed['strengths']['str-0001']['text'] = '別の強み'
-    dump(tmp_path / 'design/info_arch/info_arch.yaml', changed)
+    dump(layer_paths.path(tmp_path, 'positioning_file'), changed)
     confirm(tmp_path, changed)  # re-approved by the owner
     _, after = cli('set', '--root', str(tmp_path), '--outline', 'lp-municipal')
     assert after['set'] != before['set'] and after['outline'] == before['outline']
     unrelated = copy.deepcopy(SSOT)
     unrelated['values']['val-0002']['text'] += '（改）'
-    dump(tmp_path / 'design/info_arch/info_arch.yaml', unrelated)
+    dump(layer_paths.path(tmp_path, 'positioning_file'), unrelated)
     confirm(tmp_path, unrelated)
     _, same = cli('set', '--root', str(tmp_path), '--outline', 'lp-municipal')
     assert same['set'] == before['set']  # another segment's value
@@ -103,6 +104,6 @@ def test_review_bundle_shows_content_and_refuses_a_stale_request(tmp_path):
     assert order == sorted(order) and hashes['ia:path:val-0001'][:12] in one
     changed = copy.deepcopy(SSOT)
     changed['strengths']['str-0001']['text'] = '別の強み'
-    dump(tmp_path / 'design/info_arch/info_arch.yaml', changed)
+    dump(layer_paths.path(tmp_path, 'positioning_file'), changed)
     rc, out = cli('review', '--root', str(tmp_path), '--request', str(req))
     assert rc == 2 and out['stale'] == ['ia:path:val-0001'], out  # only the path the strength is on

@@ -2,7 +2,7 @@
 /**
  * Record the pin for fonts a CDN serves (e.g. Google Fonts), for render-environment.json's `remote_fonts`.
  *
- *   node pin_remote_fonts.mjs <url>... --environment design/render-environment.json --origins https://fonts.googleapis.com,https://fonts.gstatic.com
+ *   node pin_remote_fonts.mjs <url>... --environment ux/design/render-environment.json --origins https://fonts.googleapis.com,https://fonts.gstatic.com
  *
  * Renders each URL in the pinned runtime at every viewport and scheme of the environment, fetches everything the
  * page loads from the declared origins, and prints {origins, families, files} where files maps each exact URL to
@@ -10,7 +10,7 @@
  * (run it only when you mean to), writes nothing, and the printed pin is what the owner reviews and commits.
  * Pages that draw other characters can request other subsets later: those are rejected until pinned again.
  *
- *   node pin_remote_fonts.mjs --extend <measurement.json>... --environment design/render-environment.json
+ *   node pin_remote_fonts.mjs --extend <measurement.json>... --environment ux/design/render-environment.json
  *
  * Extends the existing pin with every URL a measurement rejected as 'remote font not pinned' on a declared origin
  * (the measurement's own flow can request subsets this tool's render does not), and prints the whole remote_fonts.

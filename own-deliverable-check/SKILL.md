@@ -59,7 +59,7 @@ pptxは従属WS完了までux/design/を読まないため、その制約を報�
 補足:
 
 - 描画後の実測の道具は 1 つ（`own-web-build` の `measure_render.mjs`）。何を当てるかは成果物の型ごとのプロファイル
-  （`own-design-author` の `references/measurement-profiles.json`。当てる検査・当てない検査と理由・幅と配色）が決める。
+  （`/own-design-author/references/measurement-profiles.json`。当てる検査・当てない検査と理由・幅と配色）が決める。
   結果の `measured` は実際に測った件数で、0 件・実行の失敗・プロファイルが無い型は合格にしない。
 - `own-website-audit` は外部基準とマーケの採点だけを持つ。LP のときは、実測が緑になってから `own-website-audit` を呼ぶ。
 - 重複 skill の検出は `own-skill-commonize` の `skill_lint.sh`（S7）が担う。

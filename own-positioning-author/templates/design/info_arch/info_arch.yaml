@@ -1,4 +1,4 @@
-# ux/positioning/positioning.yaml — positioning（スキーマ版 5。own-positioning-author が持つ）
+# design/info_arch/info_arch.yaml — positioning（スキーマ版 5。own-positioning-author が持つ）
 # positioning の原子：segments（セグメント）・jobs（ジョブ）・pains（痛み）・gains（得たいもの）・alternatives（代替）・
 #   categories（カテゴリー）・strengths（強み）・values（提供価値。kind: difference / parity）・proofs（証拠。segment を書く）。
 #   原子は 1 つのセグメントにだけ属する（segment）。別のセグメントで使うときは写しを作り、出どころを copied_from に書く。

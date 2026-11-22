@@ -32,7 +32,6 @@ LAYOUT = _load()
 ENTRIES = LAYOUT['entries']
 FOREIGN_ROOTS = tuple(LAYOUT['foreign_roots'])
 LAYERS_ROOT = ENTRIES['layers']
-IDENTITY = LAYOUT.get('identity', {})
 
 
 def _foreign_message(root):
@@ -44,23 +43,12 @@ def _foreign_message(root):
     return f'{text} {hint}'.strip()
 
 
-def identity(name):
-    """A frozen name that sits inside approved hashes (it does not move with the layout)."""
-    return IDENTITY[name]
-
-
 def guard(repo):
     """Raise LayerLayoutError if `repo` has a foreign root (a real directory, not a file or a link to nowhere)."""
     base = Path(repo)
     for name in FOREIGN_ROOTS:
         if (base / name).is_dir():
             raise LayerLayoutError(_foreign_message(name))
-
-
-def has_ia(repo):
-    """True when the repository has an infoarch or a positioning layer (after the guard)."""
-    guard(repo)
-    return (Path(repo) / ENTRIES['infoarch']).is_dir() or (Path(repo) / ENTRIES['positioning_dir']).is_dir()
 
 
 def rel(key, *rest):

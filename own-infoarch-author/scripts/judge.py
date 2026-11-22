@@ -1,6 +1,6 @@
 """IA semantic judgments (ISSUE-04): candidates for Jev and a read-only check against the shared ledger.
 
-Four kinds share own-design-author's judgment policy and `ux/judgments.json`
+Four kinds share own-design-author's judgment policy and `design/judgments.json`
 (ADR-20261111-ia-judgments-share-design-policy-and-ledger, biz_ops):
 - ia-name-variant: a piece of copy writes an official name in another notation.
 - ia-unregistered-claim: a piece of copy claims something its message's value, the evidence on that value's path and
@@ -15,7 +15,7 @@ Four kinds share own-design-author's judgment policy and `ux/judgments.json`
 The gate only reads the ledger. It never calls a model: missing judgments are "uncovered", stored ones are
 "screened" (never "clean"), and a score at or above theta goes to a human as IA_JUDGE_REVIEW.
 
-A review the owner read and accepted is recorded, with the owner's words, in `ux/infoarch/accepted_reviews.yaml`
+A review the owner read and accepted is recorded, with the owner's words, in `design/info_arch/accepted_reviews.yaml`
 bound to the judgment hash (ADR-20261118-ai-records-owner-approvals, biz_ops). It is then reported as
 IA_JUDGE_ACCEPTED (info) instead of a warning. Changing the copy or its context changes the hash, so the record stops
 applying (IA_JUDGE_ACCEPTED_STALE, info) and the review comes back. A broken or symlinked record fails closed.

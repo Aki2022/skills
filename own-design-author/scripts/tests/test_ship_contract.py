@@ -9,7 +9,6 @@ import sys
 
 import pytest
 from test_core import project, approve, write, SKILL
-import layer_paths as lp
 from ship_contract import validate_channels, artifact_hashes, validate_web_result
 
 
@@ -55,16 +54,16 @@ def test_artifact_root_alias_is_canonicalized(tmp_path):
 
 
 def result_fixture(tmp_path):
-    write(lp.path(tmp_path, 'validation'),{'schema_version':1,'html':['dist/index.html'],
+    write(tmp_path/'design/validation.json',{'schema_version':1,'html':['dist/index.html'],
         'urls':[{'env':'DESIGN_WEB_URL'}], 'viewports':[375],'schemes':['light']})
     env={'runtime':{'browser':'fixture'},'viewports':[{'width':375,'height':812}], 'schemes':['light']}
-    write(lp.path(tmp_path, 'render_environment'),env)
-    digest=hashlib.sha256((lp.path(tmp_path, 'render_environment')).read_bytes()).hexdigest()
+    write(tmp_path/'design/render-environment.json',env)
+    digest=hashlib.sha256((tmp_path/'design/render-environment.json').read_bytes()).hexdigest()
     row={'scheme':'light','width':375,'render_evidence':{'screenshot_sha256':'a'*64}}
-    write(lp.path(tmp_path, 'resolved', 'l2-0.json'),{'url':'http://127.0.0.1:12345/',
+    write(tmp_path/'design/.resolved/l2-0.json',{'url':'http://127.0.0.1:12345/',
         'environment':{'runtime':env['runtime'],'config_sha256':digest,'repeat_equal':True},
         'runs':[{**row,'repeat':0},{**row,'repeat':1}], 'failures':[], 'uncovered':[]})
-    write(lp.path(tmp_path, 'resolved', 'items.json'),{'schema_version':1,'pages':['DESIGN_WEB_URL'],
+    write(tmp_path/'design/.resolved/items.json',{'schema_version':1,'pages':['DESIGN_WEB_URL'],
         'machine':{'dads-000001':{'DESIGN_WEB_URL':'pass'}},'afm_pairs':[],'failures':[]})
     result={'exit_code':0,'errors':[],'stages':[{'stage':'L0','exit_code':0,'counts':{'items':1}},
         {'stage':'L1','exit_code':0,'targets':1},{'stage':'L2','exit_code':0,'target_env':'DESIGN_WEB_URL'},
@@ -79,7 +78,7 @@ def test_full_check_requires_every_stage_and_exact_render_evidence(tmp_path):
         broken=copy.deepcopy(result);broken['stages']=[s for s in broken['stages'] if s['stage']!=stage]
         with pytest.raises(ValueError):validate_web_result(tmp_path,broken,{'DESIGN_WEB_URL':'http://127.0.0.1:12345/'})
     with pytest.raises(ValueError):validate_web_result(tmp_path,result,{'DESIGN_WEB_URL':'http://127.0.0.1:9999/'})
-    evidence=lp.path(tmp_path, 'resolved', 'l2-0.json');data=json.loads(evidence.read_text())
+    evidence=tmp_path/'design/.resolved/l2-0.json';data=json.loads(evidence.read_text())
     data['runs'][1]['render_evidence']['screenshot_sha256']='b'*64;write(evidence,data)
     with pytest.raises(ValueError):validate_web_result(tmp_path,result,{'DESIGN_WEB_URL':'http://127.0.0.1:12345/'})
 
@@ -90,31 +89,31 @@ def test_item_and_afm_evidence_is_required(tmp_path):
     for broken in ({'failures':1},{'exit_code':2}):
         bad=copy.deepcopy(result);bad['stages'][-1].update(broken)
         with pytest.raises(ValueError):validate_web_result(tmp_path,bad,urls)
-    items=json.loads((lp.path(tmp_path, 'resolved', 'items.json')).read_text())
-    write(lp.path(tmp_path, 'resolved', 'items.json'),{**items,'afm_pairs':[['dads-000002','DESIGN_WEB_URL']]})
+    items=json.loads((tmp_path/'design/.resolved/items.json').read_text())
+    write(tmp_path/'design/.resolved/items.json',{**items,'afm_pairs':[['dads-000002','DESIGN_WEB_URL']]})
     result['stages'][-1]['afm_pairs']=1
     with pytest.raises(ValueError,match='AFM'):validate_web_result(tmp_path,result,urls)
     record={'schema_version':1,'pairs':[['dads-000002','DESIGN_WEB_URL']],'artifacts':['L2:DESIGN_WEB_URL:375:light'],
             'verdicts':[{'id':'dads-000002'}],'uncovered':[]}
-    write(lp.path(tmp_path, 'resolved', 'afm.json'),record)
+    write(tmp_path/'design/.resolved/afm.json',record)
     result['stages'].append({'stage':'AFM','exit_code':1,'judged':1})
     assert validate_web_result(tmp_path,result,urls)
     for broken in ({'judged':0},{'exit_code':2}):
         bad=copy.deepcopy(result);bad['stages'][-1].update(broken)
         with pytest.raises(ValueError):validate_web_result(tmp_path,bad,urls)
-    write(lp.path(tmp_path, 'resolved', 'afm.json'),{**record,'uncovered':[{'id':'dads-000002'}]})
+    write(tmp_path/'design/.resolved/afm.json',{**record,'uncovered':[{'id':'dads-000002'}]})
     with pytest.raises(ValueError):validate_web_result(tmp_path,result,urls)
-    write(lp.path(tmp_path, 'resolved', 'afm.json'),record)
+    write(tmp_path/'design/.resolved/afm.json',record)
     assert validate_web_result(tmp_path,result,urls)
-    write(lp.path(tmp_path, 'resolved', 'items.json'),{**items,'afm_pairs':record['pairs'],'failures':['dads-000001 on DESIGN_WEB_URL: x']})
+    write(tmp_path/'design/.resolved/items.json',{**items,'afm_pairs':record['pairs'],'failures':['dads-000001 on DESIGN_WEB_URL: x']})
     with pytest.raises(ValueError,match='adopted item'):validate_web_result(tmp_path,result,urls)
 
 
 def test_ship_stops_l0_before_server_or_deploy(project):
     root,catalogs=project
-    config=json.loads((lp.path(root, 'design_config')).read_text());config['channels']={'web':channel()}
+    config=json.loads((root/'design/design.yaml').read_text());config['channels']={'web':channel()}
     config['channels']['web']['ship_command']=[sys.executable,'-c','open("DEPLOYED","w").write("bad")']
-    write(lp.path(root, 'design_config'),config)
+    write(root/'design/design.yaml',config)
     run=subprocess.run([str(SKILL/'scripts/design-ship'),'--repo',str(root),'--channel','web',
         '--catalog-dir',str(catalogs)],env=dict(os.environ,DESIGN_AUTHOR_PYTHON=sys.executable),capture_output=True,text=True)
     assert run.returncode==2

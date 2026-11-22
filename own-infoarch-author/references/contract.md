@@ -1,11 +1,10 @@
-# ux/infoarch/ の契約
+# design/info_arch/ の契約
 
 方針は、利用側の repo の spec `information-architecture-standardization`（v6）と `deliverable-production-layers`（layer の切り方）に従う。
 
 ## ディレクトリ
 
-`ux/infoarch/` の中は次のとおり。positioning の SSOT（`ux/positioning/positioning.yaml`）はここに無い。positioning と infoarch は別のフォルダで、positioning は own-positioning-author が持つ（スキーマ版 5。原子と矢印、id 台帳。固定値・正式名称は持たない（辞書）。承認の状態は持たない（承認台帳 `ux/approvals.yaml` が持つ）。記録は git の履歴が持つ）。
-
+- `info_arch.yaml`：positioning の SSOT（スキーマ版 5。own-positioning-author が持つ。原子と矢印、id 台帳）。固定値・正式名称は持たない（辞書）。承認の状態は持たない（承認台帳が持つ）。記録は git の履歴が持つ。
 - `channels/<media>.yaml`：成果物の置き場所と出し方の宣言だけ。中身は `media`（ファイル名と一致）・`outputs`（repo 相対の glob）・`ship`・`ship_command`（`ship: true` なら必須。出荷の正式の入口が実行する）・`merge_base`（pre-push の予測マージの相手。出荷チャネルで無いと doctor が失格）・`viewports`。
 - `outlines/<成果物 id>.yaml`：成果物ごとの outline（版 3）。1 ページ＝1 outline。AI が書き、人は保守しない。`id` はファイル名と一致する。
 - `INFO_ARCH.md`：散文。原子を id で参照するだけで、値を持たない。
@@ -14,7 +13,7 @@
 
 ## positioning と辞書（この skill が読むもの）
 
-- positioning（原子・矢印・証拠・id 台帳・承認）は own-positioning-author の持ち物：`ux/positioning/positioning.yaml`（スキーマ版 5）。契約は `own-positioning-author/references/contract.md`。outline は、その id（提供価値・代替）を引く。引けなければ失格。
+- positioning（原子・矢印・証拠・id 台帳・承認）は own-positioning-author の持ち物：`design/info_arch/info_arch.yaml`（スキーマ版 5）。契約は `own-positioning-author/references/contract.md`。outline は、その id（提供価値・代替）を引く。引けなければ失格。
 - 固定値と正式名称は `docs/dictionary/<分野>.json` の辞書が持つ（own-doc-update の `dictionary.py` が形を検査し、この skill が同じファイルを読む）。辞書の `value` が固定値、`name` が正式名称。outline の文案は固定値を `{{value-<辞書の id>}}` で参照する。辞書の形が壊れていれば IA_DICTIONARY_INVALID で失格。
 - 固定値の期限は辞書の `expires`（日付）か `evergreen: true`。`as_of` から日数を足す暗黙の期限は辞書には無い。
 - 声は廃止した。成果物ごとのトーンは outline の `tone` が持つ。
@@ -52,7 +51,7 @@ outline のメッセージが指す提供価値のうち、target のセグメ�
 
 ## v5 からの移行（`infoarch-author migrate-v6 --root . [--write]`。SPEC v6 要件 17）
 
-v5 の木（旧い名前 `info_arch.yaml` の版 3（今の置き場所は `ux/positioning/positioning.yaml`）・outline 版 2・描画物の v5 の印・`modules.ia` 0.3.0）を、一括で v6 に移す。`--write` が無ければ何も書かない（見積もりだけ）。移しそこねが 1 件でもあれば終了コード 2 で、`--write` でも何も書かない（一括。半分だけ移さない）。commit はしない。v6 の木（版 4）では何もせず終了コード 0（再実行できる）。版 3 でも 4 でもなければ失格。
+v5 の木（`info_arch.yaml` 版 3・outline 版 2・描画物の v5 の印・`modules.ia` 0.3.0）を、一括で v6 に移す。`--write` が無ければ何も書かない（見積もりだけ）。移しそこねが 1 件でもあれば終了コード 2 で、`--write` でも何も書かない（一括。半分だけ移さない）。commit はしない。v6 の木（版 4）では何もせず終了コード 0（再実行できる）。版 3 でも 4 でもなければ失格。
 
 機械で決まることだけを移す。
 
@@ -67,13 +66,13 @@ v5 の木（旧い名前 `info_arch.yaml` の版 3（今の置き場所は `ux/p
 | 枠（`frames`）と対応表 | セクションの id（並びの枠は `sections.order`）と set の id（`set` で出す） |
 | 複数ページの outline | ページ数と outputs の数が同じならページごとの outline（`<id>-<ページ id>`）に分け、元のファイルを消す |
 | 描画物の `data-ia-role`＋`data-ia-msg`・`data-ia-pain`・`data-ia-frame` | セクションの要素に `data-ia-section`（と v6 の役割）。文案は、中身が要素 1 つならその要素に `data-ia-copy`、そうでなければ中身を包む（中身に段落などのブロックがあれば `<div data-ia-copy>`、無ければ `<span data-ia-copy>`。dom は文案を描かれた位置で並べるので、箱を持たない `display: contents` や style の書き足しは使わない）。印は outline のセクションと順に、数と id で突き合わせる |
-| `ux/design/design.yaml` の `modules.ia: 0.3.0` | v6 の契約の版（`ia_module.VERSION`） |
+| `design/design.yaml` の `modules.ia: 0.3.0` | v6 の契約の版（`ia_module.VERSION`） |
 
 判断が要るもの（提供価値の `kind`、所属カテゴリーと `member_of`・`recalls`・`includes`、代替 × 痛み・得たいものの `fulfills` の度合い、CTA だけのセクションに置く通常のメッセージ、役割・touchpoint・target の条件の確かめ）は `drafting_required` に並べ、作らない。移した直後の木は、これを済ませるまで `check` が失格する。
 
 出力：`id_map`（旧 id → 新 id。outline の要素は `<outline>:<id>`、v5 のセクションは `<outline>:<ページ>[<番号>]`、枠は `<outline>#<枠>`。`[]` は無くしたもの。載っていない id は同じ id のまま）・`unmigrated` と `unmigrated_count`・`dropped`・`drafting_required`・`role_map`・`stops_applying`・`module_pin`・`files`（write・create・delete）・`rollback`（戻す手順）。
 
-`stops_applying` は、外れる承認と判定の一覧。`ux/approvals.yaml` の `ia:` の行のうち `ia:path:` でないもの（v5 の `ia:strategy:` は経路の承認に移らない。オーナーが経路を新たに承認する。`ia:positioning:` の行は `migrate-approvals` で移せるか確かめる）と、`ux/judgments.json` の IA の判定（`ia-` の種類。v6 の鍵は v6 の outline の id と文案・提供価値の中身から作るので読まれない）。どちらの台帳も読むだけで、書かない。
+`stops_applying` は、外れる承認と判定の一覧。`design/approvals.yaml` の `ia:` の行のうち `ia:path:` でないもの（v5 の `ia:strategy:` は経路の承認に移らない。オーナーが経路を新たに承認する。`ia:positioning:` の行は `migrate-approvals` で移せるか確かめる）と、`design/judgments.json` の IA の判定（`ia-` の種類。v6 の鍵は v6 の outline の id と文案・提供価値の中身から作るので読まれない）。どちらの台帳も読むだけで、書かない。
 
 移しそこね（`unmigrated`。条件と赤のフィクスチャの対応表は `fixtures/migrate-red-cases.json`。対応の無い条件 0 件をテストが確かめる）：
 
@@ -107,8 +106,8 @@ v5 の木（旧い名前 `info_arch.yaml` の版 3（今の置き場所は `ux/p
 | IA_POSITIONING_*（要件 5・要件 2） | 上の positioning の表 |
 | IA_POSITIONING_UNAPPROVED | outline が指す経路に、オーナーの承認が無いか外れたものがある（`detail.values`。出荷チャネルは失格、ほかは警告） |
 | IA_APPROVALS_LEGACY | 承認台帳に原子と矢印ごとの旧い行（`ia:positioning:`）がある。数えない（警告。`positioning-author migrate-approvals` で移す） |
-| IA_APPROVALS_INVALID | `ux/approvals.yaml` が読めない・symlink・design の `verify_rows` を通らない（重複キー・項目の過不足・承認者・日付・ハッシュ）。何も承認済みとして数えない |
-| IA_PAGES_OUTPUT_NOT_INVENTORIED（警告） | 出荷チャネルの HTML の成果物が、ux/design/validation.json の pages（covered・excluded）に無い（design の検査が見ていない） |
+| IA_APPROVALS_INVALID | `design/approvals.yaml` が読めない・symlink・design の `verify_rows` を通らない（重複キー・項目の過不足・承認者・日付・ハッシュ）。何も承認済みとして数えない |
+| IA_PAGES_OUTPUT_NOT_INVENTORIED（警告） | 出荷チャネルの HTML の成果物が、design/validation.json の pages（covered・excluded）に無い（design の検査が見ていない） |
 | IA_PAGES_OUTPUT_EXCLUDED_BY_DESIGN（info） | design が対象外にした成果物。IA の検査は続ける（ページの宣言は一本化しない。ADR-20261115-design-ia-two-skills-shared-base） |
 | IA_NO_CHANNELS / IA_NO_OUTLINES / IA_CHANNEL_NAME / IA_CHANNEL_FILE / IA_OUTLINE_FILE / IA_OUTLINE_ID | 対象 0 件・名前の不一致・読まれないファイル |
 | IA_OUTLINE_CHANNEL / IA_OUTLINE_OUTPUT_UNDECLARED | 宣言の無いチャネル・チャネルの outputs に一致しない成果物 |
@@ -137,7 +136,7 @@ v5 の木（旧い名前 `info_arch.yaml` の版 3（今の置き場所は `ux/p
 ## 期限
 
 証拠は、`expires` があればその日、無ければ `as_of` に日数を足した日を期限とする。期限の日の当日までは有効で、翌日から期限切れ。日数の初期値は `references/expiry.json`、プロジェクトの
-`ux/positioning/positioning.yaml` の `policy.expiry_days` で上書きできる。固定値は辞書の `expires`（日付）か `evergreen: true`（期限なし）で、日数を足す暗黙の期限は無い（スキーマ版 4 の SSOT の固定値だけは、`as_of` から日数の読み方が残る）。出荷の成果物が期限切れの値を参照すると IA_EXPIRED_SHIPPED で失格。
+`info_arch.yaml` の `policy.expiry_days` で上書きできる。固定値は辞書の `expires`（日付）か `evergreen: true`（期限なし）で、日数を足す暗黙の期限は無い（スキーマ版 4 の SSOT の固定値だけは、`as_of` から日数の読み方が残る）。出荷の成果物が期限切れの値を参照すると IA_EXPIRED_SHIPPED で失格。
 
 ## 工場への受け渡し（`skeleton`）
 
@@ -154,7 +153,7 @@ v5 の木（旧い名前 `info_arch.yaml` の版 3（今の置き場所は `ux/p
 - 解析と描画はブラウザ（Playwright の Chromium）が行う。成果物のソースを自前のパーサで読まない。
 - 工場はアンカーを埋める：セクションは `data-ia-section`、文案は `data-ia-copy`、固定値と正式名称の表示は `data-dict="<辞書の id>"`（`value-` の id は固定値、`name-` の id は正式名称。`term-` の id は印にできない）、宣言した文言は `data-ia-text`。v4・v5 の `data-ia-problem`・`data-ia-msg`・`data-ia-pain`・`data-ia-frame` が残っていれば IA_DOM_LEGACY_ATTRIBUTE で失格（互換は持たない。v5 の描画物は `infoarch-author migrate-v6` が読み替える）。
 - **画面の適合（SPEC v6 要件 10）**：セクションの印は outline の順序どおりにちょうど並ぶ（IA_DOM_ORDER）。文案の印は、outline で属するセクションの印の中にあり（IA_DOM_COPY_SECTION）、セクションの中で outline の順番どおりに並ぶ（IA_DOM_COPY_ORDER）。同じ文案の印は 1 つだけ（IA_DOM_COPY_REPEATED。繰り返したい行動喚起は、outline に別の文案として置く）。条件と赤のフィクスチャの対応表は `fixtures/screen-red-cases.json`（DOM の写しと実ブラウザの両方で確かめる）。
-- Playwright は own-design-author の `scripts/playwright_runtime.mjs` で解決する：`OWN_PLAYWRIGHT_DIR` → 対象 repo（`INFOARCH_PLAYWRIGHT_DIR`、無ければ実行ディレクトリとその祖先）→ 端末の共通置き場（対象 repo の `ux/design/render-environment.json` が固定する版）。`NODE_PATH` は見ない。自動では入れない。解決できなければ IA_DOM_PLAYWRIGHT で失格。
+- Playwright は own-design-author の `scripts/playwright_runtime.mjs` で解決する：`OWN_PLAYWRIGHT_DIR` → 対象 repo（`INFOARCH_PLAYWRIGHT_DIR`、無ければ実行ディレクトリとその祖先）→ 端末の共通置き場（対象 repo の `design/render-environment.json` が固定する版）。`NODE_PATH` は見ない。自動では入れない。解決できなければ IA_DOM_PLAYWRIGHT で失格。
 - 読み取る前に、ページが落ち着くのを待つ：network idle の後に 1 秒（表示を始めるタイマーのため）、さらに実行中のアニメーションとトランジションが終わるまで最大 5 秒。終わらないアニメーションがあっても読み取り、2 回の描画の比較で揺れを報告する。
 - 同じ入力を 2 回描画し、結果が違えば IA_DOM_UNSTABLE（判定に使わない）。
 - 最初の画面の文言（各画面幅）を報告の `first_screens` に出す。強調の判定（Jev の判定台帳）の入力になる。
@@ -190,7 +189,7 @@ v5 の木（旧い名前 `info_arch.yaml` の版 3（今の置き場所は `ux/p
 ## 意味の判定（`judge`）
 
 意味の判定は Jev が行い、その結果を判定台帳に固定する。検査は台帳だけを読み、その場で Jev を呼ばない。
-方針ファイル（モデル・θ・プロンプト）・台帳（`ux/judgments.json`）・使用量の台帳（累計 2,000 判定）は、own-design-author と共有する
+方針ファイル（モデル・θ・プロンプト）・台帳（`design/judgments.json`）・使用量の台帳（累計 2,000 判定）は、own-design-author と共有する
 （own-design-author の `references/judgments-and-modules.md`）。
 
 | 種類 | 単位 | 入力の本文 | 文脈 |
@@ -208,7 +207,7 @@ v5 の木（旧い名前 `info_arch.yaml` の版 3（今の置き場所は `ux/p
 - モデルは呼ばない。本物の Jev は `judgment_run.py`（上限つき、`--execute` のときだけ）で取る。
 
 score は「問題がある確率」。θ 以上は IA_JUDGE_REVIEW（要確認）として人に回し、score だけで失格にしない。
-オーナーが原文を見て認めた要確認は、`accept-reviews` でオーナーの言葉と日付を付けて `ux/infoarch/accepted_reviews.yaml`（`schema_version` 1、行は `judgment_hash`・`id`・`approver`・`date`）に記録する。記録は判定のハッシュに結び付くので、文案か文脈が変われば当たらなくなり、要確認に戻る。今の要確認に無い id・言葉や ISO の日付が無いものは記録しない。`--write` が無ければ書かない。共有の判定台帳の形は変えない。
+オーナーが原文を見て認めた要確認は、`accept-reviews` でオーナーの言葉と日付を付けて `design/info_arch/accepted_reviews.yaml`（`schema_version` 1、行は `judgment_hash`・`id`・`approver`・`date`）に記録する。記録は判定のハッシュに結び付くので、文案か文脈が変われば当たらなくなり、要確認に戻る。今の要確認に無い id・言葉や ISO の日付が無いものは記録しない。`--write` が無ければ書かない。共有の判定台帳の形は変えない。
 強調の判定でゲートを止めるかは、最初の実回答で精度を測ってから決める（spec）。
 
 ```sh
@@ -231,7 +230,7 @@ holdout はそのまま引き継ぐ。回答の policy が今の共有 policy �
 | IA_JUDGE_DOM_FAILED / IA_JUDGE_DOM_REPORT | 失格した（終了コード 0・1 以外の）描画を判定に使おうとした・最初の画面の行が無いか読めない・`first_screens` か `unanchored` に、アウトラインの成果物と画面幅に無い行か重複がある（行の本文は報告に出さない）。警告だけの描画（アンカーの外の文言など）は判定に使う |
 | IA_JUDGE_UNCOVERED（warn） | 台帳に無い判定がある（未カバー） |
 | IA_JUDGE_REVIEW（warn） | score が θ 以上（要確認） |
-| IA_JUDGE_ACCEPTED（info） | θ 以上だが、オーナーが原文を見て認めた（`ux/infoarch/accepted_reviews.yaml` に判定のハッシュで記録がある） |
+| IA_JUDGE_ACCEPTED（info） | θ 以上だが、オーナーが原文を見て認めた（`design/info_arch/accepted_reviews.yaml` に判定のハッシュで記録がある） |
 | IA_JUDGE_ACCEPTED_STALE（info） | 「認めた」記録が今の判定に当たらない（文案・文脈が変わったか、θ 未満になった）。要確認は記録が当たらない限り戻る |
 | IA_JUDGE_ACCEPTED_FILE | 認めた要確認の記録が読めない・形が違う・symlink。要確認は隠さずに全部出す |
 | IA_JUDGE_EMPHASIS_MISSING（出荷される HTML なら warn、他は info） | 最初の画面の入力が無く、強調を判定していない。dom の報告が一部の成果物・画面幅だけなら、足りない組ごとに出る |
@@ -265,7 +264,7 @@ holdout はそのまま引き継ぐ。回答の policy が今の共有 policy �
 ## 出荷ゲートと維持（`ship`・`maintain`）
 
 出荷ゲートは、作業ツリーではなく、出荷されるコミット（clean な HEAD、push されるコミット、または予測マージ木）に対して走る。中身は、そのコミットを一時 worktree に取り出したもの（追跡されたファイルだけ）から読む。無視されたファイル・未コミットの変更・検査の後の書き換えは読まない。順番は次のとおりで、失格の段で止まる。
-1. `tree`：`ux/infoarch/` と `ux/positioning/` の下と `ux/judgments.json` にシンボリックリンクがあれば `IA_SHIP_SYMLINK`（失格。`check` の前に見る）。
+1. `tree`：`design/info_arch/` の下と `design/judgments.json` にシンボリックリンクがあれば `IA_SHIP_SYMLINK`（失格。`check` の前に見る）。
 2. `check`（決定論）。出荷チャネル（`ship: true`）が 0 件、または出荷チャネルのどれか 1 つでもアウトラインが 0 件なら失格（空のゲートを合格にしない。他のチャネルが出荷していても、空のチャネルは合格にしない）。
 3. `tree`（続き）：出荷されるアウトラインの成果物は、HTML かどうかに関わらず、すべてコミットの中に通常ファイルとして無ければならない。無い・ディレクトリ等は `IA_SHIP_OUTPUT_MISSING`、成果物か親ディレクトリがシンボリックリンクなら `IA_SHIP_SYMLINK`（どちらも失格）。git のオブジェクトから判定するので、手元にある無視されたファイルは数えない。
 4. `dom`：出荷されるアウトラインのうち HTML の成果物を持つものを、実ブラウザで描画して確かめる。HTML が無いアウトラインは `skipped` に記録する。
@@ -283,10 +282,10 @@ pre-push の拡張は、マーカーのある repo だけで動く（opt-in）�
 拡張は `INFOARCH_SHIP_COMMAND`（既定は PATH の `infoarch-author`）を呼ぶ。一時 worktree には node_modules が無いので、`INFOARCH_PLAYWRIGHT_DIR` が無ければ検査している checkout を使う。
 出力は 1 行の JSON。CI での出荷ゲートは持たない（spec の Deferred）。
 
-`infoarch-author maintain --root .` は own-session-close の Step 2.5 から呼ぶ。`ux/infoarch/` も `ux/positioning/` も無ければ 1 行で skip する。
-あれば（`ux/infoarch/` が無くても `ux/positioning/` があれば走る）`check` と `judge`（台帳を読むだけ。ブラウザは使わない）を走らせ、次を 1 行の JSON で返す。
+`infoarch-author maintain --root .` は own-session-close の Step 2.5 から呼ぶ。`design/info_arch/` が無ければ 1 行で skip する。
+あれば `check` と `judge`（台帳を読むだけ。ブラウザは使わない）を走らせ、次を 1 行の JSON で返す。
 - `due`：期限が `references/expiry.json` の `due_within_days` 日以内に来る証拠・固定値と、それを参照するアウトライン（出荷されるか）。
-- `changed_paths`：出荷チャネルの `merge_base` からのコミット済みの差分と、未コミットの差分（`ux/infoarch/` と `ux/positioning/` の中だけ。辞書の変更も含む）。
+- `changed_paths`：出荷チャネルの `merge_base` からのコミット済みの差分と、未コミットの差分（`design/info_arch/` の中だけ）。
 - `impacted_outlines`：変わった原子を参照するアウトライン（辞書（`docs/dictionary/`）が変わったら全部）。
 - `uncovered_judgments`：台帳に無い判定の数（Jev で取得する候補）。
 
@@ -302,7 +301,7 @@ pre-push の拡張は、マーカーのある repo だけで動く（opt-in）�
 
 ## blueprint（プロダクト UI の infoarch。SPEC-product-ui-infoarch）
 
-`ux/infoarch/blueprint/product.yaml`（`references/schema/blueprint-product.v1.schema.json`）と `screens/<scr-…>.yaml`（`blueprint-screen.v1.schema.json`）。`blueprint/` が無い repo では何も読まない。画面だけの repo（outline もチャネルも無い）は `IA_NO_OUTLINES` で失格にしない。
+`design/info_arch/blueprint/product.yaml`（`references/schema/blueprint-product.v1.schema.json`）と `screens/<scr-…>.yaml`（`blueprint-screen.v1.schema.json`）。`blueprint/` が無い repo では何も読まない。画面だけの repo（outline もチャネルも無い）は `IA_NO_OUTLINES` で失格にしない。
 
 - **項目と id**：ストーリー `sto`・原則 `pri`・制約 `con`・オブジェクト `ojc`・入口 `ntr`。id は `product.yaml` の台帳が発行し（`ledger.next`）、`ledger.tombstones` にある id は再利用しない（画面 id `scr-…` も載せられる）。承認の状態は持たない（state は empty / proposed）。
 - **承認**：`ia:item:<項目 id>`。ハッシュは `blueprint.item_hash`（項目 id と、書かれた内容から provenance を除いたものの JCS 正規化の SHA-256）。ほかの項目に依らない。`infoarch-author targets` の `approval_hashes` に proposed の項目すべて、`must_approval_keys` に出荷する画面が引く項目が出る。`ia_module.py` の鍵の形は `ia:path:val-NNNN` と `ia:item:<種別>-NNNN`。

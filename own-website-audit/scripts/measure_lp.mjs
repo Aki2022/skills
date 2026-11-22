@@ -15,7 +15,7 @@
  * 反映されず「実際にどう見えているか」を測れない（v1 でこの誤りを踏んだ）。
  *
  * 使い方:
- *   node measure_lp.mjs <url> --manifest ux/design/.resolved/web.json [--viewports 375,1280] [--schemes dark,light] [--json out.json] [--state '{"name":"open","steps":[{"click":"#open"}]}']
+ *   node measure_lp.mjs <url> --manifest design/.resolved/web.json [--viewports 375,1280] [--schemes dark,light] [--json out.json] [--state '{"name":"open","steps":[{"click":"#open"}]}']
  *
  * 終了コード: 0 = 失格なし / 1 = 失格あり / 2 = 実行不能
  */

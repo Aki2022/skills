@@ -33,10 +33,10 @@ description: "成果物の検査・レビューの入口。「デザインをチ
 
 ### 2. 前提とカバレッジ表
 
-web対象は git toplevel の `ux/design/` を確認し、`own-design-author` のL0を実行する。
+web対象は git toplevel の `design/` を確認し、`own-design-author` のL0を実行する。
 不在・失格なら生成や非決定論レビューへ進まず、定義の整備へ戻す。L0/L1は確認不要、
 L2の描画検査は人間に実施可否を確認する。対象0件は失格で、準拠合格にしない。
-pptxは従属WS完了までux/design/を読まないため、その制約を報告する。
+pptxは従属WS完了までdesign/を読まないため、その制約を報告する。
 
 **この表がこの skill の本体。** 空欄は「担当が存在しない」ことの明示であり、
 検査を実行できない観点は報告にもそのまま**欠落**として書く。
@@ -46,14 +46,14 @@ pptxは従属WS完了までux/design/を読まないため、その制約を報�
 | 構造（優先度と描画後の位置） | LP は outline の順序と文言の一致（`infoarch-author dom`） | `own-web-build` の `audit_screen.py`（blueprint の優先度と、実ブラウザで測った位置。PC とスマホの 2 つの幅） | 対象外 |
 | 骨格（主操作・領域の印） | 対象外 | 同スクリプト（主操作が 1 つだけ塗られている・宣言した領域がすべて描かれている・印が 0 件なら「確かめていない」） | 対象外 |
 | 状態（loading・empty・error など） | 対象外 | 同スクリプト（宣言した状態が、宣言した文言でページにある） | 対象外 |
-| 審美・レイアウト実測（決定論）   | `own-website-audit` の `measure_lp.mjs` | 同スクリプト流用可。ただし `fold-cta` 等 LP 前提の検査は解釈を添える | HTML資料はL0/L1/L2。pptxは `own-pptx-build` の既存決定論検査（ux/design/連携は未カバー） |
+| 審美・レイアウト実測（決定論）   | `own-website-audit` の `measure_lp.mjs` | 同スクリプト流用可。ただし `fold-cta` 等 LP 前提の検査は解釈を添える | HTML資料はL0/L1/L2。pptxは `own-pptx-build` の既存決定論検査（design/連携は未カバー） |
 | マーケ定性（独立レビュアー採点） | `own-website-audit` の rubric           | **欠落**                                                             | **欠落**                                            |
 | 広告審査・法務・SEO・計測        | `own-website-audit`                     | `own-website-audit`（該当節のみ）                                    | 対象外                                              |
 | UI ガイドライン準拠              | `web-design-guidelines`                 | `web-design-guidelines`                                              | 対象外                                              |
 | アクセシビリティ修正             | `fixing-accessibility`                  | `fixing-accessibility`                                               | **欠落**（validator の自己点検のみ）                |
 | 表示性能（Core Web Vitals）      | `web-perf`                              | `web-perf`                                                           | 対象外                                              |
 | AI 生成様式の検出                | `baseline-ui`                           | `baseline-ui`                                                        | **欠落**                                            |
-| ブランド一貫性                   | `ux/design/` のL0と解決済みマニフェストによるL1/L2 | 同左 | HTML資料は同左、pptxのux/design/準拠は未カバー                                                |
+| ブランド一貫性                   | `design/` のL0と解決済みマニフェストによるL1/L2 | 同左 | HTML資料は同左、pptxのdesign/準拠は未カバー                                                |
 | 正式名称・固定値（辞書）         | `own-doc-update` の `dictionary.py check-html`（`docs/dictionary/` のゆれ・印の値・期限切れ） | 同左 | HTML資料は同左、pptxは未カバー |
 
 補足:
@@ -69,7 +69,7 @@ pptxは従属WS完了までux/design/を読まないため、その制約を報�
 
 正式名称・固定値（辞書）の行は、HTML の成果物ごとに `python3 <skills>/own-doc-update/scripts/dictionary.py check-html <repo> <file.html>…` を流す。repo の `docs/dictionary/` が語と値の唯一の出どころで、表示のゆれ・`data-dict="<id>"` の印の文言と辞書の違い・期限切れの固定値を見る。exit 2（`docs/dictionary/` が無い・HTML を渡していない）は「確かめていない」と報告し、合格にしない。印が 0 件のときも値の照合は効いていないので、その件数を報告に書く。
 
-プロダクト UI を渡されたら、構造・骨格・状態の 3 行は `audit_screen.py` を画面ごとに流して埋める（blueprint が無い成果物には、この 3 行は「欠落（blueprint が無い）」と報告する。黙って飛ばさない）。入力は画面の yaml（`ux/infoarch/blueprint/screens/<画面 id>.yaml`）・描いた HTML・`--repo`（描画の環境を固定する `ux/design/render-environment.json`）。描画に使える Playwright が無ければ、確かめていないと報告する（合格にしない）。
+プロダクト UI を渡されたら、構造・骨格・状態の 3 行は `audit_screen.py` を画面ごとに流して埋める（blueprint が無い成果物には、この 3 行は「欠落（blueprint が無い）」と報告する。黙って飛ばさない）。入力は画面の yaml（`design/info_arch/blueprint/screens/<画面 id>.yaml`）・描いた HTML・`--repo`（描画の環境を固定する `design/render-environment.json`）。描画に使える Playwright が無ければ、確かめていないと報告する（合格にしない）。
 
 ### 3. 実行順序 — 決定論が緑になるまで非決定論へ進まない
 

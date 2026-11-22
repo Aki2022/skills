@@ -9,7 +9,6 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from page_inventory import check_pages
 from test_core import project, write, SKILL  # noqa: F401  (fixture reuse)
-import layer_paths as lp  # noqa: E402  (test_core puts scripts/ on the path)
 
 
 def repo(tmp_path, files):
@@ -107,7 +106,7 @@ def test_web_check_stops_before_l1_on_undeclared_page(project):
     (root / 'index.html').write_text('<html></html>')
     (root / 'extra.html').write_text('<html></html>')
     pages = {'sources': ['*.html'], 'covered': {'index.html': ['html', 'DESIGN_FIXTURE_URL']}, 'excluded': {}}
-    write(lp.path(root, 'validation'), config(pages, html=('index.html',), envs=('DESIGN_FIXTURE_URL',)))
+    write(root / 'design/validation.json', config(pages, html=('index.html',), envs=('DESIGN_FIXTURE_URL',)))
     argv = [sys.executable, str(SKILL / 'scripts/web_check.py'), '--repo', str(root), '--catalog-dir', str(catalogs)]
     run = subprocess.run(argv, capture_output=True, text=True)
     result = json.loads(run.stdout)

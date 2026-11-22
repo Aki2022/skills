@@ -1,10 +1,10 @@
 # 立ち上げ時の抽出
 
-新しい repo で、既存の資料（企画書・公開中の LP・配布済みの資料・製品の仕様）から、positioning（`ux/positioning/positioning.yaml`）の下書き（原子と矢印）と、辞書（`docs/dictionary/`）の固定値・正式名称の下書きを起こす手順。positioning は own-positioning-author の持ち物で、辞書は own-doc-update の手順で足す。outline は成果物ごとに AI が作るので、ここでは作らない。
+新しい repo で、既存の資料（企画書・公開中の LP・配布済みの資料・製品の仕様）から、positioning（`info_arch.yaml`）の下書き（原子と矢印）と、辞書（`docs/dictionary/`）の固定値・正式名称の下書きを起こす手順。positioning は own-positioning-author の持ち物で、辞書は own-doc-update の手順で足す。outline は成果物ごとに AI が作るので、ここでは作らない。
 
 ## やること
 
-1. `own-positioning-author/templates/positioning/positioning.yaml` を repo の `ux/positioning/` に、`own-infoarch-author/templates/infoarch/`（channels と INFO_ARCH.md）を repo の `ux/infoarch/` に写す。辞書の置き場所と形は own-doc-update（`docs/dictionary/`）。
+1. `own-positioning-author/templates/design/info_arch/info_arch.yaml` と `own-infoarch-author/templates/design/info_arch/`（channels と INFO_ARCH.md）を repo の `design/info_arch/` に写す。辞書の置き場所と形は own-doc-update（`docs/dictionary/`）。
 2. 依頼主に、読んでよい既存の資料の場所を聞く（repo の中のパス、または URL）。資料を勝手に探し回らない。
 3. 資料を読み、次の順に下書きする。どの原子にも `provenance: extracted:<repo 相対パス>#<見出し>` か `extracted:<url>` を書く。
    1. 正式名称（製品名・会社名・機能名）→ 辞書の `name`

@@ -332,7 +332,7 @@ def cmd_answer_key(args):
 
 
 def cmd_migrate_v6(args):
-    """Requirement 17: one batch v5 -> v6 migration of ux/infoarch/ (dry run without --write)."""
+    """Requirement 17: one batch v5 -> v6 migration of design/info_arch/ (dry run without --write)."""
     import migrate_v6
     out = migrate_v6.run(args.root, write=args.write)
     _print(out)

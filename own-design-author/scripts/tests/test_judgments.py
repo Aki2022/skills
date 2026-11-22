@@ -5,7 +5,6 @@ import subprocess
 import sys
 import pytest
 from test_core import project,check,write,SKILL,approve_rows,approve
-import layer_paths as lp  # noqa: E402  (test_core puts scripts/ on the path)
 from judgment_ledger import candidate,load_policy,evaluate,migrate_ledger,policy_digest
 
 
@@ -80,12 +79,12 @@ def define_doc(project):
     from test_item_coverage import catalog_item
     root,catalogs=project
     write(catalogs/'test-v1.json',{'schema_version':1,'version':'test-v1','items':[catalog_item('components/accordion','ユースケース')]})
-    config=json.loads(lp.path(root, 'design_config').read_text())
+    config=json.loads((root/'design/design.yaml').read_text())
     config['items']['dads-000001']={'state':'defined','evidence':['doc:DESIGN.md#dads-000001','rule:one-summary']}
-    write(lp.path(root, 'design_config'),config)
-    write(lp.path(root, 'checks', 'web.yaml'),{'rules':[{'id':'one-summary','kind':'count','scope':['details'],
+    write(root/'design/design.yaml',config)
+    write(root/'design/checks/web.yaml',{'rules':[{'id':'one-summary','kind':'count','scope':['details'],
         'targets':['summary'],'minimum':1,'maximum':1}]})
-    lp.path(root, 'design_dir', 'DESIGN.md').write_text('# Brand\n## dads-000001\nUse token:color.primary consistently.\n')
+    (root/'design/DESIGN.md').write_text('# Brand\n## dads-000001\nUse token:color.primary consistently.\n')
 
 
 def test_real_l0_reports_missing_judgment_and_rejects_stale_screening(project):
@@ -98,23 +97,23 @@ def test_real_l0_reports_missing_judgment_and_rejects_stale_screening(project):
         {'key':'ds:web:token:color.primary','value_hash':manifest['tokens']['color.primary']['value_hash']}])
     assert check(project,ship=True)['exit_code']==2
     rows=check(project)['judgment_candidates']
-    write(lp.path(root, 'judgments'),ledger_for(rows,[0.1]*len(rows)))
+    write(root/'design/judgments.json',ledger_for(rows,[0.1]*len(rows)))
     result=check(project,ship=True)
     assert result['exit_code']==0,result
     assert result['report']['screened'][0]['holdout']['positives']==1
-    lp.path(root, 'design_dir', 'DESIGN.md').write_text('# Brand\n## dads-000001\nChanged policy.\n')
+    (root/'design/DESIGN.md').write_text('# Brand\n## dads-000001\nChanged policy.\n')
     result=check(project,ship=True)
     assert result['exit_code']==2 and result['report']['uncovered']
 
 
 def test_ia_input_without_installed_module_fails_visibly(project):
     root,_=project;approve(project);assert check(project,ship=True)['exit_code']==0
-    assert lp.path(root, 'resolved', 'web.json').exists()
-    lp.path(root, 'infoarch').mkdir(parents=True)
+    assert (root/'design/.resolved/web.json').exists()
+    (root/'design/info_arch').mkdir()
     result=check(project)
     assert result['exit_code']==2
     assert any(row['id']=='ia' for row in result['report']['missing'])
-    assert not lp.path(root, 'resolved', 'web.json').exists()
+    assert not (root/'design/.resolved/web.json').exists()
 
 
 def test_record_and_migrate_cli_write_real_ledger_and_reject_label_changes(project,tmp_path):
@@ -124,15 +123,15 @@ def test_record_and_migrate_cli_write_real_ledger_and_reject_label_changes(proje
     args=['--repo',str(root),'--replacement',str(replacement)]
     preview=subprocess.run(argv+['record']+args,capture_output=True,text=True)
     assert preview.returncode==0,preview.stdout+preview.stderr
-    assert not lp.path(root, 'judgments').exists()
+    assert not (root/'design/judgments.json').exists()
     run=subprocess.run(argv+['record']+args+['--write'],capture_output=True,text=True)
     assert run.returncode==0,run.stdout+run.stderr
-    assert evaluate([row],json.loads(lp.path(root, 'judgments').read_text()))['screened']
-    before=lp.path(root, 'judgments').read_bytes()
+    assert evaluate([row],json.loads((root/'design/judgments.json').read_text()))['screened']
+    before=(root/'design/judgments.json').read_bytes()
     data['holdout']['cases'][0]['positive']=False;write(replacement,data)
     bad=subprocess.run(argv+['migrate']+args+['--write'],capture_output=True,text=True)
     assert bad.returncode==2
-    assert lp.path(root, 'judgments').read_bytes()==before
+    assert (root/'design/judgments.json').read_bytes()==before
     data=ledger_for([row],[0.1]);write(replacement,data)
     run=subprocess.run(argv+['migrate']+args+['--write'],capture_output=True,text=True)
     assert run.returncode==0,run.stdout+run.stderr
@@ -156,15 +155,15 @@ def resolve(*,root,approvals,profiles):
         'report':{key:[] for key in ('executed','skipped','missing','uncovered','screened')}}
 """)
     module_source=implementation.read_text()
-    config=json.loads(lp.path(root, 'design_config').read_text());config['modules']={'ia':'fixture-v1'}
-    write(lp.path(root, 'design_config'),config)
+    config=json.loads((root/'design/design.yaml').read_text());config['modules']={'ia':'fixture-v1'}
+    write(root/'design/design.yaml',config)
     run=subprocess.run([sys.executable,str(copied/'scripts/design_author.py'),'check','--repo',str(root),
         '--catalog-dir',str(catalogs),'--include-manifest'],capture_output=True,text=True)
     assert run.returncode==0,run.stdout+run.stderr
     manifest=json.loads(run.stdout)['manifest']['web']
     assert manifest['modules']['ia']['resolved']['messages']==['fixture-message']
     assert (root/'.ia-resolution-count').read_text()=='1'
-    path=lp.path(root, 'resolved', 'web.json')
+    path=root/'design/.resolved/web.json'
     python=[sys.executable,str(copied/'scripts/resolved_contract.py'),str(path)]
     js='import {loadManifest} from '+json.dumps((copied/'scripts/resolved_contract.mjs').as_uri())+';loadManifest(process.argv.at(-1));'
     node=[os.environ.get('DESIGN_TEST_NODE','node'),'--input-type=module','-e',js,str(path)]
@@ -214,7 +213,7 @@ def test_policy_change_during_l0_is_rejected_and_old_output_removed(project,monk
     result=check(project)
     assert result['exit_code']==2
     assert 'judgment policy changed during validation' in result['errors']
-    assert not lp.path(root, 'resolved', 'web.json').exists()
+    assert not (root/'design/.resolved/web.json').exists()
 
 
 def current_ledger(candidates,scores,policy=None,holdout=None):
@@ -284,19 +283,19 @@ def test_real_l0_high_score_does_not_block_approved_targets_but_stale_missing_bl
     approve_rows(project,[{'key':'ds:web:item:dads-000001','value_hash':manifest['items']['dads-000001']['value_hash']},
         {'key':'ds:web:token:color.primary','value_hash':manifest['tokens']['color.primary']['value_hash']}])
     candidates=result['judgment_candidates']
-    write(lp.path(root, 'judgments'),current_ledger(candidates,[0.99]*len(candidates)))
+    write(root/'design/judgments.json',current_ledger(candidates,[0.99]*len(candidates)))
     result=check(project,ship=True)
     assert result['exit_code']==1 and not result['errors'],result
     assert result['warnings'] and result['report']['screened'][0]['flagged_advisory']
-    assert lp.path(root, 'resolved', 'web.json').exists()
+    assert (root/'design/.resolved/web.json').exists()
     assert 'recall' not in json.dumps(result)
-    ledger=current_ledger([],[]);write(lp.path(root, 'judgments'),ledger)
+    ledger=current_ledger([],[]);write(root/'design/judgments.json',ledger)
     assert check(project,ship=True)['exit_code']==2
-    write(lp.path(root, 'judgments'),current_ledger(candidates,[0.1]*len(candidates)))
-    lp.path(root, 'design_dir', 'DESIGN.md').write_text('# Brand\n## dads-000001\nOther current wording.\n')
+    write(root/'design/judgments.json',current_ledger(candidates,[0.1]*len(candidates)))
+    (root/'design/DESIGN.md').write_text('# Brand\n## dads-000001\nOther current wording.\n')
     result=check(project,ship=True)
     assert result['exit_code']==2 and result['report']['uncovered']
-    assert not lp.path(root, 'resolved', 'web.json').exists()
+    assert not (root/'design/.resolved/web.json').exists()
 
 
 def test_real_l0_ship_rejects_missing_optional_item_judgment(project):
@@ -306,9 +305,9 @@ def test_real_l0_ship_rejects_missing_optional_item_judgment(project):
     write(catalogs/'test-v1.json',catalog)
     ledger=json.loads((catalogs/'id-ledger.json').read_text());ledger['next_id']=3
     ledger['entries'].append({'id':'dads-000002','match_key':'dads-000002','retired':False});write(catalogs/'id-ledger.json',ledger)
-    config=json.loads(lp.path(root, 'design_config').read_text());config['items']['dads-000002']={'state':'defined','evidence':['doc:DESIGN.md#dads-000002']}
-    write(lp.path(root, 'design_config'),config)
-    lp.path(root, 'design_dir', 'DESIGN.md').write_text('# Brand\n## dads-000002\nA specific optional policy.\n')
+    config=json.loads((root/'design/design.yaml').read_text());config['items']['dads-000002']={'state':'defined','evidence':['doc:DESIGN.md#dads-000002']}
+    write(root/'design/design.yaml',config)
+    (root/'design/DESIGN.md').write_text('# Brand\n## dads-000002\nA specific optional policy.\n')
     approve(project)
     result=check(project,ship=True)
     assert result['exit_code']==2 and result['report']['uncovered'],result
@@ -332,7 +331,7 @@ def test_both_semantic_kinds_are_advisory_and_cli_records_unmeasured(kind,projec
     assert run.returncode==0,run.stdout+run.stderr
     assert json.loads(run.stdout)['evaluation']=={'status':'unmeasured'}
     assert 'recall' not in run.stdout
-    evaluated=evaluate([row],json.loads(lp.path(root, 'judgments').read_text()))
+    evaluated=evaluate([row],json.loads((root/'design/judgments.json').read_text()))
     assert evaluated['warnings'] and not evaluated['errors']
 
 
@@ -387,18 +386,18 @@ def test_refresh_preserves_scores_labels_and_verifies_added_removed_input_sets()
 def test_refresh_cli_records_changed_source_inputs_then_real_l0_uses_them(project,tmp_path):
     from judgment_ledger import refresh_ledger
     root,_=project;define_doc(project);oldrows=check(project)['judgment_candidates']
-    before=current_ledger(oldrows,[0.8]*len(oldrows));write(lp.path(root, 'judgments'),before)
-    lp.path(root, 'design_dir', 'DESIGN.md').write_text('# Brand\n## dads-000001\nAn explicitly updated policy.\n')
+    before=current_ledger(oldrows,[0.8]*len(oldrows));write(root/'design/judgments.json',before)
+    (root/'design/DESIGN.md').write_text('# Brand\n## dads-000001\nAn explicitly updated policy.\n')
     current=check(project);newrows=current['judgment_candidates']
     replacement=tmp_path/'refresh.json';write(replacement,current_ledger(newrows,[0.9]*len(newrows)))
     argv=[sys.executable,str(SKILL/'scripts/judgment_ledger.py'),'refresh','--repo',str(root),
         '--replacement',str(replacement)]
     preview=subprocess.run(argv,capture_output=True,text=True)
     assert preview.returncode==0,preview.stdout+preview.stderr
-    assert json.loads(lp.path(root, 'judgments').read_text())==before
+    assert json.loads((root/'design/judgments.json').read_text())==before
     run=subprocess.run(argv+['--write'],capture_output=True,text=True)
     assert run.returncode==0,run.stdout+run.stderr
-    recorded=json.loads(lp.path(root, 'judgments').read_text())
+    recorded=json.loads((root/'design/judgments.json').read_text())
     assert recorded['refresh']['removed']==[oldrows[0]['judgment_hash']]
     manifest=current['manifest']['web']
     approve_rows(project,[{'key':'ds:web:item:dads-000001','value_hash':manifest['items']['dads-000001']['value_hash']},

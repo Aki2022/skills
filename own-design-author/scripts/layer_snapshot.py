@@ -15,13 +15,12 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import subprocess
 import sys
 from pathlib import Path
 
 SKILL = Path(__file__).resolve().parents[1]
 SKILLS = SKILL.parent
-KINDS = ('ledger', 'targets', 'rules', 'stages', 'findings', 'judgments')
+KINDS = ('ledger', 'targets', 'rules', 'stages')
 
 
 def normalise(text, layout):
@@ -42,20 +41,6 @@ def _rule_ids(manifest):
     return sorted(ids)
 
 
-def _ia(root, skills, layout):
-    """The IA check on its own (findings by level, code and normalised path), when the repository has an infoarch."""
-    script = Path(skills) / 'own-infoarch-author/scripts/infoarch_author.py'
-    run = subprocess.run([sys.executable, str(script), 'check', '--root', str(root), '--date', '2026-01-01'],
-                         capture_output=True, text=True, timeout=120, cwd=str(root))
-    try:
-        data = json.loads(run.stdout)
-    except ValueError:
-        return {'present': False, 'exit_code': run.returncode, 'counts': {}, 'findings': ['unreadable: ' + normalise(run.stdout[:200] + run.stderr[:200], layout)]}
-    findings = sorted(f"{f['level']} {f['code']} {normalise(f.get('path', ''), layout)}" for f in data.get('findings', []))
-    return {'present': bool(data.get('targets')), 'exit_code': data.get('exit_code'),
-            'counts': data.get('targets') or {}, 'findings': findings}
-
-
 def take(repo, skills=SKILLS, layout_file=None, catalog_dir=None):
     skills = Path(skills)
     scripts = skills / 'own-design-author/scripts'
@@ -74,18 +59,13 @@ def take(repo, skills=SKILLS, layout_file=None, catalog_dir=None):
         key = row['key']
         ledger[key] = {'value_hash': row['value_hash'], 'current_hash': targets.get(key),
                        'valid': targets.get(key) == row['value_hash']}
-    ledger_text = (root / layout['entries']['judgments']).read_text(encoding='utf-8') if (root / layout['entries']['judgments']).exists() else ''
-    judgments = {c['id']: {'hash': c['judgment_hash'], 'answered': c['judgment_hash'] in ledger_text}
-                 for c in result.get('judgment_candidates') or []}
     stages = {s['id']: {'exit_code': s.get('exit_code'), 'targets': s.get('targets')}
               for s in (result.get('report') or {}).get('executed', [])}
     return {
         'schema_version': 1,
-        'ia': _ia(root, skills, layout),
         'ledger': dict(sorted(ledger.items())),
         'targets': targets,
         'rules': _rule_ids(result.get('manifest')),
-        'judgments': dict(sorted(judgments.items())),
         'verdict': {'exit_code': result['exit_code'], 'stages': dict(sorted(stages.items())),
                     'errors': sorted(normalise(str(e), layout) for e in result.get('errors', [])),
                     'warnings': sorted(normalise(str(w), layout) for w in result.get('warnings', []))},
@@ -106,20 +86,14 @@ def compare(before, after):
 
     diff_maps('ledger', before['ledger'], after['ledger'])
     diff_maps('targets', before['targets'], after['targets'])
-    diff_maps('judgments', before['judgments'], after['judgments'])
     for rule in sorted(set(before['rules']) ^ set(after['rules'])):
         diffs.append(f'rules: {rule} is not in both')
     diff_maps('stages', before['verdict']['stages'], after['verdict']['stages'])
-    for field in ('present', 'exit_code', 'counts'):
-        if before['ia'][field] != after['ia'][field]:
-            diffs.append(f"ia.{field} changed: {before['ia'][field]!r} -> {after['ia'][field]!r}")
-    for finding in sorted(set(before['ia']['findings']) ^ set(after['ia']['findings'])):
-        diffs.append(f'ia.findings: {finding} is not in both')
     for field in ('exit_code', 'errors', 'warnings'):
         if before['verdict'][field] != after['verdict'][field]:
             diffs.append(f'verdict.{field} changed: {before["verdict"][field]!r} -> {after["verdict"][field]!r}')
     compared = {'ledger': len(before['ledger']), 'targets': len(before['targets']), 'rules': len(before['rules']),
-                'stages': len(before['verdict']['stages']), 'findings': len(before['ia']['findings']), 'judgments': len(before['judgments'])}
+                'stages': len(before['verdict']['stages'])}
     return {'differences': diffs, 'compared': compared}
 
 

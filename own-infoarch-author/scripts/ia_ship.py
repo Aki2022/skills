@@ -11,7 +11,7 @@
 - doctor: a configuration diagnostic. A shipping channel without ship_command or merge_base, a missing or
   invalid marker, a missing scanner-preserving dispatcher or IA extension, and a dispatcher that does not
   propagate an extension's failing exit are failures.
-- maintain: the IA trigger of own-session-close Step 2.5. One line; skips when ux/infoarch/ is absent.
+- maintain: the IA trigger of own-session-close Step 2.5. One line; skips when design/info_arch/ is absent.
 
 Git plumbing is reused from own-design-author's ship gate (hook-free environment, clean-commit binding).
 Nothing here calls a model or installs a dependency.
@@ -108,15 +108,15 @@ def _kind(root, commit, path):
 def _input_findings(root, commit):
     """The IA inputs the gate reads must be committed as files: a symlink would make the check read elsewhere."""
     out = []
-    for base in dict.fromkeys([layer_paths.rel('infoarch'), layer_paths.rel('positioning_dir')]):
-        kind = _kind(root, commit, base)
-        if kind == 'symlink':
-            out.append(('IA_SHIP_SYMLINK', f'{base} はシンボリックリンク（出荷する木の中身として読めない）', base))
-        elif kind == 'tree':
-            for row in _git_raw(root, 'ls-tree', '-r', '-z', commit + ':' + base).split('\0'):
-                meta, _, entry = row.partition('\t')
-                if meta and meta.split()[0] == SYMLINK_MODE:
-                    out.append(('IA_SHIP_SYMLINK', f'{base}/{entry} はシンボリックリンク（出荷する木の中身として読めない）', f'{base}/{entry}'))
+    base = layer_paths.rel('infoarch')
+    kind = _kind(root, commit, base)
+    if kind == 'symlink':
+        out.append(('IA_SHIP_SYMLINK', f'{base} はシンボリックリンク（出荷する木の中身として読めない）', base))
+    elif kind == 'tree':
+        for row in _git_raw(root, 'ls-tree', '-r', '-z', commit + ':' + base).split('\0'):
+            meta, _, entry = row.partition('\t')
+            if meta and meta.split()[0] == SYMLINK_MODE:
+                out.append(('IA_SHIP_SYMLINK', f'{base}/{entry} はシンボリックリンク（出荷する木の中身として読めない）', f'{base}/{entry}'))
     if _kind(root, commit, judge.LEDGER.as_posix()) == 'symlink':
         out.append(('IA_SHIP_SYMLINK', f'{judge.LEDGER.as_posix()} はシンボリックリンク', judge.LEDGER.as_posix()))
     return out
@@ -494,8 +494,8 @@ def maintain(root, date, within_days=None):
     result = {'exit_code': 0, 'status': 'skipped', 'errors': [], 'warnings': [], 'due': [], 'changed_paths': [],
               'impacted_outlines': [], 'uncovered_judgments': 0}
     # A skip is only for a repository that never had the layer: a moved one raises here (never a skip, never "0 found").
-    if not layer_paths.has_ia(root):
-        return {'exit_code': 0, 'status': 'skipped', 'reason': f'{layer_paths.rel("infoarch")}/ and {layer_paths.rel("positioning_dir")}/ absent'}
+    if not layer_paths.path(root, 'infoarch').is_dir():
+        return {'exit_code': 0, 'status': 'skipped', 'reason': f'{layer_paths.rel("infoarch")}/ absent'}
     today = dt.date.fromisoformat(date)
     expiry = load_ref('expiry.json')
     within = expiry['due_within_days'] if within_days is None else within_days
@@ -520,9 +520,8 @@ def maintain(root, date, within_days=None):
 
     # What changed since the shipping merge base (committed) and in the working tree (uncommitted).
     prefix = layer_paths.rel('infoarch') + '/'
-    prefixes = (prefix, layer_paths.rel('positioning_dir') + '/')
     dict_prefix = dictionary.DICTIONARY_DIR.as_posix() + '/'  # the values and names an outline copies live here
-    changed, old_ref = set(p for p in _dirty(root) if p.startswith((*prefixes, dict_prefix))), 'HEAD'
+    changed, old_ref = set(p for p in _dirty(root) if p.startswith((prefix, dict_prefix))), 'HEAD'
     bases = sorted({row.get('merge_base') for _, row in m.channels.values() if row['ship'] and row.get('merge_base')})
     for ref in bases:
         try:
@@ -530,7 +529,7 @@ def maintain(root, date, within_days=None):
         except ValueError:
             result['warnings'].append(f'merge_base {ref} is not resolvable here; committed IA changes are not listed')
             continue
-        changed |= set(p for p in _git(root, 'diff', '--name-only', fork, 'HEAD', '--', *prefixes, dict_prefix).splitlines() if p)
+        changed |= set(p for p in _git(root, 'diff', '--name-only', fork, 'HEAD', '--', prefix, dict_prefix).splitlines() if p)
         old_ref = fork
     result['changed_paths'] = sorted(changed)
     impacted = set()

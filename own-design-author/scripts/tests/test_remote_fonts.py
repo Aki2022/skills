@@ -15,14 +15,13 @@ from threading import Thread
 import pytest
 
 from test_core import SKILL, project, check, write  # noqa: F401
-import layer_paths as lp
 from test_fixed_render import NODE, HELPER, pin
 
 BROWSER = pytest.mark.skipif(os.environ.get('DESIGN_BROWSER_TEST') != '1', reason='explicit real browser run required')
 
 
 def load(tmp_path, config):
-    path = lp.path(tmp_path, 'render_environment')
+    path = tmp_path / 'design/render-environment.json'
     write(path, config)
     js = ('import {loadEnvironment} from ' + json.dumps(HELPER.as_uri()) + ';'
           'try {loadEnvironment(process.argv.at(-1),process.cwd(),[375],["light"]);console.log("ok")}catch(e){console.log("rejected")}')
@@ -85,7 +84,7 @@ def cdn_site(project, tmp_path):
     if env.get('DESIGN_TEST_NODE_MODULES'):
         env['NODE_PATH'] = env['DESIGN_TEST_NODE_MODULES']
     config = pin(root, env)
-    font_bytes = (lp.path(root, 'assets', 'fixture.woff2')).read_bytes()
+    font_bytes = (root / 'design/assets/fixture.woff2').read_bytes()
     cdn = tmp_path / 'cdn'
     (cdn / 's').mkdir(parents=True)
     (cdn / 's/inter.woff2').write_bytes(font_bytes)
@@ -99,7 +98,7 @@ def cdn_site(project, tmp_path):
         tokens['color'][name] = {'$value': {'colorSpace': 'srgb', 'components': components,
                                  'hex': '#ffffff' if name == 'white' else '#000000', 'alpha': alpha},
                                  '$extensions': {'org.own.design': {'origin': 'proposal'}}}
-    write(lp.path(root, 'design_dir', 'tokens', 'brand.tokens.json'), tokens)
+    write(root / 'design/tokens/brand.tokens.json', tokens)
     (root / 'index.html').write_text(
         '<html lang="en"><head><title>Fixture</title><link rel="stylesheet" href="' + cdn_origin + '/style.css"><style>'
         'body{font:16px/1.5 Inter,sans-serif;background:white;color:black}'
@@ -111,14 +110,14 @@ def cdn_site(project, tmp_path):
               'files': {cdn_origin + '/style.css': sha((cdn / 'style.css').read_bytes()), cdn_origin + '/s/inter.woff2': sha(font_bytes)}}
 
     def measure(remote_fonts):
-        write(lp.path(root, 'render_environment'), {**config, **({'fonts': [], 'remote_fonts': remote_fonts} if remote_fonts else {})})
+        write(root / 'design/render-environment.json', {**config, **({'fonts': [], 'remote_fonts': remote_fonts} if remote_fonts else {})})
         l0 = check(project)
         assert l0['exit_code'] != 2, l0['errors']
-        output = lp.path(root, 'resolved', 'remote-test.json')
+        output = root / 'design/.resolved/remote-test.json'
         output.unlink(missing_ok=True)
         run = subprocess.run([NODE, str(SKILL.parent / 'own-website-audit/scripts/measure_lp.mjs'), site + '/index.html',
-                              '--manifest', str(lp.path(root, 'resolved', 'web.json')),
-                              '--environment', str(lp.path(root, 'render_environment')),
+                              '--manifest', str(root / 'design/.resolved/web.json'),
+                              '--environment', str(root / 'design/render-environment.json'),
                               '--viewports', '375', '--schemes', 'light', '--json', str(output)],
                              cwd=root, env=env, capture_output=True, text=True)
         return run, json.loads(output.read_text()) if output.exists() else None
@@ -187,9 +186,9 @@ def test_a_rejected_font_from_an_undeclared_origin_is_counted_without_its_url(cd
 def test_pin_tool_records_what_the_page_loads_from_the_declared_origins(cdn_site):
     measure, remote, cdn, root, env, site = cdn_site
     config = pin(root, env)  # the pin is written before any remote font is known
-    write(lp.path(root, 'render_environment'), {**config, 'fonts': []})
+    write(root / 'design/render-environment.json', {**config, 'fonts': []})
     run = subprocess.run([NODE, str(SKILL / 'scripts/pin_remote_fonts.mjs'), site + '/index.html',
-                          '--environment', str(lp.path(root, 'render_environment')),
+                          '--environment', str(root / 'design/render-environment.json'),
                           '--origins', remote['origins'][0]], cwd=root, env=env, capture_output=True, text=True)
     assert run.returncode == 0, run.stderr
     assert json.loads(run.stdout) == remote
@@ -204,9 +203,9 @@ def test_pin_tool_extends_the_pin_from_what_a_measurement_rejected(cdn_site):
     partial = {**remote, 'files': {u: h for u, h in remote['files'].items() if u != font_url}}
     run, data = measure(partial)
     assert run.returncode != 0 and font_failure(data), run.stdout
-    report = lp.path(root, 'resolved', 'remote-test.json')
+    report = root / 'design/.resolved/remote-test.json'
     extended = subprocess.run([NODE, str(SKILL / 'scripts/pin_remote_fonts.mjs'), '--extend', str(report),
-                               '--environment', str(lp.path(root, 'render_environment'))],
+                               '--environment', str(root / 'design/render-environment.json')],
                               cwd=root, env=env, capture_output=True, text=True)
     assert extended.returncode == 0, extended.stderr
     assert json.loads(extended.stdout) == remote

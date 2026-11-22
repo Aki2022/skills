@@ -4,7 +4,7 @@ title: 参照 DESIGN.md の正規化マッピング
 
 # 正規化マッピング
 
-指示された DESIGN.md を repo の `ux/design/` に写す。`import-policy.md` の許可元・権利確認に従う。
+指示された DESIGN.md を repo の `design/` に写す。`import-policy.md` の許可元・権利確認に従う。
 
 | カテゴリ | 写せる内容 | 写さないもの |
 | --- | --- | --- |

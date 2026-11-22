@@ -70,15 +70,14 @@ def _leaf(key):
     return PurePosixPath(layer_paths.rel(key)).name
 
 
-def _inputs(layers):
-    """Every file under the layers root (the ledger and the judgment record included), as the L0 manifest hashes them."""
+def _inputs(design):
     values = {}
-    for path in sorted(layers.rglob('*')):
-        relative = path.relative_to(layers)
+    for path in sorted(design.rglob('*')):
+        relative = path.relative_to(design)
         if _leaf('resolved') in relative.parts or path.name in (_leaf('assets_index'), 'migration.json'):
             continue
-        if path.is_symlink() or not path.resolve().is_relative_to(layers):
-            raise ValueError(f"maintenance input is a symlink or escapes {layer_paths.rel('layers')}/")
+        if path.is_symlink() or not path.resolve().is_relative_to(design):
+            raise ValueError(f"maintenance input is a symlink or escapes {PurePosixPath(layer_paths.rel('design_config')).parent}/")
         if path.is_file():
             values[relative.as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
     return values
@@ -97,6 +96,13 @@ def maintain_design(root, *, catalog_dir=None, today=None, force=False):
     if not design.exists():
         return {**result, 'reason': f'{design_rel()}/ absent'}
     config_path = layer_paths.path(root, 'design_config')
+    infoarch = layer_paths.path(root, 'infoarch')
+    if (not design.is_symlink() and design.is_dir() and not config_path.exists() and not config_path.is_symlink()
+            and infoarch.is_dir()
+            and {p.name for p in design.iterdir()} <= {infoarch.name, _leaf('judgments')}):
+        # IA-only: no design system to check here. Anything else without the design configuration still fails below.
+        return {**result, 'reason': f"{layer_paths.rel('design_config')} absent; IA-only {design_rel()}/ "
+                                    f"(infoarch-author maintain checks {layer_paths.rel('infoarch')}/)"}
     catalog_dir = Path(catalog_dir or CATALOG)
     today = today or date.today()
     try:
@@ -167,8 +173,7 @@ def maintain_design(root, *, catalog_dir=None, today=None, force=False):
                 return {**result, 'reason': 'no changes, due reviews, or version changes'}
             ledger_path = layer_paths.path(root, 'ledger')
             before_approvals = ledger_path.read_bytes()
-            layers = layer_paths.path(root, 'layers')
-            before_inputs = _inputs(layers)
+            before_inputs = _inputs(design)
             checked = check_design(root, catalog_dir=catalog_dir)
             result.update(status='checked', exit_code=checked['exit_code'], errors=checked['errors'],
                           warnings=checked['warnings'], counts=checked['counts'], report=checked['report'])
@@ -184,7 +189,7 @@ def maintain_design(root, *, catalog_dir=None, today=None, force=False):
                     if approved.get(key) != targets.get(key))
             result['judgment_candidates'] = [row['judgment_hash'] for row in checked['judgment_candidates']]
             if (ledger_path.read_bytes() != before_approvals or
-                    _inputs(layers) != before_inputs or
+                    _inputs(design) != before_inputs or
                     _git(root, 'rev-parse', 'HEAD').decode().strip() != head or
                     _versions(config, catalog_dir) != versions):
                 raise ValueError('maintenance inputs changed during validation; rerun')
@@ -207,12 +212,12 @@ def maintain_all(root, catalog_dir=None, today=None, force=False):
     result = maintain_design(root, catalog_dir=catalog_dir, today=today, force=force)
     base = Path(root).resolve()
     try:
-        has_infoarch = layer_paths.has_ia(base)
+        has_infoarch = layer_paths.path(base, 'infoarch').is_dir()
     except layer_paths.LayerLayoutError as error:  # a repository this version does not read is a failure, never a skip
         ia = {'exit_code': 2, 'status': 'failed', 'errors': [str(error)]}
     else:
         if not has_infoarch:
-            ia = {'exit_code': 0, 'status': 'skipped', 'reason': f"{layer_paths.rel('infoarch')}/ and {layer_paths.rel('positioning_dir')}/ absent"}
+            ia = {'exit_code': 0, 'status': 'skipped', 'reason': f"{layer_paths.rel('infoarch')}/ absent"}
         else:
             cli = Path(__file__).resolve().parents[2] / 'own-infoarch-author/scripts/infoarch_author.py'
             args = [sys.executable, str(cli), 'maintain', '--root', str(base)]

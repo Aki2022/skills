@@ -8,7 +8,6 @@ import json
 import pytest
 
 from test_core import project, write, check, approve_rows  # noqa: F401  (fixture reuse)
-import layer_paths as lp  # noqa: E402  (test_core puts scripts/ on the path)
 from item_checks import load_map  # noqa: E402  (test_core puts scripts/ on the path)
 from test_item_coverage import catalog_item, use_catalog_item, set_items, doc_section, rendered, stages  # noqa: F401
 
@@ -16,7 +15,7 @@ DECISION = ('components/accordion', 'ユースケース')
 
 
 def declare(root, *rules):
-    write(lp.path(root, 'checks', 'web.yaml'), {'rules': list(rules)})
+    write(root / 'design/checks/web.yaml', {'rules': list(rules)})
 
 
 def cite(root, *refs):
@@ -145,7 +144,7 @@ def run_rule(rendered, project, rule, body):
     declare(root, rule)
     cite(root, 'rule:' + rule['id'])
     code, result = run(body)
-    items = json.loads(lp.path(root, 'resolved', 'items.json').read_text()) if lp.path(root, 'resolved', 'items.json').exists() else {}
+    items = json.loads((root / 'design/.resolved/items.json').read_text()) if (root / 'design/.resolved/items.json').exists() else {}
     return code, result, items.get('machine', {}).get('dads-000001', {}).get('DESIGN_FIXTURE_URL')
 
 

@@ -1,31 +1,25 @@
 {
   "schema_version": 1,
-  "comment": "The one place that says where a repository keeps its three layers (positioning, infoarch, design), the approval ledger and the judgment record: ux/positioning, ux/infoarch, ux/design, with the ledger and the judgment record directly under ux. scripts/layer_paths.py and scripts/layer_paths.mjs read this file and nothing else in the skills' code spells these paths (a test counts the literals). Every value is a path relative to the repository root. foreign_roots are directories that mean the repository still follows the layout before the move: finding one stops every command (LAYER_LAYOUT_FOREIGN_ROOT) instead of reading around it. hint is appended to that message. identity holds names that sit inside approved hashes and so never change with the layout: asset_path_prefix is the prefix an asset rule's targets and measured files carry in its approval evidence (the rule is hashed in the form it had before the move), so moving the files does not drop the approvals of the items that cite the rule.",
-  "foreign_roots": [
-    "design"
-  ],
-  "hint": "移行のコマンド: design-author migrate-layout --repo <repo>（先に dry-run で内容を見て、--apply で移す）。 / To migrate: design-author migrate-layout --repo <repo> (dry run first, then --apply).",
+  "comment": "The one place that says where a repository keeps its three layers (positioning, infoarch, design), the approval ledger and the judgment record. scripts/layer_paths.py and scripts/layer_paths.mjs read this file and nothing else in the skills' code spells these paths (a test counts the literals). Every value is a path relative to the repository root. foreign_roots are directories that mean the repository follows a different layout than this version of the skills reads: finding one stops every command (LAYER_LAYOUT_FOREIGN_ROOT) instead of reading around it. hint is appended to that message (the migration command, once a layout has one).",
+  "foreign_roots": ["ux"],
+  "hint": "",
   "entries": {
-    "layers": "ux",
-    "positioning_dir": "ux/positioning",
-    "positioning_file": "ux/positioning/positioning.yaml",
-    "infoarch": "ux/infoarch",
-    "accepted_reviews": "ux/infoarch/accepted_reviews.yaml",
-    "design_dir": "ux/design",
-    "design_config": "ux/design/design.yaml",
-    "ledger": "ux/approvals.yaml",
-    "judgments": "ux/judgments.json",
-    "resolved": "ux/design/.resolved",
-    "assets": "ux/design/assets",
-    "assets_index": "ux/design/assets.json",
-    "asset_exports": "ux/design/asset-exports.json",
-    "tailwind": "ux/design/tailwind.json",
-    "validation": "ux/design/validation.json",
-    "render_environment": "ux/design/render-environment.json",
-    "layout_overrides": "ux/design/layout-overrides.yaml",
-    "checks": "ux/design/checks"
-  },
-  "identity": {
-    "asset_path_prefix": "design/assets"
+    "layers": "design",
+    "positioning_file": "design/info_arch/info_arch.yaml",
+    "infoarch": "design/info_arch",
+    "accepted_reviews": "design/info_arch/accepted_reviews.yaml",
+    "design_dir": "design",
+    "design_config": "design/design.yaml",
+    "ledger": "design/approvals.yaml",
+    "judgments": "design/judgments.json",
+    "resolved": "design/.resolved",
+    "assets": "design/assets",
+    "assets_index": "design/assets.json",
+    "asset_exports": "design/asset-exports.json",
+    "tailwind": "design/tailwind.json",
+    "validation": "design/validation.json",
+    "render_environment": "design/render-environment.json",
+    "layout_overrides": "design/layout-overrides.yaml",
+    "checks": "design/checks"
   }
 }

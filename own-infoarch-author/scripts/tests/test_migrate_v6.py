@@ -4,7 +4,7 @@ Promises are dropped, v5 messages become outline atoms, audiences become the out
 sections and frames become section and copy ids, proofs become positioning evidence, the rendered v5 marks become
 data-ia-section / data-ia-copy and modules.ia moves to the v6 contract. The tool prints the old -> new id map, the
 items it failed to migrate (non-zero = exit 2, nothing written), the approvals and judgments that stop applying, and
-the rollback steps. Dry run by default; it never writes the approval ledger or the judgment record.
+the rollback steps. Dry run by default; it never writes design/approvals.yaml or design/judgments.json.
 """
 import copy
 import json
@@ -24,7 +24,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import ia_module  # noqa: E402
 from test_check import check, cli, codes, dump  # noqa: E402
-import layer_paths  # noqa: E402  (own-design-author's layer rule: where each layer lives)
 
 TABLE = json.loads((SKILL / 'fixtures/migrate-red-cases.json').read_text(encoding='utf-8'))
 CONDITIONS = {c['id']: c for c in TABLE['conditions']}
@@ -36,7 +35,7 @@ def _a(**kw):
     return {'state': 'proposed', 'provenance': 'owner', **kw}
 
 
-# The v5 SSOT (the positioning file, schema version 3): audiences and messages in the SSOT, the strategy layer with
+# The v5 SSOT (info_arch.yaml schema version 3): audiences and messages in the SSOT, the strategy layer with
 # promises and concepts, proofs that support messages.
 V5_SSOT = {
     'schema_version': 3,
@@ -151,8 +150,8 @@ JUDGMENTS = {'rows': [
 
 
 def write_v5(root, ssot=V5_SSOT, outlines=V5_OUTLINES, html=V5_HTML, design=DESIGN):
-    base = layer_paths.path(root, 'infoarch')
-    dump(layer_paths.path(root, 'positioning_file'), ssot)
+    base = root / 'design/info_arch'
+    dump(base / 'info_arch.yaml', ssot)
     for ch in CHANNELS:
         dump(base / 'channels' / f'{ch["media"]}.yaml', ch)
     for o in outlines:
@@ -160,11 +159,9 @@ def write_v5(root, ssot=V5_SSOT, outlines=V5_OUTLINES, html=V5_HTML, design=DESI
     page = root / 'site/index.html'
     page.parent.mkdir(parents=True, exist_ok=True)
     page.write_text(html, encoding='utf-8')
-    config = layer_paths.path(root, 'design_config')
-    config.parent.mkdir(parents=True, exist_ok=True)
-    config.write_text(json.dumps(design, indent=2) + '\n', encoding='utf-8')
-    dump(layer_paths.path(root, 'ledger'), APPROVALS)
-    layer_paths.path(root, 'judgments').write_text(json.dumps(JUDGMENTS, indent=2) + '\n', encoding='utf-8')
+    (root / 'design/design.yaml').write_text(json.dumps(design, indent=2) + '\n', encoding='utf-8')
+    dump(root / 'design/approvals.yaml', APPROVALS)
+    (root / 'design/judgments.json').write_text(json.dumps(JUDGMENTS, indent=2) + '\n', encoding='utf-8')
     return base
 
 
@@ -206,9 +203,9 @@ def test_dry_run_reports_everything_and_writes_nothing(tmp_path):
     assert [r['id'] for r in stops['judgments']] == ['ia-strategy-fit:lp-municipal']  # design rows stay
     assert out['module_pin'] == {'from': '0.3.0', 'to': ia_module.VERSION}
     assert out['rollback'] and any('git' in step for step in out['rollback'])
-    assert set(out['files']['write']) >= {layer_paths.rel('positioning_file'), layer_paths.rel('design_config'), 'site/index.html',
-                                          layer_paths.rel('infoarch', 'outlines', 'lp-municipal.yaml')}
-    assert layer_paths.rel('ledger') not in out['files']['write'] and layer_paths.rel('judgments') not in out['files']['write']
+    assert set(out['files']['write']) >= {'design/info_arch/info_arch.yaml', 'design/design.yaml', 'site/index.html',
+                                          'design/info_arch/outlines/lp-municipal.yaml'}
+    assert 'design/approvals.yaml' not in out['files']['write'] and 'design/judgments.json' not in out['files']['write']
     assert out['drafting_required']  # value kinds, categories and fulfills arrows are judgment, never invented
 
 
@@ -216,12 +213,12 @@ def test_dry_run_reports_everything_and_writes_nothing(tmp_path):
 
 def test_write_moves_the_ssot_outlines_marks_and_pin(tmp_path):
     write_v5(tmp_path)
-    keep = {p: (tmp_path / p).read_bytes() for p in (layer_paths.rel('ledger'), layer_paths.rel('judgments'))}
+    keep = {p: (tmp_path / p).read_bytes() for p in ('design/approvals.yaml', 'design/judgments.json')}
     rc, out = migrate(tmp_path, '--write')
     assert rc == 0, out
     assert out['status'] == 'migrated' and out['written'] is True
     assert {p: (tmp_path / p).read_bytes() for p in keep} == keep  # never writes approvals or judgments
-    ssot = load(layer_paths.path(tmp_path, 'positioning_file'))
+    ssot = load(tmp_path / 'design/info_arch/info_arch.yaml')
     assert ssot['schema_version'] == 4
     assert not {'audiences', 'messages', 'promises', 'concepts'} & set(ssot)
     assert set(ssot['ledger']['next']) == {'prf', 'fct', 'ent', 'vce', 'seg', 'job', 'pan', 'gan', 'val', 'alt', 'str', 'cat'}
@@ -237,7 +234,7 @@ def test_write_moves_the_ssot_outlines_marks_and_pin(tmp_path):
             ('supports', 'prf-0002', 'val-0001')} <= keys
     assert ssot['proofs']['prf-0003']['segment'] == 'seg-0002' and 'copy of prf-0001' in ssot['proofs']['prf-0003']['provenance']
     assert ssot['ledger']['next']['prf'] == 4
-    lp = load(layer_paths.path(tmp_path, 'infoarch', 'outlines', 'lp-municipal.yaml'))
+    lp = load(tmp_path / 'design/info_arch/outlines/lp-municipal.yaml')
     assert lp['schema_version'] == 3
     assert lp['target'] == {'segment': 'seg-0001', 'condition': '自治体の情報部門'}
     assert lp['tone'] == '丁寧で落ち着いた調子' and lp['objective'] == {'id': 'obj-0001', 'action': '資料請求'}
@@ -249,7 +246,7 @@ def test_write_moves_the_ssot_outlines_marks_and_pin(tmp_path):
         (1, 'pain', ['msg-0001']), (2, 'aware', ['msg-0001']), (3, 'trust', ['msg-0002']), (4, 'act', ['msg-0003'])]
     assert lp['copies']['cpy-0003'] == {'section': 'sec-0003', 'order': 1, 'message': 'msg-0002', 'text': '導入は{{fct-0001}}'}
     assert lp['texts'] == {'nav-footer': {'kind': 'navigation', 'text': 'お問い合わせ窓口'}}
-    deck = load(layer_paths.path(tmp_path, 'infoarch', 'outlines', 'deck-smb.yaml'))
+    deck = load(tmp_path / 'design/info_arch/outlines/deck-smb.yaml')
     assert deck['target']['segment'] == 'seg-0002'
     assert deck['messages']['msg-0002'] == {'value': 'val-0002', 'rank': 'lead', 'type': 'normal'}
     html = (tmp_path / 'site/index.html').read_text(encoding='utf-8')
@@ -258,15 +255,15 @@ def test_write_moves_the_ssot_outlines_marks_and_pin(tmp_path):
     assert '<p class="lead" data-ia-copy="cpy-0001">' in html                    # a single child carries the copy
     assert 'data-ia-section="sec-0003"' in html and 'data-ia-copy="cpy-0003"' in html
     assert html.count('data-ia-section=') == 4 and html.count('data-ia-copy=') == 4
-    assert json.loads(layer_paths.path(tmp_path, 'design_config').read_text(encoding='utf-8'))['modules']['ia'] == ia_module.VERSION
+    assert json.loads((tmp_path / 'design/design.yaml').read_text(encoding='utf-8'))['modules']['ia'] == ia_module.VERSION
     rc, again = migrate(tmp_path)
     assert rc == 0 and again['status'] == 'already-v6'  # rerunnable: a v6 tree is a no-op
 
 
-def draft_ssot(root):
+def draft_ssot(base):
     """The positioning judgment the migration lists and never invents: value kinds, member categories, recalls,
     includes and fulfills degrees (as the AI drafts them from the owner's material after the migration)."""
-    ssot = load(layer_paths.path(root, 'positioning_file'))
+    ssot = load(base / 'info_arch.yaml')
     for v in ssot['values'].values():
         v['kind'] = 'difference'
     ssot['categories'] = {'cat-0001': _a(segment='seg-0001', text='自治体向け Web サーバー'),
@@ -280,7 +277,7 @@ def draft_ssot(root):
                       edge('fulfills', 'alt-0001', 'gan-0001', degree='none'),
                       edge('member_of', 'seg-0002', 'cat-0002'), edge('recalls', 'job-0002', 'cat-0002'),
                       edge('includes', 'cat-0002', 'alt-0002'), edge('fulfills', 'alt-0002', 'pan-0002', degree='partial')]
-    dump(layer_paths.path(root, 'positioning_file'), ssot)
+    dump(base / 'info_arch.yaml', ssot)
 
 
 def test_migrated_tree_passes_check_once_the_listed_drafting_is_done(tmp_path):
@@ -291,8 +288,8 @@ def test_migrated_tree_passes_check_once_the_listed_drafting_is_done(tmp_path):
     assert rc == 0, out
     rc, report = check(tmp_path)
     assert rc == 2  # not done yet: drafting_required is real work
-    base = layer_paths.path(tmp_path, 'infoarch')
-    draft_ssot(tmp_path)
+    base = tmp_path / 'design/info_arch'
+    draft_ssot(base)
     for oid, (into, cta_sec, cta_copy) in {'lp-municipal': ('sec-0003', 'sec-0004', 'cpy-0004'),
                                            'deck-smb': ('sec-0001', 'sec-0002', 'cpy-0002')}.items():
         o = load(base / f'outlines/{oid}.yaml')
@@ -322,7 +319,7 @@ def test_rewritten_marks_pass_the_real_browser_screen_check(tmp_path):
         return [c for c in codes(report) if c.startswith('IA_DOM_')]
     rc, out = migrate(tmp_path, '--write')
     assert rc == 0, out
-    draft_ssot(tmp_path)
+    draft_ssot(tmp_path / 'design/info_arch')
     assert dom() == []
     page = tmp_path / 'site/index.html'
     page.write_text(page.read_text(encoding='utf-8').replace('data-ia-copy="cpy-0002"', 'data-ia-msg="msg-0001"'),
@@ -338,8 +335,8 @@ def test_wrapped_copy_keeps_its_place_when_a_section_holds_two_copies(tmp_path):
     write_v5(tmp_path)
     rc, out = migrate(tmp_path, '--write')
     assert rc == 0, out
-    base = layer_paths.path(tmp_path, 'infoarch')
-    draft_ssot(tmp_path)
+    base = tmp_path / 'design/info_arch'
+    draft_ssot(base)
     o = load(base / 'outlines/lp-municipal.yaml')
     del o['sections']['sec-0003']
     o['copies']['cpy-0003'].update(section='sec-0002', order=2, message='msg-0001')
@@ -380,12 +377,12 @@ def test_v6_tree_is_a_noop_and_unknown_version_fails(tmp_path):
     write_v5(tmp_path)
     ssot = copy.deepcopy(V5_SSOT)
     ssot['schema_version'] = 4
-    dump(layer_paths.path(tmp_path, 'positioning_file'), ssot)
+    dump(tmp_path / 'design/info_arch/info_arch.yaml', ssot)
     before = snapshot(tmp_path)
     rc, out = migrate(tmp_path, '--write')
     assert rc == 0 and out['status'] == 'already-v6' and snapshot(tmp_path) == before
     ssot['schema_version'] = 2
-    dump(layer_paths.path(tmp_path, 'positioning_file'), ssot)
+    dump(tmp_path / 'design/info_arch/info_arch.yaml', ssot)
     rc, out = migrate(tmp_path)
     assert rc == 2 and out['exit_code'] == 2
 

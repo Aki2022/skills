@@ -6,8 +6,6 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT / 'own-design-author/scripts'))
-import layer_paths  # noqa: E402  (the one rule for where a repository keeps its layers)
 ENTRY = ROOT / 'own-web-build/scripts/preflight.py'
 
 def test_factory_stops_without_design_from_nested_directory(tmp_path):
@@ -21,8 +19,7 @@ def test_factory_stops_without_design_from_nested_directory(tmp_path):
     result = json.loads(run.stdout)
     assert result['exit_code'] == 2
     assert result['errors']
-    assert not (tmp_path / layer_paths.rel('layers')).exists()  # the factory never creates a layer
-    assert not (tmp_path / layer_paths.rel('design_dir')).exists()
+    assert not (tmp_path / 'design').exists()
     assert not list(tmp_path.rglob('*.html'))
 
 

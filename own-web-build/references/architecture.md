@@ -1,18 +1,18 @@
 ---
-title: Architecture — ux/design/ と工場の境界
+title: Architecture — design/ と工場の境界
 ---
 
 # Architecture
 
 | 層 | 正典 | 責務 |
 | --- | --- | --- |
-| ブランド定義 | repo の `ux/design/` | 方針・トークン・媒体プロファイル・アセット・出所（承認台帳は `ux/design/` の外、`ux/approvals.yaml`） |
+| ブランド定義 | repo の `design/` | 方針・トークン・媒体プロファイル・アセット・出所・承認台帳 |
 | 定義とL0 | `own-design-author` | 整合検査・DTCG解決・マニフェスト生成 |
 | 参照ライブラリ | `own-brand-resolve` | 指示された参照だけを権利情報とともに渡す |
 | 工場 | `own-web-build` | 前提検査・媒体判定・生成・L1/L2 |
 | 媒体構造 | `media/` | HTML・dashboardの構造上の制約と推奨 |
 
-経路は User Task → Media判定 → `scripts/preflight.py`（L0）→ ux/design/の方針と解決済み値 →
+経路は User Task → Media判定 → `scripts/preflight.py`（L0）→ design/の方針と解決済み値 →
 生成 → L1 → 人間の実施確認後L2 → `own-deliverable-check`。
 L0の失格では生成せず、警告は明示して続行できる。L0/L1は確認せず実行する。
 

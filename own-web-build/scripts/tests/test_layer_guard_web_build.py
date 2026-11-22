@@ -140,7 +140,7 @@ def test_a_renamed_layer_root_is_followed_by_the_guard_and_the_help(tmp_path):
     repo = git_init(tmp_path / 'repo')
     (repo / 'zzforeign').mkdir()
     for args in (['audit_screen.py', '--screen', 'x', '--html', 'x', '--repo', repo],
-                 ['audit_html.py', _html(tmp_path), '--manifest', repo / RESOLVED.replace(ROOT, renamed, 1) / 'web.json']):
+                 ['audit_html.py', _html(tmp_path), '--manifest', repo / renamed / '.resolved' / 'web.json']):
         result = run([sys.executable, skills / 'own-web-build/scripts' / args[0], *args[1:]], cwd=tmp_path)
         assert_foreign_failure(result)
     result = run([sys.executable, skills / 'own-web-build/scripts/audit_screen.py', '--help'])

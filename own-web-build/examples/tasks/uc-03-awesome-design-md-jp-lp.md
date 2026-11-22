@@ -15,9 +15,9 @@ context: [japanese-ui, landing-page]
 
 ## 期待される Runtime 挙動
 
-1. `scripts/preflight.py` でL0を実行する。ux/design/不在なら生成せずown-design-authorへ渡す。
+1. `scripts/preflight.py` でL0を実行する。design/不在なら生成せずown-design-authorへ渡す。
 2. 指示された個別サイトだけを参照し、import-policyの権利確認を行う。
-3. 方針と値をux/design/へproposedとして写し、reference出所とNOTICEを付ける。
+3. 方針と値をdesign/へproposedとして写し、reference出所とNOTICEを付ける。
 4. L0を再実行してから、解決済みマニフェストで生成する。倉庫の値を継承しない。
 5. L1は必ず実行し、L2は人間へ実施可否を確認する。
 6. 提案状態・出所・未カバー・実施しなかった工程と理由を報告する。

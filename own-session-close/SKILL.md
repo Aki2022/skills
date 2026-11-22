@@ -125,7 +125,7 @@ absent). Say so, then continue with Step 2.5 — it does not depend on `docs/`.
 
 ### Step 2.5 — design and information-architecture maintenance
 
-This step is keyed on `ux/design/`, `ux/infoarch/` and `ux/positioning/`, not on `docs/`: run it even when
+This step is keyed on `design/` and `design/info_arch/`, not on `docs/`: run it even when
 Step 2 was skipped. One command covers both: `design-author maintain` runs the design stage and
 then always runs the IA stage (`infoarch-author maintain`) and reports it under `ia`
 (ADR-20261115-design-ia-two-skills-shared-base, biz_ops). Its exit code is the worse of the two.
@@ -133,28 +133,28 @@ then always runs the IA stage (`infoarch-author maintain`) and reports it under 
 Run `design-author maintain --repo <repo>` through the existing PATH (or the
 runtime's existing `DESIGN_AUTHOR_PYTHON` with the discovered skill script).
 Do not install dependencies or persist a machine-specific path in the repo.
-The command emits one line and skips repositories without `ux/design/`.
+The command emits one line and skips repositories without `design/`.
 It uses the last successful commit stamp, committed and uncommitted changes,
 review dates, and skill/catalog/policy fingerprints to decide whether to
 regenerate and run offline L0. It lists invalidated approvals and candidates;
 it never writes approvals or invokes a model.
 
 On exit 0, continue. On exit 1, report the warnings and continue with those
-limitations visible. On exit 2 or a missing command when `ux/design/` exists,
+limitations visible. On exit 2 or a missing command when `design/` exists,
 read **own-design-author** and its [maintenance contract](../own-design-author/references/maintenance.md), repair only
 within the current authorization, and stop the integration phase if the
 failure remains. Do not turn an unfinished design gate into a successful
-closeout. A repository without `ux/design/` can use a one-line skip even when the
+closeout. A repository without `design/` can use a one-line skip even when the
 command is unavailable. Include generated recommendations in the work unit's
 Next Actions, then continue to Step 3; do not approve them automatically.
 
-The `ia` stage is a one-line skip in repositories with neither `ux/infoarch/` nor `ux/positioning/`. It runs even
+The `ia` stage is a one-line skip in repositories without `design/info_arch/`. It runs even
 when the design stage returned early with nothing to do, because evidence and facts fall due by
 date alone. Otherwise it runs the deterministic IA check,
 reads the shared judgment ledger without calling a model, and lists SSOT/outline
 changes, the outlines they impact, evidence and facts falling due, and uncovered
 judgments. On exit 1, put the due evidence and uncovered judgments into the work
-unit's Next Actions; on an `ia` exit 2 when `ux/infoarch/` or `ux/positioning/` exists, read
+unit's Next Actions; on an `ia` exit 2 when `design/info_arch/` exists, read
 **own-infoarch-author** and stop the integration phase if the failure remains. It never
 edits the SSOT, outlines or the ledger. `infoarch-author maintain --root <repo>` remains
 available to run the IA stage alone.
@@ -209,8 +209,8 @@ present only those deletion targets and obtain one confirmation before acting.
 
 ## When part of the flow doesn't apply
 
-- **No `docs/` governance** → skip Step 2, run Step 1, Step 2.5 (it keys on `ux/design/`,
-  `ux/infoarch/` and `ux/positioning/`, not on `docs/`) and Step 3.
+- **No `docs/` governance** → skip Step 2, run Step 1, Step 2.5 (it keys on `design/` and
+  `design/info_arch/`, not on `docs/`) and Step 3.
 - **Nothing to document** (pure refactor with no behavior/API change, and
   own-doc-update concludes "guide impact: none") → record that conclusion, then
   Step 2.5 and Step 3.

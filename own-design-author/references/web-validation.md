@@ -8,11 +8,11 @@ L0を実行してから、工場は次を使う。L0/L1は確認不要、L2は�
 
 ```sh
 design-author check --repo .
-python3 <own-web-build>/scripts/audit_html.py index.html --manifest ux/design/.resolved/web.json --tailwind tailwind.config.cjs
-node <own-website-audit>/scripts/measure_lp.mjs <url> --manifest ux/design/.resolved/web.json --viewports 375,1280 --schemes dark,light --json <report.json>
+python3 <own-web-build>/scripts/audit_html.py index.html --manifest design/.resolved/web.json --tailwind tailwind.config.cjs
+node <own-website-audit>/scripts/measure_lp.mjs <url> --manifest design/.resolved/web.json --viewports 375,1280 --schemes dark,light --json <report.json>
 ```
 
-consumerはマニフェストの入力ハッシュを現行のux/design/と照合し（IAモジュールを宣言したrepoでは、IAの入力である docs/dictionary/*.json も照合する）、中央の判定policyと宣言したIA resolverのdigestも照合する。変更・追加・削除後の古い生成物を使わない。
+consumerはマニフェストの入力ハッシュを現行のdesign/と照合し（IAモジュールを宣言したrepoでは、IAの入力である docs/dictionary/*.json も照合する）、中央の判定policyと宣言したIA resolverのdigestも照合する。変更・追加・削除後の古い生成物を使わない。
 DTCGの再解決はしない。L1はブラウザを使わず、L2は既存のPlaywright環境を使う。
 Playwrightは `scripts/playwright_runtime.mjs` が探す。順は `OWN_PLAYWRIGHT_DIR`（指定したら版が違えば止まる）→対象repoとその祖先の `node_modules`（固定の版と違えば飛ばす）→端末の共通置き場 `${OWN_PLAYWRIGHT_HOME:-~/.cache/own-playwright}/<render-environment.json の playwright_version>/`。`NODE_PATH` は見ない（別repoのcheckoutを黙って指す経路だったため）。共通置き場は版ごとに端末で一度だけ入れ、無ければ入れるコマンドを出して止まる。ブラウザ本体はPlaywright自身の共有キャッシュにある。
 axe-coreは `AXE_CORE_PATH`、無ければ対象repo、無ければPlaywrightを読んだ共通置き場から解決する。
@@ -21,7 +21,7 @@ axe-coreは `AXE_CORE_PATH`、無ければ対象repo、無ければPlaywrightを
 ## L1とTailwind
 
 既定ではL0が `.resolved/tailwind.config.cjs` を生成する。プロジェクトごとの設定は
-`ux/design/tailwind.json` に `schema_version: 1` と `configs` を置く。各行は repo 相対の
+`design/tailwind.json` に `schema_version: 1` と `configs` を置く。各行は repo 相対の
 `target`（tailwind.config.js/cjs）・`content`・`theme`・`plugins` を持つ。
 `theme` の末端は `{"$token":"color.primary"}`。構造上のCSS文字列は
 `{"$format":[{"$token":"duration.fast"}," ease"]}` のように組み立てる。
@@ -46,12 +46,12 @@ repo外・design内・隠しpath・symlink先への配置を拒否し、途中�
 ## 一括実行
 
 `design-check --repo .` は実L0→L1→L2を順に呼ぶ。L0失格なら後段へ進まない。
-`ux/design/validation.json` は `schema_version: 1`、非空の `html`（repo相対path）、
+`design/validation.json` は `schema_version: 1`、非空の `html`（repo相対path）、
 `urls`（`{"env":"DESIGN_WEB_URL"}`等）、正の整数の `viewports`、`schemes`（light/dark）を持つ。
 各URLにprofile: lp|product-uiを任意指定でき、省略時はlp。操作後の状態は任意の`states`で宣言する（「操作の後の状態」）。product-uiでは広告LPの最初の画面のCTAだけを適用外としてskippedへ理由付きで残し、色・a11y・字体・固定描画の制約を維持する。関連付いたcheckbox/radioのlabelは、入力を包含する連続した矩形と実hit mapが有効な時だけ操作領域に含む。
 URLは実行時の環境変数で渡す。既存Nodeは `DESIGN_AUDIT_NODE`、Pythonは
 `DESIGN_AUTHOR_PYTHON` で選ぶ。L2を含むため、人間の実施確認を得てから実行する。
-各L2はux/design/render-environment.jsonを必須とし、固定環境で2回実行する。JSONは `.resolved/l2-<index>.json` に保存し、未カバーを集約出力する。実行前に前回の同名レポートを削除し、環境不一致や新規レポート欠落を古い成功で埋めない。
+各L2はdesign/render-environment.jsonを必須とし、固定環境で2回実行する。JSONは `.resolved/l2-<index>.json` に保存し、未カバーを集約出力する。実行前に前回の同名レポートを削除し、環境不一致や新規レポート欠落を古い成功で埋めない。
 reportはexecuted / skipped / missing / uncovered / screenedの5配列。実行したL1/L2はskippedから除き、L0のscreened・補助指摘・評価用ラベル有無を引き継ぐ。精度未測定をrecall 0や合格へ読み替えない。
 対象欠落・実行不能を成功にしない。未承認nice値だけのL0警告は集約後もexit 1に残す。
 
@@ -247,7 +247,7 @@ L1/L2が通っても、未カバー規則が消えたとは扱わない。出荷
 
 ## 固定環境
 
-`ux/design/render-environment.json`をrepoに置き、既存のPlaywright/Chromiumと同梱フォントをpinする。
+`design/render-environment.json`をrepoに置き、既存のPlaywright/Chromiumと同梱フォントをpinする。
 新規インストールは行わない。環境・フォント変更時はこのpinを更新し、L0から再生成する。
 環境に合わせて黙ってpinを書き換えない。
 
@@ -293,11 +293,11 @@ CDN（Google Fonts など）から読むフォントは、`remote_fonts` で URL
 - `families` は、それらのファイルが描いてよい実フォントの family 名。字形の検査は、ここか `fonts` の family で、かつ固定したファイルに結び付いた字体だけを認める。
 - 描画のたびに CDN へ接続する。CDN が中身を変えたら失格になるので、固定を作り直す。CDN の CSS は UA で中身が変わるが、UA は固定したブラウザの版で決まる。
 - 日本語の字体は文字の範囲ごとの小さなファイル（subset）に分かれている。ページの文字が変わると新しい subset を要求し、固定し直すまで失格になる。
-- 固定は `node scripts/pin_remote_fonts.mjs <url>... --environment ux/design/render-environment.json --origins <origin,...>` で作る。
+- 固定は `node scripts/pin_remote_fonts.mjs <url>... --environment design/render-environment.json --origins <origin,...>` で作る。
   固定環境と同じブラウザで各 viewport・scheme を描き、宣言した origin から読んだ全ファイルの URL と SHA-256、描いた family を表示する（ファイルは書かない）。
   CDN に接続するので、作り直す時だけ人が実行し、表示された固定を確かめて `render-environment.json` に入れる。
 - 道具の描き方は測定の流れと同じではないので、測定のときだけ要求される subset を取り逃すことがある（実サイトで 1 件あった）。
-  その時は `node scripts/pin_remote_fonts.mjs --extend <L2 の JSON>... --environment ux/design/render-environment.json` を使う。測定が「remote font not pinned」で拒否した、宣言済み origin の URL を取得して固定に足し、`remote_fonts` 全体を表示する。
+  その時は `node scripts/pin_remote_fonts.mjs --extend <L2 の JSON>... --environment design/render-environment.json` を使う。測定が「remote font not pinned」で拒否した、宣言済み origin の URL を取得して固定に足し、`remote_fonts` 全体を表示する。
   固定を変えたら L0 を回し直す（マニフェストが古くなるため）。
 
 固定環境のChromiumは `fixedLaunchOptions`（`--disable-gpu-rasterization`）で起動し、probeと測定で同じ描画経路を使う。起動引数はruntimeの`launch_args`としてpinし、別の描画方式で測ったpinは一致しない（作り直す）。
@@ -311,7 +311,7 @@ service workerはブロックし、各組合せを新しいcontextで実行す�
 環境指紋・実字体・glyph件数・時計・画素hashを結果JSONへ残し、終了時に環境設定とフォント・runtimeを再照合する。
 
 ```sh
-node <own-website-audit>/scripts/measure_lp.mjs <url> --manifest ux/design/.resolved/web.json --environment ux/design/render-environment.json --viewports 375,1280 --schemes light,dark --json ux/design/.resolved/l2.json
+node <own-website-audit>/scripts/measure_lp.mjs <url> --manifest design/.resolved/web.json --environment design/render-environment.json --viewports 375,1280 --schemes light,dark --json design/.resolved/l2.json
 ```
 
 viewports/schemesの順序と集合もpinに一致必須。ブラウザ版・フォントhash・環境欠落はexit 2、

@@ -10,13 +10,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from test_check import check, codes, write_repo  # noqa: E402
-import layer_paths  # noqa: E402  (own-design-author's layer rule: where each layer lives)
 
 
 def pages(root, covered=None, excluded=None):
-    path = layer_paths.path(root, 'validation')
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({'pages': {
+    (root / 'design').mkdir(exist_ok=True)
+    (root / 'design/validation.json').write_text(json.dumps({'pages': {
         'sources': ['site/**/*.html'], 'covered': covered or {}, 'excluded': excluded or {}}}), encoding='utf-8')
 
 

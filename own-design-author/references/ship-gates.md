@@ -36,7 +36,7 @@ deploy/export自体の認可を別途守る。実装テストから本番コマ�
 別checkoutの画面の証拠として流用しない。全serverを終了し、各段階の対象数・固定環境・2回分の測定と画像hashの一致を確認する。
 commit/tree・design入力・出荷ファイル集合のhashが検査中に変われば停止する。
 出荷コマンドにはDESIGN_SHIP_COMMIT / DESIGN_SHIP_TREE / DESIGN_SHIP_ARTIFACTS_JSONを渡し、その同じ成果物を扱わせる。
-結果は`ux/design/.resolved/ship-<channel>.json`。この生成記録を過去の成功からコピーして代用しない。
+結果は`design/.resolved/ship-<channel>.json`。この生成記録を過去の成功からコピーして代用しない。
 
 ## hookとmiseへの導入
 
@@ -46,7 +46,7 @@ core.hooksPathを変更せず、対応しないdispatcherを自動で書き換�
 - PATHへskillのscriptsを供給し、既存依存を持つPythonをDESIGN_AUTHOR_PYTHONで選ぶ。端末固有のパスをrepoへ保存しない。
 - templates/mise.design.tomlのtaskを既存設定へ統合する。design:shipは検査だけを呼ぶ。
 - hooks/pre-push.d/60-design-shipを既存vibe-guardの拡張ディレクトリへ置く。端末に1つだけ置き、skillの正典を指すsymlinkにする。repoごとの複製は作らない。
-- 拡張は`ux/design/design.yaml`を持つ全repoで動く。repoごとの有効化は要らない。skillを呼ばずに画面を直した変更も、push時に同じ検査を通す。
+- 拡張は`design/design.yaml`を持つ全repoで動く。repoごとの有効化は要らない。skillを呼ばずに画面を直した変更も、push時に同じ検査を通す。
 - 旧来の.vibe-guard/design-ship.enabledは残してよいが、文字列1以外（壊れた・symlink）は停止する。markerで検査を無効にする経路はない。欠落コマンドも停止する。
 
 vibe-guardがscanner後に保持したpush refsファイルを拡張へ渡す。拡張は
@@ -93,7 +93,7 @@ DESIGN_SHIP_COMMAND / DESIGN_AUTHOR_COMMAND / DESIGN_CHECK_COMMANDは、既存ru
 `ship_command`・`artifacts`・`ship`は受理しない。各URLの書式・網羅性は出荷チャネルと同じ規約を使う。
 
 `design-ship --integration --repo .`は現在のclean commitを検査する。
-`--pre-push`は同じ予測マージ木の隔離checkoutで、まずL0 `--ship`を実行する。L0はcommitされたux/design/だけを読むので、
+`--pre-push`は同じ予測マージ木の隔離checkoutで、まずL0 `--ship`を実行する。L0はcommitされたdesign/だけを読むので、
 L0で止まる時は時間のかかる準備コマンドを実行しない。L0を通ったら準備コマンドを実行し、commit/treeが変わらず、
 trackedまたは未追跡のソース変更がないことを確認する。依存・build cacheは既存ignoreの範囲に置く。
 その後、L1、固定描画L2を対象0・欠落・不一致を拒否して実行する。
@@ -101,7 +101,7 @@ serverはそのcheckoutで起動し、外から渡されたURLは利用しない
 
 結果の`scope`は`local-integration`、`production_protected`は`false`、`deployment`は`not-applicable`。
 commit/tree・元push commit・予測マージの有無・design入力・実描画の証拠を記録し、出荷物のhashや配布完了は記録しない。
-現在checkoutでの結果は`ux/design/.resolved/integration.json`へ出力する。
+現在checkoutでの結果は`design/.resolved/integration.json`へ出力する。
 予測マージの結果はhookのJSON出力に含め、隔離checkoutは検査の成否にかかわらず除去する。
 予測マージの基準は、今の基準refと、同じpushでその基準のbranchが更新される先の両方。doctorはdispatcherを写しで実行し、失敗した拡張の終了コードを伝えるかを確かめる（文字列の確認だけにしない）。git・refsの読み取り・基準・予測マージ・dispatcherの確かめは`scripts/ship_base.py`でIAの出荷の関門と共有する（ADR-20261115-design-ia-two-skills-shared-base、biz_ops）。
 

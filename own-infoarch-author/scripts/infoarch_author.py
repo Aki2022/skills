@@ -314,9 +314,20 @@ def cmd_answer_key(args):
             return 2
         items = answer_key.load_items(m, approved, policy, jl, args.key)
         labels = json.loads(Path(args.measure).read_text(encoding='utf-8'))
-        result = answer_key.measure(items, labels, judge.read_ledger(args.root), policy['theta'])
+        result = answer_key.measure(items, labels, judge.read_ledger(args.root), policy['theta'],
+                                    answer_key.read_measurement(Path(args.key).parent))
         _print(result)
         return 0
+    if args.record:
+        if not args.key or not args.limit:
+            _print({'exit_code': 2, 'error': '--record には、作った時の --key（answer-key.json）と --limit が要る'})
+            return 2
+        items = answer_key.load_items(m, approved, policy, jl, args.key)
+        _print(answer_key.record(items, Path(args.key).parent, args.limit, execute=args.execute))
+        return 0
+    if args.execute or args.limit:
+        _print({'exit_code': 2, 'error': '--limit と --execute は --record と一緒に使う'})
+        return 2
     items = answer_key.build(m, approved, policy, jl)
     if not items:
         _print({'exit_code': 2, 'error': '正解表の組が 0 件（承認済みの提供価値に立つ文案が無い）'})
@@ -468,8 +479,11 @@ def main(argv=None):
     ak = sub.add_parser('answer-key', help='answer key for the meaning judgment: pairs, candidates and the labeling page, or --measure')
     ak.add_argument('--root', default='.')
     ak.add_argument('--out', default='answer-key', help='directory to write into (files are never overwritten)')
-    ak.add_argument('--measure', help=f'the owner\'s labels.json: measure agreement against {layer_paths.rel("judgments")}')
-    ak.add_argument('--key', help='answer-key.json written with the page (required with --measure)')
+    ak.add_argument('--measure', help=f'the owner\'s labels.json: measure agreement (own pairs against {layer_paths.rel("judgments")}, swap pairs against the measurement ledger beside --key)')
+    ak.add_argument('--key', help='answer-key.json written with the page (required with --measure and --record)')
+    ak.add_argument('--record', action='store_true', help='ask Jev the swap pairs not yet answered and record them in the measurement ledger beside --key (a preview unless --execute)')
+    ak.add_argument('--limit', type=int, help='most pairs to ask Jev in one --record run')
+    ak.add_argument('--execute', action='store_true', help='with --record: really ask Jev (without it: the count only, no key read, no network, no writes)')
     ak.set_defaults(fn=cmd_answer_key)
     args = ap.parse_args(argv)
     try:

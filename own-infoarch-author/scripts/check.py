@@ -387,6 +387,38 @@ def check(root, date):
     return report, m
 
 
+# What `check` and `blueprint` never run, whoever owns it: named in `skipped`, so that a green report is not read as a
+# green rendered page or a green judgment (SPEC-information-architecture-standardization, Quality 2).
+NOT_RUN_HERE = (
+    {'id': 'ia-dom', 'reason': '描画した画面は見ない（infoarch-author dom／ship が、出荷する HTML の成果物を見る）'},
+    {'id': 'ia-semantic-judgments', 'reason': 'Jev の判定は読まない（infoarch-author judge／evaluate が、共有の判定台帳を読む）'},
+)
+
+
+def categorize(report, m, command):
+    """Give a `check` (or `blueprint`) report its five categories (ia_common.CATEGORIES). Call it last, after the report
+    holds every finding: `missing` also lists the inputs that a failure says are absent. -> report"""
+    report.categorized = True
+    report.skipped = [dict(e) for e in NOT_RUN_HERE]
+    bp = m.blueprint if m.blueprint is not None and m.blueprint.present else None
+    if m.ssot is not None:
+        report.executed.append({'id': 'ia-positioning', 'targets': {'values': len(pos.paths(m))}})
+    if command == 'check':
+        if m.outlines:
+            report.executed.append({'id': 'ia-outlines', 'targets': {
+                'channels': len(m.channels), 'outlines': len(m.outlines),
+                'sections': sum(len(o['sections']) for _, o in m.outlines.values())}})
+        elif bp is not None:
+            report.skipped.append({'id': 'ia-outlines', 'reason': 'outline が無い（プロダクト UI は blueprint で検査する）'})
+    else:
+        report.skipped.append({'id': 'ia-outlines', 'reason': 'blueprint は outline を見ない（infoarch-author check）'})
+    if bp is not None:
+        report.executed.append({'id': 'ia-blueprint', 'targets': {'screens': len(bp.screens), 'items': len(blueprint.items(bp))}})
+    elif command == 'check':
+        report.skipped.append({'id': 'ia-blueprint', 'reason': 'blueprint/ が無い（outline の成果物）'})
+    return report
+
+
 def impact(root, aid):
     report = Report('impact', dt.date.today().isoformat())
     m = load(root, report)

@@ -98,13 +98,14 @@ def resolve(*, root, approvals, profiles):
                          capture_output=True, text=True, timeout=60)
     data = json.loads(run.stdout, object_pairs_hook=_unique)
     expected = {'tool', 'version', 'level', 'evaluated_on', 'exit_code', 'environment',
-                'counts', 'targets', 'uncovered', 'findings'}
+                'counts', 'targets', 'uncovered', 'findings', 'executed', 'skipped', 'missing', 'screened'}
     if (not isinstance(data, dict) or set(data) != expected or data['tool'] != 'own-infoarch-author'
             or data['version'] != VERSION or data['level'] != 'check'
             or type(data['exit_code']) is not int or run.returncode != data['exit_code']
             or run.returncode not in (0, 1, 2) or data['evaluated_on'] != evaluated_on
             or not isinstance(data['environment'], dict) or set(data['environment']) != {'python', 'platform'}
-            or any(not isinstance(value, str) for value in data['environment'].values()) or data['uncovered'] != []):
+            or any(not isinstance(value, str) for value in data['environment'].values()) or data['uncovered'] != []
+            or any(not isinstance(data[key], list) for key in ('executed', 'skipped', 'missing', 'screened'))):
         raise ValueError('invalid upstream IA check response')
     targets = data['targets']
     if not isinstance(targets, dict) or set(targets) != set(TARGET_KEYS) or any(

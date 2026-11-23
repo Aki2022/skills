@@ -36,8 +36,8 @@ def _print(obj):
 def cmd_check(args):
     date = args.date or dt.date.today().isoformat()
     dt.date.fromisoformat(date)  # ValueError -> exit 2 in main
-    report, _ = check.check(args.root, date)
-    _print(report.to_dict())
+    report, m = check.check(args.root, date)
+    _print(check.categorize(report, m, 'check').to_dict())
     return report.exit_code
 
 
@@ -56,7 +56,7 @@ def cmd_blueprint(args):
             if not [f for f in report.findings if f.code in ('IA_BLUEPRINT_NO_SCREENS', 'IA_BLUEPRINT_PRODUCT_MISSING')]:
                 report.add('fail', 'IA_BLUEPRINT_NO_SCREENS', 'blueprint/screens/*.yaml が 0 件（対象 0 件を合格にしない）', layer_paths.rel('infoarch', 'blueprint', 'screens'))
         report.targets = {'screens': len(bp.screens) if bp else 0, 'items': len(blueprint.items(bp)) if bp else 0}
-    _print(report.to_dict())
+    _print(check.categorize(report, m, 'blueprint').to_dict())
     return report.exit_code
 
 

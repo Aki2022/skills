@@ -95,6 +95,20 @@ v5 の木（旧い名前 `info_arch.yaml` の版 3（今の置き場所は `ux/p
 
 0 合格（info を含む）/ 1 警告 / 2 失格。クラッシュは必ず 2（1 は警告専用）。JSON の報告に、評価日・環境・件数・対象数を載せる。
 
+### 報告の 5 区分（SPEC 情報設計の Quality 2）
+
+`infoarch-author check`・`infoarch-author blueprint`・`positioning-author check` の JSON は、次の 5 つの鍵を空でも必ず出す（`ia_common.CATEGORIES`。実装は `ia_common.Report` の `categorized`。`check`・`blueprint` は `check.categorize` が埋める）。
+
+| 区分 | 中身 | check・blueprint・positioning check では |
+| --- | --- | --- |
+| `executed` | 走らせた検査 `{id, targets}` | `ia-positioning`（提供価値の件数）・`ia-outlines`（channels・outlines・sections）・`ia-blueprint`（screens・items）。対象があるものだけ |
+| `skipped` | このコマンドが走らせない検査 `{id, reason}`。別のコマンドが持つので走らせない | `ia-dom`（`dom`／`ship`）・`ia-semantic-judgments`（`judge`／`evaluate`）。outline の木で blueprint が無ければ `ia-blueprint`、プロダクト UI で outline が無ければ `ia-outlines`、blueprint と positioning check は outline 側 |
+| `missing` | 要るのに無い入力 `{id, reason, code}`。失格の code から作る（`IA_MISSING`→`ia-positioning`、`IA_NO_VALUES`→`ia-values`、`IA_NO_CHANNELS`→`ia-channels`、`IA_NO_OUTLINES`→`ia-outlines`、`IA_BLUEPRINT_NO_SCREENS`→`ia-blueprint-screens`、`IA_BLUEPRINT_PRODUCT_MISSING`→`ia-blueprint-product`） | 対象 0 件を合格にしない。失格と同じ事実を、入力の名前で言い直す |
+| `uncovered` | あるのに見ていない対象（台帳に無い判定・HTML 以外の成果物など） | 決定論の検査は見ないものを持たないので常に `[]`（`ia_module` はこれを要求する） |
+| `screened` | 台帳にあって読んだ判定（「問題なし」の保証ではない） | 台帳を読まないので常に `[]` |
+
+`judge`・`evaluate`・`ship` は、この 5 区分の鍵を足さず、これまでの形のまま（`uncovered`・`screened`・`missing` を台帳の言葉で持つ。`ship` の段は `_stage` が決めた鍵だけ）。`ia_module.resolve`（design の L0）が上流の `check` を読むときの鍵の集合には、この 4 つの鍵（executed・skipped・missing・screened）が入っている。
+
 ## 検査（決定論・トークン 0）
 
 | code | 内容 |

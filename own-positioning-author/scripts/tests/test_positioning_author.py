@@ -42,6 +42,20 @@ def test_green_fixture_passes_and_counts_real_targets(tmp_path):
     assert report['targets'] == {'values': 3, 'approved': 3}
 
 
+def test_check_reports_the_five_categories_even_when_empty(tmp_path):
+    """SPEC 情報設計 Quality 2: executed・skipped・missing・uncovered・screened. Empty ones are still keys."""
+    write(tmp_path)
+    rc, report = cli('check', '--root', str(tmp_path))
+    assert rc == 0, report['findings']
+    for key in ('executed', 'skipped', 'missing', 'uncovered', 'screened'):
+        assert isinstance(report[key], list), key
+    assert [e['id'] for e in report['executed']] == ['ia-positioning'] and report['executed'][0]['targets'] == report['targets']
+    assert {'ia-outlines', 'ia-semantic-judgments'} <= {e['id'] for e in report['skipped']}
+    assert report['missing'] == [] and report['uncovered'] == [] and report['screened'] == []
+    rc, empty = cli('check', '--root', str(tmp_path / 'nothing'))  # no positioning file at all
+    assert rc == 2 and [e['id'] for e in empty['missing']] == ['ia-positioning'] and empty['executed'] == []
+
+
 def test_the_standalone_table_is_not_empty_and_names_only_known_conditions():
     assert len(STANDALONE) >= 26  # 28 cases, only the 2 that need an outline are left out
     assert {c['condition'] for c in STANDALONE} <= set(CONDITIONS)

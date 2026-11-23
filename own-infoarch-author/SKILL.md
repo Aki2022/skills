@@ -52,7 +52,7 @@ infoarch は 3 つの layer の真ん中で、成果物ごとに決める「何�
 ## 使い方
 
 ```sh
-infoarch-author check --root .              # SSOT・チャネル・アウトラインの決定論の検査。終了コード 0 / 1（警告）/ 2（失格）
+infoarch-author check --root .              # SSOT・チャネル・アウトラインの決定論の検査。終了コード 0 / 1（警告）/ 2（失格）。報告は executed・skipped・missing・uncovered・screened の 5 区分を空でも出す（走らせなかった dom・判定は skipped に名前が出る）
 infoarch-author impact --root . --id val-0001  # その原子に立つアウトラインと成果物を列挙（positioning は矢印をたどって推移的に）
 infoarch-author skeleton --root . --outline lp-xxx [--out DIR]  # アウトラインから骨組みの HTML（アンカー・順序・固定値）を出す。工場はこれを崩さずにスタイリングする
 infoarch-author dom --root . --outline lp-xxx # 描画物をブラウザで開き、アンカー・順序・固定値の表示を確かめる

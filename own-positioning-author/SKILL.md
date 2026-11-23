@@ -20,7 +20,7 @@ positioning は 3 つの layer（positioning・infoarch・design）の最初の 
 ## 使い方
 
 ```sh
-positioning-author check --root . [--strict]      # positioning の決定論の検査。終了コード 0 / 1（警告）/ 2（失格）。--strict は全部の経路を出荷の outline が指すものとして失格にする
+positioning-author check --root . [--strict]      # positioning の決定論の検査。終了コード 0 / 1（警告）/ 2（失格）。--strict は全部の経路を出荷の outline が指すものとして失格にする。報告は executed・skipped・missing・uncovered・screened の 5 区分を空でも出す（共通の形は `ia_common.Report`。区分の意味は own-infoarch-author の references/contract.md）
 positioning-author positioning --root .           # セグメントごとの positioning と、提供価値ごとの経路（比べる集合・失格・承認済みか）
 positioning-author targets --root .               # 承認の対象（ia:path:<提供価値 id> と経路のハッシュ）。出荷が要るキーは infoarch-author targets
 positioning-author request --root . --out DIR     # オーナーに見せる承認依頼のページ（○ / ×）と、approve --prepare の行を書く。既存のファイルは上書きしない

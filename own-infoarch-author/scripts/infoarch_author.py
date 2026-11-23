@@ -23,6 +23,12 @@ import skeleton  # noqa: E402
 GUARD_ITSELF = ('ship', 'maintain')
 
 
+# What only the outline side of a repository reports (channels, outlines, their use of a path, expiry of what they ship,
+# the design page inventory). `blueprint` leaves these to `check`.
+OUTLINE_SIDE = ('IA_OUTLINE', 'IA_CHANNEL', 'IA_NO_OUTLINES', 'IA_NO_CHANNELS', 'IA_LEAD_UNSUPPORTED', 'IA_PAGES_',
+                'IA_EXPIRED_', 'IA_POSITIONING_UNAPPROVED')
+
+
 def _print(obj):
     print(json.dumps(obj, ensure_ascii=False, indent=2, default=str))
 
@@ -42,9 +48,10 @@ def cmd_blueprint(args):
     report, m = check.check(args.root, date)
     bp = m.blueprint
     if m.ssot is not None:
-        # only the blueprint's own findings and the positioning's: an outline repository's findings are `check`'s
-        report.findings = [f for f in report.findings if f.code.startswith(('IA_BLUEPRINT', 'IA_SCHEMA', 'IA_YAML', 'IA_MISSING',
-                                                                            'IA_APPROVALS', 'IA_SSOT', 'IA_DICTIONARY'))]
+        # Everything `check` reports except what only an outline repository has. A product UI stands on the positioning,
+        # so its failures (IA_POSITIONING_*, IA_REF_BROKEN, IA_ID_*, ...) count here as in `check`. Drop by the outline side's
+        # names, never keep by a list of the blueprint's: a code that a list does not name would vanish without a trace.
+        report.findings = [f for f in report.findings if not f.code.startswith(OUTLINE_SIDE)]
         if bp is None or not bp.present or not bp.screens:
             if not [f for f in report.findings if f.code in ('IA_BLUEPRINT_NO_SCREENS', 'IA_BLUEPRINT_PRODUCT_MISSING')]:
                 report.add('fail', 'IA_BLUEPRINT_NO_SCREENS', 'blueprint/screens/*.yaml が 0 件（対象 0 件を合格にしない）', layer_paths.rel('infoarch', 'blueprint', 'screens'))
@@ -107,7 +114,7 @@ def cmd_judge(args):
     dt.date.fromisoformat(date)
     if bool(args.answers) != bool(args.replacement_out):
         raise ValueError('--answers と --replacement-out は一緒に使う')
-    report, rows, summary = judge.run(args.root, date, args.dom_report or [], args.answers, args.replacement_out)
+    report, rows, summary = judge.run(args.root, date, args.answers, args.replacement_out)
     out = report.to_dict()
     out['screened'] = getattr(report, 'screened', [])
     out['missing'] = getattr(report, 'missing', [])
@@ -122,7 +129,7 @@ def cmd_judge(args):
 def cmd_accept_reviews(args):
     date = args.date or dt.date.today().isoformat()
     dt.date.fromisoformat(date)
-    _print(judge.accept_reviews(args.root, date, args.dom_report or [], args.id or [], args.owner_words,
+    _print(judge.accept_reviews(args.root, date, args.id or [], args.owner_words,
                                 args.approved_on, write=args.write))
     return 0
 
@@ -307,9 +314,20 @@ def cmd_answer_key(args):
             return 2
         items = answer_key.load_items(m, approved, policy, jl, args.key)
         labels = json.loads(Path(args.measure).read_text(encoding='utf-8'))
-        result = answer_key.measure(items, labels, judge.read_ledger(args.root), policy['theta'])
+        result = answer_key.measure(items, labels, judge.read_ledger(args.root), policy['theta'],
+                                    answer_key.read_measurement(Path(args.key).parent))
         _print(result)
         return 0
+    if args.record:
+        if not args.key or not args.limit:
+            _print({'exit_code': 2, 'error': '--record には、作った時の --key（answer-key.json）と --limit が要る'})
+            return 2
+        items = answer_key.load_items(m, approved, policy, jl, args.key)
+        _print(answer_key.record(items, Path(args.key).parent, args.limit, execute=args.execute))
+        return 0
+    if args.execute or args.limit:
+        _print({'exit_code': 2, 'error': '--limit と --execute は --record と一緒に使う'})
+        return 2
     items = answer_key.build(m, approved, policy, jl)
     if not items:
         _print({'exit_code': 2, 'error': '正解表の組が 0 件（承認済みの提供価値に立つ文案が無い）'})
@@ -386,7 +404,6 @@ def main(argv=None):
     j = sub.add_parser('judge', help='Jev judgment candidates and a read-only check against the shared judgment ledger')
     j.add_argument('--root', default='.')
     j.add_argument('--date', help='evaluation date YYYY-MM-DD (default: today)')
-    j.add_argument('--dom-report', action='append', help='JSON output of `dom` whose first_screens feed the emphasis judgment (repeatable)')
     j.add_argument('--include-candidates', action='store_true', help='print judgment_candidates (contains copy text) for judgment_run.py')
     j.add_argument('--answers', help='judgment-answers.json from judgment_run.py')
     j.add_argument('--replacement-out', help='write the shared-ledger replacement here (never overwrites)')
@@ -394,7 +411,6 @@ def main(argv=None):
     ar = sub.add_parser('accept-reviews', help="record reviews (IA_JUDGE_REVIEW) the owner read and accepted, with the owner's words")
     ar.add_argument('--root', default='.')
     ar.add_argument('--date', help='evaluation date YYYY-MM-DD (default: today)')
-    ar.add_argument('--dom-report', action='append', help='the same dom reports judge reads (for emphasis reviews)')
     ar.add_argument('--id', action='append', help='judgment id of a current review (repeatable)')
     ar.add_argument('--owner-words', help="the owner's own words accepting them (quoted exactly)")
     ar.add_argument('--approved-on', help='the ISO date the owner said them')
@@ -463,8 +479,11 @@ def main(argv=None):
     ak = sub.add_parser('answer-key', help='answer key for the meaning judgment: pairs, candidates and the labeling page, or --measure')
     ak.add_argument('--root', default='.')
     ak.add_argument('--out', default='answer-key', help='directory to write into (files are never overwritten)')
-    ak.add_argument('--measure', help=f'the owner\'s labels.json: measure agreement against {layer_paths.rel("judgments")}')
-    ak.add_argument('--key', help='answer-key.json written with the page (required with --measure)')
+    ak.add_argument('--measure', help=f'the owner\'s labels.json: measure agreement (own pairs against {layer_paths.rel("judgments")}, swap pairs against the measurement ledger beside --key)')
+    ak.add_argument('--key', help='answer-key.json written with the page (required with --measure and --record)')
+    ak.add_argument('--record', action='store_true', help='ask Jev the swap pairs not yet answered and record them in the measurement ledger beside --key (a preview unless --execute)')
+    ak.add_argument('--limit', type=int, help='most pairs to ask Jev in one --record run')
+    ak.add_argument('--execute', action='store_true', help='with --record: really ask Jev (without it: the count only, no key read, no network, no writes)')
     ak.set_defaults(fn=cmd_answer_key)
     args = ap.parse_args(argv)
     try:

@@ -3,8 +3,9 @@
 - gate: one commit, read from git objects through a detached worktree of it (tracked files only). `tree` refuses
   symlinked IA inputs and shipped outputs that are not regular files in the commit (HTML or not); then the
   deterministic `check` (every ship:true channel needs at least one outline), `dom` on every shipped HTML output,
-  and `judge` (read-only against the shared judgment ledger). A shipped outline's uncovered judgment stops the
-  gate; a score at or above theta goes to a human (warning), because the emphasis gate is still undecided.
+  and `judge` (read-only against the shared judgment ledger). No judgment stops the gate: an uncovered one or a
+  score at or above theta goes to a human (warning), until the accuracy of copy x value is measured
+  (requirement 11, ADR-20261123-ia-skill-completion-judgments-and-measurement).
 - channel: `ship_command` is the formal entry. It runs only after a green gate on the same commit.
 - pre-push: every pushed commit itself, its predicted merge into each channel `merge_base`, and its predicted
   merge into the commit this same push sets that base branch to. Deleted refs ship nothing.
@@ -70,9 +71,6 @@ def _messages(stage, level):
 def shipped_outlines(m):
     return sorted(oid for oid, (_, o) in m.outlines.items()
                   if (ch := m.channels.get(o['channel'])) and ch[1]['ship'])
-
-
-ADVISORY = ('ia-value-fit:',)
 
 
 def _outline_of(judgment_id):
@@ -223,36 +221,26 @@ def _evaluate(root, commit, tree, date, source, predicted):
     if files['exit_code'] == 2:
         return finish('shipped IA outputs are not committed files')
 
-    with tempfile.TemporaryDirectory(prefix='infoarch-ship-') as temporary:
-        dom_paths, rendered, skipped, findings, screens = [], [], [], [], 0
-        worst = 0
-        for oid in shipped:
-            outputs = m.outlines[oid][1]['outputs']
-            if not any(Path(o).suffix.lower() in HTML_SUFFIXES for o in outputs):
-                skipped.append({'outline': oid, 'reason': 'no HTML output; the rendered DOM check covers HTML only'})
-                continue
-            rep = dom.run(root, oid, date)
-            data = dom.report_dict(rep)  # first_screens and unanchored: the gate judges what evaluate judges
-            path = Path(temporary) / f'dom-{oid}.json'
-            path.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
-            dom_paths.append(str(path))
-            rendered.append(oid)
-            findings += data['findings']
-            screens += len(data['first_screens'])
-            worst = max(worst, data['exit_code'])
-        counts = {k: sum(f['level'] == k for f in findings) for k in ('fail', 'warn', 'info')}
-        result['stages'].append({'stage': 'dom', 'exit_code': worst, 'counts': counts, 'targets': {'outlines': len(rendered)},
-                                 'rendered': rendered, 'skipped': skipped, 'first_screens': screens, 'findings': findings})
-        if worst == 2:
-            return finish('IA rendered DOM check failed')
-        report, _, _ = judge.run(root, date, dom_paths)
-
-    # ia-value-fit is advisory until the owner's answer key has measured it (v6 requirement 11): reported, never blocking.
-    blocking = [u for u in report.uncovered if _outline_of(u['id']) in shipped and not u['id'].startswith(ADVISORY)]
-    if blocking:
-        report.add('fail', 'IA_SHIP_UNCOVERED',
-                   f'出荷される成果物の判定 {len(blocking)} 件が台帳に無い（Jev で取得して記録してから出荷する）',
-                   ids=sorted(u['id'] for u in blocking))
+    rendered, skipped, findings, screens = [], [], [], 0
+    worst = 0
+    for oid in shipped:
+        outputs = m.outlines[oid][1]['outputs']
+        if not any(Path(o).suffix.lower() in HTML_SUFFIXES for o in outputs):
+            skipped.append({'outline': oid, 'reason': 'no HTML output; the rendered DOM check covers HTML only'})
+            continue
+        rep = dom.run(root, oid, date)
+        data = dom.report_dict(rep)
+        rendered.append(oid)
+        findings += data['findings']
+        screens += len(data['first_screens'])
+        worst = max(worst, data['exit_code'])
+    counts = {k: sum(f['level'] == k for f in findings) for k in ('fail', 'warn', 'info')}
+    result['stages'].append({'stage': 'dom', 'exit_code': worst, 'counts': counts, 'targets': {'outlines': len(rendered)},
+                             'rendered': rendered, 'skipped': skipped, 'first_screens': screens, 'findings': findings})
+    if worst == 2:
+        return finish('IA rendered DOM check failed')
+    # ia-value-fit is advisory until the owner's answer key has measured it (requirement 11): reported, never blocking.
+    report, _, _ = judge.run(root, date)
     result['stages'].append(_stage('judge', report, uncovered=report.uncovered, screened=len(report.screened)))
     fit = [r for r in report.screened if r['id'].startswith('ia-value-fit:') and _outline_of(r['id']) in shipped]
     uncovered_fit = [u for u in report.uncovered if u['id'].startswith('ia-value-fit:') and _outline_of(u['id']) in shipped]
@@ -557,8 +545,6 @@ def maintain(root, date, within_days=None):
         jrep, _, _ = judge.run(root, date)
         result['uncovered_judgments'] = len(jrep.uncovered)
         for f in jrep.findings:
-            if f.code == 'IA_JUDGE_EMPHASIS_MISSING':
-                continue  # the ship gate renders first screens; maintenance stays browser-free
             if f.level in ('fail', 'warn'):
                 result['errors' if f.level == 'fail' else 'warnings'].append(f.code + ': ' + f.message)
     if result['due']:

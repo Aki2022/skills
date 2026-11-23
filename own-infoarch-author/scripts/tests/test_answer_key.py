@@ -57,7 +57,7 @@ def test_value_fit_is_copy_times_one_value_and_replaces_strategy_fit():
 
 def test_trust_and_act_copy_is_not_asked_whether_it_conveys_a_value():
     """Pilot and I16: every fact listing and call-to-action copy was labeled "does not convey" by the owner, because
-    conveying a value is not its job. The value judgment skips those sections; the name and claim judgments stay."""
+    conveying a value is not its job. The value judgment skips those sections, and it is the only judgment left."""
     rows = judge.outline_candidates('lp-municipal', OUTLINE, SSOT, jl.load_policy(), jl)
     roles = {sid: sec['role'] for sid, sec in OUTLINE['sections'].items()}
     by_kind = {}
@@ -66,7 +66,7 @@ def test_trust_and_act_copy_is_not_asked_whether_it_conveys_a_value():
     skipped = {f'lp-municipal/{c["section"]}/{cid}' for cid, c in OUTLINE['copies'].items()
                if roles[c['section']] in ('trust', 'act')}
     assert skipped and not skipped & by_kind['ia-value-fit']
-    assert skipped <= by_kind['ia-unregistered-claim']
+    assert set(by_kind) == {'ia-value-fit'}  # no other kind exists to ask about this copy
     assert not any(i['id'].split('@')[0] in skipped for i in items())
 
 
@@ -190,7 +190,7 @@ def test_copyable_json_follows_the_choices_and_measures(tmp_path):
     assert shown == {'answer_key': answer_key.key_hash(its), 'labels': out['picks']}
     assert out['notice'] is False  # scripts run, so the no-script notice is hidden
     theta = jl.load_policy()['theta']
-    result = answer_key.measure(its, shown, ledger(its, {i['id']: 0.0 for i in its}), theta)
+    result = measured(its, shown, {i['id']: 0.0 if i['kind'] == 'own' else 0.9 for i in its}, theta)
     assert result['status'] == 'measured'
 
 
@@ -198,6 +198,13 @@ def test_copyable_json_follows_the_choices_and_measures(tmp_path):
 
 def ledger(its, scores):
     return {'rows': [{'candidate': i['candidate'], 'score': scores[i['id']]} for i in its if i['id'] in scores]}
+
+
+def measured(its, owner_labels, scores, theta):
+    """Own answers are read from the shared ledger, swap answers from the measurement ledger (a fake Jev: chosen scores)."""
+    shared = ledger([i for i in its if i['kind'] == 'own'], scores)
+    measurement = ledger([i for i in its if i['kind'] == 'swap'], scores)
+    return answer_key.measure(its, owner_labels, shared, theta, measurement)
 
 
 def labels(its, conveys):
@@ -211,7 +218,7 @@ def test_agreement_misses_and_false_detections_are_counted():
     swap = [i['id'] for i in its if i['kind'] == 'swap'][:3]
     owner = {own[0]: True, own[1]: True, own[2]: True, swap[0]: False, swap[1]: False, swap[2]: None}
     jev = {own[0]: 0.0, own[1]: theta, own[2]: 0.1, swap[0]: 0.95, swap[1]: 0.0, swap[2]: 0.9}
-    out = answer_key.measure(its, labels(its, owner), ledger(its, jev), theta)
+    out = measured(its, labels(its, owner), jev, theta)
     assert out['status'] == 'measured'
     assert out['counts'] == {'labeled': 5, 'conveys': 3, 'does_not_convey': 2, 'unknown': 1, 'uncovered': 0}
     assert out['agreement'] == pytest.approx(3 / 5)
@@ -223,8 +230,7 @@ def test_agreement_misses_and_false_detections_are_counted():
 def test_zero_on_either_side_is_unmeasurable_not_a_number(side):
     its = items()
     picked = [i['id'] for i in its if (i['kind'] == 'own') == side][:3]
-    out = answer_key.measure(its, labels(its, {k: side for k in picked}),
-                             ledger(its, {k: 0.0 for k in picked}), jl.load_policy()['theta'])
+    out = measured(its, labels(its, {k: side for k in picked}), {k: 0.0 for k in picked}, jl.load_policy()['theta'])
     assert out['status'] == 'unmeasurable' and 'agreement' not in out and out['reason'], out
 
 
@@ -232,7 +238,7 @@ def test_uncovered_pairs_are_reported_and_not_counted():
     its = items()
     own, swap = [i['id'] for i in its if i['kind'] == 'own'][:2], [i['id'] for i in its if i['kind'] == 'swap'][:2]
     owner = {own[0]: True, own[1]: True, swap[0]: False, swap[1]: False}
-    out = answer_key.measure(its, labels(its, owner), ledger(its, {own[0]: 0.0, swap[0]: 0.9}), jl.load_policy()['theta'])
+    out = measured(its, labels(its, owner), {own[0]: 0.0, swap[0]: 0.9}, jl.load_policy()['theta'])
     assert out['counts']['uncovered'] == 2 and sorted(out['uncovered']) == sorted([own[1], swap[1]])
     assert out['agreement'] == 1.0
 
@@ -241,30 +247,20 @@ def test_labels_for_another_key_are_refused():
     its = items()
     stale = {'answer_key': '0' * 64, 'labels': {its[0]['id']: True}}
     with pytest.raises(ValueError, match='answer key'):
-        answer_key.measure(its, stale, ledger(its, {}), 0.5)
+        answer_key.measure(its, stale, ledger(its, {}), 0.5, ledger(its, {}))
     with pytest.raises(ValueError, match='unknown'):
-        answer_key.measure(its, labels(its, {'nope@val-0001': True}), ledger(its, {}), 0.5)
+        answer_key.measure(its, labels(its, {'nope@val-0001': True}), ledger(its, {}), 0.5, ledger(its, {}))
 
 
-def test_cli_writes_the_key_and_measures_from_the_shared_ledger(tmp_path):
+def test_cli_writes_the_key_and_refuses_to_overwrite(tmp_path):
     write_repo(tmp_path)
     out = tmp_path / 'key'
     rc, made = cli('answer-key', '--root', str(tmp_path), '--out', str(out))
     assert rc == 0 and (out / 'answer-key-page.html').is_file() and (out / 'candidates.json').is_file(), made
     cands = json.loads((out / 'candidates.json').read_text(encoding='utf-8'))['judgment_candidates']
     key = json.loads((out / 'answer-key.json').read_text(encoding='utf-8'))
+    swaps = {i['judgment_hash'] for i in key['items'] if i['kind'] == 'swap'}
+    # candidates.json offers swap pairs only: an own pair is the shipping question and goes through judge/evaluate
+    assert cands and {c['judgment_hash'] for c in cands} == swaps
     rc, again = cli('answer-key', '--root', str(tmp_path), '--out', str(out))
     assert rc == 2  # never overwrites
-    its = key['items']
-    own = [i for i in its if i['kind'] == 'own'][0]['id']
-    swap = [i for i in its if i['kind'] == 'swap'][0]['id']
-    (tmp_path / 'labels.json').write_text(json.dumps({'answer_key': key['answer_key'], 'labels': {own: True, swap: False}}),
-                                          encoding='utf-8')
-    policy = jl.load_policy()
-    by_id = {c['input']['catalog_id']: c for c in cands}
-    rows = [{'candidate': by_id[own], 'score': 0.0}, {'candidate': by_id[swap], 'score': 0.99}]
-    layer_paths.path(tmp_path, 'judgments').write_text(json.dumps({'schema_version': 3, 'policy': policy, 'rows': rows,
-                                                                'holdout': {'source': 'unmeasured'}}), encoding='utf-8')
-    rc, measured = cli('answer-key', '--root', str(tmp_path), '--measure', str(tmp_path / 'labels.json'),
-                       '--key', str(out / 'answer-key.json'))
-    assert rc == 0 and measured['status'] == 'measured' and measured['agreement'] == 1.0, measured

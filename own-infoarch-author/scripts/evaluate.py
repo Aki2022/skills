@@ -32,35 +32,31 @@ def _merge(target, findings, seen):
 
 
 def _stages(root, date, outlines, work):
-    """-> (stages, findings, judge report or None, candidates, dom report paths)."""
+    """-> (stages, findings, judge report or None, candidates)."""
     findings, seen = [], set()
     base, m = check.check(root, date)
     _merge(findings, base.to_dict()['findings'], seen)
     stages = {'check': base.exit_code, 'dom': 'skipped', 'judge': 'skipped'}
     if base.exit_code == 2 or m.ssot is None:
-        return stages, findings, None, [], []
+        return stages, findings, None, []
     targets = list(outlines) if outlines else sorted(m.outlines)
     unknown = [o for o in targets if o not in m.outlines]
     if unknown:
         _merge(findings, [{'level': 'fail', 'code': 'IA_EVALUATE_OUTLINE', 'message': f'アウトライン {unknown} が無い',
                            'path': layer_paths.rel('infoarch', 'outlines')}], seen)
-        return stages, findings, None, [], []
-    stages['dom'], paths = {}, []
+        return stages, findings, None, []
+    stages['dom'] = {}
     for oid in targets:
         rep = dom.run(root, oid, date)
         data = dom.report_dict(rep)
         stages['dom'][oid] = rep.exit_code
         _merge(findings, data['findings'], seen)
-        if data['first_screens']:  # an outline with no HTML output has nothing for judge to read
-            path = Path(work) / f'dom-{len(paths)}.json'
-            path.write_text(json.dumps(data, ensure_ascii=False, default=str), encoding='utf-8')
-            paths.append(path)
     if any(code == 2 for code in stages['dom'].values()):
-        return stages, findings, None, [], paths
-    jrep, rows, _ = judge.run(root, date, [str(p) for p in paths])
+        return stages, findings, None, []
+    jrep, rows, _ = judge.run(root, date)
     stages['judge'] = jrep.exit_code
     _merge(findings, jrep.to_dict()['findings'], seen)
-    return stages, findings, jrep, rows, paths
+    return stages, findings, jrep, rows
 
 
 def _record(root, replacement):
@@ -73,7 +69,7 @@ def _record(root, replacement):
     return {'record': 'recorded', 'refresh': 'refreshed'}[command]
 
 
-def _acquire(root, date, rows, paths, acquire, work):
+def _acquire(root, date, rows, acquire, work):
     jr = judge._jr()
     answers_dir = Path(acquire['answers_dir'])
     answers = answers_dir / 'judgment-answers.json'
@@ -83,7 +79,7 @@ def _acquire(root, date, rows, paths, acquire, work):
                     _transport=acquire.get('_transport'), _usage_path=acquire.get('_usage_path', jr.USAGE))
     if acquire.get('execute') and answers.exists():
         replacement = Path(work) / 'replacement.json'
-        rep, _, _ = judge.run(root, date, [str(p) for p in paths], str(answers), str(replacement))
+        rep, _, _ = judge.run(root, date, str(answers), str(replacement))
         if rep.exit_code == 2:
             raise ValueError('判定台帳の置き換えを作れない（judge が失格）')
         result['ledger'] = _record(root, replacement)
@@ -94,21 +90,21 @@ def run(root, date, outlines=None, *, acquire=None):
     """-> result dict (exit_code, stages, findings, uncovered, screened, missing, candidates[, acquisition])."""
     with tempfile.TemporaryDirectory(prefix='infoarch-evaluate-') as tmp:
         work = Path(tmp).resolve()  # the shared reader refuses paths through a symlink (/var on macOS)
-        stages, findings, jrep, rows, paths = _stages(root, date, outlines, work)
+        stages, findings, jrep, rows = _stages(root, date, outlines, work)
         acquisition = None
         if acquire is not None:
             if jrep is None or jrep.exit_code == 2:
                 acquisition = {'status': 'refused', 'reason': '評価が失格しているので判定を取らない（先に直す）'}
             else:
                 try:
-                    acquisition = _acquire(root, date, rows, paths, acquire, work)
+                    acquisition = _acquire(root, date, rows, acquire, work)
                 except Exception as exc:  # noqa: BLE001 - the acquisition error names itself; never a pass
                     acquisition = {'status': 'failed', 'error': str(exc) or type(exc).__name__}
                     findings.append({'level': 'fail', 'code': 'IA_EVALUATE_ACQUIRE',
                                      'message': f'Jev の判定を取れない: {acquisition["error"]}', 'path': str(judge.LEDGER)})
                 else:
                     if acquisition.get('ledger'):
-                        stages, findings, jrep, rows, paths = _stages(root, date, outlines, work)
+                        stages, findings, jrep, rows = _stages(root, date, outlines, work)
     report = Report(level='evaluate', evaluated_on=date)
     for f in findings:
         report.add(f['level'], f['code'], f['message'], f['path'], f.get('line', 0), **f.get('detail', {}))

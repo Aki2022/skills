@@ -57,7 +57,7 @@ def test_value_fit_is_copy_times_one_value_and_replaces_strategy_fit():
 
 def test_trust_and_act_copy_is_not_asked_whether_it_conveys_a_value():
     """Pilot and I16: every fact listing and call-to-action copy was labeled "does not convey" by the owner, because
-    conveying a value is not its job. The value judgment skips those sections; the name and claim judgments stay."""
+    conveying a value is not its job. The value judgment skips those sections, and it is the only judgment left."""
     rows = judge.outline_candidates('lp-municipal', OUTLINE, SSOT, jl.load_policy(), jl)
     roles = {sid: sec['role'] for sid, sec in OUTLINE['sections'].items()}
     by_kind = {}
@@ -66,7 +66,7 @@ def test_trust_and_act_copy_is_not_asked_whether_it_conveys_a_value():
     skipped = {f'lp-municipal/{c["section"]}/{cid}' for cid, c in OUTLINE['copies'].items()
                if roles[c['section']] in ('trust', 'act')}
     assert skipped and not skipped & by_kind['ia-value-fit']
-    assert skipped <= by_kind['ia-unregistered-claim']
+    assert set(by_kind) == {'ia-value-fit'}  # no other kind exists to ask about this copy
     assert not any(i['id'].split('@')[0] in skipped for i in items())
 
 

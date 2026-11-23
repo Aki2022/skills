@@ -8,7 +8,7 @@
 
 - `channels/<media>.yaml`：成果物の置き場所と出し方の宣言だけ。中身は `media`（ファイル名と一致）・`outputs`（repo 相対の glob）・`ship`・`ship_command`（`ship: true` なら必須。出荷の正式の入口が実行する）・`merge_base`（pre-push の予測マージの相手。出荷チャネルで無いと doctor が失格）・`viewports`。
 - `outlines/<成果物 id>.yaml`：成果物ごとの outline（版 3）。1 ページ＝1 outline。AI が書き、人は保守しない。`id` はファイル名と一致する。
-- `INFO_ARCH.md`：散文。原子を id で参照するだけで、値を持たない。
+- `INFO_ARCH.md`：散文。原子を id で参照するだけで、値を持たない。`check` は引く id を確かめる：positioning の原子・プロダクトの項目（`val-0001`・`sto-0001` など）、画面（`scr-<slug>`）、outline（`outline:<id>` と書く）が無ければ `IA_INFO_ARCH_REF_BROKEN`（失格。行番号つき）、取り下げた id（墓標）なら `IA_INFO_ARCH_REF_TOMBSTONED`（警告）。ファイルが無い repo は何も確かめない。v5 の id（`msg-…`・`aud-…`）は読まない（`migrate-v6` の `prose_mentions` が持つ）。
 
 それ以外のファイルやサブディレクトリが `channels/` `outlines/` にあると失格にする（黙って無視しない）。`.` で始まるファイル（`.DS_Store`・`.gitkeep`）だけは読まずに飛ばす。`.` で始まるサブディレクトリは失格にする。
 
@@ -322,6 +322,7 @@ pre-push の拡張は、マーカーのある repo だけで動く（opt-in）�
 - **承認**：`ia:item:<項目 id>`。ハッシュは `blueprint.item_hash`（項目 id と、書かれた内容から provenance を除いたものの JCS 正規化の SHA-256）。ほかの項目に依らない。`infoarch-author targets` の `approval_hashes` に proposed の項目すべて、`must_approval_keys` に出荷する画面が引く項目が出る。`ia_module.py` の鍵の形は `ia:path:val-NNNN` と `ia:item:<種別>-NNNN`。
 - **画面の領域**：`priority`（小さいほど上位、画面の中で重ならない）、`shape`（`value`・`list`・`comparison`・`trend`・`distribution`・`status`・`form`・`text`。見せるものの種類。どの部品で見せるかは design）。状態は `loading`・`empty`・`error`・`partial`・`offline`・`denied` から宣言する。主操作は `primary: true` の操作がちょうど 1 つ（持たない画面は `no_primary: true`）。
 - **検査の code**：IA_BLUEPRINT_NO_STORIES / NO_SCREENS / NO_REGIONS / PRODUCT_MISSING / LEAD_COUNT / VALUE_NONE / VALUE_UNAPPROVED（警告）/ CONSTRAINT_FORM / ID_NOT_ISSUED / ID_REUSED / REF_BROKEN / REF_EMPTY / ITEM_UNAPPROVED / SCREEN_NO_STORY / SCREEN_ID / SCREEN_FILE / GROUP_NO_PRINCIPLE / PRIORITY_MISSING / PRIORITY_DUPLICATE / PRIMARY_MANY / PRIMARY_NONE / PRIMARY_CONTRADICTS / STATES_MISSING、IA_BLUEPRINT_CHECKED（info。画面と項目の件数）。形の違反（shape が決まった種類でない等）は IA_SCHEMA。
+- **縦の順の確かめ（型を変えるときだけ・手作業）**：blueprint の型（項目の種類と持つ情報）を変えるときだけ、その変更の中で一度、実配置を見ない別の AI が、画面の優先度と design の割り付け規則だけから縦の順を導けるかを手で一度試し、結果を作業の記録に残す（食い違いの理由が型のどの項目で説明できるか。説明できない食い違いがあれば型を直す）。毎回の検査にはしない。この skill に道具は無い。描画した画面が優先度どおりに並んでいるかは、design の割り付けの検査が毎回確かめる。
 - **ia_module の targets の 5 つの数**：outline 側の `channels`・`outlines`・`sections` と、blueprint 側の `screens`（画面）・`items`（product.yaml の項目すべて）。鍵は固定の 5 つで、`check.py`（数える）・`ia_module.py`（`TARGET_KEYS`・`zero_targets`）・`design_modules._git_contract`（受ける）・解決済みマニフェストの `modules.ia.resolved.targets` と `media.*.targets`（記録する）が同じ 5 つを持つ。
   - **対象 0 件の判定**：どちらの側も「全部が 1 以上」か「全部が 0」のどちらかで、半分だけ 0 の側（チャネルだけあって outline が無い、画面だけあって項目が無い）は 0 件扱い。両方の側が空でも 0 件で、`zero IA check targets` の失格になる。片方の側が丸ごと埋まっていれば足りる（outline の無いプロダクト UI は blueprint が、blueprint の無い成果物は outline が対象）。
   - **既存への影響**：outline だけの repo は `screens: 0, items: 0` が増えるだけで、判定は従来と同じ。マニフェストの `modules.ia.resolved.targets` を検証して読むコードは無く（読み込みで縛るのは `ia_module.py` のハッシュ）、`ia_module.py` が変わると既存のマニフェストは「IA resolver changed; rerun L0」で止まるので、`design-author check` を再実行すると 5 つの鍵で書き直される（`VERSION`・`CONTRACT` は据え置き）。3 つの鍵だけの結果を返す古い resolver は受けない。

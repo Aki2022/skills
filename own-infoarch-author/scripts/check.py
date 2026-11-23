@@ -318,6 +318,48 @@ def check_pages(m, report):
 
 # ---- expiry ------------------------------------------------------------------------------
 
+# INFO_ARCH.md is prose that refers to atoms by id and holds no value (SPEC-information-architecture-standardization,
+# requirement 1). The ids it may cite: a positioning atom or a product item (the prefixes the two layers issue), a screen
+# `scr-<slug>`, and an outline written `outline:<id>`. v5 ids (msg-…, aud-…) are the migration's business, not read here.
+_PROSE_PREFIXES = '|'.join(sorted(set(pm.BLOCKS.values()) | set(blueprint.ITEM_BLOCKS.values())))
+PROSE_ID = re.compile(r'(?<![A-Za-z0-9_-])((?:' + _PROSE_PREFIXES + r')-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})'
+                      r'|scr-[a-z0-9]+(?:-[a-z0-9]+)*|outline:[a-z0-9][a-z0-9_-]*)(?![A-Za-z0-9_-])')
+
+
+def _tombstoned(m, aid):
+    bp = m.blueprint.product if m.blueprint is not None and m.blueprint.present and m.blueprint.product else None
+    return any(aid in ((src or {}).get('ledger') or {}).get('tombstones', {}) for src in (m.ssot, bp))
+
+
+def check_info_arch_refs(m, report):
+    """Every id INFO_ARCH.md cites exists (fail) or was retired (warn). A repository without the file has nothing to check."""
+    path = layer_paths.path(m.root, 'infoarch', 'INFO_ARCH.md')
+    if not path.is_file():
+        return
+    rel = path.relative_to(Path(m.root).resolve()) if path.is_absolute() else path
+    bp = m.blueprint if m.blueprint is not None and m.blueprint.present else None
+    seen = set()
+    for lineno, line in enumerate(path.read_text(encoding='utf-8').splitlines(), 1):
+        for mention in PROSE_ID.findall(line):
+            if mention in seen:
+                continue
+            seen.add(mention)
+            if mention.startswith('outline:'):
+                aid, live = mention[len('outline:'):], mention[len('outline:'):] in m.outlines
+            elif mention.startswith('scr-'):
+                aid, live = mention, bool(bp and mention in bp.screens)
+            elif blueprint.ITEM_ID.fullmatch(mention):
+                aid, live = mention, bool(bp and bp.item(mention))
+            else:
+                aid, live = mention, m.atom(mention) is not None
+            if live:
+                continue
+            if _tombstoned(m, aid):
+                report.add('warn', 'IA_INFO_ARCH_REF_TOMBSTONED', f'INFO_ARCH.md の {lineno} 行が、取り下げた id {aid} を引いている', rel, lineno, id=aid)
+            else:
+                report.add('fail', 'IA_INFO_ARCH_REF_BROKEN', f'INFO_ARCH.md の {lineno} 行が、無い id {aid} を引いている（綴りか、消した id を確かめる）', rel, lineno, id=aid)
+
+
 def _expiry(atom, days):
     if atom.get('evergreen'):
         return None
@@ -377,6 +419,7 @@ def check(root, date):
     check_blueprint(m, report, approved, rows)
     check_expiry(m, report, date)
     check_pages(m, report)
+    check_info_arch_refs(m, report)
     # The outline side (channels, outlines, sections) and the blueprint side (screens, items) are counted apart: a product
     # UI has screens and items and no outline, a deliverable has outlines and no blueprint. The bridge (ia_module) refuses
     # a check where neither side has anything, and a side that is half empty.

@@ -165,7 +165,7 @@ def test_acquire_preview_calls_nothing_and_writes_nothing(repo, tmp_path, monkey
     result = evaluate.run(repo, DATE, ['lp-municipal'], acquire={
         'limit': 5, 'answers_dir': answers, 'execute': False, '_usage_path': usage_ledger(tmp_path),
         '_transport': lambda *a: pytest.fail('network on preview')})
-    assert result['acquisition']['status'] == 'dry-run' and result['acquisition']['selected'] == 5
+    assert result['acquisition']['status'] == 'dry-run' and result['acquisition']['selected'] == 3  # judge reads every outline: the LP's 2 judged copies and the deck's 1
     assert not (answers / 'judgment-answers.json').exists() and not layer_paths.path(repo, 'judgments').exists()
 
 
@@ -187,9 +187,9 @@ def test_acquire_respects_the_limit_and_refreshes_an_existing_ledger(repo, tmp_p
     monkeypatch.setenv('TYPESAFE_API_KEY', 'test-key')
     answers, calls, usage = tmp_path / 'answers', [], usage_ledger(tmp_path)
     answers.mkdir()
-    acquire = {'limit': 3, 'answers_dir': answers, 'execute': True, '_usage_path': usage, '_transport': responder(calls)}
+    acquire = {'limit': 1, 'answers_dir': answers, 'execute': True, '_usage_path': usage, '_transport': responder(calls)}
     first = evaluate.run(repo, DATE, ['lp-municipal'], acquire=acquire)
-    assert sum(calls) == 3 and first['exit_code'] == 1 and first['acquisition']['ledger'] == 'recorded'
+    assert sum(calls) == 1 and first['exit_code'] == 1 and first['acquisition']['ledger'] == 'recorded'
     second = evaluate.run(repo, DATE, ['lp-municipal'], acquire=dict(acquire, limit=500))
     assert second['acquisition']['ledger'] == 'refreshed' and second['exit_code'] == 0, second['findings']
 

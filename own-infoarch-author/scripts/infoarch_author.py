@@ -114,7 +114,7 @@ def cmd_judge(args):
     dt.date.fromisoformat(date)
     if bool(args.answers) != bool(args.replacement_out):
         raise ValueError('--answers と --replacement-out は一緒に使う')
-    report, rows, summary = judge.run(args.root, date, args.dom_report or [], args.answers, args.replacement_out)
+    report, rows, summary = judge.run(args.root, date, args.answers, args.replacement_out)
     out = report.to_dict()
     out['screened'] = getattr(report, 'screened', [])
     out['missing'] = getattr(report, 'missing', [])
@@ -129,7 +129,7 @@ def cmd_judge(args):
 def cmd_accept_reviews(args):
     date = args.date or dt.date.today().isoformat()
     dt.date.fromisoformat(date)
-    _print(judge.accept_reviews(args.root, date, args.dom_report or [], args.id or [], args.owner_words,
+    _print(judge.accept_reviews(args.root, date, args.id or [], args.owner_words,
                                 args.approved_on, write=args.write))
     return 0
 
@@ -314,9 +314,20 @@ def cmd_answer_key(args):
             return 2
         items = answer_key.load_items(m, approved, policy, jl, args.key)
         labels = json.loads(Path(args.measure).read_text(encoding='utf-8'))
-        result = answer_key.measure(items, labels, judge.read_ledger(args.root), policy['theta'])
+        result = answer_key.measure(items, labels, judge.read_ledger(args.root), policy['theta'],
+                                    answer_key.read_measurement(Path(args.key).parent))
         _print(result)
         return 0
+    if args.record:
+        if not args.key or not args.limit:
+            _print({'exit_code': 2, 'error': '--record には、作った時の --key（answer-key.json）と --limit が要る'})
+            return 2
+        items = answer_key.load_items(m, approved, policy, jl, args.key)
+        _print(answer_key.record(items, Path(args.key).parent, args.limit, execute=args.execute))
+        return 0
+    if args.execute or args.limit:
+        _print({'exit_code': 2, 'error': '--limit と --execute は --record と一緒に使う'})
+        return 2
     items = answer_key.build(m, approved, policy, jl)
     if not items:
         _print({'exit_code': 2, 'error': '正解表の組が 0 件（承認済みの提供価値に立つ文案が無い）'})
@@ -393,7 +404,6 @@ def main(argv=None):
     j = sub.add_parser('judge', help='Jev judgment candidates and a read-only check against the shared judgment ledger')
     j.add_argument('--root', default='.')
     j.add_argument('--date', help='evaluation date YYYY-MM-DD (default: today)')
-    j.add_argument('--dom-report', action='append', help='JSON output of `dom` whose first_screens feed the emphasis judgment (repeatable)')
     j.add_argument('--include-candidates', action='store_true', help='print judgment_candidates (contains copy text) for judgment_run.py')
     j.add_argument('--answers', help='judgment-answers.json from judgment_run.py')
     j.add_argument('--replacement-out', help='write the shared-ledger replacement here (never overwrites)')
@@ -401,7 +411,6 @@ def main(argv=None):
     ar = sub.add_parser('accept-reviews', help="record reviews (IA_JUDGE_REVIEW) the owner read and accepted, with the owner's words")
     ar.add_argument('--root', default='.')
     ar.add_argument('--date', help='evaluation date YYYY-MM-DD (default: today)')
-    ar.add_argument('--dom-report', action='append', help='the same dom reports judge reads (for emphasis reviews)')
     ar.add_argument('--id', action='append', help='judgment id of a current review (repeatable)')
     ar.add_argument('--owner-words', help="the owner's own words accepting them (quoted exactly)")
     ar.add_argument('--approved-on', help='the ISO date the owner said them')
@@ -470,8 +479,11 @@ def main(argv=None):
     ak = sub.add_parser('answer-key', help='answer key for the meaning judgment: pairs, candidates and the labeling page, or --measure')
     ak.add_argument('--root', default='.')
     ak.add_argument('--out', default='answer-key', help='directory to write into (files are never overwritten)')
-    ak.add_argument('--measure', help=f'the owner\'s labels.json: measure agreement against {layer_paths.rel("judgments")}')
-    ak.add_argument('--key', help='answer-key.json written with the page (required with --measure)')
+    ak.add_argument('--measure', help=f'the owner\'s labels.json: measure agreement (own pairs against {layer_paths.rel("judgments")}, swap pairs against the measurement ledger beside --key)')
+    ak.add_argument('--key', help='answer-key.json written with the page (required with --measure and --record)')
+    ak.add_argument('--record', action='store_true', help='ask Jev the swap pairs not yet answered and record them in the measurement ledger beside --key (a preview unless --execute)')
+    ak.add_argument('--limit', type=int, help='most pairs to ask Jev in one --record run')
+    ak.add_argument('--execute', action='store_true', help='with --record: really ask Jev (without it: the count only, no key read, no network, no writes)')
     ak.set_defaults(fn=cmd_answer_key)
     args = ap.parse_args(argv)
     try:

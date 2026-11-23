@@ -4,7 +4,7 @@
 
 L0は、カタログ項目に対するdoc証拠の散文とn-a理由だけを決定論で抽出する。
 判定の対象はdoc-relevance（項目を扱っていない可能性）とna-rationale（適用外理由が不十分な可能性）。
-中央policyはIAと共有し、IAの5種類（ia-name-variant・ia-emphasis・ia-unregistered-claim・ia-audience-fit・ia-strategy-fit）も同じpolicy・台帳・使用量台帳を使う。IAの候補と読み取りはown-infoarch-authorのjudgeが持つ。判定の鍵は種類ごとに分かれる（schema3）。ある種類のプロンプトを変えても、ほかの種類の判定は外れない。種類を足しても同じ。θ・モデル・prompt_versionは共有の値で、変えると両方の判定がmigrate対象になる。
+中央policyはIAと共有し、IAの判定（ia-value-fit の1種類だけ。v5までの ia-name-variant・ia-emphasis・ia-unregistered-claim・ia-audience-fit・ia-strategy-fit は作らず、台帳に残る行は読まずに無視する。種類の名前は台帳の検証が今も受け付ける）も同じpolicy・台帳・使用量台帳を使う。IAの候補と読み取りはown-infoarch-authorのjudgeが持つ。判定の鍵は種類ごとに分かれる（schema3）。ある種類のプロンプトを変えても、ほかの種類の判定は外れない。種類を足しても同じ。θ・モデル・prompt_versionは共有の値で、変えると両方の判定がmigrate対象になる。
 JevをL0/L1/L2から呼ばない。カタログのmust分類は既存classify.pyが所有し、この台帳と混ぜない。
 
 ```sh

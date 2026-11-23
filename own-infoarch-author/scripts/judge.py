@@ -1,19 +1,17 @@
-"""IA semantic judgments (ISSUE-04): candidates for Jev and a read-only check against the shared ledger.
+"""IA semantic judgment: candidates for Jev and a read-only check against the shared ledger.
 
-Four kinds share own-design-author's judgment policy and `ux/judgments.json`
-(ADR-20261111-ia-judgments-share-design-policy-and-ledger, biz_ops):
-- ia-name-variant: a piece of copy writes an official name in another notation.
-- ia-unregistered-claim: a piece of copy claims something its message's value, the evidence on that value's path and
-  its facts do not support. Rendered text outside every anchor (`dom`'s `unanchored`) is judged the same way, with
-  nothing on the page supporting it.
-- ia-audience-fit: the outline's order and emphasis do not suit its target, touchpoint, tone and objective.
-- ia-emphasis: a rendered first screen does not carry the lead message's value.
-- ia-value-fit: a piece of copy does not convey the one value its message points to (v6 requirement 11). The input
-  carries the copy and the value's content, so changing either never reuses an old judgment. It is advisory until
-  its accuracy is measured with the owner's answer key (answer_key.py); it replaced v5's ia-strategy-fit.
+There is one kind, ia-value-fit: a piece of copy does not convey the one value its message points to (information
+architecture requirement 11). It shares own-design-author's judgment policy and `ux/judgments.json`
+(ADR-20261111-ia-judgments-share-design-policy-and-ledger, biz_ops). The input carries the copy and the value's
+content, so changing either never reuses an old judgment. It is advisory until its accuracy is measured with the
+owner's answer key (answer_key.py); it replaced v5's ia-strategy-fit.
+
+The four older kinds (name variant, unregistered claim, audience fit, emphasis) are not made, not read and never stop
+a shipment (ADR-20261123-ia-skill-completion-judgments-and-measurement). Rows of those kinds may remain in a
+repository's ledger: they are ignored, never rewritten. A name variant is the dictionary check's work.
 
 The gate only reads the ledger. It never calls a model: missing judgments are "uncovered", stored ones are
-"screened" (never "clean"), and a score at or above theta goes to a human as IA_JUDGE_REVIEW.
+"screened" (never "clean"), and a score at or above theta goes to a human as IA_JUDGE_REVIEW. Neither blocks.
 
 A review the owner read and accepted is recorded, with the owner's words, in `ux/infoarch/accepted_reviews.yaml`
 bound to the judgment hash (ADR-20261118-ai-records-owner-approvals, biz_ops). It is then reported as
@@ -29,7 +27,6 @@ import sys
 from pathlib import Path
 
 import check
-import dom
 import outline as ol
 from common import Report
 import layer_paths  # on sys.path through common
@@ -68,136 +65,28 @@ def _expand(copy, facts):
     return check.PLACEHOLDER.sub(lambda m: str(facts.get(m.group(1), {}).get('value', m.group(0))), copy)
 
 
-def _segment_model(outline, ssot):
-    return check.Model(root=Path('.'), ssot=ssot), ol.segment_of(outline)
-
-
 def _value(ssot, vid):
     return {'id': vid, 'text': (ssot.get('values', {}).get(vid) or {}).get('text', '')}
 
 
-def _evidence(m, path):
-    """Positioning evidence that supports any element of a value's path: what a message inherits (v6)."""
-    on = set(path)
-    ev = sorted({e['from'] for e in check.pos.edges(m).values() if e['kind'] == 'supports' and e['to'] in on})
-    return [{'id': p, 'text': (m.ssot.get('proofs', {}).get(p) or {}).get('text', '')} for p in ev]
-
-
 def outline_candidates(oid, outline, ssot, policy, jl):
+    """One candidate per piece of copy whose message points to a value with text (not trust or act copy)."""
     facts = ssot.get('facts', {})
-    entities = [{'id': eid, 'name': e['name']} for eid, e in sorted(ssot.get('entities', {}).items()) if e.get('name')]
-    m, segment = _segment_model(outline, ssot)
-    rows, lines = [], []
+    rows = []
     for sid, sec, copies in ol.ordered_sections(outline):
+        if sec['role'] in VALUE_FIT_SKIP_ROLES:
+            continue
         for cid, c in copies:
             text = _expand(c['text'], facts)
-            lines.append(f"{sec['role']}: {text}")
-            if not text.strip():
-                continue
-            ident = f'{oid}/{sid}/{cid}'
-            if entities:
-                rows.append(jl.candidate('ia-name-variant', ident, text, {'outline': oid, 'entities': entities}, policy=policy))
-            msg = outline['messages'].get(c['message']) or {}
-            ids, _ = check.positioning_path(m, [msg['value']], segment) if msg else ([], None)
-            message = {'id': c['message'], 'value': _value(ssot, msg.get('value'))} if msg else None
-            ctx = {'outline': oid, 'role': sec['role'], 'message': message, 'evidence': _evidence(m, ids),
-                   'facts': [{'id': f, 'label': facts.get(f, {}).get('label', ''), 'value': facts.get(f, {}).get('value', '')}
-                             for f in dict.fromkeys(check.PLACEHOLDER.findall(c['text']))]}
-            rows.append(jl.candidate('ia-unregistered-claim', ident, text, ctx, policy=policy))
-            if (msg and sec['role'] not in VALUE_FIT_SKIP_ROLES
-                    and (ssot.get('values', {}).get(msg['value']) or {}).get('text')):
-                rows.append(value_fit(jl, policy, ident, text, oid, c['message'], _value(ssot, msg['value'])))
-    # The order of the copy is what the fit is judged against, so reordering it must invalidate the judgment.
-    fit_ctx = {'outline': oid, 'target': outline['target'], 'touchpoint': outline['touchpoint'], 'tone': outline['tone'],
-               'objective': outline['objective'], 'lead': _lead(outline, ssot)}
-    rows.append(jl.candidate('ia-audience-fit', oid, '\n'.join(lines), fit_ctx, policy=policy))
+            msg = outline['messages'].get(c['message'])
+            if text.strip() and msg and (ssot.get('values', {}).get(msg['value']) or {}).get('text'):
+                rows.append(value_fit(jl, policy, f'{oid}/{sid}/{cid}', text, oid, c['message'], _value(ssot, msg['value'])))
     return rows
 
 
 def value_fit(jl, policy, ident, text, oid, message, value):
     """The one question Jev is asked about meaning: does this copy convey this value (v6 requirement 11)."""
     return jl.candidate('ia-value-fit', ident, text, {'outline': oid, 'message': message, 'value': value}, policy=policy)
-
-
-def _lead(outline, ssot):
-    lead = [(mid, msg) for mid, msg in sorted(outline['messages'].items()) if msg['rank'] == 'lead']
-    return {'id': lead[0][0], 'value': _value(ssot, lead[0][1]['value'])} if len(lead) == 1 else None
-
-
-def emphasis_candidates(oid, outline, ssot, screens, policy, jl):
-    return [jl.candidate('ia-emphasis', f"{oid}/{s['file']}@{s['viewport']}", s['text'],
-                         {'outline': oid, 'file': s['file'], 'viewport': s['viewport'],
-                          'target': outline['target'], 'lead': _lead(outline, ssot)}, policy=policy)
-            for s in screens]
-
-
-def unanchored_candidates(oid, rows, policy, jl):
-    """Text the page shows outside every section: a claim with no message, proof or fact behind it."""
-    return [jl.candidate('ia-unregistered-claim', f"{oid}/{r['file']}@{r['viewport']}#unanchored", r['text'],
-                         {'outline': oid, 'role': 'unanchored', 'message': None, 'evidence': [], 'facts': []},
-                         policy=policy)
-            for r in rows]
-
-
-def expected_screens(outline, channels):
-    """(file, viewport) pairs `dom` renders for an outline: its HTML outputs times the channel's viewports."""
-    ch = channels.get(outline['channel'])
-    viewports = (ch[1].get('viewports') if ch else None) or dom.DEFAULT_VIEWPORTS
-    return [(o, v['name']) for o in outline['outputs'] if Path(o).suffix.lower() in dom.HTML_SUFFIXES for v in viewports]
-
-
-def _rows(path, field, rows, expected, report, seen):
-    """Validated rows of one dom report field; a bad row fails without echoing its text."""
-    good = []
-    for i, s in enumerate(rows):
-        ok = (isinstance(s, dict) and all(isinstance(s.get(k), str) and s[k].strip() for k in ('outline', 'file', 'viewport', 'text'))
-              and (s['file'], s['viewport']) in expected.get(s['outline'], ()))
-        key = (field, s['outline'], s['file'], s['viewport']) if ok else None
-        if not ok or key in seen:
-            report.add('fail', 'IA_JUDGE_DOM_REPORT',
-                       f'{path}: {field}[{i}] が読めない（型・未知のアウトライン/成果物/画面幅・重複のどれか）')
-            continue
-        seen.add(key)
-        good.append(s)
-    return good
-
-
-def read_unanchored(paths, expected, report):
-    """-> {outline id: [unanchored rows]} from passing dom reports; the field is optional (empty means none)."""
-    out, seen = {}, set()
-    for path in paths:
-        data = json.loads(Path(path).read_text(encoding='utf-8'))
-        rows = data.get('unanchored', [])
-        if data.get('exit_code') not in (0, 1) or not rows:
-            continue
-        if not isinstance(rows, list):
-            report.add('fail', 'IA_JUDGE_DOM_REPORT', f'{path}: unanchored が一覧でない')
-            continue
-        for s in _rows(path, 'unanchored', rows, expected, report, seen):
-            out.setdefault(s['outline'], []).append(s)
-    return out
-
-
-def read_dom_reports(paths, expected, report):
-    """-> {outline id: [first screens]}; a failed or malformed render is never judged.
-
-    `expected` maps outline id -> the (file, viewport) pairs dom renders. A row outside them, or a duplicate,
-    fails; row text is never echoed into findings (it is unpublished copy)."""
-    screens, seen = {}, set()
-    for path in paths:
-        data = json.loads(Path(path).read_text(encoding='utf-8'))
-        # A warning (text outside the anchors, a non-HTML output, a repeat with other copy) still renders the page as
-        # designed; only a failure (or an unknown code) makes the render unfit to judge.
-        if data.get('exit_code') not in (0, 1):
-            report.add('fail', 'IA_JUDGE_DOM_FAILED', f'{path}: dom が失格した描画物は判定しない（exit {data.get("exit_code")}）')
-            continue
-        rows = data.get('first_screens')
-        if not isinstance(rows, list) or not rows:
-            report.add('fail', 'IA_JUDGE_DOM_REPORT', f'{path}: first_screens が空（対象 0 件を合格にしない）')
-            continue
-        for s in _rows(path, 'first_screens', rows, expected, report, seen):
-            screens.setdefault(s['outline'], []).append(s)
-    return screens
 
 
 def read_ledger(root):
@@ -238,11 +127,13 @@ def read_accepted(root):
     return out
 
 
-def evaluate(rows, ledger, *, missing, policy=None, jl=None, accepted=None):
+def evaluate(rows, ledger, *, policy=None, jl=None, accepted=None):
     report = Report(level='judge', evaluated_on='')
-    report.screened, report.missing = [], list(missing)
+    report.screened, report.missing = [], []
     if not rows:
-        report.add('fail', 'IA_JUDGE_NO_TARGETS', '判定の候補が 0 件（対象 0 件を合格にしない）')
+        # An outline of only fact and call-to-action copy has nothing to judge. That is a visible gap, never a green
+        # "judged" and never a stop: no judgment stops a shipment.
+        report.add('warn', 'IA_JUDGE_NO_TARGETS', '判定の候補が 0 件（文案 × 提供価値の対象が無い。判定していない）')
         return report
     jl = jl or _jl()
     result = jl.evaluate(rows, ledger, policy=policy)
@@ -265,11 +156,6 @@ def evaluate(rows, ledger, *, missing, policy=None, jl=None, accepted=None):
     if stale:
         report.add('info', 'IA_JUDGE_ACCEPTED_STALE', f'{len(stale)} 件の「認めた」記録は今の判定に当たらない（文案・文脈が変わったか、θ 未満になった）',
                    ids=stale)
-    for m in report.missing:
-        # A shipped HTML outline without its first screen is a gap (warn); other media are reported as missing only.
-        where = f'{m["outline"]}/{m["file"]}@{m["viewport"]}' if 'viewport' in m else m['outline']
-        report.add('warn' if m.get('shipped_html') else 'info', 'IA_JUDGE_EMPHASIS_MISSING',
-                   f'{where}: 最初の画面の入力（dom の報告）が無いので強調を判定していない')
     return report
 
 
@@ -340,7 +226,7 @@ def replacement(ledger, rows, answers, policy, jl, outlines=None):
     return out, summary
 
 
-def run(root, date, dom_reports=(), answers=None, replacement_out=None):
+def run(root, date, answers=None, replacement_out=None):
     """-> (report, candidates, replacement summary or None)."""
     base, m = check.check(root, date)
     if m.ssot is None or base.exit_code == 2:
@@ -351,25 +237,9 @@ def run(root, date, dom_reports=(), answers=None, replacement_out=None):
     jl = _jl()
     policy = jl.load_policy()
     pre = Report(level='judge', evaluated_on=date)
-    expected = {oid: expected_screens(outline, m.channels) for oid, (_, outline) in m.outlines.items()}
-    screens = read_dom_reports(dom_reports, expected, pre)
-    loose = read_unanchored(dom_reports, expected, pre)
-    rows, missing = [], []
+    rows = []
     for oid, (_, outline) in sorted(m.outlines.items()):
         rows += outline_candidates(oid, outline, m.ssot, policy, jl)
-        rows += unanchored_candidates(oid, loose.get(oid, []), policy, jl)
-        ch = m.channels.get(outline['channel'])
-        shipped = bool(ch and ch[1].get('ship'))
-        if oid in screens:
-            rows += emphasis_candidates(oid, outline, m.ssot, screens[oid], policy, jl)
-            # A partial report (some files or viewports only) must not read as covered.
-            got = {(s['file'], s['viewport']) for s in screens[oid]}
-            missing += [{'kind': 'ia-emphasis', 'outline': oid, 'file': f, 'viewport': v, 'shipped_html': shipped,
-                         'reason': 'dom の報告（first_screens）にこの画面幅が無い'}
-                        for f, v in expected[oid] if (f, v) not in got]
-        else:
-            missing.append({'kind': 'ia-emphasis', 'outline': oid, 'shipped_html': shipped and bool(expected[oid]),
-                            'reason': 'dom の報告（first_screens）が渡されていない'})
     try:
         accepted = read_accepted(root)
     except layer_paths.LayerLayoutError:
@@ -379,12 +249,12 @@ def run(root, date, dom_reports=(), answers=None, replacement_out=None):
         pre.add('fail', 'IA_JUDGE_ACCEPTED_FILE', f'認めた要確認の記録が読めない: {exc}', ACCEPTED)
     try:
         ledger = read_ledger(root)
-        report = evaluate(rows, ledger, missing=missing, policy=policy, jl=jl, accepted=accepted)
+        report = evaluate(rows, ledger, policy=policy, jl=jl, accepted=accepted)
     except layer_paths.LayerLayoutError:
         raise
     except (ValueError, KeyError, TypeError) as exc:
         report = Report(level='judge', evaluated_on=date)
-        report.screened, report.missing, ledger = [], missing, None
+        report.screened, report.missing, ledger = [], [], None
         report.add('fail', 'IA_JUDGE_LEDGER', f'判定台帳 {LEDGER} が読めない・policy と合わない: {exc}')
     report.evaluated_on = date
     report.findings = pre.findings + report.findings
@@ -397,7 +267,7 @@ def run(root, date, dom_reports=(), answers=None, replacement_out=None):
     return report, rows, summary
 
 
-def accept_reviews(root, date, dom_reports, ids, owner_words, approved_on, write=False):
+def accept_reviews(root, date, ids, owner_words, approved_on, write=False):
     """Record reviews the owner accepted. Only a review judge reports now can be accepted; nothing is written without
     the owner's words and the ISO date they were given, nor without `write`."""
     _design_path()
@@ -405,7 +275,7 @@ def accept_reviews(root, date, dom_reports, ids, owner_words, approved_on, write
     owner = _owner_approval(owner_words, approved_on)
     if not ids:
         raise ValueError('認める要確認の id を 1 つ以上渡す')
-    report, _, _ = run(root, date, dom_reports)
+    report, _, _ = run(root, date)
     if report.exit_code == 2:
         raise ValueError('judge が失格しているので記録しない（先に直す）: ' + ', '.join(report.codes('fail')))
     current = {}

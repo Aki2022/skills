@@ -57,17 +57,18 @@ infoarch-author check --root .              # SSOT・チャネル・アウトラ
 infoarch-author impact --root . --id val-0001  # その原子に立つアウトラインと成果物を列挙（positioning は矢印をたどって推移的に）
 infoarch-author skeleton --root . --outline lp-xxx [--out DIR]  # アウトラインから骨組みの HTML（アンカー・順序・固定値）を出す。工場はこれを崩さずにスタイリングする
 infoarch-author dom --root . --outline lp-xxx # 描画物をブラウザで開き、アンカー・順序・固定値の表示を確かめる
-infoarch-author judge --root . [--dom-report dom.json]  # 意味の判定（表記ゆれ・強調・未登録の主張・文案 × 提供価値・妥当性）を共有の判定台帳から読む。Jev は呼ばない
+infoarch-author judge --root .                 # 意味の判定（文案 × 提供価値の 1 種類だけ）を共有の判定台帳から読む。Jev は呼ばず、出荷を止めない
 infoarch-author accept-reviews --root . --id <判定の id> --owner-words '<オーナーの言葉>' --approved-on YYYY-MM-DD [--write]  # オーナーが原文を見て認めた要確認を記録する（言葉が無ければ書かない）
 infoarch-author evaluate --root . [--outline lp-xxx]   # 作った物の評価の入口。check → dom → judge を順に走らせ、報告と終了コードを 1 つにする（工場は描画後に必ず走らせる）
 infoarch-author evaluate --root . --outline lp-xxx --acquire --answers-dir DIR --limit 50 [--execute]  # 足りない Jev 判定を上限つきで取って台帳に記録し、評価し直す（--execute が無ければ見積もりだけ）
-infoarch-author ship --root . --channel web   # 出荷の正式の入口。出荷されるコミット（git の中身）で tree → check → dom → judge が緑の時だけ ship_command を実行する
+infoarch-author ship --root . --channel web   # 出荷の正式の入口。出荷されるコミット（git の中身）で tree → check → dom → judge が失格でない時だけ ship_command を実行する（judge は警告だけで、止めない）
 infoarch-author ship --root . --doctor        # ship_command・merge_base の無い出荷チャネル、pre-push の未導入、拡張の失格を伝えない dispatcher を失格にする
 infoarch-author maintain --root .             # セッション終了の Step 2.5。ux/infoarch/ も ux/positioning/ も無ければ 1 行で skip
 infoarch-author set --root . --outline lp-xxx   # set の id（outline の id＋指す経路の id）と、outline の要素ごとのハッシュ
 infoarch-author diff --root . --a lp-a --b lp-b [--root-b DIR] [--dom-a A.json --dom-b B.json]  # 2 つの set の差分（変わった要素・層・同じ試験か）。印の外の文の違いは失格
-infoarch-author answer-key --root . --out DIR      # 意味の判定（文案 × 提供価値）の正解表：組・Jev の候補・オーナーが ○× を付けるページ
-infoarch-author answer-key --root . --measure labels.json --key DIR/answer-key.json  # 一致の割合・見逃し・誤検出。○ か × が 0 件なら「測れない」
+infoarch-author answer-key --root . --out DIR      # 意味の判定（文案 × 提供価値）の正解表：組・swap の候補・オーナーが ○× を付けるページ
+infoarch-author answer-key --root . --record --key DIR/answer-key.json --limit 50 [--execute]  # swap の組の答えを上限つきで Jev に聞き、測定用の台帳（DIR/measurement-judgments.json。出荷は読まない）に記録する（--execute が無ければ見積もりだけ）
+infoarch-author answer-key --root . --measure labels.json --key DIR/answer-key.json  # 一致の割合・見逃し・誤検出（own は共有の台帳、swap は測定用の台帳から）。own か swap か、○ か × が 0 件なら「測れない」
 infoarch-author targets --root .               # 承認の対象（ia:path:<提供価値 id> と経路のハッシュ）と、出荷が要るキー（承認依頼のページは positioning-author request）
 infoarch-author migrate-dictionary --root . --map map.json [--write]  # スキーマ版 4 の木（固定値・正式名称・声を SSOT に持つ）を、辞書とスキーマ版 5 へ一度だけ移す。dry run は移した木の検査も走らせる
 infoarch-author migrate-v6 --root . [--write]  # v5 の木（SSOT・outline・描画物の印・modules.ia）を一括で v6 に移す。旧→新の id・移しそこね（1 件でも終了コード 2、何も書かない）・外れる承認と判定・戻す手順を出す

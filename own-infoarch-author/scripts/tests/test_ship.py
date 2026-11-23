@@ -179,14 +179,15 @@ def test_a_shipped_output_must_be_a_committed_file(repo):
 
 
 def test_gate_reads_inputs_from_the_commit_not_from_ignored_files(repo):
-    """An ignored ledger on disk would cover every judgment; the commit has none, so the shipped outline is uncovered."""
+    """An ignored ledger on disk would cover every judgment; the commit has none, so the shipped outline is uncovered
+    (reported, never a stop)."""
     ledger = layer_paths.rel('judgments')
     run_git(repo, 'rm', '-q', '--cached', ledger)
     (repo / '.gitignore').write_text(f'.shipment.json\n{ledger}\n')
     commit(repo, 'ledger ignored, still on disk')
     assert layer_paths.path(repo, 'judgments').is_file()
     code, out, _ = ship(repo)
-    assert code == 2 and 'IA_SHIP_UNCOVERED' in codes(out), out
+    assert code == 1 and 'IA_JUDGE_UNCOVERED' in codes(out) and 'IA_SHIP_UNCOVERED' not in codes(out), out
 
 
 @pytest.mark.parametrize('path', ['decks/smb.pptx', layer_paths.rel('positioning_file'),
@@ -218,21 +219,23 @@ def test_a_symlinked_positioning_directory_is_refused(repo, tmp_path):
     assert layer_paths.rel('positioning_dir') in paths, paths
 
 
-def test_uncovered_judgment_of_a_shipped_outline_stops_but_a_draft_does_not(repo):
+def test_uncovered_judgment_stops_neither_a_shipped_outline_nor_a_draft(repo):
     changed = {**copy.deepcopy(DECK), 'channel': 'deck'}
-    changed['copies']['cpy-0003']['text'] = 'いますぐお問い合わせ {{value-phone}}'
+    changed['copies']['cpy-0001']['text'] = '少人数でも回る仕組みです'
     dump(layer_paths.path(repo, 'infoarch', 'outlines', 'deck-smb.yaml'), changed)
     commit(repo, 'shipped copy changed without a judgment')
     code, out, _ = ship(repo)
-    assert code == 2, out
-    assert 'IA_SHIP_UNCOVERED' in codes(out)
+    assert code == 1, out  # uncovered, reported, never blocking (requirement 11)
+    assert 'IA_JUDGE_UNCOVERED' in codes(out) and 'IA_SHIP_UNCOVERED' not in codes(out)
+    stage = [s for s in out['stages'] if s['stage'] == 'judge'][0]
+    assert [u['id'] for u in stage['uncovered']] == ['ia-value-fit:deck-smb/sec-0001/cpy-0001'], stage['uncovered']
     cover_ledger(repo)
     draft = copy.deepcopy(LP_DRAFT)
     draft['copies']['cpy-0002']['text'] = '運用の手間がかなり減ります'
     dump(layer_paths.path(repo, 'infoarch', 'outlines', 'lp-municipal.yaml'), draft)
     commit(repo, 'draft copy changed without a judgment')
     code, out, _ = ship(repo)
-    assert code == 1, out  # reported as uncovered, but a draft that does not ship does not stop the shipment
+    assert code == 1, out  # reported as uncovered
     assert 'IA_JUDGE_UNCOVERED' in codes(out) and 'IA_SHIP_UNCOVERED' not in codes(out)
 
 
@@ -636,13 +639,13 @@ def test_shipped_html_is_rendered_and_its_first_screens_are_judged(repo, tmp_pat
     assert written, proc.stdout
     commit(repo, 'ship the LP')
     code, out, _ = ship(repo, env=env)
-    assert code == 2 and 'IA_SHIP_UNCOVERED' in codes(out), out  # the LP's first screen has no judgment yet
+    assert code == 1 and 'IA_SHIP_UNCOVERED' not in codes(out), out  # the LP's copy has no judgment yet: reported only
     dom_stage = [s for s in out['stages'] if s['stage'] == 'dom'][0]
     assert dom_stage['exit_code'] == 0 and dom_stage['first_screens'] >= 1
     dom_out = tmp_path / 'dom.json'
     code, data, proc = cli(repo, 'dom', '--root', str(repo), '--outline', 'lp-municipal', '--date', TODAY, env=env)
     dom_out.write_text(proc.stdout)
-    code, data, _ = cli(repo, 'judge', '--root', str(repo), '--date', TODAY, '--dom-report', str(dom_out), '--include-candidates', env=env)
+    code, data, _ = cli(repo, 'judge', '--root', str(repo), '--date', TODAY, '--include-candidates', env=env)
     ledger = {'schema_version': 3, 'policy': jl.load_policy(),
               'rows': [{'candidate': r, 'score': 0.0} for r in data['judgment_candidates']], 'holdout': {'source': 'unmeasured'}}
     layer_paths.path(repo, 'judgments').write_text(json.dumps(ledger, ensure_ascii=False), encoding='utf-8')
@@ -807,3 +810,15 @@ def test_an_unjudged_value_fit_never_stops_shipping(repo):
     assert code == 1, out  # reported as uncovered, never blocking
     assert 'IA_SHIP_UNCOVERED' not in codes(out) and 'IA_JUDGE_UNCOVERED' in codes(out)
     assert out['positioning']['semantic_fit'] == 'not-judged', out
+
+
+def test_no_judgment_answer_at_all_never_stops_shipping(repo):
+    """WS-20261123 ISSUE-01: no Jev answer of any kind blocks a shipment; the gap is reported, not enforced."""
+    layer_paths.path(repo, 'judgments').unlink()
+    commit(repo, 'no judgment ledger at all')
+    code, out, _ = ship(repo)
+    assert code == 1, out  # warnings only
+    assert 'IA_SHIP_UNCOVERED' not in codes(out) and 'IA_JUDGE_UNCOVERED' in codes(out), codes(out)
+    assert out['positioning']['semantic_fit'] == 'not-judged', out
+    stage = [s for s in out['stages'] if s['stage'] == 'judge'][0]
+    assert stage['uncovered'] and all(u['id'].startswith('ia-value-fit:') for u in stage['uncovered']), stage['uncovered']

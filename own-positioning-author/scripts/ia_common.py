@@ -115,7 +115,7 @@ CATEGORIES = ('executed', 'skipped', 'missing', 'uncovered', 'screened')
 
 # A failure that says an input is absent names it in `missing` (the id is the input, not the code).
 MISSING_INPUT = {
-    'IA_MISSING': ('ia-positioning', 'ux/positioning/positioning.yaml が無い'),
+    'IA_MISSING': ('ia-positioning', 'positioning の SSOT ファイルが無い（置き場所は layer の規則が決める）'),
     'IA_NO_VALUES': ('ia-values', 'positioning に提供価値が 0 件'),
     'IA_NO_CHANNELS': ('ia-channels', 'channels/*.yaml が 0 件'),
     'IA_NO_OUTLINES': ('ia-outlines', 'outlines/*.yaml が 0 件'),

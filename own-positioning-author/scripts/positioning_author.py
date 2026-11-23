@@ -44,7 +44,10 @@ def cmd_check(args):
     value's path as if a shipped outline pointed at it (what the infoarch check does for the paths shipped outlines use)."""
     date = args.date or dt.date.today().isoformat()
     dt.date.fromisoformat(date)
-    report = ia_common.Report('check', date, tool='own-positioning-author')
+    report = ia_common.Report('check', date, tool='own-positioning-author', categorized=True)
+    # what this command leaves to the infoarch layer, named: a green positioning is not a green outline or judgment
+    report.skipped = [{'id': 'ia-outlines', 'reason': 'outline・blueprint は見ない（infoarch-author check）'},
+                      {'id': 'ia-semantic-judgments', 'reason': 'Jev の判定は読まない（infoarch-author judge／evaluate）'}]
     ssot, _ = pm.load_ssot(args.root, report)
     if ssot is None:
         _print(report.to_dict())
@@ -55,6 +58,7 @@ def cmd_check(args):
     ps = pos.paths(m)
     pos.check_positioning(m, report, approved, {v: True for v in ps} if args.strict else None, str(pm.SSOT_PATH))
     report.targets = {'values': len(ps), 'approved': sum(1 for v in ps if v in approved)}
+    report.executed.append({'id': 'ia-positioning', 'targets': dict(report.targets)})
     if not ps:
         report.add('fail', 'IA_NO_VALUES', 'positioning に提供価値が 0 件（対象 0 件を合格にしない）', pm.SSOT_PATH)
     _print(report.to_dict())

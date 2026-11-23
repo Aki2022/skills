@@ -103,6 +103,27 @@ class Finding:
     detail: dict = field(default_factory=dict)
 
 
+# The five categories of a report (SPEC-information-architecture-standardization, Quality 2). What each one says:
+#   executed  a check that ran: {id, targets}
+#   skipped   a check this command does not run, because another command owns it: {id, reason}
+#   missing   an input that was needed and is absent, so nothing could be checked: {id, reason}
+#   uncovered a target that exists and was not looked at (a judgment not in the ledger, a non-HTML output): {id|path, reason}
+#   screened  a judgment that exists in the ledger and was read (never a guarantee that the text is fine)
+# `check`, `blueprint` and the positioning layer's `check` carry all five keys, empty or not (`categorized`). judge,
+# evaluate and ship keep the shape they had: they own `uncovered`, `screened` and `missing` in their own terms.
+CATEGORIES = ('executed', 'skipped', 'missing', 'uncovered', 'screened')
+
+# A failure that says an input is absent names it in `missing` (the id is the input, not the code).
+MISSING_INPUT = {
+    'IA_MISSING': ('ia-positioning', 'positioning の SSOT ファイルが無い（置き場所は layer の規則が決める）'),
+    'IA_NO_VALUES': ('ia-values', 'positioning に提供価値が 0 件'),
+    'IA_NO_CHANNELS': ('ia-channels', 'channels/*.yaml が 0 件'),
+    'IA_NO_OUTLINES': ('ia-outlines', 'outlines/*.yaml が 0 件'),
+    'IA_BLUEPRINT_NO_SCREENS': ('ia-blueprint-screens', 'blueprint/screens/*.yaml が 0 件'),
+    'IA_BLUEPRINT_PRODUCT_MISSING': ('ia-blueprint-product', 'blueprint/product.yaml が無い'),
+}
+
+
 @dataclass
 class Report:
     level: str
@@ -111,6 +132,11 @@ class Report:
     targets: dict = field(default_factory=dict)
     uncovered: list = field(default_factory=list)
     tool: str = 'own-infoarch-author'
+    categorized: bool = False
+    executed: list = field(default_factory=list)
+    skipped: list = field(default_factory=list)
+    missing: list = field(default_factory=list)
+    screened: list = field(default_factory=list)
 
     def add(self, level, code, message, path='', line=0, **detail):
         if level not in LEVELS:
@@ -124,12 +150,27 @@ class Report:
     def exit_code(self):
         return max([LEVELS[f.level] for f in self.findings], default=0)
 
+    def categories(self):
+        """-> the five categories. `missing` is what was named plus the inputs that a failure says are absent."""
+        missing = list(self.missing)
+        named = {m['id'] for m in missing}
+        for f in self.findings:
+            entry = MISSING_INPUT.get(f.code)
+            if f.level == 'fail' and entry and entry[0] not in named:
+                named.add(entry[0])
+                missing.append({'id': entry[0], 'reason': entry[1], 'code': f.code})
+        return {'executed': self.executed, 'skipped': self.skipped, 'missing': missing,
+                'uncovered': self.uncovered, 'screened': self.screened}
+
     def to_dict(self):
         counts = {k: sum(1 for f in self.findings if f.level == k) for k in LEVELS}
-        return {
+        out = {
             'tool': self.tool, 'version': VERSION, 'level': self.level,
             'evaluated_on': self.evaluated_on, 'exit_code': self.exit_code,
             'environment': {'python': platform.python_version(), 'platform': sys.platform},
             'counts': counts, 'targets': self.targets, 'uncovered': self.uncovered,
             'findings': [asdict(f) for f in self.findings],
         }
+        if self.categorized:
+            out.update(self.categories())
+        return out

@@ -65,8 +65,9 @@ infoarch-author ship --root . --doctor        # ship_command・merge_base の無
 infoarch-author maintain --root .             # セッション終了の Step 2.5。ux/infoarch/ も ux/positioning/ も無ければ 1 行で skip
 infoarch-author set --root . --outline lp-xxx   # set の id（outline の id＋指す経路の id）と、outline の要素ごとのハッシュ
 infoarch-author diff --root . --a lp-a --b lp-b [--root-b DIR] [--dom-a A.json --dom-b B.json]  # 2 つの set の差分（変わった要素・層・同じ試験か）。印の外の文の違いは失格
-infoarch-author answer-key --root . --out DIR      # 意味の判定（文案 × 提供価値）の正解表：組・Jev の候補・オーナーが ○× を付けるページ
-infoarch-author answer-key --root . --measure labels.json --key DIR/answer-key.json  # 一致の割合・見逃し・誤検出。○ か × が 0 件なら「測れない」
+infoarch-author answer-key --root . --out DIR      # 意味の判定（文案 × 提供価値）の正解表：組・swap の候補・オーナーが ○× を付けるページ
+infoarch-author answer-key --root . --record --key DIR/answer-key.json --limit 50 [--execute]  # swap の組の答えを上限つきで Jev に聞き、測定用の台帳（DIR/measurement-judgments.json。出荷は読まない）に記録する（--execute が無ければ見積もりだけ）
+infoarch-author answer-key --root . --measure labels.json --key DIR/answer-key.json  # 一致の割合・見逃し・誤検出（own は共有の台帳、swap は測定用の台帳から）。own か swap か、○ か × が 0 件なら「測れない」
 infoarch-author targets --root .               # 承認の対象（ia:path:<提供価値 id> と経路のハッシュ）と、出荷が要るキー（承認依頼のページは positioning-author request）
 infoarch-author migrate-dictionary --root . --map map.json [--write]  # スキーマ版 4 の木（固定値・正式名称・声を SSOT に持つ）を、辞書とスキーマ版 5 へ一度だけ移す。dry run は移した木の検査も走らせる
 infoarch-author migrate-v6 --root . [--write]  # v5 の木（SSOT・outline・描画物の印・modules.ia）を一括で v6 に移す。旧→新の id・移しそこね（1 件でも終了コード 2、何も書かない）・外れる承認と判定・戻す手順を出す

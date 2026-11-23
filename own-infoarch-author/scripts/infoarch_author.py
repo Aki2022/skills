@@ -23,6 +23,12 @@ import skeleton  # noqa: E402
 GUARD_ITSELF = ('ship', 'maintain')
 
 
+# What only the outline side of a repository reports (channels, outlines, their use of a path, expiry of what they ship,
+# the design page inventory). `blueprint` leaves these to `check`.
+OUTLINE_SIDE = ('IA_OUTLINE', 'IA_CHANNEL', 'IA_NO_OUTLINES', 'IA_NO_CHANNELS', 'IA_LEAD_UNSUPPORTED', 'IA_PAGES_',
+                'IA_EXPIRED_', 'IA_POSITIONING_UNAPPROVED')
+
+
 def _print(obj):
     print(json.dumps(obj, ensure_ascii=False, indent=2, default=str))
 
@@ -42,9 +48,10 @@ def cmd_blueprint(args):
     report, m = check.check(args.root, date)
     bp = m.blueprint
     if m.ssot is not None:
-        # only the blueprint's own findings and the positioning's: an outline repository's findings are `check`'s
-        report.findings = [f for f in report.findings if f.code.startswith(('IA_BLUEPRINT', 'IA_SCHEMA', 'IA_YAML', 'IA_MISSING',
-                                                                            'IA_APPROVALS', 'IA_SSOT', 'IA_DICTIONARY'))]
+        # Everything `check` reports except what only an outline repository has. A product UI stands on the positioning,
+        # so its failures (IA_POSITIONING_*, IA_REF_BROKEN, IA_ID_*, ...) count here as in `check`. Drop by the outline side's
+        # names, never keep by a list of the blueprint's: a code that a list does not name would vanish without a trace.
+        report.findings = [f for f in report.findings if not f.code.startswith(OUTLINE_SIDE)]
         if bp is None or not bp.present or not bp.screens:
             if not [f for f in report.findings if f.code in ('IA_BLUEPRINT_NO_SCREENS', 'IA_BLUEPRINT_PRODUCT_MISSING')]:
                 report.add('fail', 'IA_BLUEPRINT_NO_SCREENS', 'blueprint/screens/*.yaml が 0 件（対象 0 件を合格にしない）', layer_paths.rel('infoarch', 'blueprint', 'screens'))

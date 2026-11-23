@@ -9,6 +9,7 @@ import pytest
 
 from blueprint_fixtures import BP_DIR, OVERVIEW, PERSON, PRODUCT, SCREENS, apply_ops, confirm_items, item_hashes, write_blueprint
 from ia_fixtures import SSOT, dump
+from test_check import OUTLINE as OUTLINE_FOR_BLUEPRINT
 import layer_paths  # noqa: E402  (own-design-author's layer rule: where each layer lives)
 
 SCRIPTS = Path(__file__).resolve().parents[1]
@@ -281,6 +282,65 @@ def test_the_blueprint_command_reports_its_own_counts(tmp_path):
     write_case(tmp_path / 'red', next(c for c in CASES if c['id'] == 'two-primary-actions'))
     rc, report = cli('blueprint', '--root', str(tmp_path / 'red'), '--date', DATE)
     assert rc == 2 and 'IA_BLUEPRINT_PRIMARY_MANY' in codes(report)
+
+
+def _without_an_arrow(key='fulfills:alt-0002:pan-0001'):
+    """The positioning with one arrow of a degree removed: the path that holds it loses its basis (IA_POSITIONING_FULFILLMENT_MISSING)."""
+    ssot = copy.deepcopy(SSOT)
+    before = len(ssot['edges'])
+    ssot['edges'] = [e for e in ssot['edges'] if f'{e["kind"]}:{e["from"]}:{e["to"]}' != key]
+    assert len(ssot['edges']) == before - 1, key
+    return ssot
+
+
+def _positioning_codes(report):
+    return sorted((f['level'], f['code']) for f in report['findings'] if f['code'].startswith('IA_POSITIONING') or f['code'] in ('IA_REF_BROKEN', 'IA_EMPTY_REFERENCED'))
+
+
+def test_the_blueprint_command_keeps_the_positioning_findings_check_reports(tmp_path):
+    """A product UI stands on the positioning: `blueprint` must not report a green the positioning's own `check` denies."""
+    from test_check import write_repo
+    # a repository whose outline ships the value that lost its basis: `check` fails (exit 2), so must `blueprint`
+    write_repo(tmp_path / 'both', _without_an_arrow())
+    write_blueprint(tmp_path / 'both', ssot=_without_an_arrow())
+    rc_check, report_check = check(tmp_path / 'both')
+    rc_bp, report_bp = cli('blueprint', '--root', str(tmp_path / 'both'), '--date', DATE)
+    assert rc_check == 2 and ('fail', 'IA_POSITIONING_FULFILLMENT_MISSING') in _positioning_codes(report_check), report_check['findings']
+    assert rc_bp == rc_check, report_bp['findings']
+    assert _positioning_codes(report_bp) == _positioning_codes(report_check)
+    # a product UI alone: the same finding is a warning in `check`, and `blueprint` shows it too
+    write_blueprint(tmp_path / 'alone', ssot=_without_an_arrow())
+    rc_check, report_check = check(tmp_path / 'alone')
+    rc_bp, report_bp = cli('blueprint', '--root', str(tmp_path / 'alone'), '--date', DATE)
+    assert _positioning_codes(report_check) == [('warn', 'IA_POSITIONING_FULFILLMENT_MISSING')]
+    assert rc_bp == rc_check == 1 and _positioning_codes(report_bp) == _positioning_codes(report_check), report_bp['findings']
+
+
+@pytest.mark.parametrize('ops', ['edges', 'dangling'])
+def test_the_blueprint_command_keeps_other_positioning_failures_too(tmp_path, ops):
+    """Not only the one code of the audit: a dangling arrow (IA_REF_BROKEN) is also the positioning's, and must not be filtered out."""
+    ssot = copy.deepcopy(SSOT)
+    if ops == 'dangling':
+        ssot['edges'].append({'kind': 'need', 'from': 'job-0001', 'to': 'pan-9999', 'state': 'proposed', 'provenance': 'owner'})
+    else:
+        ssot = _without_an_arrow()
+    write_blueprint(tmp_path, ssot=ssot)
+    rc_check, report_check = check(tmp_path)
+    rc_bp, report_bp = cli('blueprint', '--root', str(tmp_path), '--date', DATE)
+    assert rc_bp == rc_check and rc_bp >= 1, report_bp['findings']
+    assert _positioning_codes(report_bp) == _positioning_codes(report_check)
+
+
+def test_the_blueprint_command_leaves_the_outline_findings_to_check(tmp_path):
+    from test_check import write_repo
+    broken = copy.deepcopy(OUTLINE_FOR_BLUEPRINT)
+    broken['messages']['msg-0001']['rank'] = 'support'  # no lead message: an outline failure (IA_OUTLINE_LEAD_COUNT)
+    write_repo(tmp_path, outlines=(broken,))
+    write_blueprint(tmp_path)
+    rc_check, report_check = check(tmp_path)
+    assert rc_check == 2 and any(c.startswith('IA_OUTLINE') for c in codes(report_check)), report_check['findings']
+    rc_bp, report_bp = cli('blueprint', '--root', str(tmp_path), '--date', DATE)
+    assert rc_bp == 0 and not [c for c in codes(report_bp, 'fail') + codes(report_bp, 'warn') if c.startswith(('IA_OUTLINE', 'IA_CHANNEL', 'IA_NO_'))], report_bp['findings']
 
 
 def test_the_blueprint_command_is_not_a_pass_without_a_blueprint(tmp_path):

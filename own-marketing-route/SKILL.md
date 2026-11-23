@@ -28,12 +28,21 @@ core の CLI と catalog は、core の正典の checkout から読む。どこ�
 ダウンロードして実行しない。
 
 1. 環境変数 `MARKETING_CORE_DIR` があれば、それを core の checkout とみなす。
-2. 無ければ人に 1 回だけ場所を聞く。推測で探し回らない。
-3. `$MARKETING_CORE_DIR/packages/marketing-core/bin/capabilities.cjs`、
+2. 無ければ `~/.config/marketing-core/dir`（core の checkout のパスを 1 行書いたファイル）を読み、
+   その 1 行を `MARKETING_CORE_DIR` とみなす。シェルの設定は Nix 管理で、エージェントのシェルが
+   それを読まないこともあるため、この置き場所を主な経路とする（own-trouble-log の保管ルートと同じ方式）。
+
+   ```bash
+   MARKETING_CORE_DIR="${MARKETING_CORE_DIR:-$(cat ~/.config/marketing-core/dir 2>/dev/null)}"
+   ```
+3. どちらからも決まらなければ人に 1 回だけ場所を聞く。推測で探し回らない。聞いて分かったら、
+   次から聞かずに済むように `~/.config/marketing-core/dir` へ 1 行書いてよいかを人に聞く
+   （書くのは人の了承を得てから）。
+4. `$MARKETING_CORE_DIR/packages/marketing-core/bin/capabilities.cjs`、
    `$MARKETING_CORE_DIR/packages/marketing-core/capabilities/catalog.json`、
    `$MARKETING_CORE_DIR/packages/marketing-core/capabilities/adoption-menu.json` がすべてあることを確かめる。
    無ければ止まって人に伝える。
-4. 手元の checkout は古いことがある。`git -C "$MARKETING_CORE_DIR" fetch origin` のあと、
+5. 手元の checkout は古いことがある。`git -C "$MARKETING_CORE_DIR" fetch origin` のあと、
    `HEAD` が `origin/main` と同じかを確かめる。違うときは checkout を書き換えず、
    `git -C "$MARKETING_CORE_DIR" worktree add --detach <一時ディレクトリ> origin/main` で読み、
    以下の `$MARKETING_CORE_DIR` はその一時ディレクトリに読み替える。使い終わったら worktree を外す。

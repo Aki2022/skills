@@ -55,6 +55,8 @@ pptxは従属WS完了までux/design/を読まないため、その制約を報�
 | AI 生成様式の検出                | `baseline-ui`                           | `baseline-ui`                                                        | **欠落**                                            |
 | ブランド一貫性                   | `ux/design/` のL0と解決済みマニフェストによるL1/L2 | 同左 | HTML資料は同左、pptxのux/design/準拠は未カバー                                                |
 | 正式名称・固定値（辞書）         | `own-doc-update` の `dictionary.py check-html`（`docs/dictionary/` のゆれ・印の値・期限切れ） | 同左 | HTML資料は同左、pptxは未カバー |
+| 情報設計の整合（positioning・outline・blueprint） | `positioning-author check`（positioning の失格）と `infoarch-author check`（outline・チャネル・辞書の参照）。ともに `--root <git toplevel>` | 同左に加えて `infoarch-author blueprint --root <git toplevel>`（プロダクト UI の blueprint。positioning の失格も落とさない） | `positioning-author check` と `infoarch-author check`（LP と同じ。`blueprint` は対象外）。pptx など HTML でない成果物の描画との照合（`infoarch-author dom`）は未カバー |
+| 意味の判定（文案 × 提供価値）   | `infoarch-author judge --root <git toplevel>`（または `infoarch-author evaluate --outline <id>`）。判定は `ia-value-fit` の 1 種類だけで、**警告だけ**（未カバー・要確認）。合否も出荷も止めない | 同左（outline の文案が無ければ `IA_JUDGE_NO_TARGETS` の警告。判定していないので未カバーとして報告する） | 同左 |
 
 補足:
 
@@ -70,6 +72,10 @@ pptxは従属WS完了までux/design/を読まないため、その制約を報�
   アプリ側で提供される。検査のカバレッジ表には載せない。
 
 正式名称・固定値（辞書）の行は、HTML の成果物ごとに `python3 <skills>/own-doc-update/scripts/dictionary.py check-html <repo> <file.html>…` を流す。repo の `docs/dictionary/` が語と値の唯一の出どころで、表示のゆれ・`data-dict="<id>"` の印の文言と辞書の違い・期限切れの固定値を見る。exit 2（`docs/dictionary/` が無い・HTML を渡していない）は「確かめていない」と報告し、合格にしない。印が 0 件のときも値の照合は効いていないので、その件数を報告に書く。
+
+情報設計の 2 行は、成果物の検査を頼まれたときに、生成の後でなくても当てる。当てる前に、git toplevel に `ux/positioning/positioning.yaml` と `ux/infoarch/` があるかを確かめる。どちらかが無ければ、2 行とも当てずに、**欠落**「情報設計（ux/positioning・ux/infoarch）が未整備なので確かめていない」と報告する（`check` をそのまま流すと「無い」が失格（exit 2）で返るが、それは成果物への判定ではなく「当てなかった」ことで、失格にも合格にも数えない）。プロダクト UI で `ux/infoarch/blueprint/` が無ければ、`infoarch-author blueprint` だけを**欠落（blueprint が無い）**と報告し、`check` は当てる。
+
+当てた `check` と `blueprint` の exit 2 は成果物の失格として報告し、決定論の失格が残る間は次の段へ進めない（手順 3）。exit 1 は警告として書く。意味の判定（`judge`）は、描画後の実測を含む決定論の検査が緑になった後に走らせる。結果は `screened`（台帳に答えがある。「問題なし」の保証ではない）と**未カバー**（台帳に答えが無い。`IA_JUDGE_UNCOVERED`）に分け、θ 以上は要確認（`IA_JUDGE_REVIEW`）として書く。判定は文案 × 提供価値の 1 種類だけで、精度は未測定（正解表で測るまで）なので、警告に留め、検査の合否にも出荷にも使わない。Jev は呼ばない（台帳を読むだけ。取るのは `infoarch-author evaluate --acquire` で、頼まれたときだけ）。
 
 プロダクト UI を渡されたら、構造・骨格・状態の 3 行は `audit_screen.py` を画面ごとに流して埋める（blueprint が無い成果物には、この 3 行は「欠落（blueprint が無い）」と報告する。黙って飛ばさない）。入力は画面の yaml（`ux/infoarch/blueprint/screens/<画面 id>.yaml`）・描いた HTML・`--repo`（描画の環境を固定する `ux/design/render-environment.json`）。描画に使える Playwright が無ければ、確かめていないと報告する（合格にしない）。
 
@@ -107,6 +113,8 @@ python3 <own-web-build>/scripts/reviewer_gate.py --route entry --report <実測�
 4. **未カバー**（担当はあっても実行可能な検査が無い規則・媒体。規則idと理由を記録し、合格に数えない）
 
 5. **screened**（保存済みの確率判定を読んだ入力。DSのdoc/n-a意味判定は高scoreも補助指摘として表示する。実ラベルがあればholdoutのrecall等を併記し、なければ精度未測定・意味未保証。違反が無い証明やcleanと表現しない）
+
+情報設計の行を当てなかったとき（`ux/positioning`・`ux/infoarch` が無い・blueprint が無い・Python の環境が無く走らせられない）は、2（スキップ）か 3（欠落）に理由つきで書く。
 
 「実行しなかったものは書かない」を許すと、このルーターの存在意義が消える。
 

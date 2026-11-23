@@ -5,16 +5,32 @@ the other approved values of the same positioning (`swap`, candidates that shoul
 value is re-paired with another positioning's value. The machine only proposes: the owner's labels (conveys /
 does not convey / unknown) decide. Agreement is counted against the shared judgment ledger (a score at or above theta
 means Jev says "does not convey"). When the owner's labels hold no conveying pair or no non-conveying pair, there is
-nothing to measure against, and the result is "unmeasurable", never a number. Nothing here calls a model.
+nothing to measure against, and the result is "unmeasurable", never a number.
+
+Where Jev's answers live (ADR-20261123-ia-skill-completion-judgments-and-measurement):
+- an `own` pair is the shipping question itself (the very candidate `judge` asks), so its answer is the shared judgment
+  ledger's (`ux/judgments.json`): what is measured is what ships;
+- a `swap` pair exists only to measure, so its answer is recorded in a measurement ledger beside the answer key
+  (`measurement-judgments.json`, the shared ledger's shape). The ship gate never reads it, and `record` never writes the
+  shared ledger.
+Accuracy is measured from the two together, so either side being empty is "unmeasurable". Only `record` calls a model,
+through own-design-author's bounded `judgment_run` (a preview unless `execute`).
 """
 from __future__ import annotations
 
 import html
 import json
+import os
+import tempfile
+from pathlib import Path
 
 import judge
 import outline as ol
 import positioning as pos
+
+
+MEASUREMENT_LEDGER = 'measurement-judgments.json'
+ANSWERS = 'judgment-answers.json'  # the name judgment_run.py requires
 
 
 def build(m, approved, policy, jl):
@@ -39,8 +55,10 @@ def build(m, approved, policy, jl):
                 for v, kind in [(own, 'own')] + [(x, 'swap') for x in swaps]:
                     ident = f'{oid}/{sid}/{cid}@{v}'
                     value = {'id': v, 'text': values[v].get('text', '')}
+                    # An own pair asks what `judge` asks (same id, so the same judgment hash and one answer for both).
+                    asked = f'{oid}/{sid}/{cid}' if kind == 'own' else ident
                     out.append({'id': ident, 'kind': kind, 'text': text, 'value': value,
-                                'candidate': judge.value_fit(jl, policy, ident, text, oid, c['message'], value)})
+                                'candidate': judge.value_fit(jl, policy, asked, text, oid, c['message'], value)})
     return sorted(out, key=lambda i: i['id'])
 
 
@@ -110,8 +128,15 @@ document.getElementById('copy').addEventListener('click', function () {{
 '''
 
 
-def measure(items, labels, ledger, theta):
-    """-> the agreement between the owner's labels and Jev's answers in the ledger, or 'unmeasurable'."""
+def _scores(ledger):
+    return {(row.get('candidate') or {}).get('judgment_hash'): row.get('score') for row in (ledger or {}).get('rows') or []}
+
+
+def measure(items, labels, ledger, theta, measurement=None):
+    """-> the agreement between the owner's labels and Jev's answers, or 'unmeasurable'.
+
+    own pairs are read from `ledger` (the shared one) and swap pairs from `measurement` only, so an answer in the wrong
+    place is "uncovered", never silently counted."""
     if not isinstance(labels, dict) or labels.get('answer_key') != key_hash(items):
         raise ValueError('labels were made for another answer key (rebuild the page and label again)')
     by_id = {i['id']: i for i in items}
@@ -121,33 +146,103 @@ def measure(items, labels, ledger, theta):
         raise ValueError(f'labels name unknown pairs: {unknown_ids[:5]}')
     if any(v not in (True, False, None) for v in given.values()):
         raise ValueError('a label is true (conveys), false (does not convey) or null (unknown)')
-    scores = {}
-    for row in (ledger or {}).get('rows') or []:
-        cand = row.get('candidate') or {}
-        scores[cand.get('judgment_hash')] = row.get('score')
+    source = {'own': _scores(ledger), 'swap': _scores(measurement)}
+
+    def score(key):
+        item = by_id[key]
+        return source[item['kind']].get(item['candidate']['judgment_hash'])
+
     confirmed = {k: v for k, v in given.items() if v is not None}
-    covered = {k: v for k, v in confirmed.items() if by_id[k]['candidate']['judgment_hash'] in scores}
+    covered = {k: v for k, v in confirmed.items() if score(k) is not None}
     uncovered = sorted(set(confirmed) - set(covered))
     counts = {'labeled': len(confirmed), 'conveys': sum(confirmed.values()),
               'does_not_convey': sum(not v for v in confirmed.values()),
               'unknown': sum(v is None for v in given.values()), 'uncovered': len(uncovered)}
-    base = {'answer_key': key_hash(items), 'counts': counts, 'uncovered': uncovered, 'theta': theta}
+    judged = {kind: sum(by_id[k]['kind'] == kind for k in covered) for kind in ('own', 'swap')}
+    base = {'answer_key': key_hash(items), 'counts': counts, 'judged': judged, 'uncovered': uncovered, 'theta': theta}
     conveys = [k for k, v in covered.items() if v]
     not_conveys = [k for k, v in covered.items() if not v]
+    missing = [f'{kind} pairs answered in the {where}: 0' for kind, where in
+               (('own', 'shared judgment ledger'), ('swap', MEASUREMENT_LEDGER)) if not judged[kind]]
+    if missing:
+        return {**base, 'status': 'unmeasurable', 'reason': '; '.join(missing) + ' (agreement is not measured)'}
     if not conveys or not not_conveys:
         side = 'conveys' if not conveys else 'does not convey'
         return {**base, 'status': 'unmeasurable',
                 'reason': f'judged pairs the owner labeled "{side}" are 0: agreement is not measured'}
-    flagged = {k: scores[by_id[k]['candidate']['judgment_hash']] >= theta for k in covered}
+    flagged = {k: score(k) >= theta for k in covered}
     agree = [k for k in covered if flagged[k] == (not covered[k])]
     return {**base, 'status': 'measured', 'agreement': len(agree) / len(covered),
             'misses': sorted(k for k in not_conveys if not flagged[k]),
             'false_detections': sorted(k for k in conveys if flagged[k])}
 
 
+# ---- the measurement ledger and the tool that records into it -----------------------------------------------------
+
+def _ledger_path(key_dir):
+    return Path(key_dir) / MEASUREMENT_LEDGER
+
+
+def read_measurement(key_dir):
+    """-> the measurement ledger beside the answer key, or None when none was recorded. A damaged one raises."""
+    path = _ledger_path(key_dir)
+    if not judge._jr()._safe_path(path.absolute()):
+        raise ValueError(f'{MEASUREMENT_LEDGER} が symlink を通る')
+    if not path.exists():
+        return None
+    jl = judge._jl()
+    try:
+        data = json.loads(path.read_text(encoding='utf-8'))
+        jl.validate_ledger(data, jl.load_policy())
+    except (ValueError, KeyError, TypeError) as exc:
+        raise ValueError(f'{MEASUREMENT_LEDGER} が読めない・今の policy と合わない（記録し直す）: {exc}') from None
+    return data
+
+
+def record(items, key_dir, limit, *, execute=False, _usage_path=None, _transport=None):
+    """Ask Jev the swap pairs not yet answered and record them in the measurement ledger beside the answer key.
+
+    Bounded by `limit` and the shared usage ledger. Without `execute` it only previews (no key read, no network, no
+    writes). Own pairs are never asked here (they are the shipping question: `evaluate --acquire`), and nothing is
+    written to the shared judgment ledger. Answers accumulate in `<key_dir>/judgment-answers.json`, so a later run
+    continues where the last one stopped."""
+    jr, jl = judge._jr(), judge._jl()
+    policy = jl.load_policy()
+    swaps = {i['candidate']['judgment_hash']: i['candidate'] for i in items if i['kind'] == 'swap'}
+    if not swaps:
+        raise ValueError('swap の組が 0 件（測定用の台帳に記録するものが無い）')
+    existing = read_measurement(key_dir)
+    done = {h for h in _scores(existing) if h in swaps}
+    pending = [c for h, c in swaps.items() if h not in done]
+    kwargs = {} if _usage_path is None else {'_usage_path': _usage_path}
+    answers = Path(key_dir).absolute() / ANSWERS
+    with tempfile.TemporaryDirectory(prefix='infoarch-measure-') as tmp:
+        source = Path(tmp).resolve() / 'candidates.json'  # the shared reader refuses paths through a symlink (/var)
+        source.write_text(json.dumps({'judgment_candidates': pending or list(swaps.values())}, ensure_ascii=False), encoding='utf-8')
+        result = jr.run(source, answers, limit, dry_run=not execute, _transport=_transport, **kwargs)
+    result['swap_pairs'] = len(swaps)
+    if execute and answers.exists():
+        got = {a['candidate']['judgment_hash']: {'candidate': a['candidate'], 'score': jl.probability(a['score'])}
+               for a in judge.read_answers(answers, policy)['rows'] if a['candidate']['judgment_hash'] in swaps}
+        rows = {**{r['candidate']['judgment_hash']: r for r in (existing or {}).get('rows', []) if r['candidate']['judgment_hash'] in swaps},
+                **got}
+        ledger = {'schema_version': jl.CURRENT_SCHEME, 'policy': policy, 'holdout': {'source': 'unmeasured'},
+                  'rows': sorted(rows.values(), key=lambda r: r['candidate']['id'])}
+        jl.validate_ledger(ledger, policy)
+        target = _ledger_path(key_dir)
+        tmp_file = target.with_name(target.name + '.tmp')
+        if tmp_file.is_symlink() or tmp_file.exists():
+            raise ValueError(f'一時ファイルが既にある: {tmp_file}')
+        tmp_file.write_text(json.dumps(ledger, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+        os.replace(tmp_file, target)
+        result['ledger'] = {'file': MEASUREMENT_LEDGER, 'rows': len(rows)}
+    return result
+
+
 def candidates_file(items):
-    """The shape judgment_run.py reads (`judgment_candidates`)."""
-    return {'judgment_candidates': [i['candidate'] for i in items]}
+    """The shape judgment_run.py reads (`judgment_candidates`): the swap pairs only. Own pairs are the shipping
+    question (`judge --include-candidates`), so none is offered here to be recorded into the wrong ledger."""
+    return {'judgment_candidates': [i['candidate'] for i in items if i['kind'] == 'swap']}
 
 
 def key_file(items):

@@ -203,9 +203,11 @@ v5 までの `ia-name-variant`・`ia-unregistered-claim`・`ia-audience-fit`・`
 
 ### 正解表（`infoarch-author answer-key`。v6 要件 12）
 
-- `answer-key --root . --out DIR`：承認済みの提供価値に立つ文案ごとに、自分の提供価値との組（own）と、同じ positioning のほかの承認済みの提供価値に付け替えた組（swap。提供価値が 1 つしか無い positioning では、別の positioning の提供価値と組む）を作る。`answer-key.json`（組と判定のハッシュ、正解表の id）・`candidates.json`（`judgment_run.py` に渡す `ia-value-fit` の候補）・`answer-key-page.html`（オーナーが ○ 伝わる／× 伝わらない／？ 分からないを付けて labels.json を保存するページ。外部の読み込み無し）を書く。既にあるファイルは上書きしない。機械が作るのは外れの候補まで。正解はオーナーのラベルで決まる。
-- `answer-key --root . --measure labels.json --key DIR/answer-key.json`：ラベルと共有の判定台帳の答え（θ 以上＝伝わらない）を比べ、一致の割合・見逃し（オーナーが × で Jev が通した組）・誤検出（オーナーが ○ で Jev が止めた組）を出す。？ は数えない。台帳に無い組は `uncovered` に並べて数えない。数えた組に ○ か × のどちらかが 0 件なら、数字を出さず `status: unmeasurable`。ラベルが別の正解表のもの（正解表の id が違う）・知らない組を含む・outline や提供価値が作った後で変わった、は失格（作り直してラベルを付け直す）。
-- モデルは呼ばない。本物の Jev は `judgment_run.py`（上限つき、`--execute` のときだけ）で取る。
+- `answer-key --root . --out DIR`：承認済みの提供価値に立つ文案ごとに、自分の提供価値との組（own）と、同じ positioning のほかの承認済みの提供価値に付け替えた組（swap。提供価値が 1 つしか無い positioning では、別の positioning の提供価値と組む）を作る。`answer-key.json`（組と判定のハッシュ、正解表の id）・`candidates.json`（swap の組だけの `ia-value-fit` の候補。own の組は出荷の判定そのものなので入れない）・`answer-key-page.html`（オーナーが ○ 伝わる／× 伝わらない／？ 分からないを付けて labels.json を保存するページ。外部の読み込み無し）を書く。既にあるファイルは上書きしない。機械が作るのは外れの候補まで。正解はオーナーのラベルで決まる。
+- **Jev の答えの置き場所**（ADR-20261123）：own の組は、`judge` が聞くのと同じ候補（id が `<outline>/<sec>/<cpy>`。`@提供価値` が付かない）なので、共有の判定台帳（`ux/judgments.json`）の答えをそのまま使う（測ったものと出荷で使うものが同じ）。swap の組（id が `<outline>/<sec>/<cpy>@<提供価値>`）は測るためだけにあるので、答えを**測定用の台帳**（`DIR/measurement-judgments.json`。共有の台帳と同じ形。`answer-key.json` と同じ場所）に記録する。出荷（`ship`・`judge`・`evaluate`）は測定用の台帳を読まず、`answer-key --record` は共有の台帳を書かない。
+- `answer-key --root . --record --key DIR/answer-key.json --limit N [--execute]`：swap の組のうち測定用の台帳に答えが無いものを、上限つきで Jev に聞いて記録する。`--execute` が無ければ見積もりだけ（件数と要求数。キーを読まず、通信せず、何も書かない）。`--execute` があれば own-design-author の `judgment_run`（共有の使用量台帳。累計の上限を超えるなら 1 件も送らない）で取り、回答を `DIR/judgment-answers.json` に足して（次の実行で続きから取る）、測定用の台帳を更新する。own の組は聞かない（出荷の判定と同じ問いなので、`evaluate --acquire` で共有の台帳へ）。
+- `answer-key --root . --measure labels.json --key DIR/answer-key.json`：ラベルと答え（own は共有の台帳、swap は測定用の台帳。θ 以上＝伝わらない）を比べ、一致の割合・見逃し（オーナーが × で Jev が通した組）・誤検出（オーナーが ○ で Jev が止めた組）を出す。？ は数えない。答えが無い組（置き場所が違う答えも含む）は `uncovered` に並べて数えない。数えた組に own か swap のどちらかが 0 件、または ○ か × のどちらかが 0 件なら、数字を出さず `status: unmeasurable`（`reason` に足りない側）。ラベルが別の正解表のもの（正解表の id が違う）・知らない組を含む・outline や提供価値が作った後で変わった・測定用の台帳が読めない（symlink・今の policy と合わない）は失格（作り直す・記録し直す）。
+- モデルを呼ぶのは `--record --execute` だけ。
 
 score は「問題がある確率」。θ 以上は IA_JUDGE_REVIEW（要確認）として人に回し、score だけで失格にしない。
 オーナーが原文を見て認めた要確認は、`accept-reviews` でオーナーの言葉と日付を付けて `ux/infoarch/accepted_reviews.yaml`（`schema_version` 1、行は `judgment_hash`・`id`・`approver`・`date`）に記録する。記録は判定のハッシュに結び付くので、文案か文脈が変われば当たらなくなり、要確認に戻る。今の要確認に無い id・言葉や ISO の日付が無いものは記録しない。`--write` が無ければ書かない。共有の判定台帳の形は変えない。

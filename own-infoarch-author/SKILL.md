@@ -25,7 +25,7 @@ infoarch は 3 つの layer の真ん中で、成果物ごとに決める「何�
 - `product.yaml`（プロダクトに 1 つ）：ストーリー・原則（並べ方の原則を含む）・制約（やらないこと）・オブジェクトと主役・入口。**オーナーが 1 件ずつ承認する**（行のキーは `ia:item:<項目 id>`、ハッシュは項目 1 件の中身だけ。1 件足しても、ほかの承認は外れない）。AI は案を作ってよいが、承認の台帳に記録するのは、オーナーの承認の言葉と日付があるものだけ。
 - `screens/<scr-…>.yaml`（画面ごと。AI が作る）：応えるストーリー、グループ（並べ方の原則が正当化する）と領域（優先度・中身の種類 `shape`）、主操作（ちょうど 1 つ）、状態、移動先。承認済みの項目の id だけを引く。位置・幅・部品は書かない（design の割り付け規則。部品の選択も design）。
 - 失格：どのストーリーにも応えない画面・引く id が無い・承認の無い項目を引く（出荷する画面は失格、下書きは警告）・主操作が 2 つ以上か 0 個・優先度が欠けるか重なる・状態の宣言が無い・並べ方の原則が無いグループ・shape が決まった種類でない・id の再利用 など。条件と赤のフィクスチャの対応表は `fixtures/blueprint-red-cases.json`。
-- `infoarch-author blueprint --root .`（検査）／`infoarch-author request --root . --out DIR`（オーナーに見せる承認依頼のページ。プロダクト全体の関係図と、項目ごとのカードに ○ / ×。Artifact の使い方は own-positioning-author と同じ）／`infoarch-author targets`（`ia:item:` の行と、出荷が要る行を含む）／`infoarch-author impact --id <項目 id>`（引く画面）。
+- `infoarch-author blueprint --root .`（検査。`check` の報告から outline 側の finding だけを除く。positioning の失格・id の参照切れも `check` と同じに出て、同じ終了コードになる）／`infoarch-author request --root . --out DIR`（オーナーに見せる承認依頼のページ。プロダクト全体の関係図と、項目ごとのカードに ○ / ×。Artifact の使い方は own-positioning-author と同じ）／`infoarch-author targets`（`ia:item:` の行と、出荷が要る行を含む）／`infoarch-author impact --id <項目 id>`（引く画面）。
 
 ## 作る：依頼からアウトラインまでの 6 段
 

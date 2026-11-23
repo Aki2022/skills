@@ -114,7 +114,7 @@ def cmd_judge(args):
     dt.date.fromisoformat(date)
     if bool(args.answers) != bool(args.replacement_out):
         raise ValueError('--answers と --replacement-out は一緒に使う')
-    report, rows, summary = judge.run(args.root, date, args.dom_report or [], args.answers, args.replacement_out)
+    report, rows, summary = judge.run(args.root, date, args.answers, args.replacement_out)
     out = report.to_dict()
     out['screened'] = getattr(report, 'screened', [])
     out['missing'] = getattr(report, 'missing', [])
@@ -129,7 +129,7 @@ def cmd_judge(args):
 def cmd_accept_reviews(args):
     date = args.date or dt.date.today().isoformat()
     dt.date.fromisoformat(date)
-    _print(judge.accept_reviews(args.root, date, args.dom_report or [], args.id or [], args.owner_words,
+    _print(judge.accept_reviews(args.root, date, args.id or [], args.owner_words,
                                 args.approved_on, write=args.write))
     return 0
 
@@ -393,7 +393,6 @@ def main(argv=None):
     j = sub.add_parser('judge', help='Jev judgment candidates and a read-only check against the shared judgment ledger')
     j.add_argument('--root', default='.')
     j.add_argument('--date', help='evaluation date YYYY-MM-DD (default: today)')
-    j.add_argument('--dom-report', action='append', help='JSON output of `dom` whose first_screens feed the emphasis judgment (repeatable)')
     j.add_argument('--include-candidates', action='store_true', help='print judgment_candidates (contains copy text) for judgment_run.py')
     j.add_argument('--answers', help='judgment-answers.json from judgment_run.py')
     j.add_argument('--replacement-out', help='write the shared-ledger replacement here (never overwrites)')
@@ -401,7 +400,6 @@ def main(argv=None):
     ar = sub.add_parser('accept-reviews', help="record reviews (IA_JUDGE_REVIEW) the owner read and accepted, with the owner's words")
     ar.add_argument('--root', default='.')
     ar.add_argument('--date', help='evaluation date YYYY-MM-DD (default: today)')
-    ar.add_argument('--dom-report', action='append', help='the same dom reports judge reads (for emphasis reviews)')
     ar.add_argument('--id', action='append', help='judgment id of a current review (repeatable)')
     ar.add_argument('--owner-words', help="the owner's own words accepting them (quoted exactly)")
     ar.add_argument('--approved-on', help='the ISO date the owner said them')

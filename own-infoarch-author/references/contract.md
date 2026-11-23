@@ -171,12 +171,12 @@ v5 の木（旧い名前 `info_arch.yaml` の版 3（今の置き場所は `ux/p
 - Playwright は own-design-author の `scripts/playwright_runtime.mjs` で解決する：`OWN_PLAYWRIGHT_DIR` → 対象 repo（`INFOARCH_PLAYWRIGHT_DIR`、無ければ実行ディレクトリとその祖先）→ 端末の共通置き場（対象 repo の `ux/design/render-environment.json` が固定する版）。`NODE_PATH` は見ない。自動では入れない。解決できなければ IA_DOM_PLAYWRIGHT で失格。
 - 読み取る前に、ページが落ち着くのを待つ：network idle の後に 1 秒（表示を始めるタイマーのため）、さらに実行中のアニメーションとトランジションが終わるまで最大 5 秒。終わらないアニメーションがあっても読み取り、2 回の描画の比較で揺れを報告する。
 - 同じ入力を 2 回描画し、結果が違えば IA_DOM_UNSTABLE（判定に使わない）。
-- 最初の画面の文言（各画面幅）を報告の `first_screens` に出す。強調の判定（Jev の判定台帳）の入力になる。
+- 最初の画面の文言（各画面幅）を報告の `first_screens` に出す（描画の事実の記録。どの判定の入力にもしない）。
 - 各文案のアンカーの表示の文言（描かれている文字だけ。`unanchored` と同じ読み方で、opacity: 0 などの隠れた文字は入らない）を、アウトラインの文案（固定値を SSOT の値に展開）と比べる。NFKC で幅をそろえ、空白と改行をすべて除いてから比べる（改行は見た目で、文言ではない）。見えている印はすべて一字一句一致すること（IA_DOM_COPY_DRIFT）。報告に表示の文言は出さない。
 - **主張でない文言の宣言**：ナビ・節のラベル・見出し・法務やフッターのように主張でない文言は、outline の `texts` に安定した key と文言そのもの（`text`）を書き、工場は `data-ia-text="<key>"` を付ける。主張になりうる文言（副の行動喚起など）は宣言ではなくメッセージにする。`dom` は、その key の見えている印の**すべて**が文言と一致することを確かめる（繰り返しの緩めは無い）。outline に無い key は IA_DOM_ANCHOR_UNKNOWN、key の印が無ければ IA_DOM_ANCHOR_MISSING。`navigation` は画面幅によって畳んでよい（見えていなくても IA_DOM_ANCHOR_HIDDEN にしない。印が無ければ失格、見えている所は文言と一致）。
 - **正式名称**：`data-ia-entity="ent-NNNN"` の見えている印は、すべて全文が SSOT の `name` と一致する（NFKC・空白を除いて比べる）。名前以外の文言を包めない。
 - 文案・宣言した文言・正式名称の印の中に、ほかの IA の印（セクション・文案・宣言した文言。正式名称は固定値と正式名称も）を入れると IA_DOM_ANCHOR_NESTED。文案と宣言した文言は固定値と正式名称を中に持てる。
-- `dom` の 0 は「描画物が outline の宣言どおりに表示している」までで、主張の妥当性は確かめない。文案の意味は判定台帳（`ia-unregistered-claim`。role にかかわらず全部の文案を回す）が見る。
+- `dom` の 0 は「描画物が outline の宣言どおりに表示している」までで、主張の妥当性は確かめない。文案の意味は判定台帳の `ia-value-fit`（文案 × 提供価値）が見る。ほかの種類の意味の判定は作らない。
 - どの印（文案・固定値・正式名称・宣言した文言）にも属さない（セクションは入れ物なので、セクションの中でも文案の外なら属さない）見えている文言があれば、IA_DOM_UNANCHORED_TEXT で失格（要件 10。v5 の D12 では警告だった。文言は報告に出さない）。その文言は報告の `unanchored`（成果物 × 画面幅）に出す（文案と違う印の文言も、ここに足す）。dom が失格した描画は判定に使わないので、まず outline へ戻す。
 - このページの文案が参照しない固定値のアンカーは、SSOT にある id で、その値を表示している時だけ認める（任意の文言を固定値のアンカーで包んで、検査を逃がさない）。
 - 文言が見えているかは、文字そのものが描かれているか（テキストの範囲の大きさ）で判定する。大きさ 0 の箱でも、はみ出して文字を描いていれば見えているとみなす。
@@ -207,13 +207,13 @@ v5 の木（旧い名前 `info_arch.yaml` の版 3（今の置き場所は `ux/p
 方針ファイル（モデル・θ・プロンプト）・台帳（`ux/judgments.json`）・使用量の台帳（累計 2,000 判定）は、own-design-author と共有する
 （own-design-author の `references/judgments-and-modules.md`）。
 
+意味の判定は `ia-value-fit`（文案 × その文案が指す提供価値）の **1 種類だけ**（情報設計の要件 11・ADR-20261123）。出荷を止める判定は作らない。表記ゆれは辞書の検査（`check`）が持つ。ほかの種類（未登録の主張・target との相性・最初の画面の強調）が要ると分かったら、精度を測ってから spec に足す。
+
 | 種類 | 単位 | 入力の本文 | 文脈 |
 | --- | --- | --- | --- |
-| `ia-name-variant` | 文案（正式名称が 1 つ以上ある時。id は `<outline>/<sec>/<cpy>`） | 固定値を展開した文案 | 正式名称の一覧 |
-| `ia-unregistered-claim` | 文案。加えて、成果物 × 画面幅ごとのアンカーの外の文言（id の末尾が `#unanchored`） | 固定値を展開した文案。アンカーの外は `dom` の `unanchored` | メッセージとその提供価値・経路から受け継ぐ証拠・使った固定値。アンカーの外は、すべて空（支える根拠が無い） |
-| `ia-value-fit` | 文案（承認済みの提供価値を指すメッセージのもの。役割が trust（事実・証拠）と act（行動喚起）のセクションの文案は、提供価値を伝える役ではないので聞かない。正解表にも入れない） | 固定値を展開した文案 | その文案が伝えるメッセージが指す提供価値 1 件（id と文面）。文案か提供価値の中身が変われば判定のキーが変わる。正解表で精度を測るまでは警告だけで、θ 以上も、台帳に無いことも、出荷を止めない（v6 要件 11）。`ship` の `positioning.semantic_fit` は judged / needs-review / not-judged。v5 の `ia-strategy-fit`（経路を丸ごと渡す）は生成しない（既存の台帳の行は読める） |
-| `ia-audience-fit` | outline | 全部の文案と役割（セクションと文案の順に） | target・接点・トーン・目的変数・一番のメッセージ。並びや一番を替えると判定のキーが変わる |
-| `ia-emphasis` | 成果物 × 画面幅 | `dom` が切り出した最初の画面の文言 | target と、一番のメッセージ（とその提供価値） |
+| `ia-value-fit` | 文案（承認済みの提供価値を指すメッセージのもの。役割が trust（事実・証拠）と act（行動喚起）のセクションの文案は、提供価値を伝える役ではないので聞かない。正解表にも入れない。id は `<outline>/<sec>/<cpy>`） | 固定値を展開した文案 | その文案が伝えるメッセージが指す提供価値 1 件（id と文面）。文案か提供価値の中身が変われば判定のキーが変わる。正解表で精度を測るまでは警告だけで、θ 以上も、台帳に無いことも、出荷を止めない（要件 11）。`ship` の `positioning.semantic_fit` は judged / needs-review / not-judged。v5 の `ia-strategy-fit`（経路を丸ごと渡す）は生成しない |
+
+v5 までの `ia-name-variant`・`ia-unregistered-claim`・`ia-audience-fit`・`ia-emphasis`・`ia-strategy-fit` の行が repo の台帳に残っていても、`judge`・`evaluate`・`ship` は**読まずに無視する**（候補にも報告にも出さず、台帳は書き換えない。台帳の検証は種類の名前を今も受け付けるので、残っていても壊れない）。
 
 ### 正解表（`infoarch-author answer-key`。v6 要件 12）
 
@@ -223,34 +223,31 @@ v5 の木（旧い名前 `info_arch.yaml` の版 3（今の置き場所は `ux/p
 
 score は「問題がある確率」。θ 以上は IA_JUDGE_REVIEW（要確認）として人に回し、score だけで失格にしない。
 オーナーが原文を見て認めた要確認は、`accept-reviews` でオーナーの言葉と日付を付けて `ux/infoarch/accepted_reviews.yaml`（`schema_version` 1、行は `judgment_hash`・`id`・`approver`・`date`）に記録する。記録は判定のハッシュに結び付くので、文案か文脈が変われば当たらなくなり、要確認に戻る。今の要確認に無い id・言葉や ISO の日付が無いものは記録しない。`--write` が無ければ書かない。共有の判定台帳の形は変えない。
-強調の判定でゲートを止めるかは、最初の実回答で精度を測ってから決める（spec）。
+文案 × 提供価値の判定でゲートを止めるかは、正解表で精度を測ってから決める（spec）。
 
 ```sh
-infoarch-author dom --root . --outline lp-xxx > dom.json
-infoarch-author judge --root . --dom-report dom.json                       # 台帳の読み取り（本文は出さない）
-infoarch-author judge --root . --dom-report dom.json --include-candidates > candidates.json   # Jev に渡す候補（文案を含む）
+infoarch-author judge --root .                                              # 台帳の読み取り（本文は出さない）
+infoarch-author judge --root . --include-candidates > candidates.json      # Jev に渡す候補（文案を含む）
 python3 <own-design-author>/scripts/judgment_run.py --candidates candidates.json --answers <dir>/judgment-answers.json --limit 50 [--execute]
-infoarch-author judge --root . --dom-report dom.json --answers <dir>/judgment-answers.json --replacement-out replacement.json
+infoarch-author judge --root . --answers <dir>/judgment-answers.json --replacement-out replacement.json
 python3 <own-design-author>/scripts/judgment_ledger.py record|refresh --repo . --replacement replacement.json [--write]
 ```
 
-`--replacement-out` は共有の台帳の置き換えを作る。design の行は全部残し、IA は現在の候補に対する実回答だけを入れ、古い IA の行は落とす。回答ファイルは `judgment_run.py` と同じ読み手で検査する（形・policy・候補のハッシュ・score と raw_answer の一致）。出力先は新規作成だけで、既存のファイル・symlink（親ディレクトリを含む）には書かない。
+`--replacement-out` は共有の台帳の置き換えを作る。design の行は全部残し、IA は現在の候補に対する実回答だけを入れる。作り直された（古くなった）IA の行と、無くなった outline の行は落とす。v5 までの古い種類の行は、outline が残る間はそのまま残す（repo のデータは直さない）。回答ファイルは `judgment_run.py` と同じ読み手で検査する（形・policy・候補のハッシュ・score と raw_answer の一致）。出力先は新規作成だけで、既存のファイル・symlink（親ディレクトリを含む）には書かない。
 holdout はそのまま引き継ぐ。回答の policy が今の共有 policy と違えば止める（migrate が要る）。既にあるファイルは上書きしない。置き換えは schema 3（判定の鍵が種類ごと）で作る。共有の台帳が schema 2 以前なら止める（先に `judgment_ledger.py rekey` で移す）。
 
 | code | 内容 |
 | --- | --- |
 | IA_JUDGE_REFUSED | check が失格している（先に直す） |
-| IA_JUDGE_NO_TARGETS | 判定の候補が 0 件 |
+| IA_JUDGE_NO_TARGETS（warn） | 判定の候補が 0 件（trust・act の文案だけなど。判定していないという印で、止めない） |
 | IA_JUDGE_LEDGER | 台帳が読めない・policy と合わない・symlink |
-| IA_JUDGE_DOM_FAILED / IA_JUDGE_DOM_REPORT | 失格した（終了コード 0・1 以外の）描画を判定に使おうとした・最初の画面の行が無いか読めない・`first_screens` か `unanchored` に、アウトラインの成果物と画面幅に無い行か重複がある（行の本文は報告に出さない）。警告だけの描画（アンカーの外の文言など）は判定に使う |
 | IA_JUDGE_UNCOVERED（warn） | 台帳に無い判定がある（未カバー） |
 | IA_JUDGE_REVIEW（warn） | score が θ 以上（要確認） |
 | IA_JUDGE_ACCEPTED（info） | θ 以上だが、オーナーが原文を見て認めた（`ux/infoarch/accepted_reviews.yaml` に判定のハッシュで記録がある） |
 | IA_JUDGE_ACCEPTED_STALE（info） | 「認めた」記録が今の判定に当たらない（文案・文脈が変わったか、θ 未満になった）。要確認は記録が当たらない限り戻る |
 | IA_JUDGE_ACCEPTED_FILE | 認めた要確認の記録が読めない・形が違う・symlink。要確認は隠さずに全部出す |
-| IA_JUDGE_EMPHASIS_MISSING（出荷される HTML なら warn、他は info） | 最初の画面の入力が無く、強調を判定していない。dom の報告が一部の成果物・画面幅だけなら、足りない組ごとに出る |
 
-報告は `uncovered`（未カバー）・`screened`（台帳にあり。「問題なし」の保証ではない）・`missing`（入力が無く判定していない）を分けて出す。
+報告は `uncovered`（未カバー）・`screened`（台帳にあり。「問題なし」の保証ではない）を分けて出す（`missing` は今は常に空）。
 
 ## 作った物の評価（`evaluate`）
 
@@ -258,7 +255,7 @@ holdout はそのまま引き継ぐ。回答の policy が今の共有 policy �
 
 1. `check`。失格なら描画しない（`dom` と `judge` は `skipped`）。
 2. 指定したアウトライン（無ければ全部）ごとに `dom`。1 つでも失格なら判定しない（`judge` は `skipped`）。
-3. `dom` の報告（`first_screens`・`unanchored`）を渡して `judge`。
+3. `judge`（`dom` の報告は渡さない。判定は文案 × 提供価値だけ）。
 
 報告は 1 つで、同じ指摘は 1 回だけ出す。終了コードは全段の最大（0 / 1 / 2）。`stages` に段ごとの終了コードを載せる。
 判定の候補（文案を含む）は出さない（必要なら `judge --include-candidates`）。
@@ -283,7 +280,7 @@ holdout はそのまま引き継ぐ。回答の policy が今の共有 policy �
 2. `check`（決定論）。出荷チャネル（`ship: true`）が 0 件、または出荷チャネルのどれか 1 つでもアウトラインが 0 件なら失格（空のゲートを合格にしない。他のチャネルが出荷していても、空のチャネルは合格にしない）。
 3. `tree`（続き）：出荷されるアウトラインの成果物は、HTML かどうかに関わらず、すべてコミットの中に通常ファイルとして無ければならない。無い・ディレクトリ等は `IA_SHIP_OUTPUT_MISSING`、成果物か親ディレクトリがシンボリックリンクなら `IA_SHIP_SYMLINK`（どちらも失格）。git のオブジェクトから判定するので、手元にある無視されたファイルは数えない。
 4. `dom`：出荷されるアウトラインのうち HTML の成果物を持つものを、実ブラウザで描画して確かめる。HTML が無いアウトラインは `skipped` に記録する。
-5. `judge`：`dom` の最初の画面を渡して、共有の判定台帳を読む。出荷されるアウトラインの判定が台帳に無ければ `IA_SHIP_UNCOVERED`（失格）。出荷しないアウトラインの未カバーは `IA_JUDGE_UNCOVERED`（警告）のまま。θ 以上は `IA_JUDGE_REVIEW`（警告。人に回す。強調でゲートを止めるかは未決）。
+5. `judge`：共有の判定台帳を読む。**どの判定も出荷を止めない**。台帳に無い判定は `IA_JUDGE_UNCOVERED`（警告）、θ 以上は `IA_JUDGE_REVIEW`（警告。人に回す）。台帳が読めない・symlink は `IA_JUDGE_LEDGER`（失格。判定ではなく入力の破損）。
 
 | 入口 | 何をするか |
 | --- | --- |

@@ -1,4 +1,6 @@
-"""ISSUE-04: IA semantic judgments are pinned in the shared judgment ledger; the gate never calls a model."""
+"""ISSUE-04: the IA semantic judgment (copy x value) is pinned in the shared judgment ledger; the gate never calls a model.
+
+WS-20261123 ISSUE-01 cut the four older kinds; test_judge_one_kind.py pins that."""
 import copy
 import json
 import subprocess
@@ -19,27 +21,19 @@ sys.path.insert(0, str(DESIGN_SCRIPTS))
 import judgment_ledger as jl  # noqa: E402
 import layer_paths  # noqa: E402  (own-design-author's layer rule: where each layer lives)
 
-IA_KINDS = ('ia-name-variant', 'ia-emphasis', 'ia-unregistered-claim', 'ia-audience-fit')
-# OUTLINE has 5 pieces of copy and DECK 3; SSOT has one official name, so every piece of copy gets a name and a claim
-# candidate.
-SECTIONS = len(OUTLINE['copies']) + len(DECK['copies'])
+# The design policy still lists the older kinds so that rows already in a repository's ledger stay valid.
+OLD_KINDS = ('ia-name-variant', 'ia-emphasis', 'ia-unregistered-claim', 'ia-audience-fit')
+# Of OUTLINE's 5 pieces of copy only the 2 in its pain section are judged (trust and act copy is not asked); DECK has
+# 1 in its aware section.
+JUDGED = ['ia-value-fit:deck-smb/sec-0001/cpy-0001', 'ia-value-fit:lp-municipal/sec-0001/cpy-0001',
+          'ia-value-fit:lp-municipal/sec-0001/cpy-0002']
+FLAGGED = 'ia-value-fit:lp-municipal/sec-0001/cpy-0002'
 
 
 def cli(*args):
     proc = subprocess.run([sys.executable, str(SCRIPTS / 'infoarch_author.py'), *args],
                           capture_output=True, text=True, check=False)
     return proc.returncode, json.loads(proc.stdout)
-
-
-def dom_report(path, outline='lp-municipal', exit_code=0, screens=None, unanchored=None):
-    screens = screens if screens is not None else [
-        {'outline': outline, 'file': 'site/index.html', 'viewport': 'mobile', 'text': '既存システムの運用、重くありませんか 運用の手間が半分になります'},
-        {'outline': outline, 'file': 'site/index.html', 'viewport': 'desktop', 'text': '既存システムの運用、重くありませんか 運用の手間が半分になります 導入は100社以上'}]
-    data = {'level': 'dom', 'exit_code': exit_code, 'first_screens': screens}
-    if unanchored is not None:
-        data['unanchored'] = unanchored
-    path.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
-    return path
 
 
 def candidates(root, *extra):
@@ -62,11 +56,10 @@ def repo(tmp_path):
     return tmp_path
 
 
-def test_shared_policy_carries_the_four_ia_kinds_next_to_design():
+def test_shared_policy_carries_value_fit_next_to_design_and_still_lists_the_old_kinds():
     policy = jl.load_policy()
-    assert set(IA_KINDS) <= set(policy['prompts'])
-    assert {'doc-relevance', 'na-rationale'} <= set(policy['prompts'])
-    for kind in IA_KINDS:
+    assert {'ia-value-fit', 'doc-relevance', 'na-rationale'} <= set(policy['prompts'])
+    for kind in ('ia-value-fit', *OLD_KINDS):  # old rows stay valid in a ledger; the IA skill just never makes them
         assert jl.candidate(kind, 'x', 'text', {}, policy=policy)['id'] == f'{kind}:x'
 
 
@@ -78,17 +71,12 @@ def test_unknown_kind_is_still_rejected_by_the_shared_policy():
         jl.validate_policy(bad)
 
 
-def test_no_ledger_reports_every_candidate_uncovered_and_emphasis_missing(repo):
+def test_no_ledger_reports_every_candidate_uncovered(repo):
     code, out = cli('judge', '--root', str(repo), '--date', DATE)
     assert code == 1
-    kinds = [u['id'].split(':')[0] for u in out['uncovered']]
-    assert kinds.count('ia-name-variant') == SECTIONS
-    assert kinds.count('ia-unregistered-claim') == SECTIONS
-    assert kinds.count('ia-audience-fit') == 2
+    assert sorted(u['id'] for u in out['uncovered']) == JUDGED
     assert 'IA_JUDGE_UNCOVERED' in [f['code'] for f in out['findings']]
-    assert 'IA_JUDGE_EMPHASIS_MISSING' in [f['code'] for f in out['findings']]
-    assert any(m['kind'] == 'ia-emphasis' for m in out['missing'])
-    assert out['screened'] == []
+    assert out['screened'] == [] and out['missing'] == []
     # Text is withheld unless the candidates are explicitly requested.
     assert 'judgment_candidates' not in out and '運用の手間' not in json.dumps(out, ensure_ascii=False)
 
@@ -100,81 +88,42 @@ def test_candidates_are_reproducible_by_the_shared_reader_and_expand_facts(repo)
     for row in rows:
         data = row['input']
         assert row == jl.candidate(data['kind'], data['catalog_id'], data['text'], data['context'], policy=policy)
-    claim = next(r for r in rows if r['id'] == 'ia-unregistered-claim:lp-municipal/sec-0002/cpy-0003')
-    assert claim['input']['text'] == '導入は100社以上、止まらずに動き続けます'
-    ctx = claim['input']['context']
-    assert ctx['message'] == {'id': 'msg-0002', 'value': {'id': 'val-0003', 'text': '止まらずに動く'}}
-    assert ctx['evidence'] == []  # nothing supports the parity value's path
-    lead = next(r for r in rows if r['id'] == 'ia-unregistered-claim:lp-municipal/sec-0001/cpy-0002')
-    # a message inherits the evidence of its value's path (v6): prf-0001 backs val-0001, prf-0003 backs str-0001
-    assert [e['id'] for e in lead['input']['context']['evidence']] == ['prf-0001', 'prf-0003']
-    names = next(r for r in rows if r['id'] == 'ia-name-variant:lp-municipal/sec-0001/cpy-0001')
-    assert names['input']['context']['entities'] == [{'id': 'name-web-server', 'name': 'Webサーバー'}]
+    deck = next(r for r in rows if r['id'] == 'ia-value-fit:deck-smb/sec-0001/cpy-0001')
+    assert deck['input']['text'] == '100社以上が導入、少人数でも回ります'  # the dictionary's fixed value is expanded
+    assert deck['input']['context']['message'] == 'msg-0001'
+    assert deck['input']['context']['value']['id'] == 'val-0002'
 
 
-def test_emphasis_candidates_come_from_the_rendered_first_screen(repo, tmp_path):
-    report = dom_report(tmp_path / 'dom.json')
-    code, out, rows = candidates(repo, '--dom-report', str(report))
-    emphasis = [r for r in rows if r['input']['kind'] == 'ia-emphasis']
-    assert [r['id'] for r in emphasis] == ['ia-emphasis:lp-municipal/site/index.html@mobile',
-                                          'ia-emphasis:lp-municipal/site/index.html@desktop']
-    ctx = emphasis[0]['input']['context']
-    assert ctx['lead'] == {'id': 'msg-0001', 'value': {'id': 'val-0001', 'text': '運用の手間が減る'}}
-    assert ctx['target'] == OUTLINE['target']
-    assert not any(m['kind'] == 'ia-emphasis' and m.get('outline') == 'lp-municipal' for m in out['missing'])
-
-
-def test_failed_render_is_not_judged(repo, tmp_path):
-    code, out = cli('judge', '--root', str(repo), '--date', DATE, '--dom-report', str(dom_report(tmp_path / 'd.json', exit_code=2)))
-    assert code == 2 and 'IA_JUDGE_DOM_FAILED' in [f['code'] for f in out['findings']]
-
-
-def test_dom_report_for_unknown_outline_or_empty_screens_is_rejected(repo, tmp_path):
-    code, out = cli('judge', '--root', str(repo), '--date', DATE, '--dom-report', str(dom_report(tmp_path / 'a.json', outline='nope')))
-    assert code == 2 and 'IA_JUDGE_DOM_REPORT' in [f['code'] for f in out['findings']]
-    code, out = cli('judge', '--root', str(repo), '--date', DATE, '--dom-report', str(dom_report(tmp_path / 'b.json', screens=[])))
-    assert code == 2 and 'IA_JUDGE_DOM_REPORT' in [f['code'] for f in out['findings']]
-
-
-def test_full_ledger_below_theta_is_screened_and_green_without_any_model_call(repo, tmp_path, monkeypatch):
-    report = dom_report(tmp_path / 'dom.json')
-    _, _, rows = candidates(repo, '--dom-report', str(report))
+def test_full_ledger_below_theta_is_screened_and_green_without_any_model_call(repo):
+    _, _, rows = candidates(repo)
     theta = jl.load_policy()['theta']
     write_ledger(repo, [{'candidate': r, 'score': theta / 2} for r in rows])
-    code, out = cli('judge', '--root', str(repo), '--date', DATE, '--dom-report', str(report))
+    code, out = cli('judge', '--root', str(repo), '--date', DATE)
     assert code == 0, out['findings']
-    assert out['uncovered'] == [] and len(out['screened']) == len(rows)
+    assert out['uncovered'] == [] and len(out['screened']) == len(rows) == len(JUDGED)
     assert all(s['semantic_guarantee'] is False and s['evaluation'] == {'status': 'unmeasured'} for s in out['screened'])
-    # Emphasis is judged only for outlines with a dom report; the deck has none and stays visibly missing.
-    assert [m['outline'] for m in out['missing']] == ['deck-smb']
+    assert out['missing'] == []
 
 
-def test_at_or_above_theta_goes_to_human_review(repo, tmp_path):
-    report = dom_report(tmp_path / 'dom.json')
-    _, _, rows = candidates(repo, '--dom-report', str(report))
+def test_at_or_above_theta_goes_to_human_review(repo):
+    _, _, rows = candidates(repo)
     theta = jl.load_policy()['theta']
-    flagged = 'ia-name-variant:lp-municipal/sec-0001/cpy-0002'
-    write_ledger(repo, [{'candidate': r, 'score': theta if r['id'] == flagged else 0.0} for r in rows])
-    code, out = cli('judge', '--root', str(repo), '--date', DATE, '--dom-report', str(report))
+    write_ledger(repo, [{'candidate': r, 'score': theta if r['id'] == FLAGGED else 0.0} for r in rows])
+    code, out = cli('judge', '--root', str(repo), '--date', DATE)
     assert code == 1
     review = [f for f in out['findings'] if f['code'] == 'IA_JUDGE_REVIEW']
-    assert [f['detail']['id'] for f in review] == [flagged]
+    assert [f['detail']['id'] for f in review] == [FLAGGED]
 
 
-def test_changed_copy_invalidates_only_its_own_judgments(repo, tmp_path):
-    report = dom_report(tmp_path / 'dom.json')
-    _, _, rows = candidates(repo, '--dom-report', str(report))
+def test_changed_copy_invalidates_only_its_own_judgments(repo):
+    _, _, rows = candidates(repo)
     write_ledger(repo, [{'candidate': r, 'score': 0.0} for r in rows])
     changed = copy.deepcopy(OUTLINE)
     changed['copies']['cpy-0002']['text'] = '運用の手間がかなり減ります'
     dump(layer_paths.path(repo, 'infoarch', 'outlines', 'lp-municipal.yaml'), changed)
-    code, out = cli('judge', '--root', str(repo), '--date', DATE, '--dom-report', str(report))
+    code, out = cli('judge', '--root', str(repo), '--date', DATE)
     assert code == 1
-    # The copy itself (its name, claim and value fit), plus the outline-level fit that reads every piece of copy.
-    assert sorted(u['id'] for u in out['uncovered']) == ['ia-audience-fit:lp-municipal',
-                                                          'ia-name-variant:lp-municipal/sec-0001/cpy-0002',
-                                                          'ia-unregistered-claim:lp-municipal/sec-0001/cpy-0002',
-                                                          'ia-value-fit:lp-municipal/sec-0001/cpy-0002']
+    assert sorted(u['id'] for u in out['uncovered']) == [FLAGGED]  # only the copy that changed
 
 
 def test_design_rows_in_the_shared_ledger_do_not_disturb_ia(repo):
@@ -201,15 +150,6 @@ def test_broken_or_symlinked_ledger_fails(repo, tmp_path):
     assert code == 2 and 'IA_JUDGE_LEDGER' in [f['code'] for f in out['findings']]
 
 
-def test_shipped_html_without_first_screen_is_a_gap_other_media_are_only_reported(repo):
-    _, _, rows = candidates(repo)
-    write_ledger(repo, [{'candidate': r, 'score': 0.0} for r in rows])
-    code, out = cli('judge', '--root', str(repo), '--date', DATE)
-    assert code == 1 and out['uncovered'] == []
-    levels = {f['message'].split(':')[0]: f['level'] for f in out['findings'] if f['code'] == 'IA_JUDGE_EMPHASIS_MISSING'}
-    assert levels == {'lp-municipal': 'warn', 'deck-smb': 'info'}
-
-
 def test_failing_check_refuses_to_judge(repo):
     broken = copy.deepcopy(OUTLINE)
     broken['sections']['sec-0002']['places'] = ['msg-0099']
@@ -219,23 +159,22 @@ def test_failing_check_refuses_to_judge(repo):
 
 
 def test_zero_candidates_is_never_green():
-    report = judge.evaluate([], None, missing=[])
-    assert report.exit_code == 2 and 'IA_JUDGE_NO_TARGETS' in report.codes()
+    report = judge.evaluate([], None)
+    assert report.exit_code == 1 and 'IA_JUDGE_NO_TARGETS' in report.codes('warn')  # a visible gap, never a stop
 
 
 def test_replacement_keeps_design_rows_and_takes_only_current_ia_answers(repo, tmp_path):
-    report = dom_report(tmp_path / 'dom.json')
-    _, _, rows = candidates(repo, '--dom-report', str(report))
+    _, _, rows = candidates(repo)
     policy = jl.load_policy()
     design = jl.candidate('na-rationale', 'dads-000002', 'Not a web product.', {'item': 'x'})
-    stale = jl.candidate('ia-audience-fit', 'gone', 'old', {})
+    stale = jl.candidate('ia-value-fit', 'gone/sec-0001/cpy-0001', 'old', {})
     holdout = {'source': 'unmeasured'}
     write_ledger(repo, [{'candidate': design, 'score': 0.2}, {'candidate': stale, 'score': 0.1}], holdout)
     answers = {'schema_version': 1, 'status': 'model-answers-unlabeled', 'policy': policy,
                'rows': [{'candidate': r, 'score': 0.25, 'raw_answer': {'type': 'noul', 'noul': 0.25}} for r in rows[:-1]]}
     (tmp_path / 'judgment-answers.json').write_text(json.dumps(answers, ensure_ascii=False), encoding='utf-8')
     out_path = tmp_path / 'replacement.json'
-    code, out = cli('judge', '--root', str(repo), '--date', DATE, '--dom-report', str(report),
+    code, out = cli('judge', '--root', str(repo), '--date', DATE,
                     '--answers', str(tmp_path / 'judgment-answers.json'), '--replacement-out', str(out_path))
     # Judged against the ledger as it is now: the IA candidates are still uncovered there.
     assert code == 1, out
@@ -258,58 +197,7 @@ def test_replacement_rejects_answers_under_another_policy(repo, tmp_path):
     assert code == 2 and not (tmp_path / 'r.json').exists()
 
 
-def test_dom_first_screens_name_their_outline(repo, monkeypatch):
-    (repo / 'site').mkdir()
-    (repo / 'site/index.html').write_text('<p>x</p>', encoding='utf-8')
-    snap = {'viewport': {'name': 'mobile'}, 'text_chars': 1, 'anchors': [], 'first_screen': 'x'}
-    monkeypatch.setattr(dom, 'snapshot', lambda root, html, vps: [dict(snap, viewport=v) for v in vps])
-    report = dom.run(repo, 'lp-municipal', DATE)
-    assert report.first_screens and all(s['outline'] == 'lp-municipal' for s in report.first_screens)
-
-
 # --- external review 2026-11-11 (WS-20261022 ISSUE-04) ---
-
-def test_partial_dom_report_leaves_the_unrendered_viewport_missing(repo, tmp_path):
-    only_mobile = dom_report(tmp_path / 'm.json', screens=[
-        {'outline': 'lp-municipal', 'file': 'site/index.html', 'viewport': 'mobile', 'text': '運用の手間が半分になります'}])
-    code, out, rows = candidates(repo, '--dom-report', str(only_mobile))
-    assert [r['id'] for r in rows if r['input']['kind'] == 'ia-emphasis'] == ['ia-emphasis:lp-municipal/site/index.html@mobile']
-    gap = [m for m in out['missing'] if m['kind'] == 'ia-emphasis' and m['outline'] == 'lp-municipal']
-    assert gap == [{'kind': 'ia-emphasis', 'outline': 'lp-municipal', 'file': 'site/index.html', 'viewport': 'desktop',
-                    'shipped_html': True, 'reason': 'dom の報告（first_screens）にこの画面幅が無い'}]
-    assert 'IA_JUDGE_EMPHASIS_MISSING' in [f['code'] for f in out['findings'] if f['level'] == 'warn']
-
-
-def test_dom_rows_for_unknown_file_viewport_or_duplicates_are_rejected(repo, tmp_path):
-    base = {'outline': 'lp-municipal', 'file': 'site/index.html', 'viewport': 'mobile', 'text': 'x'}
-    for screens in ([dict(base, file='site/other.html')], [dict(base, viewport='tablet')], [base, base]):
-        code, out = cli('judge', '--root', str(repo), '--date', DATE, '--dom-report', str(dom_report(tmp_path / 'r.json', screens=screens)))
-        assert code == 2 and 'IA_JUDGE_DOM_REPORT' in [f['code'] for f in out['findings']], screens
-
-
-def test_invalid_dom_row_text_does_not_leak_into_findings(repo, tmp_path):
-    secret = '社外秘の未公開コピー'
-    report = dom_report(tmp_path / 'r.json', screens=[{'outline': 'x', 'file': 'a', 'viewport': 'm', 'text': secret}])
-    code, out = cli('judge', '--root', str(repo), '--date', DATE, '--dom-report', str(report))
-    assert code == 2 and secret not in json.dumps(out, ensure_ascii=False)
-
-
-def test_section_order_and_lead_are_part_of_the_audience_fit_and_emphasis_keys(repo, tmp_path):
-    report = dom_report(tmp_path / 'dom.json')
-    _, _, before = candidates(repo, '--dom-report', str(report))
-    changed = copy.deepcopy(OUTLINE)
-    changed['sections']['sec-0001']['order'], changed['sections']['sec-0002']['order'] = 2, 1
-    dump(layer_paths.path(repo, 'infoarch', 'outlines', 'lp-municipal.yaml'), changed)
-    _, _, after = candidates(repo, '--dom-report', str(report))
-    keys = lambda rows, kind: {r['id']: r['judgment_hash'] for r in rows if r['input']['kind'] == kind}
-    assert keys(before, 'ia-audience-fit')['ia-audience-fit:lp-municipal'] != keys(after, 'ia-audience-fit')['ia-audience-fit:lp-municipal']
-    # The other deliverable is untouched.
-    assert keys(before, 'ia-audience-fit')['ia-audience-fit:deck-smb'] == keys(after, 'ia-audience-fit')['ia-audience-fit:deck-smb']
-    changed['messages']['msg-0001']['rank'], changed['messages']['msg-0002']['rank'] = 'support', 'lead'
-    dump(layer_paths.path(repo, 'infoarch', 'outlines', 'lp-municipal.yaml'), changed)
-    _, _, lead = candidates(repo, '--dom-report', str(report))
-    assert keys(lead, 'ia-emphasis') and all(keys(lead, 'ia-emphasis')[k] != v for k, v in keys(after, 'ia-emphasis').items())
-
 
 def _answers_file(tmp_path, rows, patch=None):
     policy = jl.load_policy()
@@ -352,48 +240,16 @@ def test_replacement_out_is_created_exclusively(repo, tmp_path, monkeypatch):
     # Simulate the file appearing after any existence check: the write itself must refuse.
     monkeypatch.setattr(Path, 'exists', lambda self, **k: False)
     with pytest.raises((FileExistsError, ValueError)):
-        judge.run(repo, DATE, [], answers, target)
+        judge.run(repo, DATE, answers, target)
     monkeypatch.undo()
     assert target.read_text(encoding='utf-8') == 'someone else'
 
 
-# --- rendered text outside every anchor is judged as a claim (2026-11-12) ---
-
-UNANCHORED = [{'outline': 'lp-municipal', 'file': 'site/index.html', 'viewport': 'mobile', 'text': '業界No.1 の実績'},
-              {'outline': 'lp-municipal', 'file': 'site/index.html', 'viewport': 'desktop', 'text': '業界No.1 の実績'}]
-
-
-def test_unanchored_text_becomes_an_unregistered_claim_candidate_per_screen(repo, tmp_path):
-    code, out, rows = candidates(repo, '--dom-report', str(dom_report(tmp_path / 'dom.json', unanchored=UNANCHORED)))
-    extra = [r for r in rows if r['input']['catalog_id'].endswith('#unanchored')]
-    assert [r['input']['catalog_id'] for r in extra] == ['lp-municipal/site/index.html@mobile#unanchored',
-                                                         'lp-municipal/site/index.html@desktop#unanchored'], extra
-    assert all(r['input']['kind'] == 'ia-unregistered-claim' and r['input']['text'] == '業界No.1 の実績' for r in extra)
-    # Nothing on the page supports it: the context carries no message, evidence or fact.
-    assert all(r['input']['context']['message'] is None and r['input']['context']['evidence'] == [] for r in extra)
-    assert code == 1 and any(u['id'].endswith('#unanchored') for u in out['uncovered'])
-
-
-def test_unanchored_rows_for_unknown_screens_are_rejected_without_echo(repo, tmp_path):
-    bad = [dict(UNANCHORED[0], file='other.html', text='秘密の文案')]
-    code, out, _ = candidates(repo, '--dom-report', str(dom_report(tmp_path / 'dom.json', unanchored=bad)))
-    assert code == 2 and 'IA_JUDGE_DOM_REPORT' in [f['code'] for f in out['findings']], out
-    assert '秘密' not in json.dumps(out['findings'], ensure_ascii=False)
-
-
-def test_empty_unanchored_list_adds_no_candidate(repo, tmp_path):
-    code, out, rows = candidates(repo, '--dom-report', str(dom_report(tmp_path / 'dom.json', unanchored=[])))
-    assert not [r for r in rows if r['input']['catalog_id'].endswith('#unanchored')]
-
-
-def test_dom_report_that_only_warns_is_still_judged(repo, tmp_path):
-    code, out, rows = candidates(repo, '--dom-report', str(dom_report(tmp_path / 'dom.json', exit_code=1, unanchored=UNANCHORED)))
-    assert 'IA_JUDGE_DOM_FAILED' not in [f['code'] for f in out['findings']], out['findings']
-    assert any(r['input']['kind'] == 'ia-emphasis' for r in rows) and any(r['input']['catalog_id'].endswith('#unanchored') for r in rows)
-
-
-@pytest.mark.parametrize('bad', [2, None, 'x'])
-def test_dom_report_that_failed_or_has_no_code_is_not_judged(repo, tmp_path, bad):
-    code, out, rows = candidates(repo, '--dom-report', str(dom_report(tmp_path / 'dom.json', exit_code=bad, unanchored=UNANCHORED)))
-    assert code == 2 and 'IA_JUDGE_DOM_FAILED' in [f['code'] for f in out['findings']]
-    assert not any(r['input']['catalog_id'].endswith('#unanchored') for r in rows)
+def test_dom_first_screens_name_their_outline(repo, monkeypatch):
+    """dom still reports the first screens (a rendered-page fact); no judgment reads them any more."""
+    (repo / 'site').mkdir()
+    (repo / 'site/index.html').write_text('<p>x</p>', encoding='utf-8')
+    snap = {'viewport': {'name': 'mobile'}, 'text_chars': 1, 'anchors': [], 'first_screen': 'x'}
+    monkeypatch.setattr(dom, 'snapshot', lambda root, html, vps: [dict(snap, viewport=v) for v in vps])
+    report = dom.run(repo, 'lp-municipal', DATE)
+    assert report.first_screens and all(s['outline'] == 'lp-municipal' for s in report.first_screens)

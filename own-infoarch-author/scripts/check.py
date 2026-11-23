@@ -1,7 +1,7 @@
 """Deterministic checks of ux/infoarch/ (token 0): the positioning SSOT, channel declarations, outlines (v6).
 
-What is checked here is structure and references, never meaning. Meaning (term variants, emphasis, whether a
-sentence is a claim) belongs to the Jev judgement ledger; rendered artifacts belong to the DOM checks.
+What is checked here is structure and references, never meaning. The one meaning judgment (copy x the value its message
+points to) belongs to the Jev judgement ledger; rendered artifacts belong to the DOM checks.
 
 The positioning SSOT is the positioning layer's (own-positioning-author): this module reads it through that skill's
 loader and adds what stands on it: channels, outlines, the dictionary's values and names (docs/dictionary/, read

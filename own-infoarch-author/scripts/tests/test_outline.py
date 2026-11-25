@@ -53,7 +53,8 @@ def write_case(root, case):
             raise KeyError(op['op'])
         ssot['segments'][op['id']] = {'state': 'empty', 'provenance': 'proposal'}
         ssot['ledger']['next']['seg'] = int(op['id'].split('-')[1]) + 1
-    write_repo(root, ssot, outlines=(outline, DECK), confirmed=False)
+    base = ({**copy.deepcopy(OUTLINE), 'id': 'lp-base', 'outputs': ['site/base.html']},) if case.get('base') else ()
+    write_repo(root, ssot, outlines=(outline, DECK, *base), confirmed=False)
     confirm(root, ssot, skip=unapproved)
 
 
@@ -66,7 +67,8 @@ def test_every_condition_has_a_red_case_and_every_case_names_a_condition():
     ids = [c['id'] for c in CASES + DIFF_CASES]
     assert len(set(ids)) == len(ids)
     assert len([c for c in CONDITIONS.values() if c['requirement'] == '7']) == 22  # spec requirement 7 (2026-11-25, the script), split by code
-    assert [c['id'] for c in CONDITIONS.values() if c['requirement'] == '9'] == ['9-unassigned-difference']
+    assert [c['id'] for c in CONDITIONS.values() if c['requirement'] == '9'] == [
+        '9-unassigned-difference', '9-variant-other-experiment', '9-undeclared-difference', '9-override-unchanged']
 
 
 def test_every_outline_code_is_raised_by_the_checker():
@@ -80,6 +82,10 @@ def test_every_outline_code_is_raised_by_the_checker():
 def test_red_case_fails_with_its_condition_code(case, tmp_path):
     write_case(tmp_path, case)
     rc, report = check(tmp_path)
+    if CONDITIONS[case['condition']].get('level') == 'warn':  # a warning condition: reported, never a failure
+        assert rc == 1 and not codes(report), report['findings']
+        assert CONDITIONS[case['condition']]['code'] in codes(report, 'warn'), report['findings']
+        return
     assert rc == 2, report['findings']
     assert CONDITIONS[case['condition']]['code'] in codes(report), codes(report)
 
@@ -267,6 +273,12 @@ def diff(a, b, ssot_b=SSOT, skip_b=()):
     return ia_outline.diff(ma, a['id'], appr_a, mb, b['id'], appr_b)
 
 
+def variant(b, *overrides, base='lp-municipal'):
+    """Declare `b` a variant of `base` that overrides `overrides` (requirement 6, last bullet)."""
+    b['variant_of'], b['overrides'] = base, list(overrides)
+    return b
+
+
 def test_diff_lists_only_the_changed_elements():
     b = copy.deepcopy(OUTLINE)
     b['blocks']['blk-0001']['order'], b['blocks']['blk-0002']['order'] = 2, 1
@@ -276,7 +288,10 @@ def test_diff_lists_only_the_changed_elements():
         {'layer': 'outline', 'element': 'blocks/blk-0001', 'change': 'changed', 'attributes': ['order']},
         {'layer': 'outline', 'element': 'blocks/blk-0002', 'change': 'changed', 'attributes': ['order']},
         {'layer': 'outline', 'element': 'copies/cpy-0002', 'change': 'changed', 'attributes': ['text']}]
-    assert out['changed_layers'] == ['outline'] and out['same_experiment'] is True and out['findings'] == []
+    assert out['changed_layers'] == ['outline'] and out['same_experiment'] is True
+    assert [f['code'] for f in out['findings']] == ['IA_SCRIPT_UNDECLARED_DIFFERENCE'] and out['confounded'] is True
+    declared = diff(OUTLINE, variant(b, 'blocks/blk-0001', 'blocks/blk-0002', 'copies/cpy-0002'))
+    assert declared['findings'] == [] and declared['confounded'] is False and declared['exit_code'] == 0
 
 
 def test_diff_of_identical_sets_is_empty():
@@ -316,19 +331,50 @@ def test_different_constants_or_objective_is_another_experiment():
             node = node[k]
         node[path[-1]] = value
         out = diff(OUTLINE, b)
-        assert out['same_experiment'] is False and out['findings'] == [], (path, out)
+        assert out['same_experiment'] is False and out['findings'] == [], (path, out)  # another experiment, not confounding
         assert out['experiment_differs'] == ['/'.join(path)]
 
 
 def test_diff_cli_passes_on_a_clean_variant(tmp_path):
-    variant = copy.deepcopy(OUTLINE)
-    variant['id'], variant['outputs'] = 'lp-municipal-b', ['site/b.html']
-    variant['copies']['cpy-0002']['text'] = '運用の手間が 3 分の 1 になります'
-    write_repo(tmp_path, outlines=(OUTLINE, variant, DECK))
+    b = copy.deepcopy(OUTLINE)
+    b['id'], b['outputs'] = 'lp-municipal-b', ['site/b.html']
+    b['copies']['cpy-0002']['text'] = '運用の手間が 3 分の 1 になります'
+    write_repo(tmp_path, outlines=(OUTLINE, variant(b, 'copies/cpy-0002'), DECK))
     rc, out = cli('diff', '--root', str(tmp_path), '--a', 'lp-municipal', '--b', 'lp-municipal-b')
     assert rc == 0, out
+    assert out['confounded'] is False and out['differs_in'] == 'script'
+    assert '組み方の計画は比べていない（形が未定）' in out['not_checked']
     assert [c['element'] for c in out['changes']] == ['copies/cpy-0002'] and out['ids']['a']['positioning'] == out['ids']['b']['positioning']
     assert 'dom' in ' '.join(out['not_checked'])  # without rendered reports, text outside anchors is not compared
+
+
+def test_diff_cli_reports_an_undeclared_difference_as_confounded(tmp_path):
+    """Requirement 9 / production layers 18: a difference not declared as an override warns, and the comparison is
+    labeled 「交絡あり」 with the undeclared keys; a declared key that does not differ also warns."""
+    b = copy.deepcopy(OUTLINE)
+    b['id'], b['outputs'] = 'lp-municipal-b', ['site/b.html']
+    b['copies']['cpy-0002']['text'] = '運用の手間が 3 分の 1 になります'
+    b['blocks']['blk-0001']['order'], b['blocks']['blk-0002']['order'] = 2, 1
+    write_repo(tmp_path, outlines=(OUTLINE, variant(b, 'copies/cpy-0002', 'copies/cpy-0001'), DECK))
+    rc, out = cli('diff', '--root', str(tmp_path), '--a', 'lp-municipal', '--b', 'lp-municipal-b')
+    assert rc == 1, out
+    assert out['confounded'] is True and out['confounded_label'] == '交絡あり'
+    assert out['undeclared'] == ['blocks/blk-0001', 'blocks/blk-0002'] and out['unchanged_overrides'] == ['copies/cpy-0001']
+    assert {f['code'] for f in out['findings']} == {'IA_SCRIPT_UNDECLARED_DIFFERENCE', 'IA_SCRIPT_OVERRIDE_UNCHANGED'}
+    assert all(f['level'] == 'warn' for f in out['findings']) and out['differs_in'] == 'script'
+    rc, report = check(tmp_path)  # the same comparison runs inside check, for each variant against its base
+    assert rc == 1 and {'IA_SCRIPT_UNDECLARED_DIFFERENCE', 'IA_SCRIPT_OVERRIDE_UNCHANGED'} <= set(codes(report, 'warn'))
+    assert not codes(report), report['findings']
+
+
+def test_declaring_a_variant_moves_neither_the_script_id_nor_the_set_id():
+    """Quality 3: `variant_of` and `overrides` say how a file relates to another, not what it says (like channel and
+    outputs): the script id and the set id come from the content only."""
+    declared = variant(copy.deepcopy(OUTLINE), 'copies/cpy-0002')
+    assert ia_outline.outline_id(declared) == ia_outline.outline_id(OUTLINE)
+    declared['id'] = 'lp-municipal-v'
+    a, b = ids_of(), ids_of(outlines=(declared, DECK), oid='lp-municipal-v')
+    assert (a['outline'], a['set']) == (b['outline'], b['set'])
 
 
 # ---- external review of 2026-11-17 --------------------------------------------------------------------------------

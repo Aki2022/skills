@@ -432,6 +432,7 @@ def check(root, date):
         ol.check(m, report, oid, rel, o, shipped, approved)
         check_positioning_use(m, report, oid, rel, o, shipped, approved)
         check_lead_support(m, report, oid, rel, o, all_paths)
+        ol.check_variant(m, report, oid, rel, o)
     check_blueprint(m, report, approved, rows)
     check_expiry(m, report, date)
     check_pages(m, report)

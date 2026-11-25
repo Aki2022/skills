@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "own-infoarch-author/script.v1.schema.json",
   "title": "ux/infoarch/scripts/<deliverable id>.yaml schema version 1 (script, 台本)",
-  "description": "台本（SPEC-information-architecture-standardization 要件 6、SPEC-deliverable-production-layers 要件 16〜20）。outline（版 3）を置き換える。positioning 1 つ（target のセグメント）に立ち、定数（target・touchpoint・tone）と目的変数（objective）を置いて、独立変数のメッセージ・まとまり・文案を組み立てる。まとまりは内容の働き（辞書の 7 つ）を 1 つ持つ。1 ページ＝1 台本。AI が作り、人は保守しない。並びは order で持ち、ファイルの中で書いた順番は意味を持たない。id・channel・outputs は置き場所の宣言で、台本の id に入らない。",
+  "description": "台本（SPEC-information-architecture-standardization 要件 6、SPEC-deliverable-production-layers 要件 16〜20）。outline（版 3）を置き換える。positioning 1 つ（target のセグメント）に立ち、定数（target・touchpoint・tone）と目的変数（objective）を置いて、独立変数のメッセージ・まとまり・文案を組み立てる。まとまりは内容の働き（辞書の 7 つ）を 1 つ持つ。1 ページ＝1 台本。AI が作り、人は保守しない。並びは order で持ち、ファイルの中で書いた順番は意味を持たない。id・channel・outputs は置き場所の宣言で、台本の id に入らない。 変種は variant_of（基本の台本の id）と overrides（変える要素の鍵）を宣言する。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -41,6 +41,20 @@
           "pattern": "^(/|~)|(^|/)\\.\\.(/|$)"
         }
       }
+    },
+    "variant_of": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]*$",
+      "description": "変種の宣言：基本の台本の id（ファイル名）。ファイルは完全な台本のまま書く（継ぎ足しはしない）。置き場所の宣言と同じく、台本の id・set の id に入らない"
+    },
+    "overrides": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "上書きの宣言：基本の台本から変えるつもりの要素の鍵（infoarch-author set の elements と同じ鍵。例 blocks/blk-0002・messages/msg-0001・copies/cpy-0003・no_cta）。宣言していない違いは警告し、比較の報告に「交絡あり」と書く。台本の id・set の id に入らない"
     },
     "target": {
       "type": "object",

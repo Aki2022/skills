@@ -24,6 +24,11 @@ import positioning as pos
 
 CONTENT_KEYS = ('target', 'touchpoint', 'tone', 'objective', 'no_cta', 'messages', 'blocks', 'copies', 'texts')
 CONSTANT_KEYS = ('target', 'touchpoint', 'tone', 'objective')  # a variant that changes one is another experiment
+# A variant declares its base (`variant_of`) and the elements it means to change (`overrides`, element keys as
+# `elements` gives them). The file is still a whole script; the declaration is placement, like channel and outputs:
+# it is in neither the script id nor the set id.
+CONFOUNDED_LABEL = '交絡あり'
+PLAN_NOT_CHECKED = '組み方の計画は比べていない（形が未定）'
 NO_CTA_NOTE = 'CTA なし（意図）'
 SCRIPT_PREFIX = 'spt-'  # `scr-` is a screen's (blueprint)
 # The content functions (docs/dictionary/deliverables.json term-function-*): which may place messages, and which copy
@@ -184,14 +189,10 @@ def diff(ma, oid_a, approved_a, mb, oid_b, approved_b, dom_a=None, dom_b=None):
     changes = _changes('outline', elements(a), elements(b))
     changes += path_changes(ma, a, mb, b)
     layers = sorted({c['layer'] for c in changes})
-    differs = []
-    for key in CONSTANT_KEYS:
-        va, vb = a.get(key), b.get(key)
-        if isinstance(va, dict) and isinstance(vb, dict):
-            differs += [f'{key}/{k}' for k in sorted(set(va) | set(vb)) if va.get(k) != vb.get(k)]
-        elif va != vb:
-            differs.append(key)
-    findings, not_checked = [], []
+    differs = experiment_differs(a, b)
+    declaring = b if b.get('variant_of') == oid_a else a if a.get('variant_of') == oid_b else None
+    over = overrides(a if declaring is b else b, declaring) if declaring is not None else overrides(a, b, declared=())
+    findings, not_checked = list(over['findings']), [PLAN_NOT_CHECKED]
     fa, fb = _fact_values(ma, a), _fact_values(mb, b)
     moved_facts = sorted(f for f in set(fa) & set(fb) if fa[f] != fb[f])
     if moved_facts:  # the values are not echoed: only which facts differ
@@ -205,9 +206,76 @@ def diff(ma, oid_a, approved_a, mb, oid_b, approved_b, dom_a=None, dom_b=None):
         if moved:
             findings.append({'level': 'fail', 'code': 'IA_DIFF_UNASSIGNED',
                              'message': f'印の外の文が別案どうしで違う（どの要素にも割り当てられない差分。画面幅 {moved}）'})
+    levels = {f['level'] for f in findings}
     return {'a': oid_a, 'b': oid_b, 'ids': ids, 'changes': changes, 'changed_layers': layers,
-            'same_experiment': not differs, 'experiment_differs': differs, 'findings': findings,
-            'not_checked': not_checked, 'exit_code': 2 if findings else 0}
+            'same_experiment': not differs, 'experiment_differs': differs,
+            # which side of a variant differs: the script, the layout plan, or both. The plan has no file yet, so
+            # only the script side is compared (the plan is listed in not_checked).
+            'differs_in': 'script' if any(c['layer'] == 'outline' for c in changes) else 'none',
+            'variant_of': (declaring or {}).get('variant_of'), 'confounded': bool(over['undeclared']),
+            'confounded_label': CONFOUNDED_LABEL if over['undeclared'] else None,
+            'undeclared': over['undeclared'], 'unchanged_overrides': over['unchanged'], 'findings': findings,
+            'not_checked': not_checked, 'exit_code': 2 if 'fail' in levels else 1 if 'warn' in levels else 0}
+
+
+def experiment_differs(a, b):
+    """The constants and objective keys that differ between two scripts: any one makes them two experiments."""
+    differs = []
+    for key in CONSTANT_KEYS:
+        va, vb = a.get(key), b.get(key)
+        if isinstance(va, dict) and isinstance(vb, dict):
+            differs += [f'{key}/{k}' for k in sorted(set(va) | set(vb)) if va.get(k) != vb.get(k)]
+        elif va != vb:
+            differs.append(key)
+    return differs
+
+
+_ABSENT = object()
+
+
+def overrides(base, variant, declared=None):
+    """Requirement 9 / production layers 18: the elements of `variant` that differ from `base` and are not declared
+    (`undeclared`: a confounded comparison) and the declared ones that do not differ (`unchanged`), with a warning
+    each. The constants and objective are left out: a change there is another experiment, not a confound.
+    `declared` defaults to the variant's own `overrides`."""
+    ea, eb = elements(base), elements(variant)
+    keys = set(ea) | set(eb)
+    changed = {k for k in keys if ea.get(k, _ABSENT) != eb.get(k, _ABSENT)}
+    declared = set(variant.get('overrides', []) if declared is None else declared)
+    undeclared = sorted(k for k in changed - declared if k not in CONSTANT_KEYS)
+    unchanged = sorted(k for k in declared & keys if k not in changed)
+    findings = []
+    if undeclared:
+        findings.append({'level': 'warn', 'code': 'IA_SCRIPT_UNDECLARED_DIFFERENCE',
+                         'message': f'{CONFOUNDED_LABEL}：基本の台本と違うのに上書きとして宣言していない要素 {undeclared}'})
+    if unchanged:
+        findings.append({'level': 'warn', 'code': 'IA_SCRIPT_OVERRIDE_UNCHANGED',
+                         'message': f'上書きとして宣言したのに基本の台本と違わない要素 {unchanged}'})
+    return {'undeclared': undeclared, 'unchanged': unchanged, 'findings': findings}
+
+
+def check_variant(m, report, oid, rel, o):
+    """A variant's declaration (requirement 6, last bullet; 9): its base exists and is another script, the constants
+    and objective are the base's, every override names an element of either script; then the comparison above."""
+    base_id = o.get('variant_of')
+    if base_id is None:
+        if 'overrides' in o:
+            report.add('fail', 'IA_SCRIPT_OVERRIDES_WITHOUT_BASE', f'{oid}: overrides を書いたのに variant_of（基本の台本）が無い', rel)
+        return
+    if base_id == oid or base_id not in m.outlines:
+        report.add('fail', 'IA_SCRIPT_VARIANT_BASE_MISSING', f'{oid}: 基本の台本 {base_id} が無い（自分自身は基本にできない）', rel)
+        return
+    _, base = m.outlines[base_id]
+    differs = experiment_differs(base, o)
+    if differs:
+        report.add('fail', 'IA_SCRIPT_VARIANT_OTHER_EXPERIMENT',
+                   f'{oid}: 定数か目的変数 {differs} が基本の台本 {base_id} と違う（変種でなく別の試験。variant_of を外す）', rel)
+    known = set(elements(base)) | set(elements(o))
+    unknown = sorted(k for k in o.get('overrides', []) if k not in known)
+    if unknown:
+        report.add('fail', 'IA_SCRIPT_OVERRIDE_UNKNOWN', f'{oid}: 上書きの宣言 {unknown} が、{base_id} にもこの台本にも無い要素', rel)
+    for f in overrides(base, o)['findings']:
+        report.add(f['level'], f['code'], f'{oid}（基本は {base_id}）: {f["message"]}', rel)
 
 
 # ---- requirement 7 (and the shape of requirement 6) ------------------------------------------------------------

@@ -48,11 +48,12 @@ v6 の outline を置き換えた。outline の target・トーン・取って�
 
 - 台本の id：`spt-` ＋ 台本の中身（定数・目的変数・`no_cta`・メッセージ・まとまりの順序と働きと置き方・文案の順番と文言と引き先（`message`・`refs`）と提案の印・`texts`）を正規化した JSON の SHA-256（`scr-` は画面の id なので使わない）。立つ positioning の id は入れない。メッセージは提供価値を原子の id で指すので、提供価値の文面だけを直しても台本の id は変わらない。報告の鍵の名前は v6 のまま `outline`。
 - set の id：`<台本の id>+<経路の id>+…`（台本が指す経路の id を提供価値の id の順に並べる）。中身から決まり、承認の有無では変わらない（承認は出荷ゲートが見る）。指していない経路の手直しでは変わらず、指している経路の中（共有する原子を含む）を直すと変わる。指す経路が無ければ None。`set` は `paths`（提供価値 → 経路の id）、報告用の positioning の id、要素（messages・blocks・copies・texts）ごとの中身のハッシュも出す。v5 の対応表（mapping）はこれに置き換えた。
-- 変種の上書き（基本の台本＋宣言した上書き）はまだ無い（次の段階）。今の別案は、別の台本のファイルとして作る。
+- 変種（要件 6 の最後・9、SPEC-deliverable-production-layers 要件 18）：別案は完全な台本のファイルとして書き、`variant_of: <基本の台本の id>` と `overrides: [<要素の鍵>, ...]`（`set` の elements と同じ鍵：`blocks/blk-0002`・`messages/msg-0001`・`copies/cpy-0003`・`no_cta` など）で、基本から変えるつもりの要素を宣言する。継ぎ足し（基本に上書きを当てて作る仕組み）は無い。宣言は置き場所と同じ扱いで、台本の id・set の id に入らない。
+  - `check` は変種ごとに基本と比べる：基本が無い・自分自身（IA_SCRIPT_VARIANT_BASE_MISSING）、`variant_of` の無い `overrides`（IA_SCRIPT_OVERRIDES_WITHOUT_BASE）、どちらの台本にも無い要素の鍵（IA_SCRIPT_OVERRIDE_UNKNOWN）、定数か目的変数が違う（IA_SCRIPT_VARIANT_OTHER_EXPERIMENT。別の試験）は失格。違うのに宣言していない要素は警告（IA_SCRIPT_UNDECLARED_DIFFERENCE、「交絡あり」）、宣言したのに違わない要素も警告（IA_SCRIPT_OVERRIDE_UNCHANGED）。
 
 ### 差分（`infoarch-author diff --a <id> --b <id> [--root-b DIR] [--dom-a A --dom-b B]`）
 
-2 つの set の差分を、変わった要素（`messages/<id>`・`blocks/<id>` などの台本の要素と、経路の原子・矢印）と属性で列挙する（報告の層の名前は v6 のまま `outline`）。指す経路は提供価値の id で突き合わせ、両方にあってハッシュが違えば positioning の編集（`layer: positioning`、`path` に提供価値の id）、片方にしか無ければ台本の選択（`layer: outline`、`element: paths/<提供価値 id>`、`kind: selection`）として別々に出す。両方の文案が参照する固定値の値が違えば、IA_DIFF_UNASSIGNED で失格（固定値はどちらの id にも入らない。値は報告に出さない）。`changed_layers` で、どちらの層が変わったかが分かる（両方が変わる別案も認める）。定数か目的変数が違えば `same_experiment: false`（別の試験として扱う。失格ではない）。両方の dom の報告を渡すと、印の外の文を画面幅ごとに比べ、違えば IA_DIFF_UNASSIGNED で失格（どの要素にも割り当てられない差分）。渡さなければ `not_checked` に比べていないことを出す。A/B の実行・指標・統計は持たない。
+2 つの set の差分を、変わった要素（`messages/<id>`・`blocks/<id>` などの台本の要素と、経路の原子・矢印）と属性で列挙する（報告の層の名前は v6 のまま `outline`）。指す経路は提供価値の id で突き合わせ、両方にあってハッシュが違えば positioning の編集（`layer: positioning`、`path` に提供価値の id）、片方にしか無ければ台本の選択（`layer: outline`、`element: paths/<提供価値 id>`、`kind: selection`）として別々に出す。両方の文案が参照する固定値の値が違えば、IA_DIFF_UNASSIGNED で失格（固定値はどちらの id にも入らない。値は報告に出さない）。`changed_layers` で、どちらの層が変わったかが分かる（両方が変わる別案も認める）。定数か目的変数が違えば `same_experiment: false`（別の試験として扱う。`diff` では失格にしない）。片方がもう片方の変種（`variant_of`）なら、その `overrides` を宣言として、違うのに宣言していない要素を `undeclared` に並べ、`confounded: true`・`confounded_label: 交絡あり` と IA_SCRIPT_UNDECLARED_DIFFERENCE（警告）を出す。宣言したのに違わない要素は `unchanged_overrides` と IA_SCRIPT_OVERRIDE_UNCHANGED（警告）。どちらも変種でなければ、違う要素はすべて宣言なしとして扱う（定数と目的変数は除く）。`differs_in` は違う所が台本か（`script`）、組み方の計画か（`plan`）、両方か（`both`）。組み方の計画はまだファイルの形が無いので台本の側だけで決め、`not_checked` に「組み方の計画は比べていない（形が未定）」を出す。終了コードは失格 2・警告 1・無し 0。両方の dom の報告を渡すと、印の外の文を画面幅ごとに比べ、違えば IA_DIFF_UNASSIGNED で失格（どの要素にも割り当てられない差分）。渡さなければ `not_checked` に比べていないことを出す。A/B の実行・指標・統計は持たない。
 
 ## v5 からの移行（`infoarch-author migrate-v6 --root . [--write]`。SPEC v6 要件 17）
 
@@ -147,6 +148,8 @@ v5 の木（旧い名前 `info_arch.yaml` の版 3（今の置き場所は `ux/p
 | IA_SCRIPT_PROOF_OTHER_POSITIONING | 文案の `refs` が、target のセグメントでない証拠を引く |
 | IA_SCRIPT_PROPOSAL（warn） | 提案の印が残る文案（制作中は警告。出荷では `ship` が IA_SCRIPT_PROPOSAL_AT_SHIP で止める） |
 | IA_OUTLINE_RETIRED | 廃止した `outlines/` にファイルが残っている |
+| IA_SCRIPT_VARIANT_BASE_MISSING / IA_SCRIPT_OVERRIDES_WITHOUT_BASE / IA_SCRIPT_OVERRIDE_UNKNOWN / IA_SCRIPT_VARIANT_OTHER_EXPERIMENT | 変種の基本が無いか自分自身・基本の無い上書き・どちらにも無い要素の上書き・定数か目的変数が基本と違う |
+| IA_SCRIPT_UNDECLARED_DIFFERENCE / IA_SCRIPT_OVERRIDE_UNCHANGED（warn） | 基本と違うのに宣言していない要素（交絡あり）・宣言したのに違わない要素 |
 | IA_OUTLINE_COPY_SECTION / IA_OUTLINE_COPY_MESSAGE / IA_OUTLINE_MESSAGE_UNCONVEYED | まとまりに属さない文案・同じまとまりに無いメッセージを伝える文案（主張の文案がメッセージを指さないものも）・置かれたメッセージを伝える文案が無い |
 | IA_OUTLINE_ORDER_DUPLICATE | まとまりの順序、同じまとまりの文案の順番が重なる |
 | IA_OUTLINE_TEXT_MISPLACED | ナビの文言をまとまりに置いた・ラベルを置くまとまりが無い |

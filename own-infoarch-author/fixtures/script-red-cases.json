@@ -1,6 +1,6 @@
 {
-  "version": 2,
-  "note": "台本（script、SPEC-information-architecture-standardization 要件 7、と要件 6 の形）の失格と差分の失格（要件 9）と、それを壊す赤のフィクスチャの対応表。v6 の outline の表（outline-red-cases.json）を置き換えた。scripts/tests/test_outline.py が、全条件に赤のケースが 1 つ以上あること（対応の無い条件 0 件）、全ケースが既知の条件を指すこと、全ケースが条件の code で失格になることを確かめる。cases は基準のフィクスチャ（test_check.OUTLINE、出荷チャネルの LP の台本）への操作（path は台本の中の位置。unapprove は positioning の要素の承認を外す）。diff_cases は 2 つの別案の描画の報告（dom の unanchored）。code の IA_OUTLINE_ の接頭辞は、規則が変わらない条件では互換のため残した。変わった・増えた条件は IA_SCRIPT_。",
+  "version": 3,
+  "note": "台本（script、SPEC-information-architecture-standardization 要件 7、と要件 6 の形）の失格と差分の失格（要件 9）と、それを壊す赤のフィクスチャの対応表。v6 の outline の表（outline-red-cases.json）を置き換えた。scripts/tests/test_outline.py が、全条件に赤のケースが 1 つ以上あること（対応の無い条件 0 件）、全ケースが既知の条件を指すこと、全ケースが条件の code で失格になることを確かめる。cases は基準のフィクスチャ（test_check.OUTLINE、出荷チャネルの LP の台本）への操作（path は台本の中の位置。unapprove は positioning の要素の承認を外す）。diff_cases は 2 つの別案の描画の報告（dom の unanchored）。code の IA_OUTLINE_ の接頭辞は、規則が変わらない条件では互換のため残した。変わった・増えた条件は IA_SCRIPT_。 2026-11-25（変種の上書き。要件 6 の最後・8・9、SPEC-deliverable-production-layers 要件 18）：base: true のケースは、基準の LP の写し（id lp-base、成果物 site/base.html）を基本の台本として一緒に書く。level が warn の条件は、失格でなく警告の code が出ることを確かめる。",
   "conditions": [
     {
       "id": "7-value-unapproved",
@@ -157,6 +157,44 @@
       "requirement": "6",
       "code": "IA_OUTLINE_TEXT_MISPLACED",
       "text": "ナビの文言をまとまりに置いた、ラベルを置くまとまりが無い"
+    },
+    {
+      "id": "6-variant-base-missing",
+      "requirement": "6",
+      "code": "IA_SCRIPT_VARIANT_BASE_MISSING",
+      "text": "variant_of が、存在する別の台本を指さない（自分自身も含む）"
+    },
+    {
+      "id": "6-override-unknown",
+      "requirement": "6",
+      "code": "IA_SCRIPT_OVERRIDE_UNKNOWN",
+      "text": "上書きの宣言が、基本の台本にも変種にも無い要素を指す"
+    },
+    {
+      "id": "6-overrides-without-base",
+      "requirement": "6",
+      "code": "IA_SCRIPT_OVERRIDES_WITHOUT_BASE",
+      "text": "variant_of を書かずに overrides を書いた"
+    },
+    {
+      "id": "9-variant-other-experiment",
+      "requirement": "9",
+      "code": "IA_SCRIPT_VARIANT_OTHER_EXPERIMENT",
+      "text": "変種の定数（target・接点・トーン）か目的変数が基本の台本と違う（別の試験で、変種でない）"
+    },
+    {
+      "id": "9-undeclared-difference",
+      "requirement": "9",
+      "code": "IA_SCRIPT_UNDECLARED_DIFFERENCE",
+      "level": "warn",
+      "text": "基本の台本と違う要素を上書きとして宣言していない（交絡あり。警告）"
+    },
+    {
+      "id": "9-override-unchanged",
+      "requirement": "9",
+      "code": "IA_SCRIPT_OVERRIDE_UNCHANGED",
+      "level": "warn",
+      "text": "上書きとして宣言した要素が、基本の台本と違わない（警告）"
     }
   ],
   "cases": [
@@ -1024,6 +1062,263 @@
               "block": "blk-0001"
             }
           }
+        }
+      ]
+    },
+    {
+      "id": "variant-of-nothing",
+      "condition": "6-variant-base-missing",
+      "why": "存在しない台本の変種だと宣言した",
+      "base": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "variant_of"
+          ],
+          "value": "lp-nowhere"
+        }
+      ]
+    },
+    {
+      "id": "variant-of-itself",
+      "condition": "6-variant-base-missing",
+      "why": "自分自身の変種だと宣言した",
+      "base": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "variant_of"
+          ],
+          "value": "lp-municipal"
+        }
+      ]
+    },
+    {
+      "id": "override-unknown-element",
+      "condition": "6-override-unknown",
+      "why": "どちらの台本にも無いまとまりを上書きとして宣言した",
+      "base": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "variant_of"
+          ],
+          "value": "lp-base"
+        },
+        {
+          "op": "set",
+          "path": [
+            "overrides"
+          ],
+          "value": [
+            "blocks/blk-0099"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "override-not-an-element-key",
+      "condition": "6-override-unknown",
+      "why": "要素の鍵の形でない名前を上書きとして宣言した",
+      "base": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "variant_of"
+          ],
+          "value": "lp-base"
+        },
+        {
+          "op": "set",
+          "path": [
+            "overrides"
+          ],
+          "value": [
+            "blk-0002"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "overrides-without-variant-of",
+      "condition": "6-overrides-without-base",
+      "why": "基本の台本を書かずに上書きだけを宣言した",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "overrides"
+          ],
+          "value": [
+            "copies/cpy-0002"
+          ]
+        },
+        {
+          "op": "set",
+          "path": [
+            "copies",
+            "cpy-0002",
+            "text"
+          ],
+          "value": "運用の手間が 3 分の 1 になります"
+        }
+      ]
+    },
+    {
+      "id": "variant-other-tone",
+      "condition": "9-variant-other-experiment",
+      "why": "変種のトーンを変えた",
+      "base": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "variant_of"
+          ],
+          "value": "lp-base"
+        },
+        {
+          "op": "set",
+          "path": [
+            "overrides"
+          ],
+          "value": [
+            "tone"
+          ]
+        },
+        {
+          "op": "set",
+          "path": [
+            "tone"
+          ],
+          "value": "くだけた調子"
+        }
+      ]
+    },
+    {
+      "id": "variant-other-objective",
+      "condition": "9-variant-other-experiment",
+      "why": "変種の取ってほしい行動を変えた",
+      "base": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "variant_of"
+          ],
+          "value": "lp-base"
+        },
+        {
+          "op": "set",
+          "path": [
+            "objective",
+            "action"
+          ],
+          "value": "問い合わせ"
+        }
+      ]
+    },
+    {
+      "id": "variant-undeclared-copy",
+      "condition": "9-undeclared-difference",
+      "why": "文案を変えたのに上書きを宣言していない",
+      "base": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "variant_of"
+          ],
+          "value": "lp-base"
+        },
+        {
+          "op": "set",
+          "path": [
+            "copies",
+            "cpy-0002",
+            "text"
+          ],
+          "value": "運用の手間が 3 分の 1 になります"
+        }
+      ]
+    },
+    {
+      "id": "variant-partly-declared",
+      "condition": "9-undeclared-difference",
+      "why": "まとまりの順序は宣言したが、変えた文案を宣言していない",
+      "base": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "variant_of"
+          ],
+          "value": "lp-base"
+        },
+        {
+          "op": "set",
+          "path": [
+            "overrides"
+          ],
+          "value": [
+            "blocks/blk-0001",
+            "blocks/blk-0002"
+          ]
+        },
+        {
+          "op": "set",
+          "path": [
+            "blocks",
+            "blk-0001",
+            "order"
+          ],
+          "value": 2
+        },
+        {
+          "op": "set",
+          "path": [
+            "blocks",
+            "blk-0002",
+            "order"
+          ],
+          "value": 1
+        },
+        {
+          "op": "set",
+          "path": [
+            "copies",
+            "cpy-0003",
+            "text"
+          ],
+          "value": "止まらずに動き続けます。導入は{{value-customer-count}}"
+        }
+      ]
+    },
+    {
+      "id": "variant-declared-but-same",
+      "condition": "9-override-unchanged",
+      "why": "変えていない文案を上書きとして宣言した",
+      "base": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "variant_of"
+          ],
+          "value": "lp-base"
+        },
+        {
+          "op": "set",
+          "path": [
+            "overrides"
+          ],
+          "value": [
+            "copies/cpy-0001"
+          ]
         }
       ]
     }

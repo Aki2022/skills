@@ -43,6 +43,8 @@ def _versions(config, catalogs):
     for name in (config['catalog_version'] + '.json', 'id-ledger.json'):
         path = Path(catalogs) / name
         hashes['catalog/' + name] = hashlib.sha256(path.read_bytes()).hexdigest()
+    import layout_patterns  # the vocabulary is resolved into the manifest: a new catalog re-runs L0
+    hashes['catalog/' + layout_patterns.CATALOG_FILE.name] = hashlib.sha256(layout_patterns.CATALOG_FILE.read_bytes()).hexdigest()
     return hashlib.sha256(json.dumps(hashes, sort_keys=True).encode()).hexdigest()
 
 
@@ -75,7 +77,8 @@ def _inputs(layers):
     values = {}
     for path in sorted(layers.rglob('*')):
         relative = path.relative_to(layers)
-        if _leaf('resolved') in relative.parts or path.name in (_leaf('assets_index'), 'migration.json'):
+        if _leaf('resolved') in relative.parts or path.name in (_leaf('assets_index'), 'migration.json') \
+                or not layer_paths.design_input(relative.as_posix()):  # build records are not design inputs
             continue
         if path.is_symlink() or not path.resolve().is_relative_to(layers):
             raise ValueError(f"maintenance input is a symlink or escapes {layer_paths.rel('layers')}/")

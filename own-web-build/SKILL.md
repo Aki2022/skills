@@ -25,14 +25,24 @@ repo の git toplevel の `ux/design/` を正典として HTML / dashboard を�
 5. 値の発案や参照が必要なら `own-design-author` へ戻す。指示された参照の権利確認は
    `own-brand-resolve` の方針に従い、`proposed` と出所を `ux/design/` に記録する。
    ブランド値をAIが承認しない。
-5b. **情報設計のアウトラインを使う場合**: `ux/infoarch/outlines/<成果物 id>.yaml`があり、この成果物をoutputsに含むなら、`infoarch-author skeleton --outline <id>`で骨組みのHTMLを受け取る。セクションの印（`data-ia-section`）と文案の印（`data-ia-copy`）、固定値・正式名称（`data-dict`）・宣言した文言（`data-ia-text`）の印を残し、文言・セクションの順・セクションの中の文案の順を変えずにスタイリングする（文案を別のセクションへ動かさない。足すのは属性だけ）。印はCSSで選ばない（L1の`ia-marks-inert`が失格にする。印の付け外しで見た目が変わらないようにするため）。ロゴやフッターの正式名称は`data-dict="name-…"`（辞書の正式名称の id）で名前だけを包む。どの印にも属さない文言を足すと`dom`がIA_DOM_UNANCHORED_TEXTで失格にするので、足したい文言はアウトラインへ戻す（主張ならメッセージと文案、ナビやラベルなら`texts`）。繰り返しの行動喚起も、アウトラインの別の文案にする。アウトラインのない依頼は上の手順を継続し、情報設計を新しく作る依頼は`own-infoarch-author`へ渡す。
+5b. **台本がある成果物（LP・チラシなど）は、台本 → 組み方の計画 → カンプ → HTML の順に作る**（詳細と検査の code は `references/plan-and-comp.md`）。`ux/infoarch/scripts/<台本 id>.yaml` があり、この成果物をoutputsに含む時に使う。台本のない依頼は上の手順を継続し、情報設計を新しく作る依頼は`own-infoarch-author`へ渡す。
+   1. 台本を読む：`infoarch-author skeleton --script <id>`で骨組みのHTMLを受け取る（まとまりの印`data-ia-section`・文案の印`data-ia-copy`・固定値と正式名称`data-dict`・宣言した文言`data-ia-text`）。
+   2. **台本の門（止まる）**：オーナーに台本を見せ、「進めて」を待つ。台帳には残さない。
+   3. 組み方の計画を書く：`ux/build/<成果物 id>/plan.yaml`。まとまりごとに design の組み方の型（解決済みマニフェストの`layout_patterns`）の名前、型の既定と違うときだけ狭い画面の型（`narrow`）を書く。台本の文言は書かない。初回は`templates/build/.gitignore`を`ux/build/.gitignore`に写す（カンプを git に入れない）。
+   4. `python3 <このskill>/scripts/plan_check.py --repo <repo> --deliverable <id>`。2なら直す。
+   5. `python3 <このskill>/scripts/comp_request.py --repo <repo> --deliverable <id>`で own-image-gen の器（`comp/fields.json`）と出力先を書く。計画の検査が失格なら書かない。画像は生成しない。
+   6. `own-image-gen`を`comp/request.json`のコマンドで流し、広い画面の 1 枚を描く（従量課金。枚数は 1）。
+   7. **カンプの門（止まる）**：オーナーにカンプを見せ、「進めて」を待つ。台帳には残さない。
+   8. 計画を直す：カンプが足した細部（重なり・はみ出し・接地・区切り方）をすべて`details`に写し、変えた型を直し、`comp.reviewed: true`にして`plan_check.py`を流し直す。カンプの文言と、カンプが新しく描いた絵は使わない。
+   9. HTML を計画に沿って組む。狭い画面の崩し方は列の規則と同じ強さ（同じ詳細度のセレクタ・同じ層）で書く。骨組みの印を残し、文言・まとまりの順・まとまりの中の文案の順を変えずにスタイリングする（文案を別のまとまりへ動かさない。足すのは属性だけ）。印はCSSで選ばない（L1の`ia-marks-inert`が失格にする）。ロゴやフッターの正式名称は`data-dict="name-…"`で名前だけを包む。どの印にも属さない文言を足すと`dom`がIA_DOM_UNANCHORED_TEXTで失格にするので、足したい文言は台本へ戻す（主張ならメッセージと文案、ナビやラベルなら`texts`）。繰り返しの行動喚起も、台本の別の文案にする。
+   10. 下の 7・7b の検査を流す。
 5c. **プロダクト UI（ログイン後の画面・ダッシュボード）の blueprint を使う場合**: `ux/infoarch/blueprint/screens/<画面 id>.yaml` があり、その画面を作るなら、`python3 <このskill>/scripts/build_screen.py --repo <repo> --screen <画面 id> --out <HTML>` で作る。これは `infoarch-author skeleton --screen` の印つき HTML（`data-ia-region`・`data-ia-group`・`data-ia-action`・`data-ia-state`）に、`own-design-author/references/allocation-rules.json`（割り付け規則）から導いた幅の指定と主操作の塗りを足す。blueprint が失格なら作らない。領域の順は優先度のまま動かさず、位置と幅は規則が決める（人が規則に反して置くときは `ux/design/layout-overrides.yaml` に 1 行（id・画面・領域の組・幅・理由。幅は省けない）ずつ書き、オーナーが 1 行ずつ承認する。理由だけでは通らず、承認の無い行は失格。承認依頼の表示と記録は own-design-author の `design-author override-request`・`approve`）。作った後は必ず `python3 <このskill>/scripts/audit_screen.py --screen <画面の yaml> --html <HTML> --repo <repo> [--overrides ux/design/layout-overrides.yaml]` を流す（実ブラウザで PC とスマホの 2 つの幅に描いて、優先度と位置・主操作が 1 つだけ塗られている・宣言した状態が描ける・印がある、を確かめる。印が 0 件なら「確かめていない」で失格）。`--overrides` の各行は、台帳（`--repo` の `ux/approvals.yaml`）にオーナーの現在の承認がある行だけが、その画面・領域の組・幅の逆転を許す（報告に info で残る）。承認の無い行・幅の無い行・写した行・画面や領域が消えた行は失敗で、何も許さない。`--overrides` を渡さなければ、例外は 1 つも効かない。`audit_screen.py` は PyYAML が要る。PATH の `python3` に無いときは、`DESIGN_AUTHOR_PYTHON` の interpreter で自分を 1 回だけ起動し直す（変数が無ければ exit 2 で止まる）。
 6. `media/<media>/media.yaml` / `rules.md` と必要なassetを読み、
    `references/context-composer.md` に従って生成する。媒体最低値はマニフェストを読む。
 7. 生成後の L1（`scripts/audit_html.py <html> --manifest ux/design/.resolved/web.json`）は確認せず毎回実行する。L1 はコントラストを判定しない（出力に「未カバー」と出る）。描画後の実測は `scripts/measure_render.mjs <url> --profile <id> --manifest ...`（`references/validator.md`）。
    描画の L2 は `references/validator.md` / `site-validation.md` に従い人間へ実施可否を確認する。
    ブラウザ利用時は `own-browser-route` と `playwright-cli` を使う。
-7b. アウトラインを使った場合、出力後に`infoarch-author evaluate --outline <id>`を必ず実行する（check → dom → judge を順に走らせ、終了コードを 1 つにまとめる）。終了コード2なら、文言の書き換え（IA_DOM_COPY_DRIFT）・印の欠落・セクションと文案の順序・文案のセクション違い・印の外の文言・固定値の表示を直す。終了コード1の警告（未カバーの判定・要確認）は報告に残す。直せない時や未実施は未解決として報告する。
+7b. 台本を使った場合、出力後に`infoarch-author evaluate --script <id>`を必ず実行する（check → dom → judge を順に走らせ、終了コードを 1 つにまとめる）。終了コード2なら、文言の書き換え（IA_DOM_COPY_DRIFT）・印の欠落・まとまりと文案の順序・文案のまとまり違い・印の外の文言・固定値の表示を直す。終了コード1の警告（未カバーの判定・要確認）は報告に残す。直せない時や未実施は未解決として報告する。
 8. 決定論の失格は修正して再検査する。修正は最大2回。失格や未実施が残れば準拠を名乗らない。
 9. 出力にL0/L1/L2の結果・提案値数・主要制約・未カバー規則・通さなかった工程と理由を残す。
    フォールバック由来の値を発見したら欠陥として報告し、`ux/design/` へ戻して修正する。
@@ -44,6 +54,8 @@ repo の git toplevel の `ux/design/` を正典として HTML / dashboard を�
 - `references/validator.md`: L1/L2の実行と報告。
 - `references/site-validation.md`: L2実施時のブラウザ手順。
 - `references/media-spec.md`: 媒体を追加する場合だけ読む。
+- `references/plan-and-comp.md`: 組み方の計画・カンプの依頼・検査の code。
+- `references/schema/plan.v1.schema.json`: 組み方の計画の形。
 - `media/<media>/` / `validators/common/`: 媒体の構造規約と点検項目。
 
 ## HTML出力前 必須チェックリスト（MUST — 毎回・例外なし）

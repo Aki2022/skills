@@ -53,6 +53,8 @@ push時の検査は、`ux/design/design.yaml` を持つ全repoで pre-push の�
 `design-author sync` はL0通過後に宣言したTailwindとassetコピーを配置する。`design-check` はL0/L1を通ったら画面ごとにL2とITEMSを実行し、全画面が通ってからAFM段を実行するためL2実施確認後に呼ぶ。
 L1/L2と生成Tailwindの使い方・制約は `references/web-validation.md` を読む。
 
+LP など台本から作る成果物の組み方の型（分割 2 列・帯・行の表など）の語彙は `catalog/layout-patterns.json`。repo は `design.yaml` の `layout_patterns` に差分（使わない型・足した型）だけを書き、足した型はオーナーが 1 つずつ承認する。カンプの大きさの既定は `references/comp-sizes.json`。どちらも L0 がマニフェストに解決する（`references/contract.md`）。
+
 プロダクト UI の画面の位置と幅は、割り付け規則 `references/allocation-rules.md`（機械が読む形は `allocation-rules.json`）が、infoarch（blueprint）の優先度・グループ・shape から導く。グリッド・breakpoint・画面の型・部品の選択（表かカードか、どのグラフか）・規則に反する配置を人が指定するときの書き方（`ux/design/layout-overrides.yaml`）はここにある。作るのは own-web-build の `build_screen.py`、確かめるのは `audit_screen.py`。
 
 規則に反する配置は、1 行（id・画面・領域の組・幅・理由。幅は省けない）ずつオーナーが承認する。理由だけでは通らない。承認は台帳の `ds:web:override:<id>` で、行の中身と指す領域の宣言にハッシュで縛られる（行を変える・領域が変わる・写すと引き継がない）。承認依頼のページは `design-author override-request --repo <repo> --out <dir>`（プロダクト単位の項目と同じ台帳・同じページの形。`--read-decisions` で答えを読み戻す）で作り、記録はオーナーの言葉と日付を受けた `design-author approve --prepare --target ds:web:override:<id>` → `approve --request …` で行う。詳細は `references/allocation-rules.md`。

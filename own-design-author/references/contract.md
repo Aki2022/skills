@@ -1,6 +1,6 @@
 # ux/design/ の契約
 
-置き場所の規則は `references/layer-paths.json` が唯一の正典（positioning は `ux/positioning/`、infoarch は `ux/infoarch/`、design は `ux/design/`、承認台帳と判定台帳は `ux/` の直下）。下のファイル名は、特に断りがなければ `ux/design/` の中のもの。
+置き場所の規則は `references/layer-paths.json` が唯一の正典（positioning は `ux/positioning/`、infoarch は `ux/infoarch/`、design は `ux/design/`、承認台帳と判定台帳は `ux/` の直下、成果物ごとの build の記録（組み方の計画とカンプ）は `ux/build/`）。`ux/build/` は design の入力ではなく、L0 のマニフェストはハッシュしない。下のファイル名は、特に断りがなければ `ux/design/` の中のもの。
 
 実装元: biz_ops `WS-20261021-design-system-standardization` ISSUE-01。
 
@@ -15,7 +15,8 @@ Python 3.10以上と、既存環境に導入済みの PyYAML / jsonschema（refe
 - `design.yaml`の任意の`channels`は出荷チャネルの宣言。`ship: true`に正式のship_command・成果物・検査用serverを必須とする。ファイル契約と起動方法はship-gates.md。
 - `tokens/*.tokens.json`: 値を持つ正典。名前はlower-case kebab-case、参照パスはdot区切り、aliasは `{group.name}`。`$type` はグループから継承できる。CSS名は `--group-name`、衝突は失格。同じパスの多重定義も失格。
 - `DESIGN.md`: 散文とトークン参照。doc証拠は `doc:DESIGN.md#dads-000001` のような実見出しを指す。空の節・コードブロック内の偽見出しは証拠にならない。
-- `profiles/web.json`: `media: web` と `minimums`。skillの `minimums.json` より厳しい数値だけ上書き可。media不明・下限の緩和・未知キーは失格。
+- `profiles/web.json`: `media: web` と `minimums`。skillの `minimums.json` より厳しい数値だけ上書き可。media不明・下限の緩和・未知キーは失格。任意の `comp`（例 `{"width": 1440}`）はカンプの段が描く 1 枚の大きさの上書きで、既定は skill の `references/comp-sizes.json`（web は幅 1280）。正の整数だけ、既定に無いキーは失格（DS_COMP_SIZE_INVALID）。L0 はマニフェストの `comp` に解決し、承認のハッシュには入れない（ブランドの値ではないため、変えても承認は外れない）。
+- `design.yaml`の任意の`layout_patterns`は組み方の型の語彙の差分。既定の語彙は skill の `catalog/layout-patterns.json`（版付き、媒体に依らない名前。型ごとに説明・列・帯・絵の置き方・区切り・狭い画面の既定・向く内容の働き）。repo は `disabled`（使わない型の名前）と `added`（足す型。カタログと同じ項目、`state` は書かない）だけを持つ。カタログに無い名前を disabled にすると失格（DS_LAYOUT_PATTERN_UNKNOWN_DISABLED）、足した型の項目の欠け・未知の項目は失格（DS_LAYOUT_PATTERN_FIELDS）、カタログと同じ名前は失格（DS_LAYOUT_PATTERN_NAME_TAKEN）、狭い画面の既定が語彙に無ければ失格（DS_LAYOUT_PATTERN_NARROW_UNKNOWN）、他の鍵は失格（DS_LAYOUT_PATTERNS_INVALID）。足した型は項目と同じライフサイクルで、承認は台帳の `ds:web:pattern:<名前>`（名前と定義のハッシュ）。承認が無ければ警告、`--ship` で失格（DS_LAYOUT_PATTERN_PROPOSED）。L0 は解決した語彙をマニフェストの `layout_patterns` に入れ、組み方の計画（own-web-build）はそこだけを読む。
 - `checks/*.yaml`: `rules` 配列。宣言だけで、任意コマンドやコードを実行しない。画面の検査（count / text / style / judgment）はL2が画面ごとに測る。書き方は `web-validation.md` の「repoが決定ごとに宣言する検査」。それ以外の規則（id / kind / targetsまたはpaths / allowlist / minimum / pattern）で、実際のL1/L2実行を持たない規則は未カバー。
 - `assets/`: ファイルのsha256から `assets.json` を生成する。別の手書き台帳を正典にしない。
 - `ux/approvals.yaml`（`ux/design/` の外、`ux/` の直下）: 人間確認を根拠にした行の配列。positioning・infoarch の承認も同じ台帳に入る。
@@ -60,7 +61,7 @@ group `$extends`、カスタムdash配列のstrokeStyle、srgb以外のCSS変換
 - n-a itemはstate/reasonを束縛する。mustのn-aは承認行が必須。
 
 行はkey / value_hash / approver / ISO dateを持つ。
-keyはds:web:item:<id>、ds:web:token:<path>、ds:web:page:<画面のパス>（対象外の承認）、ds:web:override:<行の id>（割り付けの例外の 1 行。`allocation-rules.md`）。IAのキーは固定の信頼されたIA resolverが現在hashを返した場合だけ登録対象に含める。実装がないIA入力は失格。
+keyはds:web:item:<id>、ds:web:token:<path>、ds:web:page:<画面のパス>（対象外の承認）、ds:web:override:<行の id>（割り付けの例外の 1 行。`allocation-rules.md`）、ds:web:pattern:<名前>（repo が足した組み方の型）。IAのキーは固定の信頼されたIA resolverが現在hashを返した場合だけ登録対象に含める。実装がないIA入力は失格。
 旧token_path/item_id行や署名行を自動移行しない。現在のJCS hashを確認して新しい記録を作る。
 署名・鍵・allowed_signersは要求しない。承認者の真正性は技術的に証明せず、人間の明示承認を運用上の根拠とする。
 承認の判断はオーナー、記録はAI。AIはオーナー自身の承認の言葉（引用と日付）がある時だけ `approve --request --owner-words --approved-on` で記録する。自分の判断では記録しない。詳細はapproval-upgrade.md。

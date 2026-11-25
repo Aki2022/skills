@@ -31,7 +31,8 @@ def load_manifest(path):
     actual = {}
     for source in sorted(layers.rglob('*')):
         rel = source.relative_to(layers)
-        if '.resolved' in rel.parts or source.name in ('assets.json', 'migration.json'):
+        if '.resolved' in rel.parts or source.name in ('assets.json', 'migration.json') \
+                or not layer_paths.design_input(rel.as_posix()):  # build records (plan, comp) are not design inputs
             continue
         if source.is_file():
             if not source.resolve().is_relative_to(layers):

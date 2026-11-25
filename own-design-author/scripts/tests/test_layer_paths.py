@@ -3,7 +3,7 @@ version of the skills from silently reading around a repository that has already
 import json
 import shutil
 import subprocess
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import pytest
 import sys
@@ -138,3 +138,25 @@ def test_the_guard_message_shows_the_migration_command_when_the_layout_has_one(t
         lp.guard(tmp_path)
     if LAYOUT.get('hint'):
         assert 'migrate-layout' in str(caught.value)
+
+
+def test_the_build_records_have_one_entry_and_are_not_design_inputs():
+    """SPEC-deliverable-production-layers requirement 22: the layout plan lives under ux/ (one rule says where) and the
+    build records are not design inputs (a plan edit or a git-ignored comp image never makes the manifest stale)."""
+    build = lp.rel('build')
+    assert build.startswith(ROOT + '/')
+    inside = PurePosixPath(build).relative_to(ROOT)
+    assert not lp.design_input(str(inside / 'lp-sample' / 'plan.yaml'))
+    assert not lp.design_input(str(inside / 'lp-sample' / 'comp' / 'comp.png'))
+    assert lp.design_input('design/design.yaml') and lp.design_input('approvals.yaml')
+    assert lp.design_input(str(inside) + '-other/x')  # only the entry itself, not a name that starts like it
+
+
+def test_node_design_input_agrees_with_python():
+    inside = str(PurePosixPath(lp.rel('build')).relative_to(ROOT))
+    cases = [inside + '/a/plan.yaml', inside + '/a/comp/x.png', 'design/design.yaml', inside + '-other/x', 'approvals.yaml']
+    code = ('import {designInput} from "' + (SCRIPTS / 'layer_paths.mjs').as_uri() + '";'
+            'console.log(JSON.stringify(JSON.parse(process.argv[1]).map(designInput)))')
+    run = _node(code, json.dumps(cases))
+    assert run.returncode == 0, run.stderr
+    assert json.loads(run.stdout) == [lp.design_input(c) for c in cases]

@@ -145,3 +145,13 @@ def test_a_renamed_layer_root_is_followed_by_the_guard_and_the_help(tmp_path):
         assert_foreign_failure(result)
     result = run([sys.executable, skills / 'own-web-build/scripts/audit_screen.py', '--help'])
     assert renamed + '/' in result.stdout and (ROOT + '/') not in result.stdout, result.stdout
+
+
+@pytest.mark.parametrize('script', ['plan_check.py', 'comp_request.py'])
+@pytest.mark.parametrize('kind', KINDS)
+def test_the_plan_and_comp_entries_stop_on_a_moved_repository_and_write_nothing(tmp_path, kind, script):
+    repo = moved_repo(tmp_path, kind)
+    before = sorted(p.relative_to(repo).as_posix() for p in repo.rglob('*') if '.git' not in p.parts)
+    result = run([sys.executable, SCRIPTS / script, '--repo', repo, '--deliverable', 'lp-x'])
+    assert_foreign_failure(result)
+    assert sorted(p.relative_to(repo).as_posix() for p in repo.rglob('*') if '.git' not in p.parts) == before

@@ -3,7 +3,7 @@ import {readFileSync, readdirSync, realpathSync, statSync, lstatSync} from 'node
 import {dirname, basename, join, relative, resolve, sep} from 'node:path';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
-import {layerPath, repoFromResolved} from './layer_paths.mjs';
+import {designInput, layerPath, repoFromResolved} from './layer_paths.mjs';
 
 // Mirrors design_modules._digest: the IA checker is its own skill, the positioning layer it imports, and the docs
 // dictionary reader. Keys are `<skill>/<path>`, sorted by UTF-8 bytes.
@@ -101,6 +101,7 @@ export function loadManifest(path) {
     for (const name of readdirSync(dir).sort()) {
       if (name === '.resolved') continue;
       const file = join(dir, name);
+      if (!designInput(relative(layers, file).split(sep).join('/'))) continue; // build records (plan, comp) are not design inputs
       const real = realpathSync(file);
       if (real !== file || !real.startsWith(layers + sep))
         throw new Error('symlinked design input is unsupported');

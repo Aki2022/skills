@@ -33,6 +33,8 @@ ENTRIES = LAYOUT['entries']
 FOREIGN_ROOTS = tuple(LAYOUT['foreign_roots'])
 LAYERS_ROOT = ENTRIES['layers']
 IDENTITY = LAYOUT.get('identity', {})
+# Entries whose files are build records, not design inputs (the L0 manifest does not hash them), relative to the layers root.
+NOT_DESIGN_INPUTS = tuple(PurePosixPath(ENTRIES[key]).relative_to(LAYERS_ROOT).parts for key in LAYOUT.get('not_design_inputs', []))
 
 
 def _foreign_message(root):
@@ -61,6 +63,13 @@ def has_ia(repo):
     """True when the repository has an infoarch or a positioning layer (after the guard)."""
     guard(repo)
     return (Path(repo) / ENTRIES['infoarch']).is_dir() or (Path(repo) / ENTRIES['positioning_dir']).is_dir()
+
+
+def design_input(relative):
+    """False for a file (POSIX path relative to the layers root) under an entry that is not a design input (the build
+    records: the layout plan and the git-ignored comp images). Every reader that hashes the layers asks this."""
+    parts = PurePosixPath(relative).parts
+    return not any(parts[:len(prefix)] == prefix for prefix in NOT_DESIGN_INPUTS)
 
 
 def rel(key, *rest):

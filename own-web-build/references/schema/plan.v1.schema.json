@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "own-web-build/plan.v1.schema.json",
+  "title": "ux/build/<deliverable id>/plan.yaml schema version 1 (layout plan, 組み方の計画)",
+  "description": "組み方の計画（SPEC-deliverable-production-layers 要件 14・15・18・21・22）。成果物ごとに、台本のまとまりをどう組むかを design の組み方の型の名前で書く。台本の文言は持たない。カンプに渡し、カンプを見て直してから組む。狭い画面での形は、型の既定と違うときだけ narrow に書く。カンプが足した細部（重なり・はみ出し・接地・区切り方）は details に文で写す。カンプの画像は git に入れないので、残るのはこの文だけ。変種は variant_of（基本の計画の成果物 id）と overrides（変える要素の鍵 blocks/<まとまりの id>）を宣言する。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "deliverable", "script", "blocks", "comp"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "deliverable": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]*$",
+      "description": "成果物の id。置き場所のディレクトリ名と同じ"
+    },
+    "script": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]*$",
+      "description": "組む台本の id（ux/infoarch/scripts/<id>.yaml）"
+    },
+    "variant_of": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]*$",
+      "description": "変種の宣言：基本の計画の成果物 id。ファイルは完全な計画のまま書く"
+    },
+    "overrides": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^blocks/blk-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"},
+      "description": "上書きの宣言：基本の計画から変えるつもりのまとまり（blocks/<まとまりの id>）。宣言していない違いは警告し、比較の報告に「交絡あり」と書く"
+    },
+    "blocks": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {"pattern": "^blk-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"},
+      "additionalProperties": {"$ref": "#/$defs/block"},
+      "description": "台本のまとまりの id ごとの組み方。台本のまとまりをちょうど 1 回ずつ持つ"
+    },
+    "comp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reviewed"],
+      "properties": {
+        "reviewed": {
+          "type": "boolean",
+          "description": "オーナーがカンプの門でカンプを見て、計画をそれに合わせて直したら true"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "block": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pattern"],
+      "properties": {
+        "pattern": {"type": "string", "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$", "description": "組み方の型の名前（design の語彙）"},
+        "narrow": {"type": "string", "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$", "description": "狭い画面での型の名前。型の既定と違うときだけ書く"},
+        "details": {"type": "string", "minLength": 1, "description": "言葉で決めきれずカンプを見て決めた細部（重なり・はみ出し・接地・区切り方）"}
+      }
+    }
+  }
+}

@@ -24,6 +24,7 @@ from design_modules import resolve_ia
 import item_checks
 import layer_paths
 import layout_overrides
+import layout_patterns
 
 VERSION = '1.0.0'
 SKILL = Path(__file__).resolve().parents[1]
@@ -421,6 +422,20 @@ def _layout_overrides(root, approvals, counts, errors, warnings, ship):
     return state.targets, state.declared_keys | set(stale)
 
 
+def _comp_size(medium, defaults, supplied):
+    """The size of the comp image for `medium`: the skill's default, or the profile's override (not a brand value, so it
+    is popped from the profile before any approval hash sees it)."""
+    default = defaults.get(medium)
+    if not isinstance(default, dict):
+        raise ValueError(f'DS_COMP_SIZE_INVALID: no comp size for media {medium}')
+    if supplied is None:
+        return {**default, 'source': 'skill'}
+    if not isinstance(supplied, dict) or not supplied or set(supplied) - set(default) or any(
+            isinstance(v, bool) or not isinstance(v, int) or v <= 0 for v in supplied.values()):
+        raise ValueError(f'DS_COMP_SIZE_INVALID: profiles/{medium}.json の comp は {sorted(default)} の正の整数だけ')
+    return {**default, **supplied, 'source': 'profile'}
+
+
 def _approvals(root):
     return verify_rows(read_data(layer_paths.path(root, 'ledger')), root)
 
@@ -445,7 +460,7 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
             raise ValueError(f"{design_rel()}/ missing or symlink; run own-design-author init at git toplevel")
         _clear_manifests(root)
         config = read_data(inside_layer(root, 'design_config'))
-        if not isinstance(config, dict) or set(config) - {'schema_version','skill_version','catalog_version','preset','media','items','retired_items','checks','modules','spec','maintenance','channels','integration_gate'}:
+        if not isinstance(config, dict) or set(config) - {'schema_version','skill_version','catalog_version','preset','media','items','retired_items','checks','modules','spec','maintenance','channels','integration_gate','layout_patterns'}:
             raise ValueError('unknown design configuration fields')
         if config.get('schema_version') != 1:
             raise ValueError('unknown design schema version')
@@ -489,15 +504,17 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
         if not isinstance(media, list) or not media or len(set(media)) != len(media):
             raise ValueError('zero or duplicate media targets')
         minimums = read_data(SKILL / 'references/minimums.json')
-        profiles = {}
+        comp_sizes = read_data(SKILL / 'references/comp-sizes.json')
+        profiles, comps = {}, {}
         for medium in media:
             if medium not in minimums or medium == 'schema_version':
                 raise ValueError('unsupported media profile')
             profile = read_data(inside(design, f'profiles/{medium}.json'))
             if not isinstance(profile, dict) or profile.get('media') != medium:
                 raise ValueError('media profile mismatch')
-            if set(profile) - {'schema_version','media','minimums','canvas','root_font_size_px','units'}:
+            if set(profile) - {'schema_version','media','minimums','canvas','root_font_size_px','units','comp'}:
                 raise ValueError('unknown media profile field')
+            comps[medium] = _comp_size(medium, comp_sizes, profile.pop('comp', None))
             floor = minimums[medium]['minimums']
             supplied = profile.get('minimums', {})
             if not isinstance(supplied, dict) or set(supplied) - set(floor):
@@ -537,6 +554,10 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
         valid_targets.update(page_keys)
         override_keys, override_names = _layout_overrides(root, approvals, counts, errors, warnings, ship)
         valid_targets.update(override_names)
+        vocabulary = layout_patterns.resolve(config.get('layout_patterns'), approvals, media, ship=ship)
+        errors.extend(vocabulary['errors'])
+        warnings.extend(vocabulary['warnings'])
+        valid_targets.update(vocabulary['targets'])
         if set(approvals) - valid_targets:
             raise ValueError('approval target absent from catalog/tokens')
         for path, token in tokens.items():
@@ -725,6 +746,7 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
         layers = layer_paths.path(root,'layers')
         input_hashes = {p.relative_to(layers).as_posix():hashlib.sha256(p.read_bytes()).hexdigest()
             for p in sorted(layers.rglob('*')) if p.is_file() and _leaf('resolved') not in p.relative_to(layers).parts
+            and layer_paths.design_input(p.relative_to(layers).as_posix())
             and p.name not in (_leaf('assets_index'),'migration.json')}
         source_hash = value_hash(input_hashes)
         asset_exports = _asset_exports(root)
@@ -739,6 +761,8 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
                 'catalog_version':catalog['version'], 'catalog_hash':value_hash(catalog), 'source_hash':source_hash,
                 'input_hashes':input_hashes, 'media':medium, 'profile':profile,
                 'minimums':profile['minimums'], 'tokens':resolved_by_media[medium][0], 'items':resolved_by_media[medium][1],
+                'comp':comps[medium],
+                'layout_patterns':{'catalog_version':vocabulary['catalog_version'],'patterns':vocabulary['patterns']},
                 'css_variables':{t['css_name']:t['css'] for t in tokens.values()},
                 'tailwind_templates':tailwind_templates, 'artifacts':artifacts, 'rules':list(rules.values()), 'coverage':{'uncovered':sorted(uncovered_rules | {row['id'] for row in judged['uncovered']}),
                     'items':{way:sorted(i for i,r in item_routes.items() if r['route']==way) for way in ('machine','afm','uncovered')},
@@ -760,7 +784,8 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
                     result['approval_targets'][key]=row['value_hash']
                     if kind=='item' and row['must']:result['approval_required'].append(key)
         result['approval_targets'].update(page_keys)
-        result['approval_targets'].update(override_keys)  # not in approval_required: an exception is approved one row at a time, never with the must items
+        result['approval_targets'].update(override_keys)
+        result['approval_targets'].update(vocabulary['targets'])  # an added layout pattern is approved one at a time  # not in approval_required: an exception is approved one row at a time, never with the must items
         if ia:
             result['approval_targets'].update(ia['approval_hashes'])
             result['approval_required'].extend(ia['must_approval_keys'])

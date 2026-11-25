@@ -1,0 +1,3 @@
+# The comp images of every deliverable stay out of git (SPEC-deliverable-production-layers requirement 22).
+# Copy this file to ux/build/.gitignore once; the layout plan (plan.yaml) next to comp/ is committed.
+*/comp/

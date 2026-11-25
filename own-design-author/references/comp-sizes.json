@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "comment": "The size of the one image the comp step draws per media (SPEC-design-system-standardization requirement 16; SPEC-deliverable-production-layers requirement 23). The skill's default; a repository's profiles/<media>.json may override it with `comp`. L0 resolves it into the manifest (`comp`), so build reads one value. Not a brand value: it is not part of any approval hash. Print profiles (paper size, bleed, folds) are added with the first print deliverable.",
+  "web": {
+    "width": 1280
+  }
+}

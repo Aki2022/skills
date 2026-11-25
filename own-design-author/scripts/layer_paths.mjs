@@ -19,6 +19,14 @@ export const LAYOUT = load();
 export const ENTRIES = LAYOUT.entries;
 export const FOREIGN_ROOTS = LAYOUT.foreign_roots;
 export const LAYERS_ROOT = ENTRIES.layers;
+// Entries whose files are build records, not design inputs (the L0 manifest does not hash them), relative to the layers root.
+const NOT_DESIGN_INPUTS = (LAYOUT.not_design_inputs || []).map(key => posix.relative(LAYERS_ROOT, ENTRIES[key]).split('/'));
+
+// False for a file (POSIX path relative to the layers root) under an entry that is not a design input (twin of design_input).
+export function designInput(relative) {
+  const parts = relative.split('/').filter(Boolean);
+  return !NOT_DESIGN_INPUTS.some(prefix => prefix.every((name, i) => parts[i] === name));
+}
 
 function foreignMessage(root) {
   const text = `${FOREIGN_CODE}: ${root}/ がある。この repo はこの版の skills が読む置き場所（${LAYERS_ROOT}/）と違う並びに移っている。`

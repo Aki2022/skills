@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "version": "2026-11-25",
+  "comment": "The layout pattern vocabulary (SPEC-design-system-standardization requirement 15): the names a layout plan uses to say how each block of a script is laid out. Names are media-neutral; sizes per media live in the profiles. A repository's design.yaml holds only a diff (layout_patterns.disabled / layout_patterns.added). Each pattern: description (Japanese), columns (an integer, or \"n\" for as many as the block has items), band (a full-width tinted band or not), images (where an image may sit: none, left, right, top, background, inline, avatar, icon, logo), separators (none, rule, space, tint, number), narrow (the pattern a narrow screen falls back to unless the plan says otherwise; a name of this vocabulary, itself when it does not change), functions (the content functions it suits: identify, claim, fact, evidence, offer, action, source).",
+  "patterns": {
+    "header-bar": {
+      "description": "名乗りの帯。左に名前やロゴ、右に主な案内と行動のボタンを 1 行に並べる",
+      "columns": 2, "band": false, "images": ["logo", "none"], "separators": ["rule", "none"],
+      "narrow": "header-bar", "functions": ["identify"]
+    },
+    "split-2": {
+      "description": "文と絵を左右に分ける 2 列。片側に見出しと本文、もう片側に絵を置く",
+      "columns": 2, "band": false, "images": ["left", "right"], "separators": ["none", "space"],
+      "narrow": "stack-1", "functions": ["claim", "identify", "offer", "evidence"]
+    },
+    "cover": {
+      "description": "絵を全面に敷き、その上に見出しと短い文を重ねる 1 枚",
+      "columns": 1, "band": true, "images": ["background"], "separators": ["none"],
+      "narrow": "cover", "functions": ["claim", "identify"]
+    },
+    "band": {
+      "description": "幅いっぱいの色の帯の中に、短い主張や行動を中央寄せで置く",
+      "columns": 1, "band": true, "images": ["none", "inline"], "separators": ["tint"],
+      "narrow": "band", "functions": ["claim", "action", "fact"]
+    },
+    "stats-row": {
+      "description": "大きな数字と短い説明を横に並べる行。数字ごとに出典の行を添える",
+      "columns": 3, "band": false, "images": ["none", "icon"], "separators": ["rule", "space"],
+      "narrow": "grid-2", "functions": ["fact", "evidence"]
+    },
+    "row-table": {
+      "description": "項目名と中身を行ごとに並べる表。条件・価格・仕様など、比べて読むもの",
+      "columns": 2, "band": false, "images": ["none"], "separators": ["rule"],
+      "narrow": "stack-1", "functions": ["offer", "fact", "source"]
+    },
+    "cards-3": {
+      "description": "同じ形のカードを 3 つ並べる。カードごとに絵か見出しと短い文を持つ",
+      "columns": 3, "band": false, "images": ["top", "none", "icon"], "separators": ["space"],
+      "narrow": "stack-1", "functions": ["offer", "claim", "evidence"]
+    },
+    "grid-2": {
+      "description": "同じ重さの中身を 2 列に並べる。数字や短い項目を詰めずに見せる",
+      "columns": 2, "band": false, "images": ["none", "icon", "top"], "separators": ["space", "rule"],
+      "narrow": "stack-1", "functions": ["fact", "evidence", "offer"]
+    },
+    "steps-n": {
+      "description": "番号つきの手順を順に並べる。番号と短い見出しと説明を 1 組にする",
+      "columns": "n", "band": false, "images": ["none", "icon"], "separators": ["number"],
+      "narrow": "stack-1", "functions": ["action", "offer"]
+    },
+    "quotes": {
+      "description": "利用者や回答者の声を、人の絵と名前・属性を添えて並べる。声は言い換えない",
+      "columns": 2, "band": false, "images": ["avatar", "none"], "separators": ["space", "rule"],
+      "narrow": "stack-1", "functions": ["evidence"]
+    },
+    "faq-list": {
+      "description": "問いと答えを 1 組ずつ縦に並べる一覧",
+      "columns": 1, "band": false, "images": ["none"], "separators": ["rule"],
+      "narrow": "faq-list", "functions": ["offer", "action", "fact"]
+    },
+    "source-footer": {
+      "description": "出典の一覧と運営者・問い合わせ・条件の表示を小さな文字でまとめる末尾の帯",
+      "columns": 1, "band": true, "images": ["none", "logo"], "separators": ["rule", "tint"],
+      "narrow": "source-footer", "functions": ["source", "identify"]
+    },
+    "stack-1": {
+      "description": "1 列に積む。見出し・本文・絵を上から順に置く",
+      "columns": 1, "band": false, "images": ["none", "top", "inline"], "separators": ["none", "space", "rule"],
+      "narrow": "stack-1", "functions": ["identify", "claim", "fact", "evidence", "offer", "action", "source"]
+    }
+  }
+}

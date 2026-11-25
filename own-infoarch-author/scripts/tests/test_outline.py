@@ -343,7 +343,7 @@ def test_diff_cli_passes_on_a_clean_variant(tmp_path):
     rc, out = cli('diff', '--root', str(tmp_path), '--a', 'lp-municipal', '--b', 'lp-municipal-b')
     assert rc == 0, out
     assert out['confounded'] is False and out['differs_in'] == 'script'
-    assert '組み方の計画は比べていない（形が未定）' in out['not_checked']
+    assert any(n.startswith(ia_outline.PLAN_NOT_CHECKED) for n in out['not_checked']) and out['plan'] is None  # no plans
     assert [c['element'] for c in out['changes']] == ['copies/cpy-0002'] and out['ids']['a']['positioning'] == out['ids']['b']['positioning']
     assert 'dom' in ' '.join(out['not_checked'])  # without rendered reports, text outside anchors is not compared
 
@@ -422,3 +422,96 @@ def test_unanchored_text_is_compared_regardless_of_output_order():
     a = {'unanchored': [{'viewport': 'mobile', 'file': 'x.html', 'text': '一'}, {'viewport': 'mobile', 'file': 'y.html', 'text': '二'}]}
     b = {'unanchored': [{'viewport': 'mobile', 'file': 'y.html', 'text': '二'}, {'viewport': 'mobile', 'file': 'x.html', 'text': '一'}]}
     assert ia_outline._unanchored(a) == ia_outline._unanchored(b)
+
+
+# ---- the plan side of the comparison (production layers requirement 18) ----------------------------------------------
+
+PLAN_A = {'schema_version': 1, 'deliverable': 'lp-municipal', 'script': 'lp-municipal',
+          'blocks': {'blk-0001': {'pattern': 'split-2'}, 'blk-0002': {'pattern': 'stats-row'},
+                     'blk-0003': {'pattern': 'band'}},
+          'comp': {'reviewed': True}}
+
+
+def write_plan(root, plan):
+    dump(layer_paths.path(root, 'build', plan['deliverable'], 'plan.yaml'), plan)
+
+
+def plan_b(*overrides, change=None):
+    b = copy.deepcopy(PLAN_A)
+    b.update(deliverable='lp-municipal-b', script='lp-municipal-b', variant_of='lp-municipal', overrides=list(overrides))
+    if change:
+        change(b)
+    return b
+
+
+def _cover_first(b):
+    b['blocks']['blk-0001'] = {'pattern': 'cover', 'details': '絵の上に見出しを重ねる'}
+
+
+def script_b(*overrides, copy_changed=True):
+    b = copy.deepcopy(OUTLINE)
+    b['id'], b['outputs'] = 'lp-municipal-b', ['site/b.html']
+    if copy_changed:
+        b['copies']['cpy-0002']['text'] = '運用の手間が 3 分の 1 になります'
+    return variant(b, *overrides)
+
+
+def test_diff_compares_the_plans_when_each_deliverable_has_one(tmp_path):
+    write_repo(tmp_path, outlines=(OUTLINE, script_b('copies/cpy-0002'), DECK))
+    write_plan(tmp_path, PLAN_A)
+    write_plan(tmp_path, plan_b('blocks/blk-0001', change=_cover_first))
+    rc, out = cli('diff', '--root', str(tmp_path), '--a', 'lp-municipal', '--b', 'lp-municipal-b')
+    assert rc == 0, out
+    assert out['differs_in'] == 'both' and 'plan' in out['changed_layers']
+    assert not any(n.startswith(ia_outline.PLAN_NOT_CHECKED) for n in out['not_checked'])
+    assert {'layer': 'plan', 'element': 'blocks/blk-0001', 'change': 'changed', 'attributes': ['details', 'pattern']} in out['changes']
+    assert out['plan']['a'] == 'lp-municipal' and out['plan']['b'] == 'lp-municipal-b' and out['plan']['undeclared'] == []
+
+
+def test_diff_says_plan_when_only_the_plan_differs(tmp_path):
+    write_repo(tmp_path, outlines=(OUTLINE, script_b(copy_changed=False), DECK))
+    write_plan(tmp_path, PLAN_A)
+    write_plan(tmp_path, plan_b('blocks/blk-0001', change=_cover_first))
+    rc, out = cli('diff', '--root', str(tmp_path), '--a', 'lp-municipal', '--b', 'lp-municipal-b')
+    assert rc == 0, out
+    assert out['differs_in'] == 'plan' and out['confounded'] is False
+
+
+def test_diff_says_script_when_the_plans_are_the_same(tmp_path):
+    write_repo(tmp_path, outlines=(OUTLINE, script_b('copies/cpy-0002'), DECK))
+    write_plan(tmp_path, PLAN_A)
+    write_plan(tmp_path, plan_b())
+    rc, out = cli('diff', '--root', str(tmp_path), '--a', 'lp-municipal', '--b', 'lp-municipal-b')
+    assert rc == 0, out
+    assert out['differs_in'] == 'script' and out['plan']['changed'] == []
+
+
+def test_an_undeclared_plan_difference_is_confounded(tmp_path):
+    write_repo(tmp_path, outlines=(OUTLINE, script_b('copies/cpy-0002'), DECK))
+    write_plan(tmp_path, PLAN_A)
+    write_plan(tmp_path, plan_b(change=_cover_first))
+    rc, out = cli('diff', '--root', str(tmp_path), '--a', 'lp-municipal', '--b', 'lp-municipal-b')
+    assert rc == 1, out
+    assert out['confounded'] is True and out['confounded_label'] == '交絡あり'
+    assert out['plan']['undeclared'] == ['blocks/blk-0001']
+    assert [f['code'] for f in out['findings']] == ['PLAN_UNDECLARED_DIFFERENCE']
+
+
+def test_without_a_plan_on_one_side_the_plan_is_reported_not_checked(tmp_path):
+    write_repo(tmp_path, outlines=(OUTLINE, script_b('copies/cpy-0002'), DECK))
+    write_plan(tmp_path, PLAN_A)
+    rc, out = cli('diff', '--root', str(tmp_path), '--a', 'lp-municipal', '--b', 'lp-municipal-b')
+    assert rc == 0, out
+    assert out['differs_in'] == 'script' and out['plan'] is None
+    assert any(n.startswith(ia_outline.PLAN_NOT_CHECKED) for n in out['not_checked'])
+
+
+def test_two_plans_for_one_script_are_not_guessed_between(tmp_path):
+    write_repo(tmp_path, outlines=(OUTLINE, script_b('copies/cpy-0002'), DECK))
+    write_plan(tmp_path, PLAN_A)
+    other = copy.deepcopy(PLAN_A)
+    other['deliverable'] = 'lp-municipal-print'
+    write_plan(tmp_path, other)
+    write_plan(tmp_path, plan_b())
+    rc, out = cli('diff', '--root', str(tmp_path), '--a', 'lp-municipal', '--b', 'lp-municipal-b')
+    assert out['plan'] is None and any(n.startswith(ia_outline.PLAN_NOT_CHECKED) for n in out['not_checked'])

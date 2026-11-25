@@ -19,8 +19,13 @@ Module and store names (`outline`, `m.outlines`) and the codes of unchanged rule
 from __future__ import annotations
 
 import json
+import sys
+from pathlib import Path
 
 import positioning as pos
+
+# The layout plan is build's record (own-web-build): its comparison lives there, and the diff reads it.
+PLAN_SCRIPTS = Path(__file__).resolve().parents[2] / 'own-web-build' / 'scripts'
 
 CONTENT_KEYS = ('target', 'touchpoint', 'tone', 'objective', 'no_cta', 'messages', 'blocks', 'copies', 'texts')
 CONSTANT_KEYS = ('target', 'touchpoint', 'tone', 'objective')  # a variant that changes one is another experiment
@@ -28,7 +33,7 @@ CONSTANT_KEYS = ('target', 'touchpoint', 'tone', 'objective')  # a variant that 
 # `elements` gives them). The file is still a whole script; the declaration is placement, like channel and outputs:
 # it is in neither the script id nor the set id.
 CONFOUNDED_LABEL = '交絡あり'
-PLAN_NOT_CHECKED = '組み方の計画は比べていない（形が未定）'
+PLAN_NOT_CHECKED = '組み方の計画は比べていない'  # followed by the reason (no plan on a side, two plans, no build skill)
 NO_CTA_NOTE = 'CTA なし（意図）'
 SCRIPT_PREFIX = 'spt-'  # `scr-` is a screen's (blueprint)
 # The content functions (docs/dictionary/deliverables.json term-function-*): which may place messages, and which copy
@@ -188,11 +193,17 @@ def diff(ma, oid_a, approved_a, mb, oid_b, approved_b, dom_a=None, dom_b=None):
     ids = {'a': set_ids(ma, oid_a, approved_a), 'b': set_ids(mb, oid_b, approved_b)}
     changes = _changes('outline', elements(a), elements(b))
     changes += path_changes(ma, a, mb, b)
-    layers = sorted({c['layer'] for c in changes})
     differs = experiment_differs(a, b)
     declaring = b if b.get('variant_of') == oid_a else a if a.get('variant_of') == oid_b else None
     over = overrides(a if declaring is b else b, declaring) if declaring is not None else overrides(a, b, declared=())
-    findings, not_checked = list(over['findings']), [PLAN_NOT_CHECKED]
+    findings, not_checked = list(over['findings']), []
+    plan, reason = plan_side(ma, oid_a, mb, oid_b)
+    if plan is None:
+        not_checked.append(reason)
+    else:
+        changes += plan['changes']
+        findings += plan['findings']
+    layers = sorted({c['layer'] for c in changes})
     fa, fb = _fact_values(ma, a), _fact_values(mb, b)
     moved_facts = sorted(f for f in set(fa) & set(fb) if fa[f] != fb[f])
     if moved_facts:  # the values are not echoed: only which facts differ
@@ -209,13 +220,50 @@ def diff(ma, oid_a, approved_a, mb, oid_b, approved_b, dom_a=None, dom_b=None):
     levels = {f['level'] for f in findings}
     return {'a': oid_a, 'b': oid_b, 'ids': ids, 'changes': changes, 'changed_layers': layers,
             'same_experiment': not differs, 'experiment_differs': differs,
-            # which side of a variant differs: the script, the layout plan, or both. The plan has no file yet, so
-            # only the script side is compared (the plan is listed in not_checked).
-            'differs_in': 'script' if any(c['layer'] == 'outline' for c in changes) else 'none',
-            'variant_of': (declaring or {}).get('variant_of'), 'confounded': bool(over['undeclared']),
-            'confounded_label': CONFOUNDED_LABEL if over['undeclared'] else None,
+            # which side of a variant differs: the script, the layout plan, or both. Without one plan per side the
+            # plan is not compared (listed in not_checked) and only the script side decides.
+            'differs_in': _differs_in(any(c['layer'] == 'outline' for c in changes), bool(plan and plan['changed'])),
+            'variant_of': (declaring or {}).get('variant_of'),
+            'confounded': bool(over['undeclared'] or (plan and plan['undeclared'])),
+            'confounded_label': CONFOUNDED_LABEL if over['undeclared'] or (plan and plan['undeclared']) else None,
+            'plan': None if plan is None else {k: plan[k] for k in ('a', 'b', 'variant_of', 'changed', 'undeclared', 'unchanged')},
             'undeclared': over['undeclared'], 'unchanged_overrides': over['unchanged'], 'findings': findings,
             'not_checked': not_checked, 'exit_code': 2 if 'fail' in levels else 1 if 'warn' in levels else 0}
+
+
+def _differs_in(script, plan):
+    return 'both' if script and plan else 'script' if script else 'plan' if plan else 'none'
+
+
+def _plan_module():
+    if not (PLAN_SCRIPTS / 'plan_check.py').is_file():
+        raise RuntimeError('own-web-build/scripts/plan_check.py が無い')
+    if str(PLAN_SCRIPTS) not in sys.path:
+        sys.path.insert(0, str(PLAN_SCRIPTS))
+    import plan_check
+    return plan_check
+
+
+def plan_side(ma, oid_a, mb, oid_b):
+    """Production layers requirement 18: the layout plans of the two deliverables, compared by build's own comparison.
+    -> (comparison, None) when each script has exactly one plan, else (None, the not-checked line with its reason)."""
+    try:
+        plan_check = _plan_module()
+        pa, pb = plan_check.find_plans(ma.root, oid_a), plan_check.find_plans(mb.root, oid_b)
+    except RuntimeError as exc:
+        return None, f'{PLAN_NOT_CHECKED}（{exc}）'
+    if len(pa) != 1 or len(pb) != 1:
+        return None, (f'{PLAN_NOT_CHECKED}（台本ごとに計画がちょうど 1 つ要る：{oid_a} に {len(pa)} 個・{oid_b} に {len(pb)} 個）')
+    (da, a), (db, b) = next(iter(pa.items())), next(iter(pb.items()))
+    if b.get('variant_of') == da:
+        out = plan_check.compare(a, b, b.get('overrides') or [])
+    elif a.get('variant_of') == db:
+        out = plan_check.compare(b, a, a.get('overrides') or [])
+        out['changes'] = plan_check.compare(a, b)['changes']  # listed in the a -> b direction like the script side
+    else:
+        out = plan_check.compare(a, b)
+    variant_of = b.get('variant_of') if b.get('variant_of') == da else a.get('variant_of') if a.get('variant_of') == db else None
+    return {**out, 'a': da, 'b': db, 'variant_of': variant_of}, None
 
 
 def experiment_differs(a, b):

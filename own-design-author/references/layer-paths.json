@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "comment": "The one place that says where a repository keeps its three layers (positioning, infoarch, design), the approval ledger and the judgment record: ux/positioning, ux/infoarch, ux/design, with the ledger and the judgment record directly under ux. scripts/layer_paths.py and scripts/layer_paths.mjs read this file and nothing else in the skills' code spells these paths (a test counts the literals). Every value is a path relative to the repository root. foreign_roots are directories that mean the repository still follows the layout before the move: finding one stops every command (LAYER_LAYOUT_FOREIGN_ROOT) instead of reading around it. hint is appended to that message. identity holds names that sit inside approved hashes and so never change with the layout: asset_path_prefix is the prefix an asset rule's targets and measured files carry in its approval evidence (the rule is hashed in the form it had before the move), so moving the files does not drop the approvals of the items that cite the rule.",
+  "comment": "The one place that says where a repository keeps its three layers (positioning, infoarch, design), the approval ledger and the judgment record: ux/positioning, ux/infoarch, ux/design, with the ledger and the judgment record directly under ux. scripts/layer_paths.py and scripts/layer_paths.mjs read this file and nothing else in the skills' code spells these paths (a test counts the literals). Every value is a path relative to the repository root. foreign_roots are directories that mean the repository still follows the layout before the move: finding one stops every command (LAYER_LAYOUT_FOREIGN_ROOT) instead of reading around it. hint is appended to that message. identity holds names that sit inside approved hashes and so never change with the layout: asset_path_prefix is the prefix an asset rule's targets and measured files carry in its approval evidence (the rule is hashed in the form it had before the move), so moving the files does not drop the approvals of the items that cite the rule. build holds the records build (own-web-build) keeps per deliverable: ux/build/<deliverable id>/plan.yaml (the layout plan, committed) and ux/build/<deliverable id>/comp/ (the comp images, git-ignored). not_design_inputs lists the entries whose files are not design inputs: the L0 manifest does not hash them, so writing a plan or a comp never makes it stale.",
   "foreign_roots": [
     "design"
   ],
@@ -23,9 +23,13 @@
     "validation": "ux/design/validation.json",
     "render_environment": "ux/design/render-environment.json",
     "layout_overrides": "ux/design/layout-overrides.yaml",
-    "checks": "ux/design/checks"
+    "checks": "ux/design/checks",
+    "build": "ux/build"
   },
   "identity": {
     "asset_path_prefix": "design/assets"
-  }
+  },
+  "not_design_inputs": [
+    "build"
+  ]
 }

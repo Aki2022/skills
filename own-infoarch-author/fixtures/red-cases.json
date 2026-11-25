@@ -1,11 +1,11 @@
 {
-  "version": 4,
-  "note": "必須の赤ケース（SSOT・チャネル・outline の参照と形の決定論の検査）。scripts/tests/test_check.py が全 id を 1 回ずつ実行し、終了コード 2 と code を確かめる。ケースを足したらテスト側の変異も足す（片方だけだとテストが失敗する）。positioning の失格（要件 5）は positioning-red-cases.json、outline の失格（要件 7）と差分の失格（要件 9）は outline-red-cases.json。 2026-11-20（positioning の切り出し）：声と固定値と正式名称は SSOT から出た。固定値と正式名称は docs/dictionary/ の辞書（own-doc-update の dictionary.py が形を検査）、声は廃止。id の書き方の赤ケースは positioning の原子の id で書き直した（同じ IA_SCHEMA）。",
+  "version": 5,
+  "note": "必須の赤ケース（SSOT・チャネル・台本（script）の参照と形の決定論の検査）。scripts/tests/test_check.py が全 id を 1 回ずつ実行し、終了コード 2 と code を確かめる。ケースを足したらテスト側の変異も足す（片方だけだとテストが失敗する）。positioning の失格（要件 5）は positioning-red-cases.json、台本の失格（要件 7）と差分の失格（要件 9）は script-red-cases.json。 2026-11-20（positioning の切り出し）：声と固定値と正式名称は SSOT から出た。固定値と正式名称は docs/dictionary/ の辞書（own-doc-update の dictionary.py が形を検査）、声は廃止。id の書き方の赤ケースは positioning の原子の id で書き直した（同じ IA_SCHEMA）。 2026-11-25（台本が outline を置き換えた）：台本は scripts/<id>.yaml（版 1）。outlines/ にファイルがあれば IA_OUTLINE_RETIRED で失格（黙って 0 件にしない）。ケースの id は互換のため outline- のまま。",
   "cases": [
     {
       "id": "outline-ref-broken",
       "code": "IA_OUTLINE_REF_BROKEN",
-      "why": "セクションが存在しないメッセージを置く"
+      "why": "まとまりが存在しないメッセージを置く"
     },
     {
       "id": "outline-ref-tombstoned",
@@ -60,7 +60,7 @@
     {
       "id": "no-outlines",
       "code": "IA_NO_OUTLINES",
-      "why": "アウトラインが 0 件（対象 0 件を合格にしない）"
+      "why": "台本が 0 件（対象 0 件を合格にしない）"
     },
     {
       "id": "no-channels",
@@ -115,7 +115,7 @@
     {
       "id": "outline-dot-directory",
       "code": "IA_OUTLINE_FILE",
-      "why": "outlines/ のドット始まりのサブディレクトリ（飛ばすのはドット始まりのファイルだけ）"
+      "why": "scripts/ のドット始まりのサブディレクトリ（飛ばすのはドット始まりのファイルだけ）"
     },
     {
       "id": "ssot-id-zero-serial",
@@ -135,12 +135,32 @@
     {
       "id": "outline-text-section-broken",
       "code": "IA_OUTLINE_REF_BROKEN",
-      "why": "見出しのラベルが存在しないセクションに置かれる"
+      "why": "見出しのラベルが存在しないまとまりに置かれる"
     },
     {
       "id": "outline-v2",
       "code": "IA_SCHEMA",
-      "why": "版 2 のアウトライン（v6 は読まない）"
+      "why": "版 2 のアウトライン（台本の版 1 でない）"
+    },
+    {
+      "id": "outline-v3-in-scripts",
+      "code": "IA_SCHEMA",
+      "why": "scripts/ に outline（版 3）の形のファイルを置いた（機械で写さない。台本は版 1）"
+    },
+    {
+      "id": "outlines-dir-retired",
+      "code": "IA_OUTLINE_RETIRED",
+      "why": "廃止した outlines/ に outline が残っている（読まずに黙って 0 件にしない）"
+    },
+    {
+      "id": "outlines-dir-retired-dotfile-only",
+      "code": "IA_OUTLINE_RETIRED",
+      "why": "廃止した outlines/ がドット始まりのファイルだけで残っている（置き場所ごと消す）"
+    },
+    {
+      "id": "script-proof-ref-broken",
+      "code": "IA_OUTLINE_REF_BROKEN",
+      "why": "証拠と声の文案が存在しない証拠を引く（refs）"
     }
   ]
 }

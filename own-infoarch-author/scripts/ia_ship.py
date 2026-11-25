@@ -2,7 +2,8 @@
 
 - gate: one commit, read from git objects through a detached worktree of it (tracked files only). `tree` refuses
   symlinked IA inputs and shipped outputs that are not regular files in the commit (HTML or not); then the
-  deterministic `check` (every ship:true channel needs at least one outline), `dom` on every shipped HTML output,
+  deterministic `check` (every ship:true channel needs at least one script, and no shipped script may still carry a
+  proposal: IA_SCRIPT_PROPOSAL_AT_SHIP), `dom` on every shipped HTML output,
   and `judge` (read-only against the shared judgment ledger). No judgment stops the gate: an uncovered one or a
   score at or above theta goes to a human (warning), until the accuracy of copy x value is measured
   (requirement 11, ADR-20261123-ia-skill-completion-judgments-and-measurement).
@@ -33,6 +34,7 @@ import check
 import dictionary
 import dom
 import judge
+import outline as ol
 from common import SKILL, YamlError, load_ref, load_yaml
 import layer_paths  # on sys.path through common
 
@@ -133,6 +135,18 @@ def _output_findings(root, commit, m, shipped):
     return out
 
 
+def _proposal_findings(m, shipped):
+    """IA_SCRIPT_PROPOSAL_AT_SHIP for every shipped script that still has a copy with the proposal mark."""
+    out = []
+    for oid in shipped:
+        rel, o = m.outlines[oid]
+        left = ol.proposals(o)
+        if left:
+            out.append(('IA_SCRIPT_PROPOSAL_AT_SHIP',
+                        f'{oid}: 提案の印が残る文案 {left} がある台本は出荷しない（証拠を positioning に足すか、文を消す）', str(rel)))
+    return out
+
+
 def _tree_stage(stage, rows):
     stage['findings'] += [{'level': 'fail', 'code': code, 'message': msg, 'path': path} for code, msg, path in rows]
     stage['counts'] = {k: sum(f['level'] == k for f in stage['findings']) for k in ('fail', 'warn', 'info')}
@@ -216,6 +230,15 @@ def _evaluate(root, commit, tree, date, source, predicted):
     empty = [name for name, oids in per_channel.items() if not oids]
     if empty:
         return finish('ship:true IA channel with zero outlines (an empty gate is not a pass): ' + ', '.join(empty))
+    # Requirement 15 / SPEC-deliverable-production-layers requirement 17: a proposal (a copy with no reference) only warns
+    # while producing; a shipped script that still carries one does not ship.
+    held = _proposal_findings(m, shipped)
+    if held:
+        check_stage = result['stages'][-1]
+        check_stage['findings'] += [{'level': 'fail', 'code': code, 'message': msg, 'path': path} for code, msg, path in held]
+        check_stage['counts'] = {k: sum(f['level'] == k for f in check_stage['findings']) for k in ('fail', 'warn', 'info')}
+        check_stage['exit_code'] = 2
+        return finish('shipped IA scripts still carry proposals')
     _tree_stage(files, _output_findings(root, commit, m, shipped))
     files['targets'] = {'commit': commit, 'outputs': sum(len(m.outlines[oid][1]['outputs']) for oid in shipped)}
     if files['exit_code'] == 2:
@@ -524,7 +547,7 @@ def maintain(root, date, within_days=None):
     impacted = set()
     for path in changed:
         stem = Path(path).stem
-        if path.startswith(prefix + 'outlines/') and stem in m.outlines:
+        if path.startswith(prefix + check.SCRIPTS_DIR + '/') and stem in m.outlines:
             impacted.add(stem)
         elif path.startswith(dict_prefix):
             impacted |= set(m.outlines)  # official names and fixed values apply to every outline

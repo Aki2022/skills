@@ -94,7 +94,7 @@ def _digest(path, full=False):
 
 
 def _zero_targets(targets):
-    sides = [[targets[k] for k in ('channels', 'outlines', 'sections')], [targets[k] for k in ('screens', 'items')]]
+    sides = [[targets[k] for k in ('channels', 'outlines', 'blocks')], [targets[k] for k in ('screens', 'items')]]
     return any(any(side) and not all(side) for side in sides) or not any(all(side) for side in sides)
 
 
@@ -105,9 +105,9 @@ def _git_contract(result):
     if set(result) != expected or not isinstance(result['approval_hashes'], dict) or not isinstance(result['must_approval_keys'], list):
         raise ValueError('invalid IA git-history contract')
     targets = result['targets']
-    # Five fixed keys (mirrors ia_module.TARGET_KEYS): the outline side and the blueprint side. A side is all or nothing and
+    # Five fixed keys (mirrors ia_module.TARGET_KEYS): the script side (outlines = scripts, blocks) and the blueprint side. A side is all or nothing and
     # one whole side is enough; a check that counted nothing, or half a side, is accepted only when errors explain it.
-    if not isinstance(targets, dict) or set(targets) != {'channels', 'outlines', 'sections', 'screens', 'items'} or any(
+    if not isinstance(targets, dict) or set(targets) != {'channels', 'outlines', 'blocks', 'screens', 'items'} or any(
             type(n) is not int or n < 0 for n in targets.values()) or (_zero_targets(targets) and not result['errors']):
         raise ValueError('zero or invalid IA check targets')
     governance = result['governance']
@@ -177,7 +177,7 @@ def resolve_ia(root,config,approvals,profiles,report):
         if any(not isinstance(row,dict) or not isinstance(row.get('id'),str) or not row['id'] for row in result['report'][key]):
             raise ValueError('invalid IA reporting row')
         report[key].extend(result['report'][key])
-    stage(report,'ia',2 if result['errors'] else (1 if result['warnings'] else 0),result['targets']['sections']+result['targets']['items'] if git_contract else len(result['approval_hashes']))
+    stage(report,'ia',2 if result['errors'] else (1 if result['warnings'] else 0),result['targets']['blocks']+result['targets']['items'] if git_contract else len(result['approval_hashes']))
     if _digest(implementation,git_contract)!=implementation_sha256:
         raise ValueError('IA resolver changed during resolution')
     result['_implementation_sha256']=implementation_sha256

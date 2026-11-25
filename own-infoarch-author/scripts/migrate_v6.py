@@ -1,16 +1,20 @@
 """One batch migration of ux/infoarch/ from v5 to v6 (SPEC-information-architecture-standardization v6, requirement 17).
 
-v5 is info_arch.yaml schema 3 with outlines schema 2; v6 is schema 4 with outlines schema 3. Mechanical moves only:
+v5 is info_arch.yaml schema 3 with outlines schema 2; the target is schema 4 with scripts (台本, script.v1, which
+replaced the v6 outline). Mechanical moves only:
 - promises (prm) and concepts (cpt) are dropped; the four forces of a job are dropped (v6 does not hold them);
 - pains, gains, values and strengths get the segment their v5 links lead to, and those links become edges
   (has_job, need, satisfies, lacks, produces); proofs become positioning evidence (`supports` edges to what the
   messages they supported serve), with a copy per segment (`copied_from`) when they reached two segments;
-- each outline's audience becomes its constant `target`, each v5 message it uses becomes an outline message pointing
-  at the one value of the target segment it served, each v5 section becomes a section with one copy, frames become
-  section ids (the sequence frame is the section order), navigation/other text becomes `texts`;
-- the rendered v5 marks (data-ia-role / data-ia-msg / data-ia-pain / data-ia-frame) become data-ia-section and
-  data-ia-copy, and design.yaml's modules.ia moves from 0.3.0 to the v6 contract version.
-What needs judgment (value kinds, categories, fulfills degrees, recalls/includes, a normal message beside a CTA) is
+- each v5 outline becomes a script (scripts/<id>.yaml; the v5 file under outlines/ is deleted): its audience becomes
+  the constant `target`, each v5 message it uses becomes a script message pointing at the one value of the target
+  segment it served, each v5 section becomes a block with one copy (a CTA section an action block, every other one a
+  claim block: only those two functions may place a message), frames become block ids (the sequence frame is the
+  block order), navigation/other text becomes `texts`;
+- the rendered v5 marks (data-ia-role / data-ia-msg / data-ia-pain / data-ia-frame) become data-ia-section (the block
+  anchor) with data-ia-function, and data-ia-copy, and design.yaml's modules.ia moves from 0.3.0 to the current
+  contract version.
+What needs judgment (value kinds, categories, fulfills degrees, recalls/includes, the function of a block) is
 listed under drafting_required and never invented. Anything that has no mechanical destination is unmigrated: one
 item is a failure (exit 2) and nothing is written (one batch). ux/approvals.yaml and ux/judgments.json are
 only read, to list what stops applying. Nothing is committed. A v6 tree is a no-op, so the tool is rerunnable.
@@ -35,9 +39,11 @@ import positioning as pos
 V5_PIN = '0.3.0'
 APPROVALS = layer_paths.rel('ledger')  # repository-relative name; reading goes through layer_paths.path
 PROV = 'extracted:infoarch-author migrate-v6'
-# v5 section role -> v6 section role (aware / pain / compare / trust / act). A fixed table, printed in the report.
-ROLE = {'pain': 'pain', 'benefit': 'aware', 'vision': 'aware', 'proof': 'trust', 'how': 'trust',
-        'objection': 'compare', 'cta': 'act', 'navigation': 'aware', 'other': 'aware'}
+# v5 section role -> script block function. Every v5 section carried a message, and only a claim block (a normal
+# message) or an action block (a CTA) may place one. A fixed table, printed in the report.
+ROLE = {'pain': 'claim', 'benefit': 'claim', 'vision': 'claim', 'proof': 'claim', 'how': 'claim',
+        'objection': 'claim', 'cta': 'action', 'navigation': 'claim', 'other': 'claim'}
+SCRIPTS = check.SCRIPTS_DIR
 TEXT_ROLES = {'navigation', 'other'}
 LEGACY_ATTRS = ('data-ia-problem', 'data-ia-msg', 'data-ia-pain', 'data-ia-frame')
 LEGACY_RE = re.compile(r'\b(?:' + '|'.join(LEGACY_ATTRS) + r')\s*=')
@@ -45,7 +51,7 @@ V4_PREFIXES = ('prf', 'fct', 'ent', 'vce', 'seg', 'job', 'pan', 'gan', 'val', 'a
 FORCES = ('push', 'pull', 'anxiety', 'habit')
 HEADER = (f'# {layer_paths.rel("positioning_file")} — 伝え方の SSOT（スキーマ版 4）\n'
           '# v5 から infoarch-author migrate-v6 で移した。提供価値の kind・カテゴリー・満たす度合いなどは下書きが要る。\n')
-OUTLINE_HEADER = '# v5 の outline から infoarch-author migrate-v6 で移した（版 3）。\n'
+OUTLINE_HEADER = '# v5 の outline から infoarch-author migrate-v6 で台本（版 1）に移した。\n'
 
 
 def _dump(data):
@@ -222,7 +228,7 @@ def _resolve_pain(ssot, seg_of, seg, pain, candidates):
 
 
 def migrate_outline(ssot, seg_of, o, r, used):
-    """-> [(new outline, [v5 sections with their new ids])] — one per page."""
+    """-> [(new script, [v5 sections with their new ids])] — one per page."""
     oid = o['id']
     aud = (ssot.get('audiences') or {}).get(o.get('audience')) or {}
     seg = aud.get('segment')
@@ -240,21 +246,21 @@ def migrate_outline(ssot, seg_of, o, r, used):
     brief = o.get('brief') or {}
     for k in ('strategy', 'brief'):
         if o.get(k):
-            r.drop(f'{oid}.{k}', 'outline v3 に無い（取ってほしい行動だけを objective に移した）' if k == 'brief'
-                   else 'outline v3 に無い（選んだ理由は set の id と差分が持つ）')
+            r.drop(f'{oid}.{k}', '台本に無い（取ってほしい行動だけを objective に移した）' if k == 'brief'
+                   else '台本に無い（選んだ理由は set の id と差分が持つ）')
     msgs = ssot.get('messages') or {}
     result = []
     for nid, page, outs in parts:
         page_msgs = [s['message'] for s in page['sections'] if s.get('message')]
-        messages, sections, copies, texts, placed = {}, {}, {}, {}, []
+        messages, blocks, copies, texts, placed = {}, {}, {}, {}, []
         n, last_sec = 0, None
         for i, s in enumerate(page['sections']):
             key = f'{oid}:{page["id"]}[{i}]'
             if s.get('role') in TEXT_ROLES and s.get('key') and not s.get('message') and not s.get('pain'):
                 kind = 'navigation' if s['role'] == 'navigation' else 'label'
-                texts[s['key']] = {'kind': kind, 'text': s['copy'], **({'section': last_sec} if kind == 'label' else {})}
+                texts[s['key']] = {'kind': kind, 'text': s['copy'], **({'block': last_sec} if kind == 'label' else {})}
                 if kind == 'label':
-                    r.drafting.append(f'{nid}.texts.{s["key"]}: ラベルを置くセクション（直前の {last_sec} にした）を確かめる')
+                    r.drafting.append(f'{nid}.texts.{s["key"]}: ラベルを置くまとまり（直前の {last_sec} にした）を確かめる')
                 r.id_map[key] = [f'{nid}:texts.{s["key"]}']
                 placed.append((s, None, None, None))
                 continue
@@ -279,24 +285,25 @@ def migrate_outline(ssot, seg_of, o, r, used):
                 r.id_map[mid].append(f'{nid}:{mid}')
                 used.add(mid)
             n += 1
-            sid, cid = f'sec-{n:04d}', f'cpy-{n:04d}'
+            sid, cid = f'blk-{n:04d}', f'cpy-{n:04d}'
             last_sec = sid
-            sections[sid] = {'order': n, 'role': ROLE[s['role']], 'places': [mid]}
-            copies[cid] = {'section': sid, 'order': 1, 'message': mid, 'text': s['copy']}
+            fn = 'action' if messages[mid]['type'] == 'cta' else 'claim'
+            blocks[sid] = {'order': n, 'function': fn, 'places': [mid]}
+            copies[cid] = {'block': sid, 'order': 1, 'message': mid, 'text': s['copy']}
             r.id_map[key] = [f'{nid}:{sid}', f'{nid}:{cid}']
             if s.get('frame'):
                 r.id_map[f'{oid}#{s["frame"]}'] = [f'{nid}:{sid}']
             if s.get('proofs'):
-                r.drop(f'{key}.proofs', '証拠は提供価値の経路が持つ（outline は指さない）')
-            if s['role'] in ('navigation', 'other', 'how', 'vision', 'objection'):
-                r.drafting.append(f'{nid}.{sid}: v5 の役割 {s["role"]} を {ROLE[s["role"]]} にした。役割を確かめる')
-            if messages[mid]['type'] == 'cta':
-                r.drafting.append(f'{nid}.{sid}: CTA だけのセクション。通常のメッセージを 1 つ置き、それを伝える文案を足すか、'
-                                  '前のセクションに CTA を移す')
+                r.drop(f'{key}.proofs', '証拠は提供価値の経路が持つ（台本の証拠と声のまとまりは refs で引き直す）')
+            if s['role'] in ('navigation', 'other', 'how', 'vision', 'objection', 'proof'):
+                r.drafting.append(f'{nid}.{sid}: v5 の役割 {s["role"]} を働き {fn} にした。働きを確かめる'
+                                  '（事実・証拠と声のまとまりにするなら、メッセージを主張のまとまりへ移す）')
+            if fn == 'action' and s['role'] != 'cta':
+                r.drafting.append(f'{nid}.{sid}: v5 の役割 {s["role"]} のセクションが CTA を置いていたので、行動のまとまりにした')
             placed.append((s, sid, cid, mid))
         for inst in (o.get('frames') or {}).get('instances') or []:
             if f'{oid}#{inst["id"]}' not in r.id_map:
-                r.id_map[f'{oid}#{inst["id"]}'] = [f'{nid}:sections.order'] if inst.get('type') == 'section-order' else []
+                r.id_map[f'{oid}#{inst["id"]}'] = [f'{nid}:blocks.order'] if inst.get('type') == 'section-order' else []
         normal = [m for m, v in messages.items() if v['type'] == 'normal']
         lead = next((m for m in aud.get('priorities') or [] if m in normal), normal[0] if normal else None)
         if lead:
@@ -309,7 +316,7 @@ def migrate_outline(ssot, seg_of, o, r, used):
         touchpoint = medium if re.fullmatch(r'[a-z][a-z0-9_-]*', medium) else o['channel']
         if touchpoint != medium:
             r.drafting.append(f'{nid}.touchpoint: v5 の媒体「{brief.get("medium")}」を形にできないのでチャネル名 {touchpoint} にした。確かめる')
-        new = {'schema_version': 3, 'id': nid, 'channel': o['channel'], 'outputs': outs,
+        new = {'schema_version': 1, 'id': nid, 'channel': o['channel'], 'outputs': outs,
                'target': {'segment': seg, 'condition': aud.get('label') or aud.get('situation') or seg},
                'touchpoint': touchpoint}
         if aud.get('tone'):
@@ -317,7 +324,7 @@ def migrate_outline(ssot, seg_of, o, r, used):
         else:
             r.drafting.append(f'{nid}.tone: v5 の対象者にトーンが無い。書く')
         new['objective'] = {'id': 'obj-0001', 'action': brief.get('action') or o['channel']}
-        new.update(messages=messages, sections=sections, copies=copies)
+        new.update(messages=messages, blocks=blocks, copies=copies)
         if texts:
             new['texts'] = texts
         r.drafting.append(f'{nid}.target.condition: v5 の対象者の名前を写した。セグメントに足す条件として確かめる')
@@ -386,25 +393,26 @@ def _start_tag(text, e, new_attrs):
 
 
 def rewrite_html(text, placed):
-    """-> (new text, error or None). `placed`: the v5 sections of the outline in order, with their new ids."""
+    """-> (new text, error or None). `placed`: the v5 sections of the outline in order, with their new ids and the
+    script they moved to."""
     tree = _Tree(text)
     marked = [i for i, e in enumerate(tree.elems) if 'data-ia-role' in e['attrs']]
     if len(marked) != len(placed):
-        return None, f'v5 のセクションの印が {len(marked)} 個、outline のセクションは {len(placed)} 個'
+        return None, f'v5 のセクションの印が {len(marked)} 個、台本のまとまりは {len(placed)} 個'
     edits = []  # (start, end, replacement)
-    for i, (s, sid, cid, _) in zip(marked, placed):
+    for i, (s, sid, cid, _, new) in zip(marked, placed):
         e = tree.elems[i]
         a = e['attrs']
         same = (a.get('data-ia-msg'), a.get('data-ia-pain')) == (s.get('message'), s.get('pain'))
         if not same or (sid is None and a.get('data-ia-text') != s.get('key')):
-            return None, f'{e["tag"]}（{a}）が outline のセクション（{s.get("message") or s.get("pain") or s.get("key")}）と合わない'
+            return None, f'{e["tag"]}（{a}）が台本のまとまり（{s.get("message") or s.get("pain") or s.get("key")}）と合わない'
         if sid is None:
             edits.append((e['start'], e['start_end'], _start_tag(text, e, [])))
             continue
         if e['end'] is None:
             return None, f'{e["tag"]} の閉じタグが無い（{sid}）'
-        role = ROLE[s['role']]
-        edits.append((e['start'], e['start_end'], _start_tag(text, e, [('data-ia-section', sid), ('data-ia-role', role)])))
+        fn = new['blocks'][sid]['function']
+        edits.append((e['start'], e['start_end'], _start_tag(text, e, [('data-ia-section', sid), ('data-ia-function', fn)])))
         kids = [c for c in tree.elems if c['parent'] == i]
         rest = text[e['start_end']:e['end']]
         for c in sorted(kids, key=lambda c: -c['start']):
@@ -490,11 +498,11 @@ def plan(root):
             raise ValueError(f'{f.name}: outline の版 {o.get("schema_version")!r} は v5（2）でない')
         parts = migrate_outline(ssot, seg_of, o, r, used)
         for new, placed in parts:
-            writes[base / 'outlines' / f'{new["id"]}.yaml'] = OUTLINE_HEADER + _dump(new)
+            writes[base / SCRIPTS / f'{new["id"]}.yaml'] = OUTLINE_HEADER + _dump(new)
             for out in new['outputs']:
-                html_parts[out] = placed
-        if parts and all(new['id'] != o['id'] for new, _ in parts):
-            deletes.append(f)
+                html_parts[out] = [(*p, new) for p in placed]
+        if parts:
+            deletes.append(f)  # the v5 outline moved to scripts/: outlines/ is the retired place
     for mid, msg in (ssot.get('messages') or {}).items():
         if mid not in used:
             if msg.get('state') == 'proposed':
@@ -531,16 +539,16 @@ def plan(root):
         'id_map': dict(sorted(r.id_map.items())),
         'id_map_note': '載っていない id（セグメント・ジョブ・痛み・代替・固定値など）は同じ id のまま。[] は無くしたもの',
         'unmigrated': r.unmigrated, 'unmigrated_count': len(r.unmigrated),
-        'dropped': r.dropped, 'drafting_required': r.drafting, 'role_map': ROLE,
+        'dropped': r.dropped, 'drafting_required': r.drafting, 'function_map': ROLE,
         'stops_applying': stops_applying(root),
         'module_pin': pin, 'prose_mentions': {layer_paths.rel('infoarch', 'INFO_ARCH.md'): mentions} if mentions else {},
-        'set_ids': 'drafting_required を済ませて check が緑になってから infoarch-author set --outline <id> で出す（v5 の対応表の置き換え）',
+        'set_ids': 'drafting_required を済ませて check が緑になってから infoarch-author set --script <id> で出す（v5 の対応表の置き換え）',
         'files': {'write': sorted(p.relative_to(root).as_posix() for p in writes if p.exists()), 'create': created,
                   'delete': sorted(p.relative_to(root).as_posix() for p in deletes)},
         'rollback': [
             'この道具は commit しない。--write の後、commit する前なら git restore -- <files.write と files.delete> で戻し、'
             'files.create のファイルを 1 つずつ消す',
-            'commit した後なら git revert <移行の commit>（info_arch.yaml・outlines・描画物・design.yaml が v5 に戻る）',
+            'commit した後なら git revert <移行の commit>（info_arch.yaml・outlines（scripts から戻る）・描画物・design.yaml が v5 に戻る）',
             f'{layer_paths.rel("ledger")} と {layer_paths.rel("judgments")} は書いていないので戻すものは無い。v6 で足した ia:path: の行と判定は、'
             'v5 の道具では数えられない',
         ],

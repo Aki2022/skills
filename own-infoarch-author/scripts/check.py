@@ -1,11 +1,14 @@
-"""Deterministic checks of ux/infoarch/ (token 0): the positioning SSOT, channel declarations, outlines (v6).
+"""Deterministic checks of ux/infoarch/ (token 0): the positioning SSOT, channel declarations, scripts (台本).
 
 What is checked here is structure and references, never meaning. The one meaning judgment (copy x the value its message
 points to) belongs to the Jev judgement ledger; rendered artifacts belong to the DOM checks.
 
 The positioning SSOT is the positioning layer's (own-positioning-author): this module reads it through that skill's
-loader and adds what stands on it: channels, outlines, the dictionary's values and names (docs/dictionary/, read
+loader and adds what stands on it: channels, scripts, the dictionary's values and names (docs/dictionary/, read
 through own-doc-update's reader), approvals per path, expiry and the design page inventory.
+
+The script (scripts/<id>.yaml, script.v1) replaced the v6 outline. The store keeps its v6 name `outlines` and the
+helpers their `outline_*` names; the retired outlines/ directory is never read, and any file in it fails.
 """
 from __future__ import annotations
 
@@ -32,13 +35,16 @@ from positioning_model import (  # noqa: F401  (the positioning layer's, re-expo
 # writes {{fct-NNNN}} for the facts its SSOT carries (read with a warning until it moves to the dictionary).
 PLACEHOLDER = re.compile(r'\{\{(value-[a-z0-9]+(?:-[a-z0-9]+)*|fct-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,}))\}\}')  # no padding
 ANY_BRACES = re.compile(r'\{\{.*?\}\}', re.S)
+SCRIPTS_DIR = 'scripts'  # ux/infoarch/scripts/<deliverable id>.yaml: the script (台本)
+SCRIPT_SCHEMA = 'script.v1.schema.json'
+RETIRED_DIR = 'outlines'  # the v6 outline's place: never read; a file left there fails (IA_OUTLINE_RETIRED)
 
 
 @dataclass
 class Model(pm.Model):
     channels: dict = field(default_factory=dict)  # media -> (rel path, data)
     blueprint: object = None  # the product UI's infoarch (blueprint.Blueprint), when ux/infoarch/blueprint/ exists
-    outlines: dict = field(default_factory=dict)  # id -> (rel path, data)
+    outlines: dict = field(default_factory=dict)  # scripts (台本): id -> (rel path, data); v6 name kept
     # The dictionary as the rest of the checks read it: facts (kind value) and entities (kind name), keyed by the
     # dictionary id. Built at load time, so dom, judge, skeleton and the answer key read one shape wherever the
     # values came from (docs/dictionary/, or a schema 4 SSOT that still carries them).
@@ -87,7 +93,7 @@ def _dictionary_view(root, legacy, report):
 
 def load(root, report):
     root = Path(root)
-    base = layer_paths.path(root, 'infoarch')  # a repository that moved stops here, never "0 outlines"
+    base = layer_paths.path(root, 'infoarch')  # a repository that moved stops here, never "0 scripts"
     m = Model(root)
     data, legacy = pm.load_ssot(root, report)
     if data is None:
@@ -96,8 +102,15 @@ def load(root, report):
     m.facts, m.entities = _dictionary_view(root, legacy, report)
     # downstream readers (dom, judge, skeleton, answer key) take facts and entities from the SSOT dict
     m.ssot['facts'], m.ssot['entities'] = m.facts, m.entities
+    retired = base / RETIRED_DIR
+    left = (sorted(p.name for p in retired.iterdir()) if retired.is_dir() and not retired.is_symlink()
+            else [retired.name] if retired.is_symlink() or retired.exists() else [])
+    if left:  # an empty directory holds nothing; anything in it (dotfiles too) is a leftover
+        report.add('fail', 'IA_OUTLINE_RETIRED',
+                   f'{RETIRED_DIR}/ は廃止した（台本は {SCRIPTS_DIR}/<成果物 id>.yaml）。残っている {left} を読まずに 0 件にはしない。'
+                   'outline は機械で写さず、positioning から台本を作り直してから消す', layer_paths.rel('infoarch', RETIRED_DIR))
     for kind, sub, schema, store in (('channel', 'channels', 'channel.v2.schema.json', m.channels),
-                                     ('outline', 'outlines', 'outline.v3.schema.json', m.outlines)):
+                                     ('outline', SCRIPTS_DIR, SCRIPT_SCHEMA, m.outlines)):
         d = base / sub
         validator = validator_for(schema)
         for f in sorted(d.iterdir()) if d.is_dir() else []:
@@ -249,6 +262,8 @@ def outline_refs(o):
     for mid, msg in sorted(o['messages'].items()):
         out.append((f'messages.{mid}.value', msg['value']))
         out += [(f'messages.{mid}.compares', a) for a in msg.get('compares', [])]
+    for cid, cp in sorted(o['copies'].items()):
+        out += [(f'copies.{cid}.refs', p) for p in cp.get('refs', [])]
     for where, text in outline_texts(o):
         out += [(where, f) for f in PLACEHOLDER.findall(text)]
     return out
@@ -320,10 +335,10 @@ def check_pages(m, report):
 
 # INFO_ARCH.md is prose that refers to atoms by id and holds no value (SPEC-information-architecture-standardization,
 # requirement 1). The ids it may cite: a positioning atom or a product item (the prefixes the two layers issue), a screen
-# `scr-<slug>`, and an outline written `outline:<id>`. v5 ids (msg-…, aud-…) are the migration's business, not read here.
+# `scr-<slug>`, and a script written `script:<id>` (or `outline:<id>`, the v6 form, still read). v5 ids (msg-…, aud-…) are the migration's business, not read here.
 _PROSE_PREFIXES = '|'.join(sorted(set(pm.BLOCKS.values()) | set(blueprint.ITEM_BLOCKS.values())))
 PROSE_ID = re.compile(r'(?<![A-Za-z0-9_-])((?:' + _PROSE_PREFIXES + r')-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})'
-                      r'|scr-[a-z0-9]+(?:-[a-z0-9]+)*|outline:[a-z0-9][a-z0-9_-]*)(?![A-Za-z0-9_-])')
+                      r'|scr-[a-z0-9]+(?:-[a-z0-9]+)*|(?:outline|script):[a-z0-9][a-z0-9_-]*)(?![A-Za-z0-9_-])')
 
 
 def _tombstoned(m, aid):
@@ -344,8 +359,9 @@ def check_info_arch_refs(m, report):
             if mention in seen:
                 continue
             seen.add(mention)
-            if mention.startswith('outline:'):
-                aid, live = mention[len('outline:'):], mention[len('outline:'):] in m.outlines
+            if mention.startswith(('outline:', 'script:')):
+                aid = mention.split(':', 1)[1]
+                live = aid in m.outlines
             elif mention.startswith('scr-'):
                 aid, live = mention, bool(bp and mention in bp.screens)
             elif blueprint.ITEM_ID.fullmatch(mention):
@@ -408,7 +424,7 @@ def check(root, date):
     if not m.channels and (m.outlines or not product_ui):
         report.add('fail', 'IA_NO_CHANNELS', 'channels/*.yaml が 0 件（対象 0 件を合格にしない）', layer_paths.rel('infoarch', 'channels'))
     if not m.outlines and not product_ui:
-        report.add('fail', 'IA_NO_OUTLINES', 'outlines/*.yaml が 0 件（対象 0 件を合格にしない）', layer_paths.rel('infoarch', 'outlines'))
+        report.add('fail', 'IA_NO_OUTLINES', f'{SCRIPTS_DIR}/*.yaml（台本）が 0 件（対象 0 件を合格にしない）', layer_paths.rel('infoarch', SCRIPTS_DIR))
     for oid, (rel, o) in sorted(m.outlines.items()):
         ch = m.channels.get(o['channel'])
         shipped = bool(ch and ch[1]['ship'])
@@ -420,12 +436,12 @@ def check(root, date):
     check_expiry(m, report, date)
     check_pages(m, report)
     check_info_arch_refs(m, report)
-    # The outline side (channels, outlines, sections) and the blueprint side (screens, items) are counted apart: a product
+    # The script side (channels, outlines = scripts, blocks) and the blueprint side (screens, items) are counted apart: a product
     # UI has screens and items and no outline, a deliverable has outlines and no blueprint. The bridge (ia_module) refuses
     # a check where neither side has anything, and a side that is half empty.
     bp = m.blueprint if m.blueprint is not None and m.blueprint.present else None
     report.targets = {'channels': len(m.channels), 'outlines': len(m.outlines),
-                      'sections': sum(len(o['sections']) for _, o in m.outlines.values()),
+                      'blocks': sum(len(o['blocks']) for _, o in m.outlines.values()),
                       'screens': len(bp.screens) if bp else 0, 'items': len(blueprint.items(bp)) if bp else 0}
     return report, m
 
@@ -450,15 +466,15 @@ def categorize(report, m, command):
         if m.outlines:
             report.executed.append({'id': 'ia-outlines', 'targets': {
                 'channels': len(m.channels), 'outlines': len(m.outlines),
-                'sections': sum(len(o['sections']) for _, o in m.outlines.values())}})
+                'blocks': sum(len(o['blocks']) for _, o in m.outlines.values())}})
         elif bp is not None:
-            report.skipped.append({'id': 'ia-outlines', 'reason': 'outline が無い（プロダクト UI は blueprint で検査する）'})
+            report.skipped.append({'id': 'ia-outlines', 'reason': '台本が無い（プロダクト UI は blueprint で検査する）'})
     else:
-        report.skipped.append({'id': 'ia-outlines', 'reason': 'blueprint は outline を見ない（infoarch-author check）'})
+        report.skipped.append({'id': 'ia-outlines', 'reason': 'blueprint は台本を見ない（infoarch-author check）'})
     if bp is not None:
         report.executed.append({'id': 'ia-blueprint', 'targets': {'screens': len(bp.screens), 'items': len(blueprint.items(bp))}})
     elif command == 'check':
-        report.skipped.append({'id': 'ia-blueprint', 'reason': 'blueprint/ が無い（outline の成果物）'})
+        report.skipped.append({'id': 'ia-blueprint', 'reason': 'blueprint/ が無い（台本の成果物）'})
     return report
 
 

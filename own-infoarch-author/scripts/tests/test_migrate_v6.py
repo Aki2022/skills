@@ -1,8 +1,9 @@
-"""One batch migration of a v5 SSOT to v6 (SPEC-information-architecture-standardization v6, requirement 17).
+"""One batch migration of a v5 SSOT (SPEC-information-architecture-standardization, requirement 17).
 
-Promises are dropped, v5 messages become outline atoms, audiences become the outline's constant `target`, v5
-sections and frames become section and copy ids, proofs become positioning evidence, the rendered v5 marks become
-data-ia-section / data-ia-copy and modules.ia moves to the v6 contract. The tool prints the old -> new id map, the
+Promises are dropped, v5 messages become script atoms, audiences become the script's constant `target`, v5
+sections and frames become block and copy ids (a CTA section an action block, any other a claim block), proofs become
+positioning evidence, the rendered v5 marks become data-ia-section (with data-ia-function) / data-ia-copy and
+modules.ia moves to the current contract. The v5 outline file moves to scripts/ (outlines/ is retired). The tool prints the old -> new id map, the
 items it failed to migrate (non-zero = exit 2, nothing written), the approvals and judgments that stop applying, and
 the rollback steps. Dry run by default; it never writes the approval ledger or the judgment record.
 """
@@ -194,9 +195,9 @@ def test_dry_run_reports_everything_and_writes_nothing(tmp_path):
     assert ids['aud-0001'] == ['lp-municipal:target']
     assert ids['msg-0001'] == ['lp-municipal:msg-0001']
     assert sorted(ids['msg-0002']) == ['deck-smb:msg-0002', 'lp-municipal:msg-0002']
-    assert ids['lp-municipal:top[0]'] == ['lp-municipal:sec-0001', 'lp-municipal:cpy-0001']
-    assert ids['lp-municipal#fv'] == ['lp-municipal:sec-0002']          # a v5 frame becomes a section id
-    assert ids['lp-municipal#order'] == ['lp-municipal:sections.order']  # the sequence frame is the order
+    assert ids['lp-municipal:top[0]'] == ['lp-municipal:blk-0001', 'lp-municipal:cpy-0001']
+    assert ids['lp-municipal#fv'] == ['lp-municipal:blk-0002']          # a v5 frame becomes a block id
+    assert ids['lp-municipal#order'] == ['lp-municipal:blocks.order']  # the sequence frame is the order
     assert ids['prm-0001'] == [] and ids['cpt-0001'] == []               # promises and concepts are dropped
     assert sorted(ids['prf-0001']) == ['prf-0001', 'prf-0003']           # evidence of two segments: a copy each
     dropped = {d['item'] for d in out['dropped']}
@@ -206,8 +207,9 @@ def test_dry_run_reports_everything_and_writes_nothing(tmp_path):
     assert [r['id'] for r in stops['judgments']] == ['ia-strategy-fit:lp-municipal']  # design rows stay
     assert out['module_pin'] == {'from': '0.3.0', 'to': ia_module.VERSION}
     assert out['rollback'] and any('git' in step for step in out['rollback'])
-    assert set(out['files']['write']) >= {layer_paths.rel('positioning_file'), layer_paths.rel('design_config'), 'site/index.html',
-                                          layer_paths.rel('infoarch', 'outlines', 'lp-municipal.yaml')}
+    assert set(out['files']['write']) >= {layer_paths.rel('positioning_file'), layer_paths.rel('design_config'), 'site/index.html'}
+    assert layer_paths.rel('infoarch', 'scripts', 'lp-municipal.yaml') in out['files']['create']
+    assert layer_paths.rel('infoarch', 'outlines', 'lp-municipal.yaml') in out['files']['delete']  # outlines/ is retired
     assert layer_paths.rel('ledger') not in out['files']['write'] and layer_paths.rel('judgments') not in out['files']['write']
     assert out['drafting_required']  # value kinds, categories and fulfills arrows are judgment, never invented
 
@@ -237,26 +239,28 @@ def test_write_moves_the_ssot_outlines_marks_and_pin(tmp_path):
             ('supports', 'prf-0002', 'val-0001')} <= keys
     assert ssot['proofs']['prf-0003']['segment'] == 'seg-0002' and 'copy of prf-0001' in ssot['proofs']['prf-0003']['provenance']
     assert ssot['ledger']['next']['prf'] == 4
-    lp = load(layer_paths.path(tmp_path, 'infoarch', 'outlines', 'lp-municipal.yaml'))
-    assert lp['schema_version'] == 3
+    lp = load(layer_paths.path(tmp_path, 'infoarch', 'scripts', 'lp-municipal.yaml'))
+    assert lp['schema_version'] == 1
+    assert not layer_paths.path(tmp_path, 'infoarch', 'outlines').exists() or not any(layer_paths.path(tmp_path, 'infoarch', 'outlines').iterdir())
     assert lp['target'] == {'segment': 'seg-0001', 'condition': '自治体の情報部門'}
     assert lp['tone'] == '丁寧で落ち着いた調子' and lp['objective'] == {'id': 'obj-0001', 'action': '資料請求'}
     assert lp['messages'] == {
         'msg-0001': {'value': 'val-0001', 'rank': 'lead', 'type': 'normal'},
         'msg-0002': {'value': 'val-0001', 'rank': 'support', 'type': 'normal'},
         'msg-0003': {'value': 'val-0001', 'rank': 'support', 'type': 'cta', 'achieves': 'obj-0001'}}
-    assert [(s['order'], s['role'], s['places']) for s in lp['sections'].values()] == [
-        (1, 'pain', ['msg-0001']), (2, 'aware', ['msg-0001']), (3, 'trust', ['msg-0002']), (4, 'act', ['msg-0003'])]
-    assert lp['copies']['cpy-0003'] == {'section': 'sec-0003', 'order': 1, 'message': 'msg-0002', 'text': '導入は{{fct-0001}}'}
+    assert [(s['order'], s['function'], s['places']) for s in lp['blocks'].values()] == [
+        (1, 'claim', ['msg-0001']), (2, 'claim', ['msg-0001']), (3, 'claim', ['msg-0002']), (4, 'action', ['msg-0003'])]
+    assert lp['copies']['cpy-0003'] == {'block': 'blk-0003', 'order': 1, 'message': 'msg-0002', 'text': '導入は{{fct-0001}}'}
     assert lp['texts'] == {'nav-footer': {'kind': 'navigation', 'text': 'お問い合わせ窓口'}}
-    deck = load(layer_paths.path(tmp_path, 'infoarch', 'outlines', 'deck-smb.yaml'))
+    deck = load(layer_paths.path(tmp_path, 'infoarch', 'scripts', 'deck-smb.yaml'))
     assert deck['target']['segment'] == 'seg-0002'
     assert deck['messages']['msg-0002'] == {'value': 'val-0002', 'rank': 'lead', 'type': 'normal'}
     html = (tmp_path / 'site/index.html').read_text(encoding='utf-8')
     for legacy in ('data-ia-msg', 'data-ia-pain', 'data-ia-frame', 'data-ia-problem'):
         assert legacy not in html
     assert '<p class="lead" data-ia-copy="cpy-0001">' in html                    # a single child carries the copy
-    assert 'data-ia-section="sec-0003"' in html and 'data-ia-copy="cpy-0003"' in html
+    assert 'data-ia-section="blk-0003" data-ia-function="claim"' in html and 'data-ia-copy="cpy-0003"' in html
+    assert 'data-ia-role' not in html
     assert html.count('data-ia-section=') == 4 and html.count('data-ia-copy=') == 4
     assert json.loads(layer_paths.path(tmp_path, 'design_config').read_text(encoding='utf-8'))['modules']['ia'] == ia_module.VERSION
     rc, again = migrate(tmp_path)
@@ -284,21 +288,14 @@ def draft_ssot(root):
 
 
 def test_migrated_tree_passes_check_once_the_listed_drafting_is_done(tmp_path):
-    """The migration's output is v6-shaped: the only work left is the judgment it lists (value kinds, categories,
-    fulfills degrees, a normal message beside each CTA). With that drafted, `check` has no failure."""
+    """The migration's output is script-shaped: the only work left is the judgment it lists (value kinds, categories,
+    fulfills degrees). With that drafted, `check` has no failure (a CTA-only block is an action block: valid)."""
     write_v5(tmp_path)
     rc, out = migrate(tmp_path, '--write')
     assert rc == 0, out
     rc, report = check(tmp_path)
     assert rc == 2  # not done yet: drafting_required is real work
-    base = layer_paths.path(tmp_path, 'infoarch')
     draft_ssot(tmp_path)
-    for oid, (into, cta_sec, cta_copy) in {'lp-municipal': ('sec-0003', 'sec-0004', 'cpy-0004'),
-                                           'deck-smb': ('sec-0001', 'sec-0002', 'cpy-0002')}.items():
-        o = load(base / f'outlines/{oid}.yaml')
-        o['sections'][into]['places'] += o['sections'].pop(cta_sec)['places']
-        o['copies'][cta_copy].update(section=into, order=2)
-        dump(base / f'outlines/{oid}.yaml', o)
     rc, report = check(tmp_path)
     assert codes(report) == [], report['findings']
     assert rc == 1  # warnings only: the owner has not approved the new value paths yet
@@ -340,13 +337,13 @@ def test_wrapped_copy_keeps_its_place_when_a_section_holds_two_copies(tmp_path):
     assert rc == 0, out
     base = layer_paths.path(tmp_path, 'infoarch')
     draft_ssot(tmp_path)
-    o = load(base / 'outlines/lp-municipal.yaml')
-    del o['sections']['sec-0003']
-    o['copies']['cpy-0003'].update(section='sec-0002', order=2, message='msg-0001')
-    dump(base / 'outlines/lp-municipal.yaml', o)
+    o = load(base / 'scripts/lp-municipal.yaml')
+    del o['blocks']['blk-0003']
+    o['copies']['cpy-0003'].update(block='blk-0002', order=2, message='msg-0001')
+    dump(base / 'scripts/lp-municipal.yaml', o)
     page = tmp_path / 'site/index.html'
     html = page.read_text(encoding='utf-8')
-    moved = re.search(r'<section data-ia-section="sec-0003"[^>]*>(.*?)</section>', html, re.S)
+    moved = re.search(r'<section data-ia-section="blk-0003"[^>]*>(.*?)</section>', html, re.S)
     html = html.replace(moved.group(0), '')
     html = html.replace('運用の手間が半分になります</h2>', '運用の手間が半分になります</h2>\n    ' + moved.group(1))
     page.write_text(html, encoding='utf-8')
@@ -367,10 +364,11 @@ def test_wrapped_copy_keeps_its_place_when_a_section_holds_two_copies(tmp_path):
 def test_wrapper_has_a_box_and_no_inline_style(inner, wrapper):
     import migrate_v6
     html = f'<main><section data-ia-role="proof" data-ia-msg="msg-0002">{inner}</section></main>'
-    placed = [({'role': 'proof', 'message': 'msg-0002'}, 'sec-0001', 'cpy-0001', 'msg-0002')]
+    script = {'blocks': {'blk-0001': {'order': 1, 'function': 'claim', 'places': ['msg-0002']}}}
+    placed = [({'role': 'proof', 'message': 'msg-0002'}, 'blk-0001', 'cpy-0001', 'msg-0002', script)]
     out, error = migrate_v6.rewrite_html(html, placed)
     assert error is None
-    assert out == (f'<main><section data-ia-section="sec-0001" data-ia-role="trust"><{wrapper} data-ia-copy="cpy-0001">'
+    assert out == (f'<main><section data-ia-section="blk-0001" data-ia-function="claim"><{wrapper} data-ia-copy="cpy-0001">'
                    f'{inner}</{wrapper}></section></main>')
 
 

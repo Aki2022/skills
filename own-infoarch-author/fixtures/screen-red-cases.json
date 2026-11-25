@@ -6,31 +6,31 @@
       "id": "10-section-order",
       "requirement": "10",
       "code": "IA_DOM_ORDER",
-      "text": "セクションの並びが outline と違う"
+      "text": "まとまりの並びが 台本と違う"
     },
     {
       "id": "10-copy-text",
       "requirement": "10",
       "code": "IA_DOM_COPY_DRIFT",
-      "text": "文案が outline と一字一句同じでない"
+      "text": "文案が 台本と一字一句同じでない"
     },
     {
       "id": "10-copy-order",
       "requirement": "10",
       "code": "IA_DOM_COPY_ORDER",
-      "text": "セクションの中の文案の順番が outline と違う"
+      "text": "まとまりの中の文案の順番が 台本と違う"
     },
     {
       "id": "10-copy-section",
       "requirement": "10",
       "code": "IA_DOM_COPY_SECTION",
-      "text": "文案が outline と別のセクションの中にある"
+      "text": "文案が 台本と別のまとまりの中にある"
     },
     {
       "id": "10-copy-repeated",
       "requirement": "10",
       "code": "IA_DOM_COPY_REPEATED",
-      "text": "同じ文案の印が 2 つ以上ある（繰り返しは outline の別の文案にする）"
+      "text": "同じ文案の印が 2 つ以上ある（繰り返しは 台本の別の文案にする）"
     },
     {
       "id": "10-outside-text",
@@ -42,14 +42,14 @@
       "id": "10-anchor-missing",
       "requirement": "10",
       "code": "IA_DOM_ANCHOR_MISSING",
-      "text": "outline のセクション・文案の印が無い"
+      "text": "台本のまとまり・文案の印が無い"
     }
   ],
   "cases": [
     {
       "id": "sections-swapped",
       "condition": "10-section-order",
-      "why": "2 番目と 3 番目のセクションを入れ替えて描いた",
+      "why": "2 番目と 3 番目のまとまりを入れ替えて描いた",
       "ops": [
         {
           "op": "set",
@@ -87,7 +87,7 @@
     {
       "id": "copies-swapped",
       "condition": "10-copy-order",
-      "why": "同じセクションの 2 つの文案を入れ替えて描いた",
+      "why": "同じまとまりの 2 つの文案を入れ替えて描いた",
       "ops": [
         {
           "op": "set",
@@ -100,13 +100,13 @@
     {
       "id": "copy-in-other-section",
       "condition": "10-copy-section",
-      "why": "sec-0001 の文案を sec-0002 の中に描いた",
+      "why": "blk-0001 の文案を blk-0002 の中に描いた",
       "ops": [
         {
           "op": "set",
           "index": 2,
           "field": "section",
-          "value": "sec-0002"
+          "value": "blk-0002"
         },
         {
           "op": "set",
@@ -126,7 +126,7 @@
           "anchor": {
             "kind": "copy",
             "id": "cpy-0005",
-            "section": "sec-0003",
+            "section": "blk-0003",
             "top": 1520,
             "text": "資料請求はこちら（03-1234-5678）"
           }
@@ -158,7 +158,7 @@
     {
       "id": "section-mark-removed",
       "condition": "10-anchor-missing",
-      "why": "セクションの印を外した",
+      "why": "まとまりの印を外した",
       "ops": [
         {
           "op": "remove",

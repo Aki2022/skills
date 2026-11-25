@@ -68,7 +68,7 @@ def test_check_counts_what_it_executed_per_layer(tmp_path):
     write_repo(tmp_path)
     rc, report = infoarch('check', tmp_path)
     executed = {e['id']: e for e in report['executed']}
-    assert executed['ia-outlines']['targets'] == {'channels': 2, 'outlines': 2, 'sections': report['targets']['sections']}
+    assert executed['ia-outlines']['targets'] == {'channels': 2, 'outlines': 2, 'blocks': report['targets']['blocks']}
     assert 'ia-blueprint' in ids(report['skipped'])  # no blueprint in this tree: said, not silent
     assert 'ia-blueprint' not in executed
 

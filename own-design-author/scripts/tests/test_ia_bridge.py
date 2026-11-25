@@ -52,10 +52,10 @@ def test_schema2_actual_check_has_counts_and_preserves_ds_approvals(project):
     assert resolved['version'] == '0.4.0'
     assert resolved['resolved']['governance']['contract'] == 'ia-git-history-v4'
     assert resolved['resolved']['governance']['schema_version'] == 4
-    assert resolved['resolved']['targets'] == {'channels': 2, 'outlines': 2, 'sections': 5, 'screens': 0, 'items': 0}
+    assert resolved['resolved']['targets'] == {'channels': 2, 'outlines': 2, 'blocks': 6, 'screens': 0, 'items': 0}
     assert resolved['resolved']['governance']['method'] == 'git-history'
     assert resolved['resolved']['governance']['input_hashes']
-    assert any(row['id'] == 'ia-deterministic' and row['targets'] == 5 for row in result['report']['executed'])
+    assert any(row['id'] == 'ia-deterministic' and row['targets'] == 6 for row in result['report']['executed'])
     assert any(row['id'] == 'ia-semantic-judgments' for row in result['report']['missing'])
     assert any(row['id'] == 'ia-dom' for row in result['report']['skipped'])
     validate_module_state(result['manifest']['web']['modules'])
@@ -68,14 +68,14 @@ def test_actual_ia_bad_inputs_make_l0_red(project, broken):
     positioning = lp.path(root, 'positioning_file')
     if broken == 'ref':
         data = copy.deepcopy(FIXTURE['OUTLINE'])
-        data['sections']['sec-0002']['places'] = ['msg-9999']
-        FIXTURE['dump'](base / 'outlines/lp-municipal.yaml', data)
+        data['blocks']['blk-0002']['places'] = ['msg-9999']
+        FIXTURE['dump'](base / 'scripts/lp-municipal.yaml', data)
     elif broken == 'expiry':
         dictionary = copy.deepcopy(FIXTURE['DICTIONARY'])
         dictionary['entries'][0]['expires'] = '2000-01-01'  # an expired value in the docs dictionary
         FIXTURE['write_dictionary'](root, dictionary)
     elif broken == 'zero':
-        for path in (base / 'outlines').iterdir():
+        for path in (base / 'scripts').iterdir():
             path.unlink()
     elif broken == 'corrupt':
         positioning.write_text('schema_version: 2\nschema_version: 2\n')
@@ -111,7 +111,7 @@ def test_blueprint_only_repository_passes_l0_and_counts_its_screens_and_items(pr
     assert result['exit_code'] == 0, result['errors']
     assert not [e for e in result['errors'] if 'zero IA' in e]
     resolved = result['manifest']['web']['modules']['ia']['resolved']
-    assert resolved['targets'] == {'channels': 0, 'outlines': 0, 'sections': 0, 'screens': 2, 'items': 10}
+    assert resolved['targets'] == {'channels': 0, 'outlines': 0, 'blocks': 0, 'screens': 2, 'items': 10}
     assert any(row['id'] == 'ia-deterministic' and row['targets'] == 10 for row in result['report']['executed'])
     assert sum(k.startswith('ia:item:') for k in result['approval_targets']) == 10
     validate_module_state(result['manifest']['web']['modules'])
@@ -127,12 +127,12 @@ def test_empty_blueprint_stays_red_at_l0(project, how):
 
 
 @pytest.mark.parametrize('targets,ok', [
-    ({'channels': 0, 'outlines': 0, 'sections': 0, 'screens': 2, 'items': 10}, True),
-    ({'channels': 2, 'outlines': 2, 'sections': 5, 'screens': 0, 'items': 0}, True),
-    ({'channels': 0, 'outlines': 0, 'sections': 0, 'screens': 0, 'items': 0}, False),
-    ({'channels': 0, 'outlines': 0, 'sections': 0, 'screens': 2, 'items': 0}, False),
-    ({'channels': 2, 'outlines': 2, 'sections': 0, 'screens': 2, 'items': 10}, False),
-    ({'channels': 0, 'outlines': 0, 'sections': 0}, False),  # the old three-key shape is not a result of the current resolver
+    ({'channels': 0, 'outlines': 0, 'blocks': 0, 'screens': 2, 'items': 10}, True),
+    ({'channels': 2, 'outlines': 2, 'blocks': 6, 'screens': 0, 'items': 0}, True),
+    ({'channels': 0, 'outlines': 0, 'blocks': 0, 'screens': 0, 'items': 0}, False),
+    ({'channels': 0, 'outlines': 0, 'blocks': 0, 'screens': 2, 'items': 0}, False),
+    ({'channels': 2, 'outlines': 2, 'blocks': 0, 'screens': 2, 'items': 10}, False),
+    ({'channels': 0, 'outlines': 0, 'blocks': 0}, False),  # the old three-key shape is not a result of the current resolver
 ])
 def test_git_contract_accepts_blueprint_counts_only_when_something_was_checked(targets, ok):
     import design_modules
@@ -177,7 +177,7 @@ def test_python_and_javascript_reject_changed_checker_and_schema(project, tmp_pa
     for consumer in (python, node):
         good = subprocess.run(consumer, capture_output=True, text=True)
         assert good.returncode == 0, good.stdout + good.stderr
-    for relative in ('own-infoarch-author/scripts/check.py', 'own-infoarch-author/references/schema/outline.v3.schema.json',
+    for relative in ('own-infoarch-author/scripts/check.py', 'own-infoarch-author/references/schema/script.v1.schema.json',
                      'own-positioning-author/scripts/positioning.py', 'own-positioning-author/references/schema/info_arch.v5.schema.json',
                      'own-doc-update/scripts/dictionary.py'):
         path = installed / relative
@@ -492,7 +492,7 @@ def test_resolved_manifest_is_stale_for_both_consumers_after_an_infoarch_tree_ch
     for consumer in consumers(manifest):
         good = subprocess.run(consumer, capture_output=True, text=True)
         assert good.returncode == 0, good.stdout + good.stderr
-    outline = sorted(lp.path(root, 'infoarch', 'outlines').iterdir())[0]
+    outline = sorted(lp.path(root, 'infoarch', 'scripts').iterdir())[0]
     saved = outline.read_bytes()
     if change == 'outline-edited':
         outline.write_bytes(saved + b'\n# fixture: reworded note, same meaning\n')

@@ -93,7 +93,7 @@ def test_unanchored_text_fails_the_render(repo, monkeypatch):
 
 def test_failing_check_stops_before_rendering(repo, monkeypatch):
     monkeypatch.setattr(dom, 'snapshot', lambda *a: pytest.fail('rendered although check failed'))
-    outline = layer_paths.path(repo, 'infoarch', 'outlines', 'lp-municipal.yaml')
+    outline = layer_paths.path(repo, 'infoarch', 'scripts', 'lp-municipal.yaml')
     outline.write_text(outline.read_text(encoding='utf-8').replace('msg-0001', 'msg-0099', 1), encoding='utf-8')
     result = evaluate.run(repo, DATE, ['lp-municipal'])
     assert result['exit_code'] == 2 and result['stages'] == {'check': 2, 'dom': 'skipped', 'judge': 'skipped'}
@@ -165,7 +165,7 @@ def test_acquire_preview_calls_nothing_and_writes_nothing(repo, tmp_path, monkey
     result = evaluate.run(repo, DATE, ['lp-municipal'], acquire={
         'limit': 5, 'answers_dir': answers, 'execute': False, '_usage_path': usage_ledger(tmp_path),
         '_transport': lambda *a: pytest.fail('network on preview')})
-    assert result['acquisition']['status'] == 'dry-run' and result['acquisition']['selected'] == 3  # judge reads every outline: the LP's 2 judged copies and the deck's 1
+    assert result['acquisition']['status'] == 'dry-run' and result['acquisition']['selected'] == 4  # judge reads every script: the LP's 3 claim copies and the deck's 1
     assert not (answers / 'judgment-answers.json').exists() and not layer_paths.path(repo, 'judgments').exists()
 
 

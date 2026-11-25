@@ -1,7 +1,7 @@
-"""outline (SPEC-information-architecture-standardization v6, requirements 6-9 and 13; Quality 1 and 3).
+"""script, 台本 (SPEC-information-architecture-standardization, requirements 6-9 and 13; Quality 1 and 3).
 
-An outline stands on one positioning (its target's segment), keeps the constants and the objective fixed, and
-varies messages, sections and copy. Requirement 7 disqualifies it; ids come from content only; two sets differ by
+A script stands on one positioning (its target's segment), keeps the constants and the objective fixed, and
+varies messages, blocks (each with one content function) and copy. Requirement 7 disqualifies it; ids come from content only; two sets differ by
 elements, and a difference no element owns disqualifies the variant.
 """
 import copy
@@ -20,7 +20,7 @@ import positioning  # noqa: E402
 from test_check import DECK, DICTIONARY, OUTLINE, SKILL, SSOT, check, cli, codes, confirm, dump, write_repo  # noqa: E402
 import layer_paths  # noqa: E402  (own-design-author's layer rule: where each layer lives)
 
-TABLE = json.loads((SKILL / 'fixtures/outline-red-cases.json').read_text(encoding='utf-8'))
+TABLE = json.loads((SKILL / 'fixtures/script-red-cases.json').read_text(encoding='utf-8'))
 CONDITIONS = {c['id']: c for c in TABLE['conditions']}
 CASES, DIFF_CASES = TABLE['cases'], TABLE['diff_cases']
 
@@ -65,7 +65,7 @@ def test_every_condition_has_a_red_case_and_every_case_names_a_condition():
     assert sorted(covered - set(CONDITIONS)) == []
     ids = [c['id'] for c in CASES + DIFF_CASES]
     assert len(set(ids)) == len(ids)
-    assert len([c for c in CONDITIONS.values() if c['requirement'] == '7']) == 17  # spec requirement 7 (2026-11-18), split by code
+    assert len([c for c in CONDITIONS.values() if c['requirement'] == '7']) == 22  # spec requirement 7 (2026-11-25, the script), split by code
     assert [c['id'] for c in CONDITIONS.values() if c['requirement'] == '9'] == ['9-unassigned-difference']
 
 
@@ -128,7 +128,7 @@ def test_unplaced_support_message_is_a_warning(tmp_path):
 def test_declared_no_cta_passes_and_is_always_reported(tmp_path):
     outline, _ = apply([{'op': 'set', 'path': ['no_cta'], 'value': True},
                         {'op': 'delete', 'path': ['messages', 'msg-0003']},
-                        {'op': 'set', 'path': ['sections', 'sec-0003', 'places'], 'value': ['msg-0001']},
+                        {'op': 'set', 'path': ['blocks', 'blk-0003', 'places'], 'value': []},
                         {'op': 'delete', 'path': ['copies', 'cpy-0005']}])
     write_repo(tmp_path, outlines=(outline, DECK))
     rc, report = check(tmp_path)
@@ -144,12 +144,53 @@ def test_unapproved_value_only_warns_in_a_draft(tmp_path):
     assert 'IA_OUTLINE_VALUE_UNAPPROVED' in codes(report, 'warn') and 'IA_OUTLINE_VALUE_UNAPPROVED' not in codes(report)
 
 
+def test_blocks_of_any_function_and_any_count_pass(tmp_path):
+    """Requirement 6: blocks of every function, the same function more than once, copy citing evidence or the dictionary."""
+    outline, _ = apply([
+        {'op': 'set', 'path': ['blocks', 'blk-0004'], 'value': {'order': 4, 'function': 'identify'}},
+        {'op': 'set', 'path': ['blocks', 'blk-0005'], 'value': {'order': 5, 'function': 'fact'}},
+        {'op': 'set', 'path': ['blocks', 'blk-0006'], 'value': {'order': 6, 'function': 'evidence'}},
+        {'op': 'set', 'path': ['blocks', 'blk-0007'], 'value': {'order': 7, 'function': 'offer'}},
+        {'op': 'set', 'path': ['blocks', 'blk-0008'], 'value': {'order': 8, 'function': 'source'}},
+        {'op': 'set', 'path': ['blocks', 'blk-0009'], 'value': {'order': 9, 'function': 'evidence'}},
+        {'op': 'set', 'path': ['copies', 'cpy-0006'], 'value': {'block': 'blk-0004', 'order': 1, 'text': '{{value-phone}} 自治体向けサーバー'}},
+        {'op': 'set', 'path': ['copies', 'cpy-0007'], 'value': {'block': 'blk-0005', 'order': 1, 'text': '導入は{{value-customer-count}}'}},
+        {'op': 'set', 'path': ['copies', 'cpy-0008'], 'value': {'block': 'blk-0006', 'order': 1, 'refs': ['prf-0001'], 'text': '導入した自治体の数を台帳で数えています'}},
+        {'op': 'set', 'path': ['copies', 'cpy-0009'], 'value': {'block': 'blk-0007', 'order': 1, 'text': '月額で使えます'}},
+        {'op': 'set', 'path': ['copies', 'cpy-0010'], 'value': {'block': 'blk-0008', 'order': 1, 'text': '運営：自治体サーバー事業部'}},
+        {'op': 'set', 'path': ['copies', 'cpy-0011'], 'value': {'block': 'blk-0009', 'order': 1, 'refs': ['prf-0001', 'prf-0003'], 'text': '稼働記録と導入台帳から'}}])
+    write_repo(tmp_path, outlines=(outline, DECK))
+    rc, report = check(tmp_path)
+    assert rc == 0, report['findings']
+
+
+def test_proposal_is_a_warning_while_producing(tmp_path):
+    """Requirement 7 / SPEC-deliverable-production-layers requirement 17: a copy with no reference may stay as a
+    proposal; production only warns (the ship gate refuses it, see test_ship)."""
+    outline, _ = apply([
+        {'op': 'set', 'path': ['blocks', 'blk-0004'], 'value': {'order': 4, 'function': 'fact'}},
+        {'op': 'set', 'path': ['copies', 'cpy-0006'], 'value': {'block': 'blk-0004', 'order': 1, 'proposal': True,
+                                                               'text': '自治体の 8 割が更新に悩んでいます'}}])
+    write_repo(tmp_path, outlines=(outline, DECK))
+    rc, report = check(tmp_path)
+    assert rc == 1 and 'IA_SCRIPT_PROPOSAL' in codes(report, 'warn') and not codes(report), report['findings']
+    assert ia_outline.proposals(outline) == ['cpy-0006'] and ia_outline.proposals(OUTLINE) == []
+
+
+def test_proposal_is_part_of_the_script_id():
+    outline, _ = apply([{'op': 'delete', 'path': ['copies', 'cpy-0003', 'message']},
+                        {'op': 'set', 'path': ['copies', 'cpy-0003', 'proposal'], 'value': True}])
+    cited, _ = apply([{'op': 'set', 'path': ['copies', 'cpy-0004', 'refs'], 'value': ['prf-0001']}])
+    base = ia_outline.outline_id(OUTLINE)
+    assert len({base, ia_outline.outline_id(outline), ia_outline.outline_id(cited)}) == 3
+
+
 # ---- ids (requirement 8, Quality 3) -----------------------------------------------------------------------------------
 
 def model(ssot=SSOT, outlines=(OUTLINE, DECK), skip=()):
     m = ia_check.Model(root=Path('.'), ssot=ssot)
     for o in outlines:
-        m.outlines[o['id']] = (Path(layer_paths.rel('infoarch', 'outlines', f'{o["id"]}.yaml')), o)
+        m.outlines[o['id']] = (Path(layer_paths.rel('infoarch', 'scripts', f'{o["id"]}.yaml')), o)
     rows = {k: v for k, v in positioning.approval_targets(m).items() if k[len(positioning.APPROVAL_PREFIX):] not in skip}
     return m, positioning.approved_keys(m, rows)
 
@@ -162,14 +203,14 @@ def ids_of(oid='lp-municipal', **kw):
 def test_ids_are_reproducible_and_shaped():
     a, b = ids_of(), ids_of()
     assert a == b
-    assert a['outline'].startswith('out-') and a['positioning'].startswith('pos-')
+    assert a['outline'].startswith('spt-') and a['positioning'].startswith('pos-')
     assert sorted(a['paths']) == ['val-0001', 'val-0003'] and all(p.startswith('pth-') for p in a['paths'].values())
     assert a['set'] == a['outline'] + ''.join('+' + a['paths'][v] for v in sorted(a['paths']))  # no positioning id
 
 
-def test_section_order_moves_outline_and_set_not_positioning():
+def test_block_order_moves_script_and_set_not_positioning():
     swapped = copy.deepcopy(OUTLINE)
-    swapped['sections']['sec-0001']['order'], swapped['sections']['sec-0002']['order'] = 2, 1
+    swapped['blocks']['blk-0001']['order'], swapped['blocks']['blk-0002']['order'] = 2, 1
     a, b = ids_of(), ids_of(outlines=(swapped, DECK))
     assert b['outline'] != a['outline'] and b['set'] != a['set'] and b['positioning'] == a['positioning']
 
@@ -189,7 +230,7 @@ def test_value_text_moves_positioning_and_set_not_outline():
 
 def test_file_order_and_placement_do_not_move_the_outline_id():
     shuffled = copy.deepcopy(OUTLINE)
-    for key in ('messages', 'sections', 'copies'):
+    for key in ('messages', 'blocks', 'copies'):
         shuffled[key] = dict(reversed(list(shuffled[key].items())))
     shuffled = dict(reversed(list(shuffled.items())))
     moved = copy.deepcopy(OUTLINE)
@@ -228,13 +269,13 @@ def diff(a, b, ssot_b=SSOT, skip_b=()):
 
 def test_diff_lists_only_the_changed_elements():
     b = copy.deepcopy(OUTLINE)
-    b['sections']['sec-0001']['order'], b['sections']['sec-0002']['order'] = 2, 1
+    b['blocks']['blk-0001']['order'], b['blocks']['blk-0002']['order'] = 2, 1
     b['copies']['cpy-0002']['text'] = '運用の手間が 3 分の 1 になります'
     out = diff(OUTLINE, b)
     assert out['changes'] == [
-        {'layer': 'outline', 'element': 'copies/cpy-0002', 'change': 'changed', 'attributes': ['text']},
-        {'layer': 'outline', 'element': 'sections/sec-0001', 'change': 'changed', 'attributes': ['order']},
-        {'layer': 'outline', 'element': 'sections/sec-0002', 'change': 'changed', 'attributes': ['order']}]
+        {'layer': 'outline', 'element': 'blocks/blk-0001', 'change': 'changed', 'attributes': ['order']},
+        {'layer': 'outline', 'element': 'blocks/blk-0002', 'change': 'changed', 'attributes': ['order']},
+        {'layer': 'outline', 'element': 'copies/cpy-0002', 'change': 'changed', 'attributes': ['text']}]
     assert out['changed_layers'] == ['outline'] and out['same_experiment'] is True and out['findings'] == []
 
 
@@ -247,7 +288,7 @@ def test_diff_names_added_and_removed_elements_and_the_lead_change():
     b = copy.deepcopy(OUTLINE)
     b['messages']['msg-0001']['rank'], b['messages']['msg-0002']['rank'] = 'support', 'lead'
     del b['copies']['cpy-0004']
-    b['copies']['cpy-0009'] = {'section': 'sec-0003', 'order': 1, 'message': 'msg-0001', 'text': '保守の要らない運用を'}
+    b['copies']['cpy-0009'] = {'block': 'blk-0003', 'order': 1, 'text': '保守の要らない運用を'}
     out = diff(OUTLINE, b)
     assert {(c['element'], c['change']) for c in out['changes']} == {
         ('messages/msg-0001', 'changed'), ('messages/msg-0002', 'changed'),

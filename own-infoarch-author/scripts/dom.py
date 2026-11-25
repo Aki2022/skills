@@ -1,8 +1,9 @@
-"""Rendered DOM vs outline: screen conformance (SPEC-information-architecture-standardization v6, requirement 10).
+"""Rendered DOM vs script (台本): screen conformance (SPEC-information-architecture-standardization, requirement 10).
 
-The browser does the parsing and rendering; this module only compares its snapshot with the outline: every section
-and every piece of copy has exactly one visible mark (data-ia-section / data-ia-copy), the sections appear exactly in
-the outline's order, each piece of copy is drawn inside its own section and in the section's order, each copy mark
+The browser does the parsing and rendering; this module only compares its snapshot with the script: every block
+and every piece of copy has exactly one visible mark (data-ia-section / data-ia-copy; the anchor names are v6's and
+are kept until the factories rename them), the blocks appear exactly in the script's order, each piece of copy is
+drawn inside its own block and in the block's order, each copy mark
 shows the outline's copy word for word (facts expanded; width and whitespace folded), every fact the copy refers to
 is shown with the SSOT value, and two runs give the same snapshot. A repeat is another piece of copy in the outline.
 Declared non-claim text (data-ia-text) must show its text on every occurrence, and an official name (data-dict="name-…")
@@ -29,8 +30,8 @@ LEGACY = {'legacy-problem': 'data-ia-problem', 'legacy-msg': 'data-ia-msg', 'leg
 def expected(outline):
     """-> ([(kind, id)] in the outline's order, [fact ids the copy refers to])."""
     seq, facts = [], []
-    for sid, _, copies in ol.ordered_sections(outline):
-        seq.append(('section', sid))
+    for sid, _, copies in ol.ordered_blocks(outline):
+        seq.append(('section', sid))  # a block's anchor is data-ia-section (kind 'section')
         for cid, c in copies:
             seq.append(('copy', cid))
             facts += [f for f in check.PLACEHOLDER.findall(c['text']) if f not in facts]
@@ -104,7 +105,7 @@ def compare(outline, ssot, snap, output=None):
     want = [sid for kind, sid in seq if kind == 'section' and sid in have]
     if have != want:
         out.append(('IA_DOM_ORDER', 'fail', f'{vp}: セクションの描画の順 {have} が outline の順 {want} と違う'))
-    owner = {cid: c['section'] for cid, c in outline['copies'].items()}
+    owner = {cid: c['block'] for cid, c in outline['copies'].items()}
     for cid in sorted(owner):
         marks = [a for a in anchors if (a['kind'], a['id']) == ('copy', cid)]
         if len(marks) > 1:
@@ -112,7 +113,7 @@ def compare(outline, ssot, snap, output=None):
         for a in marks:
             if a.get('section') != owner[cid]:
                 out.append(('IA_DOM_COPY_SECTION', 'fail', f'{vp}: 文案 {cid} が {a.get("section")} の中にある（outline では {owner[cid]}）'))
-    for sid, _, copies in ol.ordered_sections(outline):
+    for sid, _, copies in ol.ordered_blocks(outline):
         drawn = [a['id'] for a in sorted(anchors, key=lambda a: (a['top'], a['left']))
                  if a['kind'] == 'copy' and a['visible'] and a.get('section') == sid and owner.get(a['id']) == sid]
         expected_order = [cid for cid, _ in copies if cid in drawn]

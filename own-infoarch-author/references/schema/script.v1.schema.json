@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "own-infoarch-author/outline.v3.schema.json",
-  "title": "design/info_arch/outlines/<deliverable id>.yaml schema version 3 (outline)",
-  "description": "outline（SPEC-information-architecture-standardization v6 要件 6）。positioning 1 つ（target のセグメント）に立ち、定数（target・touchpoint・tone）と目的変数（objective）を置いて、独立変数のメッセージ・セクション・文案を組み立てる。1 ページ＝1 outline。AI が作り、人は保守しない。並びは order で持ち、ファイルの中で書いた順番は意味を持たない。id・channel・outputs は置き場所の宣言で、outline の id に入らない。",
+  "$id": "own-infoarch-author/script.v1.schema.json",
+  "title": "ux/infoarch/scripts/<deliverable id>.yaml schema version 1 (script, 台本)",
+  "description": "台本（SPEC-information-architecture-standardization 要件 6、SPEC-deliverable-production-layers 要件 16〜20）。outline（版 3）を置き換える。positioning 1 つ（target のセグメント）に立ち、定数（target・touchpoint・tone）と目的変数（objective）を置いて、独立変数のメッセージ・まとまり・文案を組み立てる。まとまりは内容の働き（辞書の 7 つ）を 1 つ持つ。1 ページ＝1 台本。AI が作り、人は保守しない。並びは order で持ち、ファイルの中で書いた順番は意味を持たない。id・channel・outputs は置き場所の宣言で、台本の id に入らない。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -15,12 +15,12 @@
     "tone",
     "objective",
     "messages",
-    "sections",
+    "blocks",
     "copies"
   ],
   "properties": {
     "schema_version": {
-      "const": 3
+      "const": 1
     },
     "id": {
       "type": "string",
@@ -49,7 +49,7 @@
         "segment",
         "condition"
       ],
-      "description": "意図した相手：セグメント（id）＋足す条件。outline はこのセグメントの positioning に立つ",
+      "description": "意図した相手：セグメント（id）＋足す条件。台本はこのセグメントの positioning に立つ",
       "properties": {
         "segment": {
           "type": "string",
@@ -102,13 +102,13 @@
         "$ref": "#/$defs/message"
       }
     },
-    "sections": {
+    "blocks": {
       "type": "object",
       "propertyNames": {
-        "pattern": "^sec-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
+        "pattern": "^blk-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
       },
       "additionalProperties": {
-        "$ref": "#/$defs/section"
+        "$ref": "#/$defs/block"
       }
     },
     "copies": {
@@ -122,7 +122,7 @@
     },
     "texts": {
       "type": "object",
-      "description": "主張でない文言の宣言（ナビ・見出しのラベル。D12）。key は outline の中で一意",
+      "description": "主張でない文言の宣言（ナビ・見出しのラベル。D12）。key は台本の中で一意",
       "propertyNames": {
         "pattern": "^[a-z][a-z0-9_-]*$"
       },
@@ -140,7 +140,7 @@
         "rank",
         "type"
       ],
-      "description": "何を言うか。提供価値をちょうど 1 つ指す（CTA も、その行動で何が得られるかとして指す）",
+      "description": "何を言うか。提供価値をちょうど 1 つ指す（CTA も、その行動で何が得られるかとして指す）。主張と行動のまとまりにだけ置く",
       "properties": {
         "value": {
           "type": "string",
@@ -173,28 +173,30 @@
         }
       }
     },
-    "section": {
+    "block": {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "order",
-        "role",
-        "places"
+        "function"
       ],
-      "description": "どこで何番目に言うか。通常のメッセージ 1 つと CTA 0〜1 つを置く",
+      "description": "どこで何番目に言うか（まとまり）。内容の働きを辞書の 7 つ（term-function-*）から 1 つ持つ。主張のまとまりは通常のメッセージをちょうど 1 つ、行動のまとまりは CTA を 0〜1 つ置く。ほかの働きのまとまりはメッセージを置かない",
       "properties": {
         "order": {
           "type": "integer",
           "minimum": 1
         },
-        "role": {
+        "function": {
           "enum": [
-            "aware",
-            "pain",
-            "compare",
-            "trust",
-            "act"
-          ]
+            "identify",
+            "claim",
+            "fact",
+            "evidence",
+            "offer",
+            "action",
+            "source"
+          ],
+          "description": "名乗り・主張・事実・証拠と声・提供条件・行動・出典と運営者"
         },
         "places": {
           "type": "array",
@@ -209,26 +211,40 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "section",
+        "block",
         "order",
-        "message",
         "text"
       ],
-      "description": "どんな言葉で言うか。セクションに属し、同じセクションに置かれたメッセージを 1 つ伝える。固定値は {{value-<辞書の id>}} で参照する",
+      "description": "どんな言葉で言うか（文案）。まとまりに属し、まとまりの中の順番を持つ。引き先（伝えるメッセージ・positioning の証拠・辞書の値 {{value-<辞書の id>}}）を持つか、提案の印（proposal: true）を持つ",
       "properties": {
-        "section": {
+        "block": {
           "type": "string"
         },
         "order": {
           "type": "integer",
           "minimum": 1
         },
-        "message": {
-          "type": "string"
-        },
         "text": {
           "type": "string",
           "minLength": 1
+        },
+        "message": {
+          "type": "string",
+          "description": "伝えるメッセージ。同じまとまりに置かれたものだけ"
+        },
+        "refs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^prf-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"
+          },
+          "description": "引く positioning の証拠（事実・証拠と声の文案）"
+        },
+        "proposal": {
+          "const": true,
+          "description": "提案の印：引き先の無い文（true のときだけ書く）。制作中は警告、出荷で止める"
         }
       }
     },
@@ -250,9 +266,9 @@
           "type": "string",
           "minLength": 1
         },
-        "section": {
+        "block": {
           "type": "string",
-          "description": "label を置くセクション"
+          "description": "label を置くまとまり"
         }
       }
     }

@@ -33,7 +33,7 @@ import layer_paths  # noqa: E402  (own-design-author's layer rule: where each la
 def model(ssot=SSOT, outlines=(OUTLINE, DECK)):
     m = ia_check.Model(root=Path('.'), ssot=ssot)
     for o in outlines:
-        m.outlines[o['id']] = (Path(layer_paths.rel('infoarch', 'outlines', f'{o["id"]}.yaml')), o)
+        m.outlines[o['id']] = (Path(layer_paths.rel('infoarch', 'scripts', f'{o["id"]}.yaml')), o)
     return m, positioning.approved_keys(m, positioning.approval_targets(m))
 
 
@@ -49,23 +49,27 @@ def test_value_fit_is_copy_times_one_value_and_replaces_strategy_fit():
     kinds = {r['input']['kind'] for r in rows}
     assert 'ia-value-fit' in kinds and 'ia-strategy-fit' not in kinds
     fit = {r['id']: r for r in rows if r['input']['kind'] == 'ia-value-fit'}
-    # trust (facts, proof) and act (the call to action) sections do not carry a value: they are not asked (D32).
-    assert sorted(fit) == ['ia-value-fit:lp-municipal/sec-0001/cpy-0001', 'ia-value-fit:lp-municipal/sec-0001/cpy-0002']
-    ctx = fit['ia-value-fit:lp-municipal/sec-0001/cpy-0002']['input']['context']
+    # only claim blocks carry a value; fact, evidence, offer and action copy is not asked (D32, requirement 11).
+    assert sorted(fit) == ['ia-value-fit:lp-municipal/blk-0001/cpy-0001', 'ia-value-fit:lp-municipal/blk-0001/cpy-0002',
+                           'ia-value-fit:lp-municipal/blk-0002/cpy-0003']
+    ctx = fit['ia-value-fit:lp-municipal/blk-0001/cpy-0002']['input']['context']
     assert set(ctx) == {'outline', 'message', 'value'}
 
 
-def test_trust_and_act_copy_is_not_asked_whether_it_conveys_a_value():
+@pytest.mark.parametrize('oid', ['lp-municipal', 'deck-smb'])
+def test_only_claim_copy_is_asked_whether_it_conveys_a_value(oid):
     """Pilot and I16: every fact listing and call-to-action copy was labeled "does not convey" by the owner, because
-    conveying a value is not its job. The value judgment skips those sections, and it is the only judgment left."""
-    rows = judge.outline_candidates('lp-municipal', OUTLINE, SSOT, jl.load_policy(), jl)
-    roles = {sid: sec['role'] for sid, sec in OUTLINE['sections'].items()}
+    conveying a value is not its job. The value judgment asks only the copy of claim blocks (requirement 11), it is the
+    only judgment left, and the answer key holds nothing else."""
+    o = {'lp-municipal': OUTLINE, 'deck-smb': DECK}[oid]
+    rows = judge.outline_candidates(oid, o, SSOT, jl.load_policy(), jl)
+    fn = {bid: b['function'] for bid, b in o['blocks'].items()}
     by_kind = {}
     for r in rows:
         by_kind.setdefault(r['input']['kind'], set()).add(r['id'].split(':', 1)[1])
-    skipped = {f'lp-municipal/{c["section"]}/{cid}' for cid, c in OUTLINE['copies'].items()
-               if roles[c['section']] in ('trust', 'act')}
-    assert skipped and not skipped & by_kind['ia-value-fit']
+    skipped = {f'{oid}/{c["block"]}/{cid}' for cid, c in o['copies'].items() if fn[c['block']] != 'claim'}
+    asked = {f'{oid}/{c["block"]}/{cid}' for cid, c in o['copies'].items() if fn[c['block']] == 'claim'}
+    assert skipped and not skipped & by_kind['ia-value-fit'] and asked == by_kind['ia-value-fit']
     assert set(by_kind) == {'ia-value-fit'}  # no other kind exists to ask about this copy
     assert not any(i['id'].split('@')[0] in skipped for i in items())
 
@@ -87,9 +91,9 @@ def test_judgment_input_binds_the_copy_and_the_value_content(change):
         ssot['values']['val-0001']['text'] = '運用がかなり楽になる'
     before, after = key(SSOT, OUTLINE), key(ssot, outline)
     moved = sorted(k for k in before if before[k] != after[k])
-    # cpy-0001 and cpy-0002 both point to val-0001; trust and act copy are not asked (D32)
-    expect = ['ia-value-fit:lp-municipal/sec-0001/cpy-0002'] if change == 'copy' else \
-        ['ia-value-fit:lp-municipal/sec-0001/cpy-0001', 'ia-value-fit:lp-municipal/sec-0001/cpy-0002']
+    # cpy-0001 and cpy-0002 both point to val-0001; action copy is not asked (D32)
+    expect = ['ia-value-fit:lp-municipal/blk-0001/cpy-0002'] if change == 'copy' else \
+        ['ia-value-fit:lp-municipal/blk-0001/cpy-0001', 'ia-value-fit:lp-municipal/blk-0001/cpy-0002']
     assert moved == expect, moved
 
 
@@ -97,16 +101,16 @@ def test_judgment_input_binds_the_copy_and_the_value_content(change):
 
 def test_answer_key_pairs_each_copy_with_its_value_and_re_pairs_it_within_the_positioning():
     out = {i['id']: i for i in items()}
-    own = out['lp-municipal/sec-0001/cpy-0002@val-0001']
+    own = out['lp-municipal/blk-0001/cpy-0002@val-0001']
     assert own['kind'] == 'own' and own['value']['id'] == 'val-0001'
-    swap = out['lp-municipal/sec-0001/cpy-0002@val-0003']  # the other value of seg-0001
+    swap = out['lp-municipal/blk-0001/cpy-0002@val-0003']  # the other value of seg-0001
     assert swap['kind'] == 'swap' and swap['candidate']['input']['kind'] == 'ia-value-fit'
     assert swap['candidate']['input']['text'] == own['candidate']['input']['text']  # same copy, another value
 
 
 def test_a_single_value_positioning_is_re_paired_with_another_positioning():
     out = {i['id']: i for i in items()}
-    deck = [i for i in out.values() if i['id'].startswith('deck-smb/sec-0001/cpy-0001@')]
+    deck = [i for i in out.values() if i['id'].startswith('deck-smb/blk-0001/cpy-0001@')]
     assert {i['value']['id']: i['kind'] for i in deck} == {'val-0002': 'own', 'val-0001': 'swap'}
 
 

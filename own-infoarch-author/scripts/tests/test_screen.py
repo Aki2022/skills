@@ -1,7 +1,7 @@
 """Screen conformance (SPEC-information-architecture-standardization v6, requirement 10; Quality 1).
 
-The rendered page must show the outline's sections in order, each section's copy word for word and in order, each
-copy inside its own section, and nothing outside the marks. Every condition has a red fixture (the table), checked on
+The rendered page must show the script's blocks in order, each block's copy word for word and in order, each
+copy inside its own block, and nothing outside the marks. Every condition has a red fixture (the table), checked on
 DOM snapshots here and with a real browser in test_dom.
 """
 import copy

@@ -34,7 +34,7 @@ ANSWERS = 'judgment-answers.json'  # the name judgment_run.py requires
 
 
 def build(m, approved, policy, jl):
-    """-> [item] sorted by id. An item: id (`<outline>/<sec>/<cpy>@<value>`), kind (own / swap), text, value, candidate."""
+    """-> [item] sorted by id. An item: id (`<script>/<block>/<copy>@<value>`), kind (own / swap), text, value, candidate."""
     atoms = pos.atoms(m)
     values = {v: a for v, a in atoms.items() if pos._prefix(v) == 'val' and v in approved}
     facts = m.ssot.get('facts') or {}
@@ -43,11 +43,11 @@ def build(m, approved, policy, jl):
         seg = ol.segment_of(o)
         same = sorted(v for v, a in values.items() if a.get('segment') == seg)
         other = sorted(v for v, a in values.items() if a.get('segment') != seg)
-        for sid, sec, copies in ol.ordered_sections(o):
-            if sec['role'] in judge.VALUE_FIT_SKIP_ROLES:
+        for sid, blk, copies in ol.ordered_blocks(o):
+            if blk['function'] not in judge.VALUE_FIT_FUNCTIONS:
                 continue  # not asked whether it conveys a value, so nothing to measure
             for cid, c in copies:
-                own = (o['messages'].get(c['message']) or {}).get('value')
+                own = (o['messages'].get(c.get('message')) or {}).get('value')
                 if own not in values:
                     continue  # an unapproved value has nothing settled to measure against
                 swaps = [v for v in same if v != own] or other[:1]
@@ -58,7 +58,7 @@ def build(m, approved, policy, jl):
                     # An own pair asks what `judge` asks (same id, so the same judgment hash and one answer for both).
                     asked = f'{oid}/{sid}/{cid}' if kind == 'own' else ident
                     out.append({'id': ident, 'kind': kind, 'text': text, 'value': value,
-                                'candidate': judge.value_fit(jl, policy, asked, text, oid, c['message'], value)})
+                                'candidate': judge.value_fit(jl, policy, asked, text, oid, c.get('message'), value)})
     return sorted(out, key=lambda i: i['id'])
 
 

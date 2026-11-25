@@ -1,4 +1,4 @@
-"""Messaging SSOT + structured outline: green fixture, every required red case, impact lookup."""
+"""Messaging SSOT + structured script (台本): green fixture, every required red case, impact lookup."""
 import copy
 import json
 import subprocess
@@ -21,10 +21,11 @@ RED = json.loads((SKILL / 'fixtures/red-cases.json').read_text(encoding='utf-8')
 
 CHANNEL = {'schema_version': 2, 'media': 'web', 'outputs': ['site/**/*.html'], 'ship': True, 'ship_command': 'mise run deploy'}
 DRAFT = {'schema_version': 2, 'media': 'deck', 'outputs': ['decks/*.pptx'], 'ship': False}
-# outline v3 (requirement 6): stands on the target segment's positioning; constants, objective, then the three
-# independent variables. Order lives in `order`, never in how the file is written.
+# script v1 (台本, requirement 6): stands on the target segment's positioning; constants, objective, then the three
+# independent variables (messages, blocks with a content function, copy). Order lives in `order`, never in how the file
+# is written. The store keeps the name `OUTLINE` (the deliverable's script) to limit churn in the tests that import it.
 OUTLINE = {
-    'schema_version': 3, 'id': 'lp-municipal', 'channel': 'web', 'outputs': ['site/index.html'],
+    'schema_version': 1, 'id': 'lp-municipal', 'channel': 'web', 'outputs': ['site/index.html'],
     'target': {'segment': 'seg-0001', 'condition': '既存システムの運用が重いと感じている情報部門の担当者'},
     'touchpoint': 'lp', 'tone': '丁寧で落ち着いた調子',
     'objective': {'id': 'obj-0001', 'action': '資料請求'},
@@ -32,32 +33,35 @@ OUTLINE = {
         'msg-0001': {'value': 'val-0001', 'rank': 'lead', 'type': 'normal', 'compares': ['alt-0001']},
         'msg-0002': {'value': 'val-0003', 'rank': 'support', 'type': 'normal'},
         'msg-0003': {'value': 'val-0001', 'rank': 'support', 'type': 'cta', 'achieves': 'obj-0001'}},
-    'sections': {
-        'sec-0001': {'order': 1, 'role': 'pain', 'places': ['msg-0001']},
-        'sec-0002': {'order': 2, 'role': 'trust', 'places': ['msg-0002']},
-        'sec-0003': {'order': 3, 'role': 'act', 'places': ['msg-0001', 'msg-0003']}},
+    'blocks': {
+        'blk-0001': {'order': 1, 'function': 'claim', 'places': ['msg-0001']},
+        'blk-0002': {'order': 2, 'function': 'claim', 'places': ['msg-0002']},
+        'blk-0003': {'order': 3, 'function': 'action', 'places': ['msg-0003']}},
     'copies': {
-        'cpy-0001': {'section': 'sec-0001', 'order': 1, 'message': 'msg-0001', 'text': '既存システムの運用、重くありませんか'},
-        'cpy-0002': {'section': 'sec-0001', 'order': 2, 'message': 'msg-0001', 'text': '運用の手間が半分になります'},
-        'cpy-0003': {'section': 'sec-0002', 'order': 1, 'message': 'msg-0002', 'text': '導入は{{value-customer-count}}、止まらずに動き続けます'},
-        'cpy-0004': {'section': 'sec-0003', 'order': 1, 'message': 'msg-0001', 'text': '保守の要らない運用へ'},
-        'cpy-0005': {'section': 'sec-0003', 'order': 2, 'message': 'msg-0003', 'text': '資料請求はこちら（{{value-phone}}）'}},
+        'cpy-0001': {'block': 'blk-0001', 'order': 1, 'message': 'msg-0001', 'text': '既存システムの運用、重くありませんか'},
+        'cpy-0002': {'block': 'blk-0001', 'order': 2, 'message': 'msg-0001', 'text': '運用の手間が半分になります'},
+        'cpy-0003': {'block': 'blk-0002', 'order': 1, 'message': 'msg-0002', 'text': '導入は{{value-customer-count}}、止まらずに動き続けます'},
+        'cpy-0004': {'block': 'blk-0003', 'order': 1, 'text': '保守の要らない運用へ'},
+        'cpy-0005': {'block': 'blk-0003', 'order': 2, 'message': 'msg-0003', 'text': '資料請求はこちら（{{value-phone}}）'}},
 }
+# The deck also holds an evidence block: its copy cites positioning evidence of its own segment (refs).
 DECK = {
-    'schema_version': 3, 'id': 'deck-smb', 'channel': 'deck', 'outputs': ['decks/smb.pptx'],
+    'schema_version': 1, 'id': 'deck-smb', 'channel': 'deck', 'outputs': ['decks/smb.pptx'],
     'target': {'segment': 'seg-0002', 'condition': '人手が足りない中小企業の経営者'},
     'touchpoint': 'deck', 'tone': '端的で親しみやすい調子',
     'objective': {'id': 'obj-0001', 'action': '問い合わせ'},
     'messages': {
         'msg-0001': {'value': 'val-0002', 'rank': 'lead', 'type': 'normal'},
         'msg-0002': {'value': 'val-0002', 'rank': 'support', 'type': 'cta', 'achieves': 'obj-0001'}},
-    'sections': {
-        'sec-0001': {'order': 1, 'role': 'aware', 'places': ['msg-0001']},
-        'sec-0002': {'order': 2, 'role': 'act', 'places': ['msg-0001', 'msg-0002']}},
+    'blocks': {
+        'blk-0001': {'order': 1, 'function': 'claim', 'places': ['msg-0001']},
+        'blk-0002': {'order': 2, 'function': 'evidence'},
+        'blk-0003': {'order': 3, 'function': 'action', 'places': ['msg-0002']}},
     'copies': {
-        'cpy-0001': {'section': 'sec-0001', 'order': 1, 'message': 'msg-0001', 'text': '{{value-customer-count}}が導入、少人数でも回ります'},
-        'cpy-0002': {'section': 'sec-0002', 'order': 1, 'message': 'msg-0001', 'text': '少人数で回す仕組みを'},
-        'cpy-0003': {'section': 'sec-0002', 'order': 2, 'message': 'msg-0002', 'text': 'お問い合わせ {{value-phone}}'}},
+        'cpy-0001': {'block': 'blk-0001', 'order': 1, 'message': 'msg-0001', 'text': '{{value-customer-count}}が導入、少人数でも回ります'},
+        'cpy-0002': {'block': 'blk-0003', 'order': 1, 'text': '少人数で回す仕組みを'},
+        'cpy-0003': {'block': 'blk-0003', 'order': 2, 'message': 'msg-0002', 'text': 'お問い合わせ {{value-phone}}'},
+        'cpy-0004': {'block': 'blk-0002', 'order': 1, 'refs': ['prf-0002'], 'text': '導入前後で運用の時間を比べました'}},
 }
 
 # The docs dictionary the outlines copy from (docs/dictionary/<domain>.json): fixed values and the official name.
@@ -93,7 +97,7 @@ def write_repo(root, ssot=SSOT, channels=(CHANNEL, DRAFT), outlines=(OUTLINE, DE
     for ch in channels:
         dump(base / 'channels' / f'{ch["media"]}.yaml', ch)
     for o in outlines:
-        dump(base / 'outlines' / f'{o["id"]}.yaml', o)
+        dump(base / 'scripts' / f'{o["id"]}.yaml', o)
     return base
 
 
@@ -146,7 +150,7 @@ def test_green_fixture_passes_with_real_targets(tmp_path):
     write_repo(tmp_path)
     rc, report = check(tmp_path)
     assert rc == 0, report['findings']
-    assert report['targets'] == {'channels': 2, 'outlines': 2, 'sections': 5, 'screens': 0, 'items': 0}
+    assert report['targets'] == {'channels': 2, 'outlines': 2, 'blocks': 6, 'screens': 0, 'items': 0}
 
 
 def mutate(case, root):
@@ -155,7 +159,7 @@ def mutate(case, root):
     channels = [copy.deepcopy(CHANNEL), copy.deepcopy(DRAFT)]
     cp = outline['copies']
     if case == 'outline-ref-broken':
-        outline['sections']['sec-0002']['places'] = ['msg-0099']
+        outline['blocks']['blk-0002']['places'] = ['msg-0099']
     elif case == 'outline-ref-tombstoned':
         ssot['ledger']['next']['val'] = 5
         ssot['ledger']['tombstones'] = {'val-0004': 'val-0001'}
@@ -175,7 +179,7 @@ def mutate(case, root):
         outline['outputs'] = ['other/index.html']
     elif case == 'outline-id-mismatch':
         base = write_repo(root, ssot, channels, [outline, deck], dictionary=dic)
-        (base / 'outlines/lp-municipal.yaml').rename(base / 'outlines/lp-renamed.yaml')
+        (base / 'scripts/lp-municipal.yaml').rename(base / 'scripts/lp-renamed.yaml')
         return
     elif case == 'expired-proof-shipped':
         ssot['proofs']['prf-0001']['as_of'] = '2024-01-01'
@@ -211,19 +215,32 @@ def mutate(case, root):
         dic['entries'][1]['expires'] = '2020-01-01'
     elif case == 'outline-dot-directory':
         base = write_repo(root, ssot, channels, [outline, deck], dictionary=dic)
-        (base / 'outlines/.drafts').mkdir()
-        (base / 'outlines/.drafts/broken.yaml').write_text('a: [', encoding='utf-8')
+        (base / 'scripts/.drafts').mkdir()
+        (base / 'scripts/.drafts/broken.yaml').write_text('a: [', encoding='utf-8')
         return
     elif case == 'ssot-id-zero-serial':
         ssot['strengths']['str-0000'] = copy.deepcopy(ssot['strengths']['str-0001'])
     elif case == 'ssot-id-trailing-newline':
         ssot['strengths']['str-0001\n'] = copy.deepcopy(ssot['strengths']['str-0001'])
     elif case == 'outline-text-section-broken':
-        outline['texts'] = {'label-problem': {'kind': 'label', 'text': 'PROBLEM', 'section': 'sec-0099'}}
+        outline['texts'] = {'label-problem': {'kind': 'label', 'text': 'PROBLEM', 'block': 'blk-0099'}}
     elif case == 'outline-placeholder-padded':
         deck['copies']['cpy-0001']['text'] = '{{\nvalue-customer-count\n}}が導入'
     elif case == 'outline-v2':
         outline['schema_version'] = 2
+    elif case == 'outline-v3-in-scripts':
+        outline['schema_version'] = 3
+    elif case == 'outlines-dir-retired':
+        base = write_repo(root, ssot, channels, [outline, deck], dictionary=dic)
+        dump(base / 'outlines/lp-municipal.yaml', outline)
+        return
+    elif case == 'outlines-dir-retired-dotfile-only':
+        base = write_repo(root, ssot, channels, [outline, deck], dictionary=dic)
+        (base / 'outlines').mkdir()
+        (base / 'outlines/.gitkeep').write_text('', encoding='utf-8')
+        return
+    elif case == 'script-proof-ref-broken':
+        deck['copies']['cpy-0004']['refs'] = ['prf-0099']
     else:
         raise KeyError(case)
     write_repo(root, ssot, channels, [o for o in (outline, deck) if o], dictionary=dic)
@@ -313,7 +330,7 @@ def test_impact_on_unknown_id_is_exit_2(tmp_path):
 def test_dotfiles_in_channels_and_outlines_are_ignored(tmp_path):
     base = write_repo(tmp_path)
     (base / 'channels/.DS_Store').write_bytes(b'x')
-    (base / 'outlines/.gitkeep').write_text('', encoding='utf-8')
+    (base / 'scripts/.gitkeep').write_text('', encoding='utf-8')
     rc, report = check(tmp_path)
     assert rc == 0, report['findings']
 
@@ -332,7 +349,9 @@ def test_lead_value_without_evidence_is_a_warning(tmp_path):
     ssot = copy.deepcopy(SSOT)
     ssot['edges'] = [e for e in ssot['edges'] if e['kind'] != 'supports' or e['from'] != 'prf-0002']
     del ssot['proofs']['prf-0002']
-    write_repo(tmp_path, ssot)
+    deck = copy.deepcopy(DECK)  # its evidence copy cited prf-0002: left as a proposal (a warning too)
+    deck['copies']['cpy-0004'] = {'block': 'blk-0002', 'order': 1, 'proposal': True, 'text': '導入前後で運用の時間を比べました'}
+    write_repo(tmp_path, ssot, outlines=(OUTLINE, deck))
     rc, report = check(tmp_path)
     hits = [f for f in report['findings'] if f['code'] == 'IA_LEAD_UNSUPPORTED']
     assert rc == 1 and [f['level'] for f in hits] == ['warn'], report['findings']
@@ -342,7 +361,7 @@ def test_lead_value_without_evidence_is_a_warning(tmp_path):
 def test_declared_navigation_and_label_texts_pass(tmp_path):
     outline = copy.deepcopy(OUTLINE)
     outline['texts'] = {'nav': {'kind': 'navigation', 'text': 'サービス 使い方'},
-                        'label-problem': {'kind': 'label', 'text': 'PROBLEM', 'section': 'sec-0001'}}
+                        'label-problem': {'kind': 'label', 'text': 'PROBLEM', 'block': 'blk-0001'}}
     write_repo(tmp_path, outlines=(outline, DECK))
     rc, report = check(tmp_path)
     assert rc == 0, report['findings']

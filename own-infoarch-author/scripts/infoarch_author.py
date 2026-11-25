@@ -23,9 +23,9 @@ import skeleton  # noqa: E402
 GUARD_ITSELF = ('ship', 'maintain')
 
 
-# What only the outline side of a repository reports (channels, outlines, their use of a path, expiry of what they ship,
+# What only the script side of a repository reports (channels, scripts, their use of a path, expiry of what they ship,
 # the design page inventory). `blueprint` leaves these to `check`.
-OUTLINE_SIDE = ('IA_OUTLINE', 'IA_CHANNEL', 'IA_NO_OUTLINES', 'IA_NO_CHANNELS', 'IA_LEAD_UNSUPPORTED', 'IA_PAGES_',
+OUTLINE_SIDE = ('IA_OUTLINE', 'IA_SCRIPT_', 'IA_CHANNEL', 'IA_NO_OUTLINES', 'IA_NO_CHANNELS', 'IA_LEAD_UNSUPPORTED', 'IA_PAGES_',
                 'IA_EXPIRED_', 'IA_POSITIONING_UNAPPROVED')
 
 
@@ -220,7 +220,7 @@ def cmd_skeleton(args):
         return cmd_skeleton_screen(args)
     report, m = check.check(args.root, dt.date.today().isoformat())
     if m.ssot is None or args.outline not in m.outlines:
-        report.add('fail', 'IA_SKELETON_OUTLINE', f'アウトライン {args.outline} が無い')
+        report.add('fail', 'IA_SKELETON_OUTLINE', f'台本 {args.outline} が無い')
     elif report.exit_code == 2:
         report.add('fail', 'IA_SKELETON_REFUSED', 'check が失格しているので骨組みを出さない。先に直す')
     if report.exit_code == 2:
@@ -262,11 +262,11 @@ def _loaded(args, level):
 
 
 def cmd_set(args):
-    """The set id (requirement 8) of one deliverable, with the content hash of each of its outline elements."""
+    """The set id (requirement 8) of one deliverable, with the content hash of each of its script elements."""
     import outline
     report, m, approved = _loaded(args, 'set')
     if approved is not None and args.outline not in m.outlines:
-        report.add('fail', 'IA_SET_UNKNOWN_OUTLINE', f'アウトライン {args.outline} が無い')
+        report.add('fail', 'IA_SET_UNKNOWN_OUTLINE', f'台本 {args.outline} が無い')
     if approved is None or report.exit_code == 2:
         _print(report.to_dict())
         return 2
@@ -382,7 +382,7 @@ def cmd_targets(args):
 def main(argv=None):
     ap = argparse.ArgumentParser(prog='infoarch-author')
     sub = ap.add_subparsers(dest='cmd', required=True)
-    c = sub.add_parser('check', help='deterministic checks of the SSOT, channels and outlines')
+    c = sub.add_parser('check', help='deterministic checks of the SSOT, channels and scripts (台本)')
     c.add_argument('--root', default='.')
     c.add_argument('--date', help='evaluation date YYYY-MM-DD (default: today)')
     c.set_defaults(fn=cmd_check)
@@ -396,9 +396,9 @@ def main(argv=None):
     rq.add_argument('--title', default='プロダクト UI の承認依頼')
     rq.add_argument('--read-decisions', help="the owner's saved answers (the Artifact db `decisions` rows, or the page's copied JSON)")
     rq.set_defaults(fn=cmd_request)
-    d = sub.add_parser('dom', help='render the outline outputs in a browser and compare anchors, order and facts')
+    d = sub.add_parser('dom', help='render the script outputs in a browser and compare anchors, order and facts')
     d.add_argument('--root', default='.')
-    d.add_argument('--outline', required=True)
+    d.add_argument('--outline', '--script', dest='outline', required=True, help='script id (--outline is the v6 name, kept)')
     d.add_argument('--date', help='evaluation date YYYY-MM-DD (default: today)')
     d.set_defaults(fn=cmd_dom)
     j = sub.add_parser('judge', help='Jev judgment candidates and a read-only check against the shared judgment ledger')
@@ -419,7 +419,7 @@ def main(argv=None):
     e = sub.add_parser('evaluate', help='evaluate generated creatives: check, then dom, then judge, one report and one exit code')
     e.add_argument('--root', default='.')
     e.add_argument('--date', help='evaluation date YYYY-MM-DD (default: today)')
-    e.add_argument('--outline', action='append', help='outline id to evaluate (repeatable; default: every outline)')
+    e.add_argument('--outline', '--script', dest='outline', action='append', help='script id to evaluate (repeatable; default: every script)')
     e.add_argument('--acquire', action='store_true', help='also fetch missing Jev judgments (preview only unless --execute)')
     e.add_argument('--answers-dir', help='directory that keeps judgment-answers.json between runs (outside the repo)')
     e.add_argument('--limit', type=int, help='most judgments to request in this run')
@@ -434,42 +434,42 @@ def main(argv=None):
     mode.add_argument('--doctor', action='store_true', help='diagnose ship_command, merge_base, marker and the pre-push extension')
     s.add_argument('--refs-file', help='pre-push refs preserved by the dispatcher')
     s.set_defaults(fn=cmd_ship)
-    mt = sub.add_parser('maintain', help='own-session-close Step 2.5: changed SSOT/outlines, evidence falling due, uncovered judgments')
+    mt = sub.add_parser('maintain', help='own-session-close Step 2.5: changed SSOT/scripts, evidence falling due, uncovered judgments')
     mt.add_argument('--root', default='.')
     mt.add_argument('--date', help='evaluation date YYYY-MM-DD (default: today)')
     mt.add_argument('--within-days', type=int, help='due window in days (default: references/expiry.json due_within_days)')
     mt.set_defaults(fn=cmd_maintain)
-    k = sub.add_parser('skeleton', help='print or write the HTML skeleton (anchors, order, facts) of an outline for a factory to style')
+    k = sub.add_parser('skeleton', help='print or write the HTML skeleton (anchors, order, facts) of a script for a factory to style')
     k.add_argument('--root', default='.')
-    k.add_argument('--outline')
+    k.add_argument('--outline', '--script', dest='outline', help='script id (--outline is the v6 name, kept)')
     k.add_argument('--screen', help='a blueprint screen id: print or write its HTML skeleton (marks for regions, groups, actions, states)')
     k.add_argument('--css', help='with --screen: a stylesheet to embed (design\'s allocation CSS)')
-    k.add_argument('--out', help='outline: a directory; screen: the HTML file to write (never overwritten)')
+    k.add_argument('--out', help='script: a directory; screen: the HTML file to write (never overwritten)')
     k.set_defaults(fn=cmd_skeleton)
-    i = sub.add_parser('impact', help='list outlines and outputs that reference an atom id')
+    i = sub.add_parser('impact', help='list scripts and outputs that reference an atom id')
     i.add_argument('--root', default='.')
     i.add_argument('--id', required=True)
     i.set_defaults(fn=cmd_impact)
-    st = sub.add_parser('set', help='set id of one deliverable: positioning id + outline id, and its element hashes')
+    st = sub.add_parser('set', help='set id of one deliverable: script id + the ids of the paths it points at, and its element hashes')
     st.add_argument('--root', default='.')
-    st.add_argument('--outline', required=True)
+    st.add_argument('--outline', '--script', dest='outline', required=True, help='script id (--outline is the v6 name, kept)')
     st.set_defaults(fn=cmd_set)
     df = sub.add_parser('diff', help='difference between two sets: changed elements, changed layers, same experiment or not')
     df.add_argument('--root', default='.')
     df.add_argument('--root-b', help='checkout of the second set (default: --root)')
-    df.add_argument('--a', required=True, help='first deliverable (outline id)')
-    df.add_argument('--b', required=True, help='second deliverable (outline id)')
+    df.add_argument('--a', required=True, help='first deliverable (script id)')
+    df.add_argument('--b', required=True, help='second deliverable (script id)')
     df.add_argument('--dom-a', help='dom report of the first deliverable (compares text outside anchors)')
     df.add_argument('--dom-b', help='dom report of the second deliverable')
     df.set_defaults(fn=cmd_diff)
     t = sub.add_parser('targets', help='owner-approval targets (ia:path keys and path hashes) for own-design-author approvals')
     t.add_argument('--root', default='.')
     t.set_defaults(fn=cmd_targets)
-    m6 = sub.add_parser('migrate-v6', help='one batch v5 -> v6 migration: SSOT, outlines, rendered marks, modules.ia pin')
+    m6 = sub.add_parser('migrate-v6', help='one batch v5 migration: SSOT, scripts (from v5 outlines), rendered marks, modules.ia pin')
     m6.add_argument('--root', default='.')
     m6.add_argument('--write', action='store_true', help='write the migrated files (without it: dry run)')
     m6.set_defaults(fn=cmd_migrate_v6)
-    md = sub.add_parser('migrate-dictionary', help='one migration of a schema 4 tree: facts and entities to docs/dictionary/, the voice dropped, outlines and rendered marks rewritten')
+    md = sub.add_parser('migrate-dictionary', help='one migration of a schema 4 tree: facts and entities to docs/dictionary/, the voice dropped, scripts and rendered marks rewritten')
     md.add_argument('--root', default='.')
     md.add_argument('--map', required=True, help='JSON: {old id: {"id": "<kind>-<slug>", "expires": "YYYY-MM-DD" | "evergreen": true, "variants": [..]}}')
     md.add_argument('--domain', default='product', help='dictionary file docs/dictionary/<domain>.json (default: product)')

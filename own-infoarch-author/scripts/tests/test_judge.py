@@ -23,11 +23,11 @@ import layer_paths  # noqa: E402  (own-design-author's layer rule: where each la
 
 # The design policy still lists the older kinds so that rows already in a repository's ledger stay valid.
 OLD_KINDS = ('ia-name-variant', 'ia-emphasis', 'ia-unregistered-claim', 'ia-audience-fit')
-# Of OUTLINE's 5 pieces of copy only the 2 in its pain section are judged (trust and act copy is not asked); DECK has
-# 1 in its aware section.
-JUDGED = ['ia-value-fit:deck-smb/sec-0001/cpy-0001', 'ia-value-fit:lp-municipal/sec-0001/cpy-0001',
-          'ia-value-fit:lp-municipal/sec-0001/cpy-0002']
-FLAGGED = 'ia-value-fit:lp-municipal/sec-0001/cpy-0002'
+# Only copy of a claim block is judged (requirement 11). Of OUTLINE's 5 pieces of copy the 3 in its two claim blocks
+# are (the action block's copy is not asked); DECK has 1 in its claim block (its evidence and action copy is not asked).
+JUDGED = ['ia-value-fit:deck-smb/blk-0001/cpy-0001', 'ia-value-fit:lp-municipal/blk-0001/cpy-0001',
+          'ia-value-fit:lp-municipal/blk-0001/cpy-0002', 'ia-value-fit:lp-municipal/blk-0002/cpy-0003']
+FLAGGED = 'ia-value-fit:lp-municipal/blk-0001/cpy-0002'
 
 
 def cli(*args):
@@ -88,7 +88,7 @@ def test_candidates_are_reproducible_by_the_shared_reader_and_expand_facts(repo)
     for row in rows:
         data = row['input']
         assert row == jl.candidate(data['kind'], data['catalog_id'], data['text'], data['context'], policy=policy)
-    deck = next(r for r in rows if r['id'] == 'ia-value-fit:deck-smb/sec-0001/cpy-0001')
+    deck = next(r for r in rows if r['id'] == 'ia-value-fit:deck-smb/blk-0001/cpy-0001')
     assert deck['input']['text'] == '100社以上が導入、少人数でも回ります'  # the dictionary's fixed value is expanded
     assert deck['input']['context']['message'] == 'msg-0001'
     assert deck['input']['context']['value']['id'] == 'val-0002'
@@ -120,7 +120,7 @@ def test_changed_copy_invalidates_only_its_own_judgments(repo):
     write_ledger(repo, [{'candidate': r, 'score': 0.0} for r in rows])
     changed = copy.deepcopy(OUTLINE)
     changed['copies']['cpy-0002']['text'] = '運用の手間がかなり減ります'
-    dump(layer_paths.path(repo, 'infoarch', 'outlines', 'lp-municipal.yaml'), changed)
+    dump(layer_paths.path(repo, 'infoarch', 'scripts', 'lp-municipal.yaml'), changed)
     code, out = cli('judge', '--root', str(repo), '--date', DATE)
     assert code == 1
     assert sorted(u['id'] for u in out['uncovered']) == [FLAGGED]  # only the copy that changed
@@ -152,8 +152,8 @@ def test_broken_or_symlinked_ledger_fails(repo, tmp_path):
 
 def test_failing_check_refuses_to_judge(repo):
     broken = copy.deepcopy(OUTLINE)
-    broken['sections']['sec-0002']['places'] = ['msg-0099']
-    dump(layer_paths.path(repo, 'infoarch', 'outlines', 'lp-municipal.yaml'), broken)
+    broken['blocks']['blk-0002']['places'] = ['msg-0099']
+    dump(layer_paths.path(repo, 'infoarch', 'scripts', 'lp-municipal.yaml'), broken)
     code, out = cli('judge', '--root', str(repo), '--date', DATE)
     assert code == 2 and 'IA_JUDGE_REFUSED' in [f['code'] for f in out['findings']]
 
@@ -167,7 +167,7 @@ def test_replacement_keeps_design_rows_and_takes_only_current_ia_answers(repo, t
     _, _, rows = candidates(repo)
     policy = jl.load_policy()
     design = jl.candidate('na-rationale', 'dads-000002', 'Not a web product.', {'item': 'x'})
-    stale = jl.candidate('ia-value-fit', 'gone/sec-0001/cpy-0001', 'old', {})
+    stale = jl.candidate('ia-value-fit', 'gone/blk-0001/cpy-0001', 'old', {})
     holdout = {'source': 'unmeasured'}
     write_ledger(repo, [{'candidate': design, 'score': 0.2}, {'candidate': stale, 'score': 0.1}], holdout)
     answers = {'schema_version': 1, 'status': 'model-answers-unlabeled', 'policy': policy,

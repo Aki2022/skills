@@ -43,7 +43,7 @@ def outline_v4(o):
     return o
 
 
-HTML = ('<body data-ia-outline="lp-municipal"><section data-ia-section="sec-0002"><p data-ia-copy="cpy-0003">導入は'
+HTML = ('<body data-ia-outline="lp-municipal"><section data-ia-section="blk-0002"><p data-ia-copy="cpy-0003">導入は'
         '<span data-ia-fact="fct-0001">100社以上</span></p></section><footer><span data-ia-entity="ent-0001">Webサーバー</span></footer></body>')
 
 
@@ -99,7 +99,7 @@ def test_write_migrates_the_tree_and_the_check_result_is_the_same_without_the_wa
     assert by['value-customer-count']['expires'] == '2027-10-01' and by['value-customer-count']['as_of'] == '2026-10-01'
     assert by['value-phone']['evergreen'] is True and 'expires' not in by['value-phone']
     assert by['name-web-server']['variants'] == ['ウェブサーバー'] and by['name-web-server']['text'] == 'Webサーバー'
-    lp = yaml.safe_load(layer_paths.path(repo, 'infoarch', 'outlines', 'lp-municipal.yaml').read_text(encoding='utf-8'))
+    lp = yaml.safe_load(layer_paths.path(repo, 'infoarch', 'scripts', 'lp-municipal.yaml').read_text(encoding='utf-8'))
     assert '{{value-customer-count}}' in lp['copies']['cpy-0003']['text'] and 'fct-' not in json.dumps(lp)
     html = (repo / 'site/index.html').read_text(encoding='utf-8')
     assert 'data-dict="value-customer-count"' in html and 'data-dict="name-web-server"' in html and 'data-ia-fact' not in html
@@ -161,7 +161,7 @@ def test_an_existing_dictionary_file_is_never_overwritten(repo):
 def test_a_placeholder_naming_no_fact_is_a_failure(repo):
     o = outline_v4(OUTLINE)
     o['copies']['cpy-0003']['text'] = '導入は{{fct-0099}}'
-    dump(layer_paths.path(repo, 'infoarch', 'outlines', 'lp-municipal.yaml'), o)
+    dump(layer_paths.path(repo, 'infoarch', 'scripts', 'lp-municipal.yaml'), o)
     rc, out = migrate(repo, '--write')
     assert rc == 2 and 'placeholder' in [u['reason'] for u in out['unmigrated']]
     assert yaml.safe_load(layer_paths.path(repo, 'positioning_file').read_text(encoding='utf-8'))['schema_version'] == 4

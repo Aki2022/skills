@@ -47,7 +47,7 @@ def parse(html):
     return p
 
 
-ORDER = ['sec-0001', 'cpy-0001', 'cpy-0002', 'sec-0002', 'cpy-0003', 'sec-0003', 'cpy-0004', 'cpy-0005']
+ORDER = ['blk-0001', 'cpy-0001', 'cpy-0002', 'blk-0002', 'cpy-0003', 'blk-0003', 'cpy-0004', 'cpy-0005']
 
 
 def test_skeleton_keeps_outline_order_anchors_and_fact_values():
@@ -60,13 +60,20 @@ def test_skeleton_keeps_outline_order_anchors_and_fact_values():
     assert [k[1] for k in dom.expected(OUTLINE)[0]] == ORDER  # dom expects the order the skeleton writes
 
 
+def test_each_block_carries_its_content_function_not_a_v6_role():
+    html = skeleton.render(OUTLINE, SSOT)['site/index.html']
+    for bid, blk in OUTLINE['blocks'].items():
+        assert f'data-ia-section="{bid}" data-ia-function="{blk["function"]}"' in html
+    assert 'data-ia-role' not in html
+
+
 def test_order_comes_from_the_order_field_not_the_file():
     o = copy.deepcopy(OUTLINE)
-    o['sections'] = dict(reversed(list(o['sections'].items())))
+    o['blocks'] = dict(reversed(list(o['blocks'].items())))
     o['copies'] = dict(reversed(list(o['copies'].items())))
     assert parse(skeleton.render(o, SSOT)['site/index.html']).seq == ORDER
-    o['sections']['sec-0001']['order'], o['sections']['sec-0002']['order'] = 2, 1
-    assert parse(skeleton.render(o, SSOT)['site/index.html']).seq[:3] == ['sec-0002', 'cpy-0003', 'sec-0001']
+    o['blocks']['blk-0001']['order'], o['blocks']['blk-0002']['order'] = 2, 1
+    assert parse(skeleton.render(o, SSOT)['site/index.html']).seq[:3] == ['blk-0002', 'cpy-0003', 'blk-0001']
 
 
 def test_copy_is_html_escaped():
@@ -100,7 +107,7 @@ def test_cli_writes_skeleton_only_with_write_and_never_overwrites(tmp_path):
 
 def test_skeleton_refuses_an_outline_that_fails_check(tmp_path):
     o = copy.deepcopy(OUTLINE)
-    o['sections']['sec-0002']['places'] = ['msg-0099']
+    o['blocks']['blk-0002']['places'] = ['msg-0099']
     write_repo(tmp_path, outlines=(o,))
     proc = subprocess.run([sys.executable, str(SCRIPTS / 'infoarch_author.py'), 'skeleton', '--root', str(tmp_path),
                            '--outline', 'lp-municipal'], capture_output=True, text=True, check=False)
@@ -124,7 +131,7 @@ def test_skeleton_passes_the_rendered_dom_check(tmp_path):
 
 
 TEXTS = {'nav': {'kind': 'navigation', 'text': 'サービス 使い方'},
-         'label-problem': {'kind': 'label', 'text': 'PROBLEM', 'section': 'sec-0001'}}
+         'label-problem': {'kind': 'label', 'text': 'PROBLEM', 'block': 'blk-0001'}}
 
 
 def test_declared_texts_carry_their_key():

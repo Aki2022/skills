@@ -43,7 +43,7 @@ def _stages(root, date, outlines, work):
     unknown = [o for o in targets if o not in m.outlines]
     if unknown:
         _merge(findings, [{'level': 'fail', 'code': 'IA_EVALUATE_OUTLINE', 'message': f'アウトライン {unknown} が無い',
-                           'path': layer_paths.rel('infoarch', 'outlines')}], seen)
+                           'path': layer_paths.rel('infoarch', 'scripts')}], seen)
         return stages, findings, None, []
     stages['dom'] = {}
     for oid in targets:

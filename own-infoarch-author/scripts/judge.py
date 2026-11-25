@@ -35,9 +35,10 @@ DESIGN_SCRIPTS = Path(__file__).resolve().parents[2] / 'own-design-author/script
 # Repository-relative names, derived from the layer rule; every read and write goes through layer_paths.path (the guard).
 LEDGER = Path(layer_paths.rel('judgments'))
 ACCEPTED = Path(layer_paths.rel('accepted_reviews'))
-# Fact and proof listings (trust) and the call to action (act) are not there to convey a value: in the I16 example
-# and the officeohana pilot the owner labeled every such copy "does not convey", so asking only produced reviews.
-VALUE_FIT_SKIP_ROLES = ('trust', 'act')
+# Only the copy of a claim block conveys a value (requirement 11). Facts, evidence (with testimonials), offers and
+# the call to action are not there to convey one: in the I16 example and the officeohana pilot the owner labeled every
+# such copy "does not convey" (v6's trust and act), so asking only produced reviews. They are not asked, nor keyed.
+VALUE_FIT_FUNCTIONS = ('claim',)
 IA_PREFIX = 'ia-'
 
 
@@ -70,15 +71,15 @@ def _value(ssot, vid):
 
 
 def outline_candidates(oid, outline, ssot, policy, jl):
-    """One candidate per piece of copy whose message points to a value with text (not trust or act copy)."""
+    """One candidate per piece of copy of a claim block whose message points to a value with text."""
     facts = ssot.get('facts', {})
     rows = []
-    for sid, sec, copies in ol.ordered_sections(outline):
-        if sec['role'] in VALUE_FIT_SKIP_ROLES:
+    for sid, blk, copies in ol.ordered_blocks(outline):
+        if blk['function'] not in VALUE_FIT_FUNCTIONS:
             continue
         for cid, c in copies:
             text = _expand(c['text'], facts)
-            msg = outline['messages'].get(c['message'])
+            msg = outline['messages'].get(c.get('message'))
             if text.strip() and msg and (ssot.get('values', {}).get(msg['value']) or {}).get('text'):
                 rows.append(value_fit(jl, policy, f'{oid}/{sid}/{cid}', text, oid, c['message'], _value(ssot, msg['value'])))
     return rows

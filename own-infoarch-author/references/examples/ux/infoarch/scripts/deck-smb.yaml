@@ -1,5 +1,6 @@
-# 例：seg-0002 の positioning に立つ資料。同じ固定値を使い、別の一番のメッセージと並びで話す。
-schema_version: 3
+# 例：seg-0002 の positioning に立つ資料の台本。同じ固定値を使い、別の一番のメッセージと並びで話す。
+# 証拠と声のまとまりの文案は、立っている positioning の証拠（refs）を引く。
+schema_version: 1
 id: deck-smb
 channel: deck
 outputs:
@@ -22,31 +23,38 @@ messages:
     rank: support
     type: cta
     achieves: obj-0001
-sections:
-  sec-0001:
+blocks:
+  blk-0001:
     order: 1
-    role: aware
+    function: claim
     places:
     - msg-0001
-  sec-0002:
+  blk-0002:
     order: 2
-    role: act
+    function: evidence
+  blk-0003:
+    order: 3
+    function: action
     places:
-    - msg-0001
     - msg-0002
 copies:
   cpy-0001:
-    section: sec-0001
+    block: blk-0001
     order: 1
     message: msg-0001
     text: '{{value-customer-count}}が導入、少人数でも回ります'
-  cpy-0002:
-    section: sec-0002
+  cpy-0004:
+    block: blk-0002
     order: 1
-    message: msg-0001
+    refs:
+    - prf-0002
+    text: 導入前後で運用の時間を比べました
+  cpy-0002:
+    block: blk-0003
+    order: 1
     text: 少人数で回す仕組みを
   cpy-0003:
-    section: sec-0002
+    block: blk-0003
     order: 2
     message: msg-0002
     text: お問い合わせ {{value-phone}}

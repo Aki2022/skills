@@ -78,7 +78,7 @@ def test_green_fixture_passes_and_counts_what_it_checked(tmp_path):
     [info] = [f for f in report['findings'] if f['code'] == 'IA_BLUEPRINT_CHECKED']
     assert info['detail'] == {'screens': 2, 'items': 10}
     # The bridge counts the blueprint beside the outline side: a product UI with no outline is a real target, not zero.
-    assert report['targets'] == {'channels': 0, 'outlines': 0, 'sections': 0, 'screens': 2, 'items': 10}
+    assert report['targets'] == {'channels': 0, 'outlines': 0, 'blocks': 0, 'screens': 2, 'items': 10}
 
 
 def test_a_repository_with_no_blueprint_and_no_outline_still_fails(tmp_path):
@@ -178,7 +178,7 @@ def test_targets_list_every_proposed_item_and_the_ones_shipping_needs(tmp_path):
 ZERO_TARGETS = 'zero IA check targets'
 # (channels, outlines, sections, screens, items) -> is it an empty check (red)?
 TARGET_TABLE = [
-    ((2, 2, 5, 0, 0), False),   # outlines only (the existing LP / deck repositories)
+    ((2, 2, 6, 0, 0), False),   # scripts only (the existing LP / deck repositories)
     ((0, 0, 0, 2, 10), False),  # a blueprint only (the product UI): the case this table exists for
     ((2, 2, 5, 2, 10), False),  # both
     ((0, 0, 0, 0, 0), True),    # nothing to check is never a pass
@@ -193,7 +193,7 @@ TARGET_TABLE = [
 @pytest.mark.parametrize('counts,empty', TARGET_TABLE)
 def test_the_zero_target_rule_by_table(counts, empty):
     import ia_module
-    targets = dict(zip(('channels', 'outlines', 'sections', 'screens', 'items'), counts))
+    targets = dict(zip(('channels', 'outlines', 'blocks', 'screens', 'items'), counts))
     assert ia_module.zero_targets(targets) is empty
 
 
@@ -211,7 +211,7 @@ def test_the_bridge_counts_a_blueprint_only_repository(tmp_path):
     write_blueprint(tmp_path)  # a positioning and a blueprint; no outline, no channel
     result = resolve(tmp_path)
     assert result['errors'] == [], result['errors']
-    assert result['targets'] == {'channels': 0, 'outlines': 0, 'sections': 0, 'screens': 2, 'items': 10}
+    assert result['targets'] == {'channels': 0, 'outlines': 0, 'blocks': 0, 'screens': 2, 'items': 10}
     assert result['media']['web']['targets'] == result['targets']
     assert any(k.startswith('ia:item:') for k in result['approval_hashes'])
     [row] = result['report']['executed']
@@ -239,7 +239,7 @@ def test_an_outline_repository_keeps_zero_blueprint_counts(tmp_path):
     write_repo(tmp_path)
     result = resolve(tmp_path)
     assert result['errors'] == [], result['errors']
-    assert result['targets'] == {'channels': 2, 'outlines': 2, 'sections': 5, 'screens': 0, 'items': 0}
+    assert result['targets'] == {'channels': 2, 'outlines': 2, 'blocks': 6, 'screens': 0, 'items': 0}
 
 
 def test_the_bridge_accepts_item_keys():
@@ -335,12 +335,15 @@ def test_the_blueprint_command_leaves_the_outline_findings_to_check(tmp_path):
     from test_check import write_repo
     broken = copy.deepcopy(OUTLINE_FOR_BLUEPRINT)
     broken['messages']['msg-0001']['rank'] = 'support'  # no lead message: an outline failure (IA_OUTLINE_LEAD_COUNT)
+    broken['blocks']['blk-0009'] = {'order': 9, 'function': 'fact'}  # and a fact with no reference: IA_SCRIPT_*
+    broken['copies']['cpy-0009'] = {'block': 'blk-0009', 'order': 1, 'text': '自治体の 8 割が更新に悩んでいます'}
     write_repo(tmp_path, outlines=(broken,))
     write_blueprint(tmp_path)
     rc_check, report_check = check(tmp_path)
     assert rc_check == 2 and any(c.startswith('IA_OUTLINE') for c in codes(report_check)), report_check['findings']
+    assert 'IA_SCRIPT_COPY_UNREFERENCED' in codes(report_check), report_check['findings']
     rc_bp, report_bp = cli('blueprint', '--root', str(tmp_path), '--date', DATE)
-    assert rc_bp == 0 and not [c for c in codes(report_bp, 'fail') + codes(report_bp, 'warn') if c.startswith(('IA_OUTLINE', 'IA_CHANNEL', 'IA_NO_'))], report_bp['findings']
+    assert rc_bp == 0 and not [c for c in codes(report_bp, 'fail') + codes(report_bp, 'warn') if c.startswith(('IA_OUTLINE', 'IA_SCRIPT_', 'IA_CHANNEL', 'IA_NO_'))], report_bp['findings']
 
 
 def test_the_blueprint_command_is_not_a_pass_without_a_blueprint(tmp_path):

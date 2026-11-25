@@ -1,0 +1,1361 @@
+{
+  "version": 3,
+  "note": "台本（script、SPEC-information-architecture-standardization 要件 7、と要件 6 の形）の失格と差分の失格（要件 9）と、それを壊す赤のフィクスチャの対応表。v6 の outline の表（outline-red-cases.json）を置き換えた。scripts/tests/test_outline.py が、全条件に赤のケースが 1 つ以上あること（対応の無い条件 0 件）、全ケースが既知の条件を指すこと、全ケースが条件の code で失格になることを確かめる。cases は基準のフィクスチャ（test_check.OUTLINE、出荷チャネルの LP の台本）への操作（path は台本の中の位置。unapprove は positioning の要素の承認を外す）。diff_cases は 2 つの別案の描画の報告（dom の unanchored）。code の IA_OUTLINE_ の接頭辞は、規則が変わらない条件では互換のため残した。変わった・増えた条件は IA_SCRIPT_。 2026-11-25（変種の上書き。要件 6 の最後・8・9、SPEC-deliverable-production-layers 要件 18）：base: true のケースは、基準の LP の写し（id lp-base、成果物 site/base.html）を基本の台本として一緒に書く。level が warn の条件は、失格でなく警告の code が出ることを確かめる。",
+  "conditions": [
+    {
+      "id": "7-value-unapproved",
+      "requirement": "7",
+      "code": "IA_OUTLINE_VALUE_UNAPPROVED",
+      "text": "承認済みの提供価値を指さないメッセージ（出荷チャネルは失格、制作中は警告）"
+    },
+    {
+      "id": "7-value-other-positioning",
+      "requirement": "7",
+      "code": "IA_OUTLINE_VALUE_OTHER_POSITIONING",
+      "text": "立っていない positioning（target のセグメントのもの以外）の提供価値を指すメッセージ"
+    },
+    {
+      "id": "7-lead-count",
+      "requirement": "7",
+      "code": "IA_OUTLINE_LEAD_COUNT",
+      "text": "一番のメッセージが 1 つでない"
+    },
+    {
+      "id": "7-lead-unplaced",
+      "requirement": "7",
+      "code": "IA_OUTLINE_LEAD_UNPLACED",
+      "text": "一番のメッセージがどの主張のまとまりにも置かれていない"
+    },
+    {
+      "id": "7-cta-missing",
+      "requirement": "7",
+      "code": "IA_OUTLINE_CTA_MISSING",
+      "text": "「CTA を置かない」と書かずに CTA のメッセージをどこにも置いていない"
+    },
+    {
+      "id": "7-cta-contradicts",
+      "requirement": "7",
+      "code": "IA_OUTLINE_CTA_CONTRADICTS",
+      "text": "「CTA を置かない」と書いたのに CTA がある"
+    },
+    {
+      "id": "7-cta-no-action",
+      "requirement": "7",
+      "code": "IA_OUTLINE_CTA_NO_ACTION",
+      "text": "取ってほしい行動を指さない CTA"
+    },
+    {
+      "id": "7-no-blocks",
+      "requirement": "7",
+      "code": "IA_OUTLINE_NO_SECTIONS",
+      "text": "まとまりが 0 件"
+    },
+    {
+      "id": "7-function-invalid",
+      "requirement": "7",
+      "code": "IA_SCHEMA",
+      "text": "辞書の 7 つに無い働きか、働きの無いまとまり"
+    },
+    {
+      "id": "7-claim-no-message",
+      "requirement": "7",
+      "code": "IA_SCRIPT_CLAIM_NO_MESSAGE",
+      "text": "通常のメッセージを置かない主張のまとまり"
+    },
+    {
+      "id": "7-block-overloaded",
+      "requirement": "7",
+      "code": "IA_OUTLINE_SECTION_OVERLOADED",
+      "text": "通常のメッセージが 2 つ以上の主張のまとまり、CTA が 2 つ以上の行動のまとまり"
+    },
+    {
+      "id": "7-message-misplaced",
+      "requirement": "7",
+      "code": "IA_SCRIPT_MESSAGE_MISPLACED",
+      "text": "主張と行動以外の働きのまとまりに置いたメッセージ（主張に CTA、行動に通常のメッセージも）"
+    },
+    {
+      "id": "7-copy-block",
+      "requirement": "7",
+      "code": "IA_OUTLINE_COPY_SECTION",
+      "text": "まとまりに属さない文案"
+    },
+    {
+      "id": "7-copy-message",
+      "requirement": "7",
+      "code": "IA_OUTLINE_COPY_MESSAGE",
+      "text": "主張のまとまりで伝えるメッセージを指さない文案、同じまとまりに無いメッセージを指す文案"
+    },
+    {
+      "id": "7-message-unconveyed",
+      "requirement": "7",
+      "code": "IA_OUTLINE_MESSAGE_UNCONVEYED",
+      "text": "置かれたメッセージのうち、それを伝える文案が 1 つも無いもの"
+    },
+    {
+      "id": "7-copy-unreferenced",
+      "requirement": "7",
+      "code": "IA_SCRIPT_COPY_UNREFERENCED",
+      "text": "引き先も提案の印も無い主張・事実・証拠と声の文案"
+    },
+    {
+      "id": "7-proposal-with-reference",
+      "requirement": "7",
+      "code": "IA_SCRIPT_PROPOSAL_WITH_REFERENCE",
+      "text": "引き先があるのに提案の印を持つ文案"
+    },
+    {
+      "id": "7-proof-other-positioning",
+      "requirement": "7",
+      "code": "IA_SCRIPT_PROOF_OTHER_POSITIONING",
+      "text": "立っていない positioning（target のセグメントのもの以外）の証拠を引く文案"
+    },
+    {
+      "id": "7-target-unset",
+      "requirement": "7",
+      "code": "IA_SCHEMA",
+      "text": "設定されていない target"
+    },
+    {
+      "id": "7-target-not-segment",
+      "requirement": "7",
+      "code": "IA_OUTLINE_TARGET",
+      "text": "セグメントを指さない target"
+    },
+    {
+      "id": "7-target-malformed",
+      "requirement": "7",
+      "code": "IA_SCHEMA",
+      "text": "形が違う target"
+    },
+    {
+      "id": "6-order-duplicate",
+      "requirement": "6",
+      "code": "IA_OUTLINE_ORDER_DUPLICATE",
+      "text": "まとまりの順序、同じまとまりの中の文案の順番が重なる（並びが決まらない）"
+    },
+    {
+      "id": "6-compares-invalid",
+      "requirement": "6",
+      "code": "IA_OUTLINE_COMPARE_INVALID",
+      "text": "比べる相手が、立っている positioning（target のセグメント）の代替でない"
+    },
+    {
+      "id": "7-compare-outside-set",
+      "requirement": "7",
+      "code": "IA_OUTLINE_COMPARE_OUTSIDE_SET",
+      "text": "メッセージが比べる相手に指す代替が、その提供価値の経路の比べる集合に入っていない"
+    },
+    {
+      "id": "9-unassigned-difference",
+      "requirement": "9",
+      "code": "IA_DIFF_UNASSIGNED",
+      "text": "どの要素にも割り当てられない差分（印の外の文の変化など）を持つ別案"
+    },
+    {
+      "id": "6-text-misplaced",
+      "requirement": "6",
+      "code": "IA_OUTLINE_TEXT_MISPLACED",
+      "text": "ナビの文言をまとまりに置いた、ラベルを置くまとまりが無い"
+    },
+    {
+      "id": "6-variant-base-missing",
+      "requirement": "6",
+      "code": "IA_SCRIPT_VARIANT_BASE_MISSING",
+      "text": "variant_of が、存在する別の台本を指さない（自分自身も含む）"
+    },
+    {
+      "id": "6-override-unknown",
+      "requirement": "6",
+      "code": "IA_SCRIPT_OVERRIDE_UNKNOWN",
+      "text": "上書きの宣言が、基本の台本にも変種にも無い要素を指す"
+    },
+    {
+      "id": "6-overrides-without-base",
+      "requirement": "6",
+      "code": "IA_SCRIPT_OVERRIDES_WITHOUT_BASE",
+      "text": "variant_of を書かずに overrides を書いた"
+    },
+    {
+      "id": "9-variant-other-experiment",
+      "requirement": "9",
+      "code": "IA_SCRIPT_VARIANT_OTHER_EXPERIMENT",
+      "text": "変種の定数（target・接点・トーン）か目的変数が基本の台本と違う（別の試験で、変種でない）"
+    },
+    {
+      "id": "9-undeclared-difference",
+      "requirement": "9",
+      "code": "IA_SCRIPT_UNDECLARED_DIFFERENCE",
+      "level": "warn",
+      "text": "基本の台本と違う要素を上書きとして宣言していない（交絡あり。警告）"
+    },
+    {
+      "id": "9-override-unchanged",
+      "requirement": "9",
+      "code": "IA_SCRIPT_OVERRIDE_UNCHANGED",
+      "level": "warn",
+      "text": "上書きとして宣言した要素が、基本の台本と違わない（警告）"
+    }
+  ],
+  "cases": [
+    {
+      "id": "value-unapproved",
+      "condition": "7-value-unapproved",
+      "why": "LP（出荷）の msg-0002 が指す提供価値を承認していない",
+      "ops": [
+        {
+          "op": "unapprove",
+          "key": "val-0003"
+        }
+      ]
+    },
+    {
+      "id": "value-of-other-segment",
+      "condition": "7-value-other-positioning",
+      "why": "seg-0001 に立つ LP のメッセージが seg-0002 の提供価値を指す",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "messages",
+            "msg-0002",
+            "value"
+          ],
+          "value": "val-0002"
+        }
+      ]
+    },
+    {
+      "id": "lead-none",
+      "condition": "7-lead-count",
+      "why": "一番のメッセージが無い",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "messages",
+            "msg-0001",
+            "rank"
+          ],
+          "value": "support"
+        }
+      ]
+    },
+    {
+      "id": "lead-two",
+      "condition": "7-lead-count",
+      "why": "一番のメッセージが 2 つ",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "messages",
+            "msg-0002",
+            "rank"
+          ],
+          "value": "lead"
+        }
+      ]
+    },
+    {
+      "id": "lead-unplaced",
+      "condition": "7-lead-unplaced",
+      "why": "一番のメッセージをどのまとまりにも置かない",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "messages",
+            "msg-0004"
+          ],
+          "value": {
+            "value": "val-0001",
+            "rank": "lead",
+            "type": "normal"
+          }
+        },
+        {
+          "op": "set",
+          "path": [
+            "messages",
+            "msg-0001",
+            "rank"
+          ],
+          "value": "support"
+        }
+      ]
+    },
+    {
+      "id": "lead-in-fact-block",
+      "condition": "7-lead-unplaced",
+      "why": "一番のメッセージを置いたまとまりの働きを事実にした（主張のまとまりに無い）",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "blocks",
+            "blk-0001",
+            "function"
+          ],
+          "value": "fact"
+        }
+      ]
+    },
+    {
+      "id": "cta-missing",
+      "condition": "7-cta-missing",
+      "why": "行動のまとまりから CTA を外した（宣言なし）",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "blocks",
+            "blk-0003",
+            "places"
+          ],
+          "value": []
+        },
+        {
+          "op": "delete",
+          "path": [
+            "copies",
+            "cpy-0005"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cta-contradicts",
+      "condition": "7-cta-contradicts",
+      "why": "「CTA を置かない」と書いたのに CTA を置いている",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "no_cta"
+          ],
+          "value": true
+        }
+      ]
+    },
+    {
+      "id": "cta-no-action",
+      "condition": "7-cta-no-action",
+      "why": "CTA が取ってほしい行動を指さない",
+      "ops": [
+        {
+          "op": "delete",
+          "path": [
+            "messages",
+            "msg-0003",
+            "achieves"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cta-wrong-action",
+      "condition": "7-cta-no-action",
+      "why": "CTA が台本の目的変数でない行動を指す",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "messages",
+            "msg-0003",
+            "achieves"
+          ],
+          "value": "obj-0009"
+        }
+      ]
+    },
+    {
+      "id": "no-blocks",
+      "condition": "7-no-blocks",
+      "why": "まとまりも文案も 0 件",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "blocks"
+          ],
+          "value": {}
+        },
+        {
+          "op": "set",
+          "path": [
+            "copies"
+          ],
+          "value": {}
+        }
+      ]
+    },
+    {
+      "id": "function-unknown",
+      "condition": "7-function-invalid",
+      "why": "辞書の 7 つに無い働き（v6 のセクションの役割 trust）",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "blocks",
+            "blk-0002",
+            "function"
+          ],
+          "value": "trust"
+        }
+      ]
+    },
+    {
+      "id": "function-missing",
+      "condition": "7-function-invalid",
+      "why": "働きの無いまとまり",
+      "ops": [
+        {
+          "op": "delete",
+          "path": [
+            "blocks",
+            "blk-0002",
+            "function"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "claim-cta-only",
+      "condition": "7-claim-no-message",
+      "why": "主張のまとまりに CTA だけを置いた",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "blocks",
+            "blk-0002",
+            "places"
+          ],
+          "value": [
+            "msg-0003"
+          ]
+        },
+        {
+          "op": "delete",
+          "path": [
+            "copies",
+            "cpy-0003",
+            "message"
+          ]
+        },
+        {
+          "op": "set",
+          "path": [
+            "copies",
+            "cpy-0003",
+            "proposal"
+          ],
+          "value": true
+        }
+      ]
+    },
+    {
+      "id": "claim-empty",
+      "condition": "7-claim-no-message",
+      "why": "主張のまとまりにメッセージを置かない",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "blocks",
+            "blk-0002",
+            "places"
+          ],
+          "value": []
+        }
+      ]
+    },
+    {
+      "id": "claim-two-normal",
+      "condition": "7-block-overloaded",
+      "why": "主張のまとまりに通常のメッセージを 2 つ置いた",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "blocks",
+            "blk-0001",
+            "places"
+          ],
+          "value": [
+            "msg-0001",
+            "msg-0002"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "action-two-cta",
+      "condition": "7-block-overloaded",
+      "why": "行動のまとまりに CTA を 2 つ置いた",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "messages",
+            "msg-0004"
+          ],
+          "value": {
+            "value": "val-0001",
+            "rank": "support",
+            "type": "cta",
+            "achieves": "obj-0001"
+          }
+        },
+        {
+          "op": "set",
+          "path": [
+            "blocks",
+            "blk-0003",
+            "places"
+          ],
+          "value": [
+            "msg-0003",
+            "msg-0004"
+          ]
+        },
+        {
+          "op": "set",
+          "path": [
+            "copies",
+            "cpy-0006"
+          ],
+          "value": {
+            "block": "blk-0003",
+            "order": 3,
+            "message": "msg-0004",
+            "text": "今すぐ相談する"
+          }
+        }
+      ]
+    },
+    {
+      "id": "message-in-fact-block",
+      "condition": "7-message-misplaced",
+      "why": "事実のまとまりにメッセージを置いた",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "blocks",
+            "blk-0004"
+          ],
+          "value": {
+            "order": 4,
+            "function": "fact"
+          }
+        },
+        {
+          "op": "set",
+          "path": [
+            "blocks",
+            "blk-0004",
+            "places"
+          ],
+          "value": [
+            "msg-0002"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "normal-in-action-block",
+      "condition": "7-message-misplaced",
+      "why": "行動のまとまりに通常のメッセージを置いた",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "blocks",
+            "blk-0003",
+            "places"
+          ],
+          "value": [
+            "msg-0001",
+            "msg-0003"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cta-in-claim-block",
+      "condition": "7-message-misplaced",
+      "why": "主張のまとまりに CTA を置いた",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "blocks",
+            "blk-0002",
+            "places"
+          ],
+          "value": [
+            "msg-0002",
+            "msg-0003"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "copy-without-block",
+      "condition": "7-copy-block",
+      "why": "文案が存在しないまとまりに属する",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "copies",
+            "cpy-0004",
+            "block"
+          ],
+          "value": "blk-0099"
+        }
+      ]
+    },
+    {
+      "id": "claim-copy-without-message",
+      "condition": "7-copy-message",
+      "why": "主張のまとまりの文案が伝えるメッセージを指さない",
+      "ops": [
+        {
+          "op": "delete",
+          "path": [
+            "copies",
+            "cpy-0002",
+            "message"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "copy-message-elsewhere",
+      "condition": "7-copy-message",
+      "why": "文案が同じまとまりに置かれていないメッセージを伝える",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "copies",
+            "cpy-0001",
+            "message"
+          ],
+          "value": "msg-0002"
+        }
+      ]
+    },
+    {
+      "id": "copy-message-missing",
+      "condition": "7-copy-message",
+      "why": "文案が存在しないメッセージを伝える",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "copies",
+            "cpy-0001",
+            "message"
+          ],
+          "value": "msg-0099"
+        }
+      ]
+    },
+    {
+      "id": "action-copy-message-elsewhere",
+      "condition": "7-copy-message",
+      "why": "行動のまとまりの文案が、そこに無い通常のメッセージを伝える",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "copies",
+            "cpy-0004",
+            "message"
+          ],
+          "value": "msg-0001"
+        }
+      ]
+    },
+    {
+      "id": "fact-copy-with-message",
+      "condition": "7-copy-message",
+      "why": "事実のまとまりの文案がメッセージを指す（メッセージを置けないまとまり）",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "blocks",
+            "blk-0004"
+          ],
+          "value": {
+            "order": 4,
+            "function": "fact"
+          }
+        },
+        {
+          "op": "set",
+          "path": [
+            "copies",
+            "cpy-0006"
+          ],
+          "value": {
+            "block": "blk-0004",
+            "order": 1,
+            "message": "msg-0002",
+            "text": "導入は{{value-customer-count}}"
+          }
+        }
+      ]
+    },
+    {
+      "id": "message-without-copy",
+      "condition": "7-message-unconveyed",
+      "why": "置かれたメッセージを伝える文案を消した",
+      "ops": [
+        {
+          "op": "delete",
+          "path": [
+            "copies",
+            "cpy-0003"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "fact-copy-unreferenced",
+      "condition": "7-copy-unreferenced",
+      "why": "事実のまとまりに引き先も提案の印も無い統計を書いた",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "blocks",
+            "blk-0004"
+          ],
+          "value": {
+            "order": 4,
+            "function": "fact"
+          }
+        },
+        {
+          "op": "set",
+          "path": [
+            "copies",
+            "cpy-0006"
+          ],
+          "value": {
+            "block": "blk-0004",
+            "order": 1,
+            "text": "自治体の 8 割が更新に悩んでいます"
+          }
+        }
+      ]
+    },
+    {
+      "id": "evidence-copy-unreferenced",
+      "condition": "7-copy-unreferenced",
+      "why": "証拠と声のまとまりに引き先も提案の印も無い声を書いた",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "blocks",
+            "blk-0004"
+          ],
+          "value": {
+            "order": 4,
+            "function": "evidence"
+          }
+        },
+        {
+          "op": "set",
+          "path": [
+            "copies",
+            "cpy-0006"
+          ],
+          "value": {
+            "block": "blk-0004",
+            "order": 1,
+            "text": "「運用がとても楽になりました」"
+          }
+        }
+      ]
+    },
+    {
+      "id": "claim-copy-unreferenced",
+      "condition": "7-copy-unreferenced",
+      "why": "主張のまとまりの文案がメッセージも提案の印も持たない",
+      "ops": [
+        {
+          "op": "delete",
+          "path": [
+            "copies",
+            "cpy-0001",
+            "message"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "claim-copy-proposal-with-message",
+      "condition": "7-proposal-with-reference",
+      "why": "メッセージを伝える主張の文案に提案の印を付けた",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "copies",
+            "cpy-0003",
+            "proposal"
+          ],
+          "value": true
+        }
+      ]
+    },
+    {
+      "id": "fact-copy-proposal-with-refs",
+      "condition": "7-proposal-with-reference",
+      "why": "証拠を引く事実の文案に提案の印を付けた",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "blocks",
+            "blk-0004"
+          ],
+          "value": {
+            "order": 4,
+            "function": "fact"
+          }
+        },
+        {
+          "op": "set",
+          "path": [
+            "copies",
+            "cpy-0006"
+          ],
+          "value": {
+            "block": "blk-0004",
+            "order": 1,
+            "refs": [
+              "prf-0001"
+            ],
+            "proposal": true,
+            "text": "導入自治体の数は台帳で確かめています"
+          }
+        }
+      ]
+    },
+    {
+      "id": "fact-copy-proposal-with-value",
+      "condition": "7-proposal-with-reference",
+      "why": "辞書の値を引く事実の文案に提案の印を付けた",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "blocks",
+            "blk-0004"
+          ],
+          "value": {
+            "order": 4,
+            "function": "fact"
+          }
+        },
+        {
+          "op": "set",
+          "path": [
+            "copies",
+            "cpy-0006"
+          ],
+          "value": {
+            "block": "blk-0004",
+            "order": 1,
+            "proposal": true,
+            "text": "導入は{{value-customer-count}}"
+          }
+        }
+      ]
+    },
+    {
+      "id": "evidence-copy-cites-other-segment",
+      "condition": "7-proof-other-positioning",
+      "why": "seg-0001 に立つ LP の証拠と声の文案が seg-0002 の証拠を引く",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "blocks",
+            "blk-0004"
+          ],
+          "value": {
+            "order": 4,
+            "function": "evidence"
+          }
+        },
+        {
+          "op": "set",
+          "path": [
+            "copies",
+            "cpy-0006"
+          ],
+          "value": {
+            "block": "blk-0004",
+            "order": 1,
+            "refs": [
+              "prf-0002"
+            ],
+            "text": "導入前後で運用の時間を比べました"
+          }
+        }
+      ]
+    },
+    {
+      "id": "target-unset",
+      "condition": "7-target-unset",
+      "why": "target が無い",
+      "ops": [
+        {
+          "op": "delete",
+          "path": [
+            "target"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "target-unknown-segment",
+      "condition": "7-target-not-segment",
+      "why": "target が存在しないセグメントを指す",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "target",
+            "segment"
+          ],
+          "value": "seg-0099"
+        }
+      ]
+    },
+    {
+      "id": "target-string",
+      "condition": "7-target-malformed",
+      "why": "target を文字列で書いた",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "target"
+          ],
+          "value": "seg-0001 の情報部門"
+        }
+      ]
+    },
+    {
+      "id": "block-order-duplicate",
+      "condition": "6-order-duplicate",
+      "why": "2 つのまとまりの順序が同じ",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "blocks",
+            "blk-0002",
+            "order"
+          ],
+          "value": 1
+        }
+      ]
+    },
+    {
+      "id": "copy-order-duplicate",
+      "condition": "6-order-duplicate",
+      "why": "同じまとまりの 2 つの文案の順番が同じ",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "copies",
+            "cpy-0002",
+            "order"
+          ],
+          "value": 1
+        }
+      ]
+    },
+    {
+      "id": "compares-other-segment",
+      "condition": "6-compares-invalid",
+      "why": "比べる相手が別のセグメントの代替",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "messages",
+            "msg-0001",
+            "compares"
+          ],
+          "value": [
+            "alt-0003"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "compares-outside-parity-set",
+      "condition": "7-compare-outside-set",
+      "why": "LP の通常のメッセージ（同等であるべき点の提供価値）が、所属カテゴリーに入っていない代替と比べる",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "messages",
+            "msg-0002",
+            "compares"
+          ],
+          "value": [
+            "alt-0002"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "label-without-block",
+      "condition": "6-text-misplaced",
+      "why": "見出しのラベルを、置くまとまり無しで宣言した",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "texts"
+          ],
+          "value": {
+            "label-x": {
+              "kind": "label",
+              "text": "PROBLEM"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "navigation-in-block",
+      "condition": "6-text-misplaced",
+      "why": "ナビの文言をまとまりに置いた",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "texts"
+          ],
+          "value": {
+            "nav": {
+              "kind": "navigation",
+              "text": "サービス",
+              "block": "blk-0001"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "variant-of-nothing",
+      "condition": "6-variant-base-missing",
+      "why": "存在しない台本の変種だと宣言した",
+      "base": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "variant_of"
+          ],
+          "value": "lp-nowhere"
+        }
+      ]
+    },
+    {
+      "id": "variant-of-itself",
+      "condition": "6-variant-base-missing",
+      "why": "自分自身の変種だと宣言した",
+      "base": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "variant_of"
+          ],
+          "value": "lp-municipal"
+        }
+      ]
+    },
+    {
+      "id": "override-unknown-element",
+      "condition": "6-override-unknown",
+      "why": "どちらの台本にも無いまとまりを上書きとして宣言した",
+      "base": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "variant_of"
+          ],
+          "value": "lp-base"
+        },
+        {
+          "op": "set",
+          "path": [
+            "overrides"
+          ],
+          "value": [
+            "blocks/blk-0099"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "override-not-an-element-key",
+      "condition": "6-override-unknown",
+      "why": "要素の鍵の形でない名前を上書きとして宣言した",
+      "base": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "variant_of"
+          ],
+          "value": "lp-base"
+        },
+        {
+          "op": "set",
+          "path": [
+            "overrides"
+          ],
+          "value": [
+            "blk-0002"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "overrides-without-variant-of",
+      "condition": "6-overrides-without-base",
+      "why": "基本の台本を書かずに上書きだけを宣言した",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "overrides"
+          ],
+          "value": [
+            "copies/cpy-0002"
+          ]
+        },
+        {
+          "op": "set",
+          "path": [
+            "copies",
+            "cpy-0002",
+            "text"
+          ],
+          "value": "運用の手間が 3 分の 1 になります"
+        }
+      ]
+    },
+    {
+      "id": "variant-other-tone",
+      "condition": "9-variant-other-experiment",
+      "why": "変種のトーンを変えた",
+      "base": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "variant_of"
+          ],
+          "value": "lp-base"
+        },
+        {
+          "op": "set",
+          "path": [
+            "overrides"
+          ],
+          "value": [
+            "tone"
+          ]
+        },
+        {
+          "op": "set",
+          "path": [
+            "tone"
+          ],
+          "value": "くだけた調子"
+        }
+      ]
+    },
+    {
+      "id": "variant-other-objective",
+      "condition": "9-variant-other-experiment",
+      "why": "変種の取ってほしい行動を変えた",
+      "base": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "variant_of"
+          ],
+          "value": "lp-base"
+        },
+        {
+          "op": "set",
+          "path": [
+            "objective",
+            "action"
+          ],
+          "value": "問い合わせ"
+        }
+      ]
+    },
+    {
+      "id": "variant-undeclared-copy",
+      "condition": "9-undeclared-difference",
+      "why": "文案を変えたのに上書きを宣言していない",
+      "base": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "variant_of"
+          ],
+          "value": "lp-base"
+        },
+        {
+          "op": "set",
+          "path": [
+            "copies",
+            "cpy-0002",
+            "text"
+          ],
+          "value": "運用の手間が 3 分の 1 になります"
+        }
+      ]
+    },
+    {
+      "id": "variant-partly-declared",
+      "condition": "9-undeclared-difference",
+      "why": "まとまりの順序は宣言したが、変えた文案を宣言していない",
+      "base": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "variant_of"
+          ],
+          "value": "lp-base"
+        },
+        {
+          "op": "set",
+          "path": [
+            "overrides"
+          ],
+          "value": [
+            "blocks/blk-0001",
+            "blocks/blk-0002"
+          ]
+        },
+        {
+          "op": "set",
+          "path": [
+            "blocks",
+            "blk-0001",
+            "order"
+          ],
+          "value": 2
+        },
+        {
+          "op": "set",
+          "path": [
+            "blocks",
+            "blk-0002",
+            "order"
+          ],
+          "value": 1
+        },
+        {
+          "op": "set",
+          "path": [
+            "copies",
+            "cpy-0003",
+            "text"
+          ],
+          "value": "止まらずに動き続けます。導入は{{value-customer-count}}"
+        }
+      ]
+    },
+    {
+      "id": "variant-declared-but-same",
+      "condition": "9-override-unchanged",
+      "why": "変えていない文案を上書きとして宣言した",
+      "base": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "variant_of"
+          ],
+          "value": "lp-base"
+        },
+        {
+          "op": "set",
+          "path": [
+            "overrides"
+          ],
+          "value": [
+            "copies/cpy-0001"
+          ]
+        }
+      ]
+    }
+  ],
+  "diff_cases": [
+    {
+      "id": "text-outside-anchors-changed",
+      "condition": "9-unassigned-difference",
+      "why": "2 つの別案の 台本 は同じなのに、描画物の印の外の文が違う（どの要素にも割り当てられない）",
+      "dom_a": {
+        "unanchored": [
+          {
+            "outline": "lp-municipal",
+            "file": "site/index.html",
+            "viewport": "mobile",
+            "text": "いまだけ無料"
+          }
+        ]
+      },
+      "dom_b": {
+        "unanchored": [
+          {
+            "outline": "lp-municipal-b",
+            "file": "site/b.html",
+            "viewport": "mobile",
+            "text": "いまだけ半額"
+          }
+        ]
+      }
+    },
+    {
+      "id": "fact-value-changed",
+      "condition": "9-unassigned-difference",
+      "why": "2 つの別案が参照する固定値の値が違う（台本 の要素にも positioning にも割り当てられない）",
+      "fact_b": {
+        "value-customer-count": "500社以上"
+      }
+    }
+  ]
+}

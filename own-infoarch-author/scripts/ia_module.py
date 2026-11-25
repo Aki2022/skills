@@ -23,9 +23,10 @@ CONTRACT = 'ia-git-history-v4'
 # ia:path:<value id>: one row per value, its hash binding the whole path (ADR-20261118-ia-approval-per-value-path).
 # Per-element keys (ia:positioning:...) are not targets: a ledger row with one is not counted as an approval.
 KEY = re.compile(r'ia:path:val-[0-9]{4,}|ia:item:(?:sto|pri|con|ojc|ntr)-[0-9]{4,}')  # a value's path; a product item (blueprint)
-# The targets a check counted: the outline side (a deliverable) and the blueprint side (a product UI). The five keys are
+# The targets a check counted: the script side (a deliverable: channels, scripts under the v6 key `outlines`, blocks) and
+# the blueprint side (a product UI). The five keys are
 # fixed; design_modules._git_contract validates the same five, and a resolved manifest records them in media.*.targets.
-OUTLINE_TARGETS = ('channels', 'outlines', 'sections')
+OUTLINE_TARGETS = ('channels', 'outlines', 'blocks')
 BLUEPRINT_TARGETS = ('screens', 'items')
 TARGET_KEYS = OUTLINE_TARGETS + BLUEPRINT_TARGETS
 CATEGORIES = ('executed', 'skipped', 'missing', 'uncovered', 'screened')
@@ -157,7 +158,7 @@ def resolve(*, root, approvals, profiles):
                   'commit': commit, 'input_hashes': inputs}
     report = {key: [] for key in CATEGORIES}
     report['executed'].append({'id': 'ia-deterministic', 'exit_code': 2 if errors else run.returncode,
-                               'targets': targets['sections'] + targets['items'], 'counts': targets})
+                               'targets': targets['blocks'] + targets['items'], 'counts': targets})
     report['missing'].append({'id': 'ia-semantic-judgments', 'reason': 'design L0 does not read IA judgments; the IA ship gate (infoarch-author ship) reads them from the shared ledger'})
     report['skipped'].append({'id': 'ia-dom', 'reason': 'design L0 does not render; the IA ship gate (infoarch-author ship) runs dom on shipped HTML outputs'})
     return {'contract': CONTRACT, 'governance': governance, 'targets': targets,

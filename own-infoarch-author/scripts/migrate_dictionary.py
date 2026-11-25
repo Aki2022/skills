@@ -168,9 +168,10 @@ def run(root, mapping, domain=DOMAIN, write=False, date=None):
     except common.YamlError as exc:
         unmigrated.append({'id': str(pm.SSOT_PATH), 'reason': 'ssot-rewrite', 'text': str(exc)})
     changes[str(pm.SSOT_PATH)] = new_text
-    # outlines and their rendered outputs
+    # scripts and their rendered outputs (the retired outlines/ is not rewritten: check fails on it)
     base = layer_paths.path(root, 'infoarch')
-    for f in sorted((base / 'outlines').glob('*.yaml')) if (base / 'outlines').is_dir() else []:
+    scripts = base / check.SCRIPTS_DIR
+    for f in sorted(scripts.glob('*.yaml')) if scripts.is_dir() else []:
         rel = f.relative_to(root)
         text = f.read_text(encoding='utf-8')
         out = rewrite_outline_text(text, ids, str(rel), unmigrated)

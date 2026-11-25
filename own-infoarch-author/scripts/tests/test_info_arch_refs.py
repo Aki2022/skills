@@ -45,7 +45,7 @@ def tree(root):
     write_blueprint(root)
 
 
-GREEN = ('# 情報設計\n\n提供価値 val-0001 は `outline:lp-municipal` の一番のメッセージが伝える。\n'
+GREEN = ('# 情報設計\n\n提供価値 val-0001 は `script:lp-municipal` の一番のメッセージが伝える（v6 の書き方 `outline:deck-smb` も読む）。\n'
          '画面 scr-overview はストーリー sto-0001 に応える。原則 pri-0001・セグメント seg-0001。\n')
 
 
@@ -60,6 +60,7 @@ def test_ids_that_exist_pass(tmp_path):
 @pytest.mark.parametrize('mention, kind', [
     ('val-0099', 'a positioning atom'), ('seg-0042', 'a segment'), ('sto-0099', 'a product story'),
     ('pri-0099', 'a product principle'), ('scr-nowhere', 'a screen'), ('outline:no-such-outline', 'an outline'),
+    ('script:no-such-script', 'a script'),
 ])
 def test_an_id_that_does_not_exist_fails(tmp_path, mention, kind):
     tree(tmp_path)

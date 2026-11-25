@@ -1,6 +1,6 @@
 # 立ち上げ時の抽出
 
-新しい repo で、既存の資料（企画書・公開中の LP・配布済みの資料・製品の仕様）から、positioning（`ux/positioning/positioning.yaml`）の下書き（原子と矢印）と、辞書（`docs/dictionary/`）の固定値・正式名称の下書きを起こす手順。positioning は own-positioning-author の持ち物で、辞書は own-doc-update の手順で足す。outline は成果物ごとに AI が作るので、ここでは作らない。
+新しい repo で、既存の資料（企画書・公開中の LP・配布済みの資料・製品の仕様）から、positioning（`ux/positioning/positioning.yaml`）の下書き（原子と矢印）と、辞書（`docs/dictionary/`）の固定値・正式名称の下書きを起こす手順。positioning は own-positioning-author の持ち物で、辞書は own-doc-update の手順で足す。台本は成果物ごとに AI が作るので、ここでは作らない。
 
 ## やること
 
@@ -14,7 +14,7 @@
    5. 証拠（事例・数値・受賞。出典と時点を付け、segment と、支える原子・矢印への supports を書く）
 4. **白紙から発案しない。** 資料から読み取れないものは `state: empty` にして、何が足りないかを依頼主に伝える。
 5. 資料の間で矛盾する値（古い数字と新しい数字）は、新しい日付の方を `proposed` にし、古い方を説明に残す。
-6. `infoarch-author check` で SSOT の検査を通す（アウトラインが 0 件なので、IA_NO_OUTLINES の失格だけが残るのが正常）。
+6. `infoarch-author check` で SSOT の検査を通す（台本が 0 件なので、IA_NO_OUTLINES の失格だけが残るのが正常）。
 7. SSOT の変更を PR にし、検査が緑なら自律マージする（人のレビューは置かない）。`empty` のまま残した原子と、資料の間で矛盾していた値は、PR の説明に一覧で書いて、オーナーが後から直せるようにする。
 
 ## 出典

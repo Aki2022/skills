@@ -37,7 +37,7 @@ def test_no_script_makes_or_reads_a_removed_kind():
 
 def test_old_rows_in_the_ledger_are_ignored_not_screened_or_reported(repo):
     _, _, rows = candidates(repo)
-    old = [jl.candidate(kind, 'lp-municipal/sec-0001/cpy-0001', '運用の手間が半分になります', {'outline': 'lp-municipal'})
+    old = [jl.candidate(kind, 'lp-municipal/blk-0001/cpy-0001', '運用の手間が半分になります', {'outline': 'lp-municipal'})
            for kind in REMOVED[:3]]
     old.append(jl.candidate('ia-emphasis', 'lp-municipal/site/index.html@mobile', '運用の手間が半分になります', {'outline': 'lp-municipal'}))
     write_ledger(repo, [{'candidate': r, 'score': 0.99} for r in old] + [{'candidate': r, 'score': 0.0} for r in rows])

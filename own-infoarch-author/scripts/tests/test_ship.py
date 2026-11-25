@@ -222,17 +222,17 @@ def test_a_symlinked_positioning_directory_is_refused(repo, tmp_path):
 def test_uncovered_judgment_stops_neither_a_shipped_outline_nor_a_draft(repo):
     changed = {**copy.deepcopy(DECK), 'channel': 'deck'}
     changed['copies']['cpy-0001']['text'] = '少人数でも回る仕組みです'
-    dump(layer_paths.path(repo, 'infoarch', 'outlines', 'deck-smb.yaml'), changed)
+    dump(layer_paths.path(repo, 'infoarch', 'scripts', 'deck-smb.yaml'), changed)
     commit(repo, 'shipped copy changed without a judgment')
     code, out, _ = ship(repo)
     assert code == 1, out  # uncovered, reported, never blocking (requirement 11)
     assert 'IA_JUDGE_UNCOVERED' in codes(out) and 'IA_SHIP_UNCOVERED' not in codes(out)
     stage = [s for s in out['stages'] if s['stage'] == 'judge'][0]
-    assert [u['id'] for u in stage['uncovered']] == ['ia-value-fit:deck-smb/sec-0001/cpy-0001'], stage['uncovered']
+    assert [u['id'] for u in stage['uncovered']] == ['ia-value-fit:deck-smb/blk-0001/cpy-0001'], stage['uncovered']
     cover_ledger(repo)
     draft = copy.deepcopy(LP_DRAFT)
     draft['copies']['cpy-0002']['text'] = '運用の手間がかなり減ります'
-    dump(layer_paths.path(repo, 'infoarch', 'outlines', 'lp-municipal.yaml'), draft)
+    dump(layer_paths.path(repo, 'infoarch', 'scripts', 'lp-municipal.yaml'), draft)
     commit(repo, 'draft copy changed without a judgment')
     code, out, _ = ship(repo)
     assert code == 1, out  # reported as uncovered
@@ -797,6 +797,20 @@ def test_maintain_lists_outlines_impacted_through_a_changed_arrow(repo):
     dump(layer_paths.path(repo, 'positioning_file'), ssot)
     code, out, _ = maintain(repo)
     assert out['impacted_outlines'] == ['deck-smb'], out
+
+
+def test_a_shipped_script_with_a_proposal_stops_the_gate_while_check_only_warns(repo):
+    """SPEC-deliverable-production-layers requirement 17 / IA requirement 15: a proposal (a copy with no reference)
+    may stay while producing, but a shipped script that still carries one does not pass the ship gate."""
+    deck = {**copy.deepcopy(DECK), 'channel': 'deck'}
+    deck['copies']['cpy-0004'] = {'block': 'blk-0002', 'order': 1, 'proposal': True, 'text': '運用の時間が半分になりました'}
+    dump(layer_paths.path(repo, 'infoarch', 'scripts', 'deck-smb.yaml'), deck)
+    commit(repo, 'a proposal in the shipped deck')
+    code, out, _ = cli(repo, 'check', '--root', str(repo), '--date', TODAY)
+    assert code == 1 and 'IA_SCRIPT_PROPOSAL' in [f['code'] for f in out['findings'] if f['level'] == 'warn'], out
+    code, out, _ = ship(repo)
+    assert code == 2 and 'IA_SCRIPT_PROPOSAL_AT_SHIP' in codes(out), out
+    assert any('cpy-0004' in e for e in out['errors']), out['errors']
 
 
 def test_an_unjudged_value_fit_never_stops_shipping(repo):

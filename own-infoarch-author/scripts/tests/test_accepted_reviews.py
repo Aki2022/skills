@@ -15,8 +15,8 @@ from test_check import DATE, OUTLINE, dump
 from test_judge import candidates, cli, jl, repo, write_ledger  # noqa: F401  (repo is a fixture)
 import layer_paths  # noqa: E402  (own-design-author's layer rule: where each layer lives)
 
-FLAGGED = 'ia-value-fit:lp-municipal/sec-0001/cpy-0002'
-OTHER = 'ia-value-fit:lp-municipal/sec-0001/cpy-0001'
+FLAGGED = 'ia-value-fit:lp-municipal/blk-0001/cpy-0002'
+OTHER = 'ia-value-fit:lp-municipal/blk-0001/cpy-0001'
 WORDS = '認める'
 DAY = '2026-11-18'
 FILE = layer_paths.rel('accepted_reviews')
@@ -79,7 +79,7 @@ def test_changed_copy_brings_the_review_back(flagged):
     assert accept(root, FLAGGED)[0] == 0
     changed = copy.deepcopy(OUTLINE)
     changed['copies']['cpy-0002']['text'] = '運用の手間がかなり減ります'
-    dump(layer_paths.path(root, 'infoarch', 'outlines', 'lp-municipal.yaml'), changed)
+    dump(layer_paths.path(root, 'infoarch', 'scripts', 'lp-municipal.yaml'), changed)
     _, _, rows = candidates(root)
     theta = jl.load_policy()['theta']
     write_ledger(root, [{'candidate': r, 'score': theta if r['id'] in (FLAGGED, OTHER) else 0.0} for r in rows])
@@ -98,8 +98,8 @@ def test_recording_without_the_owners_words_and_date_is_refused(flagged, words, 
 
 def test_only_a_current_review_can_be_accepted(flagged):
     root = flagged
-    not_flagged = 'ia-value-fit:deck-smb/sec-0001/cpy-0001'
-    for ident in (not_flagged, 'ia-value-fit:nowhere/sec-0001/cpy-0001'):
+    not_flagged = 'ia-value-fit:deck-smb/blk-0001/cpy-0001'
+    for ident in (not_flagged, 'ia-value-fit:nowhere/blk-0001/cpy-0001'):
         code, out = accept(root, ident)
         assert code == 2 and not (root / FILE).exists(), out
 

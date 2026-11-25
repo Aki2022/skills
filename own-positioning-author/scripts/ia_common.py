@@ -118,7 +118,7 @@ MISSING_INPUT = {
     'IA_MISSING': ('ia-positioning', 'positioning の SSOT ファイルが無い（置き場所は layer の規則が決める）'),
     'IA_NO_VALUES': ('ia-values', 'positioning に提供価値が 0 件'),
     'IA_NO_CHANNELS': ('ia-channels', 'channels/*.yaml が 0 件'),
-    'IA_NO_OUTLINES': ('ia-outlines', 'outlines/*.yaml が 0 件'),
+    'IA_NO_OUTLINES': ('ia-outlines', 'scripts/*.yaml（台本）が 0 件'),
     'IA_BLUEPRINT_NO_SCREENS': ('ia-blueprint-screens', 'blueprint/screens/*.yaml が 0 件'),
     'IA_BLUEPRINT_PRODUCT_MISSING': ('ia-blueprint-product', 'blueprint/product.yaml が無い'),
 }

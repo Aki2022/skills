@@ -44,7 +44,7 @@ def test_numbers_with_units_are_marked_as_sourced_or_rough(path):
 
 
 def _example(name):
-    return yaml.safe_load(layer_paths.path(EXAMPLES, 'infoarch', 'outlines', f'{name}.yaml').read_text(encoding='utf-8'))
+    return yaml.safe_load(layer_paths.path(EXAMPLES, 'infoarch', 'scripts', f'{name}.yaml').read_text(encoding='utf-8'))
 
 
 def test_worked_example_checks_green():

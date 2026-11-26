@@ -21,6 +21,12 @@
       "text": "まとまりの中の文案の順番が 台本と違う"
     },
     {
+      "id": "10-css-reorder",
+      "requirement": "10",
+      "code": "IA_DOM_CSS_REORDER",
+      "text": "DOM の順は台本どおりだが、CSS（order・*-reverse・wrap-reverse・dense・グリッドの明示の配置）で見た目の順を入れ替えた"
+    },
+    {
       "id": "10-copy-section",
       "requirement": "10",
       "code": "IA_DOM_COPY_SECTION",
@@ -54,19 +60,19 @@
         {
           "op": "set",
           "index": 3,
-          "field": "top",
+          "field": "dom_index",
           "value": 1600
         },
         {
           "op": "set",
           "index": 4,
-          "field": "top",
+          "field": "dom_index",
           "value": 1610
         },
         {
           "op": "set",
           "index": 5,
-          "field": "top",
+          "field": "dom_index",
           "value": 1615
         }
       ]
@@ -92,8 +98,23 @@
         {
           "op": "set",
           "index": 1,
-          "field": "top",
+          "field": "dom_index",
           "value": 130
+        }
+      ]
+    },
+    {
+      "id": "copies-reordered-by-css",
+      "condition": "10-css-reorder",
+      "why": "文案の DOM の順はそのままで、並べる入れ物を flex-direction: row-reverse にした",
+      "ops": [
+        {
+          "op": "set",
+          "index": 2,
+          "field": "reorder",
+          "value": [
+            "div.cards: flex-direction: row-reverse"
+          ]
         }
       ]
     },
@@ -111,7 +132,7 @@
         {
           "op": "set",
           "index": 2,
-          "field": "top",
+          "field": "dom_index",
           "value": 890
         }
       ]

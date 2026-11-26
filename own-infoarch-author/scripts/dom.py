@@ -3,7 +3,8 @@
 The browser does the parsing and rendering; this module only compares its snapshot with the script: every block
 and every piece of copy has exactly one visible mark (data-ia-section / data-ia-copy; the anchor names are v6's and
 are kept until the factories rename them), the blocks appear exactly in the script's order, each piece of copy is
-drawn inside its own block and in the block's order, each copy mark
+drawn inside its own block and in the block's order (order is the DOM's reading order; CSS that draws the marks in
+another order fails, and moves that cannot be judged are reported as uncovered), each copy mark
 shows the outline's copy word for word (facts expanded; width and whitespace folded), every fact the copy refers to
 is shown with the SSOT value, and two runs give the same snapshot. A repeat is another piece of copy in the outline.
 Declared non-claim text (data-ia-text) must show its text on every occurrence, and an official name (data-dict="name-…")
@@ -90,7 +91,9 @@ def compare(outline, ssot, snap, output=None):
         if a.get('nested'):
             out.append(('IA_DOM_ANCHOR_NESTED', 'fail',
                         f'{vp}: {a["id"]} の印（{a["kind"]}）の中にほかの IA の印がある（文案・宣言した文言・正式名称は、セクションや文案を包めない）'))
-    rendered = [(a['kind'], a['id']) for a in sorted(anchors, key=lambda a: (a['top'], a['left']))
+    # Order is the document order of the visible anchors (the reading order a screen reader follows), not the drawn
+    # position: cards side by side in the script's order pass. CSS that draws them in another order fails below.
+    rendered = [(a['kind'], a['id']) for a in sorted(anchors, key=lambda a: a['dom_index'])
                 if a['visible'] and a['kind'] in ('section', 'copy')]
     nav = navigation_keys(outline)
     for key in dict.fromkeys(seq + [('text', k) for k in texts]):
@@ -104,7 +107,7 @@ def compare(outline, ssot, snap, output=None):
     have = [k[1] for k in rendered if k[0] == 'section']
     want = [sid for kind, sid in seq if kind == 'section' and sid in have]
     if have != want:
-        out.append(('IA_DOM_ORDER', 'fail', f'{vp}: セクションの描画の順 {have} が outline の順 {want} と違う'))
+        out.append(('IA_DOM_ORDER', 'fail', f'{vp}: セクションの DOM の順 {have} が outline の順 {want} と違う'))
     owner = {cid: c['block'] for cid, c in outline['copies'].items()}
     for cid in sorted(owner):
         marks = [a for a in anchors if (a['kind'], a['id']) == ('copy', cid)]
@@ -114,11 +117,19 @@ def compare(outline, ssot, snap, output=None):
             if a.get('section') != owner[cid]:
                 out.append(('IA_DOM_COPY_SECTION', 'fail', f'{vp}: 文案 {cid} が {a.get("section")} の中にある（outline では {owner[cid]}）'))
     for sid, _, copies in ol.ordered_blocks(outline):
-        drawn = [a['id'] for a in sorted(anchors, key=lambda a: (a['top'], a['left']))
+        drawn = [a['id'] for a in sorted(anchors, key=lambda a: a['dom_index'])
                  if a['kind'] == 'copy' and a['visible'] and a.get('section') == sid and owner.get(a['id']) == sid]
         expected_order = [cid for cid, _ in copies if cid in drawn]
         if list(dict.fromkeys(drawn)) != expected_order:
-            out.append(('IA_DOM_COPY_ORDER', 'fail', f'{vp}: {sid} の文案の描画の順 {drawn} が outline の順 {expected_order} と違う'))
+            out.append(('IA_DOM_COPY_ORDER', 'fail', f'{vp}: {sid} の文案の DOM の順 {drawn} が outline の順 {expected_order} と違う'))
+    for a in anchors:
+        if a['kind'] not in ('section', 'copy') or not a['visible'] or (a['kind'], a['id']) not in wanted:
+            continue
+        if a['reorder']:
+            out.append(('IA_DOM_CSS_REORDER', 'fail', f'{vp}: {a["id"]} を CSS が DOM と違う順に描いている {a["reorder"]}'
+                        '（順は DOM の順で判定する。横に並べるのはよいが、見た目の順を入れ替えない）'))
+        if a['unverified']:
+            out.append(('IA_DOM_ORDER_UNVERIFIED', 'warn', f'{vp}: {a["id"]} の見た目の順を確かめられない {a["unverified"]}（未カバー）'))
     for cid, copy_ in expected_copy(outline, ssot).items():
         shown = [a for a in anchors if (a['kind'], a['id']) == ('copy', cid) and a['visible']]
         # The text itself is not echoed: it is unpublished copy and may be long.
@@ -229,6 +240,8 @@ def run(root, outline_id, date, runs=2):
             per_vp = [s[i] for s in series]
             for code, level, msg in compare_runs(per_vp) or compare(o, m.ssot, per_vp[0], out):
                 report.add(level, code, f'{out} {msg}', out)
+                if code == 'IA_DOM_ORDER_UNVERIFIED':
+                    report.uncovered.append({'path': out, 'reason': msg})
             first_screens.append({'outline': outline_id, 'file': out, 'viewport': vp['name'], 'text': per_vp[0]['first_screen']})
             loose = unjudged_text(o, m.ssot, per_vp[0], out)
             if loose:

@@ -5,7 +5,9 @@
 // `term`; the v4/v5 attributes data-ia-problem / data-ia-msg / data-ia-pain / data-ia-frame are
 // reported as legacy-<name>) with their rendered box,
 // visibility, visible text (painted text nodes only, the same rule as `unanchored`) and whether a declared-text or
-// official-name anchor holds another IA anchor (`nested`), the total rendered text length, the text visible in the
+// official-name anchor holds another IA anchor (`nested`), its place in document order (`dom_index`), and for a block
+// or copy anchor the CSS that draws it in another order than the DOM (`reorder`) and moves this cannot judge
+// (`unverified`), the total rendered text length, the text visible in the
 // first screen, and the visible text that belongs to no anchor (`unanchored`).
 // Playwright is found by own-design-author's playwright_runtime.mjs: OWN_PLAYWRIGHT_DIR, else the project
 // (INFOARCH_PLAYWRIGHT_DIR when set, else the current directory), else the per-machine runtime of the version
@@ -93,6 +95,59 @@ try {
         text: "[data-ia-section],[data-ia-copy],[data-ia-text]",
         entity: "[data-ia-section],[data-ia-copy],[data-ia-text],[data-dict]",
       };
+      // Order (2026-11-26): the order of the blocks and the copy is the document order (what a screen reader and a
+      // keyboard follow), not the drawn position, so a row of cards in the script's order passes. CSS that draws IA
+      // items in another order than the DOM is a failure (`reorder`); a move this cannot judge is `unverified`.
+      const domIndex = new Map();
+      let nth = 0;
+      for (const el of document.querySelectorAll("*")) domIndex.set(el, nth++);
+      const label = (el) => el.tagName.toLowerCase() + (el.id ? `#${el.id}` : "") + (el.classList[0] ? `.${el.classList[0]}` : "");
+      const isFlex = (d) => d === "flex" || d === "inline-flex";
+      const isGrid = (d) => d === "grid" || d === "inline-grid";
+      const outOfFlow = (cs) => cs.position === "absolute" || cs.position === "fixed";
+      const explicit = (v) => v !== "auto" && !v.startsWith("span");
+      const placed = (cs) => [cs.gridRowStart, cs.gridColumnStart, cs.gridRowEnd, cs.gridColumnEnd].some(explicit);
+      // b is drawn before a in the grid's reading order: rows first (columns first when the grid flows by column).
+      // Boxes must be clearly apart (no overlap on the cross axis), so a few px of misalignment never counts.
+      const drawnBefore = (b, a, byColumn) => {
+        const rb = b.getBoundingClientRect(), ra = a.getBoundingClientRect();
+        const [b0, b1, a0, a1, bs, ae] = byColumn
+          ? [rb.left, rb.right, ra.left, ra.right, rb.bottom, ra.top]
+          : [rb.top, rb.bottom, ra.top, ra.bottom, rb.right, ra.left];
+        if (b1 <= a0) return true;
+        if (a1 <= b0) return false;
+        return bs <= ae;
+      };
+      // Walk from the anchor up to `stop` (exclusive): each element is an item of its parent. For a copy, `stop` is
+      // its block (so the block's own container properties count, its place among blocks does not); for a block, the
+      // walk goes up to the root.
+      const orderOf = (el, stop) => {
+        const reorder = [], unverified = [];
+        if (getComputedStyle(el).direction === "rtl") unverified.push(`${label(el)}: direction: rtl`);
+        for (let e = el; e && e !== stop && e.parentElement; e = e.parentElement) {
+          const cs = getComputedStyle(e), p = e.parentElement, pcs = getComputedStyle(p);
+          if (outOfFlow(cs)) unverified.push(`${label(e)}: position: ${cs.position}`);
+          if (cs.float === "right" || cs.float === "inline-end") unverified.push(`${label(e)}: float: ${cs.float}`);
+          // a transform that is not the identity (an animation that settled at translate(0) is) can move the box
+          const moved = (cs.transform !== "none" && !new DOMMatrixReadOnly(cs.transform).isIdentity)
+            || [cs.translate, cs.rotate].some((v) => v && v !== "none" && !/^0(px|deg)?( 0(px)?)*$/.test(v));
+          if (moved) unverified.push(`${label(e)}: transform`);
+          if (pcs.display === "contents") unverified.push(`${label(p)}: display: contents`);
+          if (outOfFlow(cs) || !(isFlex(pcs.display) || isGrid(pcs.display))) continue;
+          if (Number(cs.order) !== 0) reorder.push(`${label(e)}: order: ${cs.order}`);
+          const items = [...p.children].filter((c) => getComputedStyle(c).display !== "none" && !outOfFlow(getComputedStyle(c)));
+          if (items.length < 2) continue;
+          if (isFlex(pcs.display) && pcs.flexDirection.endsWith("-reverse")) reorder.push(`${label(p)}: flex-direction: ${pcs.flexDirection}`);
+          if (isFlex(pcs.display) && pcs.flexWrap === "wrap-reverse") reorder.push(`${label(p)}: flex-wrap: wrap-reverse`);
+          if (isGrid(pcs.display) && pcs.gridAutoFlow.includes("dense")) reorder.push(`${label(p)}: grid-auto-flow: ${pcs.gridAutoFlow}`);
+          if (isGrid(pcs.display) && items.some((c) => placed(getComputedStyle(c)))) {
+            const byColumn = pcs.gridAutoFlow.startsWith("column");
+            const earlier = items.filter((c) => domIndex.get(c) < domIndex.get(e));
+            if (earlier.some((c) => drawnBefore(e, c, byColumn))) reorder.push(`${label(e)}: グリッドの明示の配置で DOM の前の項目より先に描かれる`);
+          }
+        }
+        return { reorder: [...new Set(reorder)], unverified: [...new Set(unverified)] };
+      };
       const anchors = [];
       const dictKind = (id) => ({ value: "fact", name: "entity" })[id.split("-")[0]] ?? "term";
       for (const [attr, base] of [["data-ia-section", "section"], ["data-ia-copy", "copy"], ["data-dict", null], ["data-ia-text", "text"],
@@ -100,6 +155,8 @@ try {
         for (const el of document.querySelectorAll(`[${attr}]`)) {
           const r = el.getBoundingClientRect();
           const kind = base ?? dictKind(el.getAttribute(attr));
+          const block = el.parentElement?.closest("[data-ia-section]") ?? null;
+          const ordered = kind === "section" ? orderOf(el, null) : kind === "copy" ? orderOf(el, block) : { reorder: [], unverified: [] };
           anchors.push({
             kind, id: el.getAttribute(attr),
             top: Math.round(r.top + scrollY), left: Math.round(r.left + scrollX),
@@ -107,7 +164,8 @@ try {
             visible: visible(el), text: visibleText(el),
             nested: NESTED[kind] ? el.querySelector(NESTED[kind]) !== null : false,
             // the section a mark is drawn inside (screen conformance: a copy belongs to its own section)
-            section: el.parentElement?.closest("[data-ia-section]")?.getAttribute("data-ia-section") ?? null,
+            section: block?.getAttribute("data-ia-section") ?? null,
+            dom_index: domIndex.get(el), reorder: ordered.reorder, unverified: ordered.unverified,
           });
         }
       }

@@ -23,9 +23,12 @@ SCRIPTS = Path(__file__).resolve().parents[1]
 VP = {'name': 'mobile', 'width': 375, 'height': 812}
 
 
-def anchor(kind, aid, top, text='x', visible=True, left=0, height=40, nested=False, section=None):
+def anchor(kind, aid, top, text='x', visible=True, left=0, height=40, nested=False, section=None, dom_index=None, reorder=(),
+           unverified=()):
+    # dom_index is the anchor's place in document order; a fixture written top to bottom uses its top unless told otherwise.
     return {'kind': kind, 'id': aid, 'top': top, 'left': left, 'width': 300, 'height': height, 'visible': visible, 'text': text,
-            'nested': nested, 'section': section}
+            'nested': nested, 'section': section, 'dom_index': top if dom_index is None else dom_index,
+            'reorder': list(reorder), 'unverified': list(unverified)}
 
 
 C1, C2 = '既存システムの運用、重くありませんか', '運用の手間が半分になります'
@@ -65,8 +68,10 @@ def test_green_snapshot_passes():
     (lambda s: s['anchors'].pop(2), 'IA_DOM_ANCHOR_MISSING'),
     (lambda s: s['anchors'].pop(3), 'IA_DOM_ANCHOR_MISSING'),
     (lambda s: s['anchors'][2].update(visible=False), 'IA_DOM_ANCHOR_HIDDEN'),
-    (lambda s: s['anchors'][2].update(top=5), 'IA_DOM_COPY_ORDER'),
-    (lambda s: s['anchors'][3].update(top=1700), 'IA_DOM_ORDER'),
+    (lambda s: s['anchors'][2].update(dom_index=5), 'IA_DOM_COPY_ORDER'),
+    (lambda s: s['anchors'][3].update(dom_index=1700), 'IA_DOM_ORDER'),
+    (lambda s: s['anchors'][2].update(reorder=['div.cards: flex-direction: row-reverse']), 'IA_DOM_CSS_REORDER'),
+    (lambda s: s['anchors'][3].update(reorder=['section: order: 2']), 'IA_DOM_CSS_REORDER'),
     (lambda s: s['anchors'][5].update(text='120社以上'), 'IA_DOM_FACT_VALUE'),
     (lambda s: s['anchors'].pop(5), 'IA_DOM_FACT_MISSING'),
     (lambda s: s.update(text_chars=0, anchors=[], first_screen=''), 'IA_DOM_NO_TARGETS'),
@@ -83,6 +88,28 @@ def test_red_snapshots_fail(mutation, code):
     snap = green_snapshot()
     mutation(snap)
     assert code in codes(run(snap)), run(snap)
+
+
+def test_order_is_document_order_not_the_drawn_position():
+    """Side by side (2026-11-26): copies and blocks drawn left to right or a few px apart keep the DOM order."""
+    snap = green_snapshot()
+    snap['anchors'][1].update(top=14, left=0)     # cpy-0001 drawn lower than cpy-0002 ...
+    snap['anchors'][2].update(top=10, left=200)   # ... and to its right: still first in the DOM
+    snap['anchors'][3].update(top=0, left=900)    # blk-0002 beside blk-0001 at the top
+    assert codes(run(snap)) == [], run(snap)
+
+
+def test_a_reorder_on_a_hidden_or_unknown_anchor_is_not_reported_twice():
+    snap = green_snapshot()
+    snap['anchors'].append(anchor('copy', 'cpy-0002', 130, C2, visible=False, reorder=['order: 1']))
+    assert 'IA_DOM_CSS_REORDER' not in codes(run(snap)), run(snap)
+
+
+def test_order_that_cannot_be_judged_is_reported_as_unverified_not_passed():
+    snap = green_snapshot()
+    snap['anchors'][2]['unverified'] = ['p: position: absolute']
+    found = run(snap)
+    assert codes(found) == [] and codes(found, 'warn') == ['IA_DOM_ORDER_UNVERIFIED'], found
 
 
 def test_a_repeated_call_to_action_is_another_copy_in_the_outline():
@@ -484,6 +511,105 @@ def test_real_browser_screen_conformance(tmp_path, name, body, code):
 def test_every_screen_condition_has_a_real_browser_fixture():
     import json as _json
     table = _json.loads((SCRIPTS.parent / 'fixtures/screen-red-cases.json').read_text(encoding='utf-8'))
-    required = {'IA_DOM_ORDER', 'IA_DOM_COPY_DRIFT', 'IA_DOM_COPY_ORDER', 'IA_DOM_COPY_SECTION', 'IA_DOM_UNANCHORED_TEXT'}
+    required = {'IA_DOM_ORDER', 'IA_DOM_COPY_DRIFT', 'IA_DOM_COPY_ORDER', 'IA_DOM_COPY_SECTION', 'IA_DOM_UNANCHORED_TEXT',
+                'IA_DOM_CSS_REORDER'}
     assert required <= {c['code'] for c in table['conditions']}
-    assert {code for _, _, code in SCREEN_RED} == required
+    assert {code for _, _, code in SCREEN_RED + CARD_RED} == required
+
+
+# --- order is the DOM's reading order; CSS that redraws it in another order fails (2026-11-26) ---
+# Three course cards (name, description, button) in one block, side by side. The old rule sorted anchors by the drawn
+# (top, left) and failed any row; the order is now the document order, and CSS that changes the visual order fails.
+
+CARD_NAMES = ('ライト', 'スタンダード', 'プレミアム')
+
+
+def cards_outline():
+    o = copy.deepcopy(OUTLINE)
+    n = 6
+    for card in CARD_NAMES:
+        for text in (f'{card}コース', f'{card}の説明です', f'{card}を選ぶ'):
+            o['copies'][f'cpy-{n:04d}'] = {'block': 'blk-0002', 'order': n - 4, 'message': 'msg-0002', 'text': text}
+            n += 1
+    return o
+
+
+def card(i, style=''):
+    name, base = CARD_NAMES[i], 6 + 3 * i
+    attr = f' style="{style}"' if style else ''
+    return (f'<div class="card"{attr}><h3 data-ia-copy="cpy-{base:04d}">{name}コース</h3>'
+            f'<p data-ia-copy="cpy-{base + 1:04d}">{name}の説明です</p><a href="#" data-ia-copy="cpy-{base + 2:04d}">{name}を選ぶ</a></div>')
+
+
+# the tops differ by a few px on purpose: a row drawn 1-3 px apart must not change the order
+OFFSETS = ('margin-top:3px', '', 'margin-top:1px')
+
+
+def cards_page(cards=None, row='display:flex;gap:8px', blocks=None, wrap=''):
+    cards = cards or ''.join(card(i, OFFSETS[i]) for i in range(3))
+    sec2 = SEC2.replace('</section>', f'<div class="cards" style="{row}">{cards}</div></section>')
+    body = ''.join(blocks or (SEC1, sec2, SEC3))
+    if wrap:
+        body = f'<main style="{wrap}">{body}</main>'
+    return PAGE.format(body=body)
+
+
+def run_cards(tmp_path, html):
+    from test_check import write_repo, DECK
+    write_repo(tmp_path, outlines=(cards_outline(), DECK))
+    (tmp_path / 'site').mkdir(exist_ok=True)
+    (tmp_path / 'site/index.html').write_text(html, encoding='utf-8')
+    env = dict(os.environ, INFOARCH_PLAYWRIGHT_DIR=PW_DIR)
+    proc = subprocess.run([sys.executable, str(SCRIPTS / 'infoarch_author.py'), 'dom', '--root', str(tmp_path),
+                           '--outline', 'lp-municipal'], capture_output=True, text=True, env=env, check=False)
+    report = json.loads(proc.stdout)
+    return proc.returncode, report, {f['code'] for f in report['findings'] if f['level'] == 'fail'}
+
+
+def _sec2():
+    return cards_page().split('<body>')[1].split('</body>')[0].replace(SEC1, '').replace(SEC3, '')
+
+
+CARD_GREEN = [
+    ('cards-in-a-row', cards_page()),
+    ('cards-stacked', cards_page(row='display:block')),
+    ('grid-placed-in-dom-order', cards_page(cards=''.join(card(i, f'grid-column-start:{i + 1};grid-row-start:1') for i in range(3)),
+                                            row='display:grid;grid-template-columns:repeat(3,1fr)')),
+    ('blocks-in-a-row', cards_page(wrap='display:flex;gap:8px;align-items:flex-start')),
+]
+CARD_RED = [
+    ('cards-swapped-in-dom', cards_page(cards=card(1) + card(0) + card(2)), 'IA_DOM_COPY_ORDER'),
+    ('blocks-swapped-in-dom', cards_page(blocks=(SEC1, SEC3, _sec2())), 'IA_DOM_ORDER'),
+    ('card-moved-by-order', cards_page(cards=card(0, 'order:2') + card(1) + card(2)), 'IA_DOM_CSS_REORDER'),
+    ('row-reverse', cards_page(row='display:flex;flex-direction:row-reverse'), 'IA_DOM_CSS_REORDER'),
+    ('wrap-reverse', cards_page(row='display:flex;flex-wrap:wrap-reverse'), 'IA_DOM_CSS_REORDER'),
+    ('grid-placement', cards_page(cards=card(0, 'grid-column-start:3;grid-row-start:1') + card(1) + card(2),
+                                  row='display:grid;grid-template-columns:repeat(3,1fr)'), 'IA_DOM_CSS_REORDER'),
+    ('grid-dense', cards_page(row='display:grid;grid-template-columns:repeat(3,1fr);grid-auto-flow:row dense'), 'IA_DOM_CSS_REORDER'),
+    ('blocks-column-reverse', cards_page(wrap='display:flex;flex-direction:column-reverse'), 'IA_DOM_CSS_REORDER'),
+]
+
+
+@pytest.mark.skipif(not PW_DIR, reason='INFOARCH_TEST_PLAYWRIGHT_DIR is not set: real-browser integration not run (reported as skipped, not passed)')
+@pytest.mark.parametrize('name,html', CARD_GREEN, ids=[n for n, _ in CARD_GREEN])
+def test_real_browser_side_by_side_in_dom_order_passes(tmp_path, name, html):
+    rc, report, fails = run_cards(tmp_path, html)
+    assert rc == 0 and fails == set(), report['findings']
+
+
+@pytest.mark.skipif(not PW_DIR, reason='INFOARCH_TEST_PLAYWRIGHT_DIR is not set: real-browser integration not run (reported as skipped, not passed)')
+@pytest.mark.parametrize('name,html,code', CARD_RED, ids=[n for n, _, _ in CARD_RED])
+def test_real_browser_order_red(tmp_path, name, html, code):
+    rc, report, fails = run_cards(tmp_path, html)
+    assert rc == 2 and code in fails, report['findings']
+    if code == 'IA_DOM_CSS_REORDER':
+        assert not fails & {'IA_DOM_ORDER', 'IA_DOM_COPY_ORDER'}, report['findings']  # the DOM order itself is right
+
+
+@pytest.mark.skipif(not PW_DIR, reason='INFOARCH_TEST_PLAYWRIGHT_DIR is not set: real-browser integration not run (reported as skipped, not passed)')
+def test_real_browser_order_moved_by_absolute_position_is_unverified_not_passed(tmp_path):
+    html = cards_page(row='position:relative;height:300px', cards=card(0, 'position:absolute;left:400px;top:0') + card(1) + card(2))
+    rc, report, fails = run_cards(tmp_path, html)
+    assert rc == 1 and fails == set(), report['findings']
+    assert 'IA_DOM_ORDER_UNVERIFIED' in {f['code'] for f in report['findings'] if f['level'] == 'warn'}
+    assert report['uncovered'] and all(u['path'] == 'site/index.html' for u in report['uncovered']), report['uncovered']

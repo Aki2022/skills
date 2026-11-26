@@ -30,8 +30,8 @@ repo の git toplevel の `ux/design/` を正典として HTML / dashboard を�
    2. **台本の門（止まる）**：オーナーに台本を見せ、「進めて」を待つ。台帳には残さない。
    3. 組み方の計画を書く：`ux/build/<成果物 id>/plan.yaml`。まとまりごとに design の組み方の型（解決済みマニフェストの`layout_patterns`）の名前、型の既定と違うときだけ狭い画面の型（`narrow`）を書く。台本の文言は書かない。初回は`templates/build/.gitignore`を`ux/build/.gitignore`に写す（カンプを git に入れない）。
    4. `python3 <このskill>/scripts/plan_check.py --repo <repo> --deliverable <id>`。2なら直す。
-   5. `python3 <このskill>/scripts/comp_request.py --repo <repo> --deliverable <id>`で own-image-gen の器（`comp/fields.json`）と出力先を書く。計画の検査が失格なら書かない。画像は生成しない。
-   6. `own-image-gen`を`comp/request.json`のコマンドで流し、広い画面の 1 枚を描く（従量課金。枚数は 1）。
+   5. 制作の指示`ux/build/<成果物 id>/brief.yaml`（使うトークンの絞り込み・見本の画像・まとまりごとの見た目の要望）を書き、`python3 <このskill>/scripts/comp_request.py --repo <repo> --deliverable <id>`で own-image-gen の器（`comp/fields.json`）と出力先を書く。指示が無いか壊れている、または計画の検査が失格なら書かない。画像は生成しない。`--parts N`でページを N 枚に分ける。`--composition free`は組み方をモデルに提案させる試しで、流れの順がオーナーの決定待ちのため既定は`plan`。
+   6. `own-image-gen`を`comp/request.json`の`commands`で流し、広い画面の絵を描く（従量課金。枚数は`parts`、既定 1）。
    7. **カンプの門（止まる）**：オーナーにカンプを見せ、「進めて」を待つ。台帳には残さない。
    8. 計画を直す：カンプが足した細部（重なり・はみ出し・接地・区切り方）をすべて`details`に写し、変えた型を直し、`comp.reviewed: true`にして`plan_check.py`を流し直す。カンプの文言と、カンプが新しく描いた絵は使わない。
    9. HTML を計画に沿って組む。狭い画面の崩し方は列の規則と同じ強さ（同じ詳細度のセレクタ・同じ層）で書く。骨組みの印を残し、文言・まとまりの順・まとまりの中の文案の順を変えずにスタイリングする（文案を別のまとまりへ動かさない。足すのは属性だけ）。順は DOM の順（読む順）で判定するので、DOM が台本の順のままなら、カードやまとまりを横に並べてよい（縦に積み直さない）。見た目の順を CSS で入れ替える（`order`・`row-reverse`・`column-reverse`・`wrap-reverse`・`grid-auto-flow: dense`・DOM の前の項目より先に置くグリッドの明示の配置）と、`dom` が IA_DOM_CSS_REORDER で失格にする。`position: absolute` などで動かした印は確かめられず、未カバー（IA_DOM_ORDER_UNVERIFIED）として報告に残る。印はCSSで選ばない（L1の`ia-marks-inert`が失格にする）。ロゴやフッターの正式名称は`data-dict="name-…"`で名前だけを包む。どの印にも属さない文言を足すと`dom`がIA_DOM_UNANCHORED_TEXTで失格にするので、足したい文言は台本へ戻す（主張ならメッセージと文案、ナビやラベルなら`texts`）。繰り返しの行動喚起も、台本の別の文案にする。
@@ -56,6 +56,7 @@ repo の git toplevel の `ux/design/` を正典として HTML / dashboard を�
 - `references/media-spec.md`: 媒体を追加する場合だけ読む。
 - `references/plan-and-comp.md`: 組み方の計画・カンプの依頼・検査の code。
 - `references/schema/plan.v1.schema.json`: 組み方の計画の形。
+- `references/schema/brief.v1.schema.json`: 制作の指示（カンプの依頼が読む）の形。
 - `media/<media>/` / `validators/common/`: 媒体の構造規約と点検項目。
 
 ## HTML出力前 必須チェックリスト（MUST — 毎回・例外なし）

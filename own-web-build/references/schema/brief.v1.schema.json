@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "own-web-build/brief.v1.schema.json",
+  "title": "ux/build/<deliverable id>/brief.yaml schema version 1 (build brief, 制作の指示)",
+  "description": "成果物ごとの制作の指示。カンプの依頼（comp_request.py）が必ず読む。design のトークンのうちこの成果物が使うもの（ブランドのテーマが複数ある repo では、ほかのテーマを外す）、見た目の見本にする画像（own-image-gen の Style references）、まとまりごとの見た目の要望を書く。台本の文言・組み方の型は書かない（台本と組み方の計画が持つ）。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "deliverable", "script", "tokens", "style_references"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "deliverable": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]*$",
+      "description": "成果物の id。置き場所のディレクトリ名と同じ"
+    },
+    "script": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]*$",
+      "description": "台本の id（ux/infoarch/scripts/<id>.yaml）。組み方の計画があるときは計画の script と同じ"
+    },
+    "tokens": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "解決済みマニフェストのトークンの道（例 color.a.primary）を fnmatch の glob で選ぶ。include があれば一致するものだけを残し、そのあと exclude に一致するものを外す。{} はすべてのトークン。残った色が 0 個なら失格。どのトークンにも一致しない glob は警告（書き間違いを効いた絞り込みに見せない）",
+      "properties": {
+        "include": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "exclude": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "style_references": {
+      "type": "array",
+      "uniqueItems": true,
+      "description": "見た目の見本にする画像の repo の root からの相対の道。どれも在ること。own-image-gen に --anchor で渡し、edit-mode で描く。人が承認した実物から採る（生成物を見本にすると劣化が積もる）。空なら見本なしと報告する",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "not": {"pattern": "^(/|~)|(^|/)\\.\\.(/|$)|\\\\"}
+      }
+    },
+    "emphasis": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {"pattern": "^blk-(?:(?!0000)[0-9]{4}|[1-9][0-9]{4,})$"},
+      "additionalProperties": {"type": "string", "minLength": 1, "maxLength": 200},
+      "description": "台本のまとまりの id ごとの、見た目の要望の短い文（例：数字を大きく見せる）。カンプの組み方のそのまとまりの行に入る。台本に無いまとまりは失格"
+    }
+  }
+}

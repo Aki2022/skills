@@ -9,7 +9,8 @@
 | もの | 置き場所 | git |
 | --- | --- | --- |
 | 組み方の計画 | `ux/build/<成果物 id>/plan.yaml` | 入れる |
-| カンプの依頼と画像 | `ux/build/<成果物 id>/comp/`（`fields.json`・`request.json`・`comp.png`） | 入れない |
+| 制作の指示 | `ux/build/<成果物 id>/brief.yaml` | 入れる |
+| カンプの依頼と画像 | `ux/build/<成果物 id>/comp/`（`fields.json`・`request.json`・`comp.png`。分けたときは `fields-<k>.json`・`comp-<k>.png`） | 入れない |
 
 カンプを git に入れないための ignore の規則は `templates/build/.gitignore`。最初の計画を書くときに `ux/build/.gitignore` に写す。`ux/build/` は design の入力ではない（L0 のマニフェストは計画とカンプをハッシュしない）。計画を直してもカンプを描いても、マニフェストは古くならない。
 
@@ -61,16 +62,60 @@ comp: {reviewed: false}       # カンプの門で見て、計画を直したら
 
 台本そのものの検査（引き先・提案の印など）は `infoarch-author check` が持ち、ここではスキップと報告する。
 
+## 制作の指示（`brief.yaml`）
+
+カンプの依頼が必ず読む、成果物ごとの指示。形は `references/schema/brief.v1.schema.json`。
+
+```yaml
+schema_version: 1
+deliverable: lp-sample        # 置き場所のディレクトリ名と同じ
+script: lp-sample             # 台本の id（計画があるときは計画の script と同じ）
+tokens:                       # マニフェストのトークンの道を fnmatch の glob で選ぶ。{} はすべて
+  exclude: ["*.b.*", "*.c.*"] # 例：テーマ a だけを使う（include で残すものを書いてもよい）
+style_references:             # 見本の画像（repo の root からの相対）。空でもよい（info で報告）
+  - references/comp-style.png
+emphasis:                     # 任意：まとまりごとの見た目の要望（組み方のそのまとまりの行に入る）
+  blk-0003: 数字を大きく見せる
+```
+
+- `tokens`：ブランドのテーマが複数ある repo では、この成果物のテーマ以外を外す（外さないとすべてのテーマの色が混ざる）。`include` で残してから `exclude` で外す。
+- `style_references`：人が承認した実物から採る。own-image-gen に `--anchor` で渡し（edit-mode）、`--take-latest` を付ける。見本があるときの `--workdir` は repo の root（image_gen は見本を今の作業ディレクトリから確かめ、codex は workdir から読むため）。
+- 台本の文言・組み方の型は書かない。
+
 ## カンプの依頼（`scripts/comp_request.py`）
 
-`python3 <このskill>/scripts/comp_request.py --repo <repo> --deliverable <id>`。計画の検査が失格なら何も書かずに 2（COMP_PLAN_FAILED）。カンプのディレクトリが git に入るなら 2（COMP_DIR_NOT_IGNORED）。マニフェストにカンプの大きさが無ければ 2（COMP_SIZE_MISSING）。想定外の誤りも 2（COMP_REQUEST_FAILED）。git の外では書いて 1（COMP_IGNORE_NOT_CHECKED）。
+`python3 <このskill>/scripts/comp_request.py --repo <repo> --deliverable <id> [--parts N] [--composition plan|free]`。
 
-書くのは own-image-gen の器の 10 フィールド（`fields.json`）と、出力先・実行するコマンドを持つ `request.json`。画像は生成しない（従量課金。オーナーの門の前に人が流す）。
+書くのは own-image-gen の器の 10 フィールド（1 枚ごとに 1 つ）と、出力先・実行するコマンドを並べた `request.json`（`fields`・`out`・`commands`・`part_list` はどれも配列、`composition`・`parts`・`text_max_chars`・`brief` も持つ）。画像は生成しない（従量課金。オーナーの門の前に人が流す）。
 
-- カンプはページ全体の広い画面の 1 枚。まとまりを台本の `order` の順に、働き・型（列・帯・絵の置き方・区切り）・計画の細部で描く。
-- 台本の文案は仮置きの文として渡す。カンプは見せてよいが、カンプの文言は使わない。カンプが新しく描いた絵も使わない。
-- 色と書体は解決済みマニフェストのトークン。大きさはマニフェストの `comp`（skill の既定 `own-design-author/references/comp-sizes.json`、repo の `profiles/<media>.json` の `comp` だけが上書きできる）。
+- 組み方（`--composition`）：既定は `plan`。計画を検査して読み、まとまりごとに働き・型（列・帯・絵の置き方・区切り）・計画の細部で描かせ、「各まとまりの型を守る」と縛る。`free` は**試し**で、計画を読まない（無くてよい）。まとまりの順と働きは守らせたまま、格子と列・帯・絵の大きさと置き場所・重なり・はみ出し・何を目立たせるかをモデルに提案させる。流れの順（計画が先かカンプが先か。SPEC-deliverable-production-layers 要件 14）はオーナーの決定待ちなので、既定は `plan` のまま。`free` で描いた組み方は、計画に書き起こしてから HTML を組む。
+- 分け方（`--parts N`）：既定はカンプの設定の `parts`（skill の既定 1＝ページ全体を 1 枚）。まとまりを台本の順のまま N 個の続いた組に、数がそろうよう（差は 1 まで、多い組が先）に分ける。1 から まとまりの数までの外は失格。各枚の Asset type に「N 枚のうち k 枚目（まとまり …）」と書く。前の依頼の `fields*.json` は消してから書く（画像は消さない）。
+- 文案：台本の文案を、辞書（`docs/dictionary/`）の値（`{{value-…}}`）を埋めて渡す。読むのは own-infoarch-author の `check` と own-doc-update の辞書の読み手（同じ読み方を 2 つ持たない）。埋められない値はそのまま残して警告。カンプの設定の `text_max_chars` より長い文案は「灰色の線で描く」と印を付けて並べ、読める文字にさせない。短い文言（見出し・数字・ボタン）だけを文字で描かせる。カンプの文言とカンプが新しく描いた絵は使わない。
+- 見た目（Style）：台本の `tone`・`target.condition`・`objective.action` から書く。skill の決めた雰囲気の語は足さない。色と書体は、解決済みマニフェストのトークンを制作の指示の `tokens` で絞ったものだけ。
+- 大きさ・文字数・枚数はマニフェストの `comp`（`width`・`text_max_chars`・`parts`。skill の既定 `own-design-author/references/comp-sizes.json`、repo の `profiles/<media>.json` の `comp` だけが上書きできる）。
 - 狭い画面は描かない。狭い画面の形は計画が持つ。
+
+| code | 段 | 意味 |
+| --- | --- | --- |
+| COMP_BRIEF_MISSING | fail | 制作の指示が無い |
+| COMP_BRIEF_INVALID | fail | 制作の指示が読めない・形が schema に合わない・`deliverable` がディレクトリ名と違う |
+| COMP_BRIEF_REFERENCE_MISSING | fail | 見本の画像が無い |
+| COMP_BRIEF_BLOCK_UNKNOWN | fail | `emphasis` のまとまりが台本に無い |
+| COMP_BRIEF_SCRIPT_MISMATCH | fail | 制作の指示と計画の `script` が違う（plan のとき） |
+| COMP_BRIEF_NO_COLOR | fail | `tokens` で絞ると色が 0 個 |
+| COMP_PLAN_FAILED | fail | 計画の検査が失格（plan のとき。計画が無いときも） |
+| COMP_SCRIPT_MISSING | fail | 台本が無いか読めないか、まとまりが 0 個 |
+| COMP_DIR_NOT_IGNORED | fail | カンプのディレクトリが git に入る |
+| COMP_MANIFEST_UNAVAILABLE | fail | 解決済みマニフェストが無いか古い |
+| COMP_SIZE_MISSING | fail | マニフェストにカンプの設定（`width`・`text_max_chars`・`parts`）が無い（L0 を流し直す） |
+| COMP_PARTS_INVALID | fail | 枚数が 1 から まとまりの数 までの外 |
+| COMP_REQUEST_FAILED | fail | 想定外の誤り（警告に見せないため 2） |
+| COMP_BRIEF_GLOB_UNUSED | warn | `tokens` の glob がどのトークンにも一致しない（書き間違いを効いた絞り込みに見せない） |
+| COMP_VALUE_UNRESOLVED | warn | 辞書の値が見つからず `{{…}}` のまま渡した |
+| COMP_IGNORE_NOT_CHECKED | warn | git の作業ツリーでないので ignore を確かめていない |
+| COMP_NO_STYLE_REFERENCE | info | 見本の画像が無い |
+
+終了コードは 0 書いた・1 警告つきで書いた（計画の検査の警告も含む）・2 断った（何も書かない）。
 
 ## カンプの門のあと
 

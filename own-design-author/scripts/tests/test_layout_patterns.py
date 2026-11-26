@@ -214,6 +214,8 @@ def test_the_comp_size_defaults_from_the_skill(project):
     defaults = json.loads((SKILL / 'references/comp-sizes.json').read_text())
     assert result['manifest']['web']['comp'] == {**defaults['web'], 'source': 'skill'}
     assert defaults['web']['width'] == 1280
+    # the comp settings beside the size: how long a copy may be to be drawn as text, and how many images by default
+    assert defaults['web']['parts'] == 1 and isinstance(defaults['web']['text_max_chars'], int)
 
 
 def test_a_profile_may_override_the_comp_size_without_moving_any_approval(project):
@@ -225,11 +227,23 @@ def test_a_profile_may_override_the_comp_size_without_moving_any_approval(projec
                                                              'comp': {'width': 1440}})
     after = check(project, ship=True)
     assert after['exit_code'] == 0, after['errors']
-    assert after['manifest']['web']['comp'] == {'width': 1440, 'source': 'profile'}
+    defaults = json.loads((SKILL / 'references/comp-sizes.json').read_text())
+    assert after['manifest']['web']['comp'] == {**defaults['web'], 'width': 1440, 'source': 'profile'}
     assert after['approval_targets'] == before['approval_targets']
 
 
-@pytest.mark.parametrize('comp', [{'width': 0}, {'width': '1280'}, {'width': True}, {'height': 900}, [], {'width': 1.5}])
+def test_a_profile_may_override_text_max_chars_and_parts(project):
+    root, _ = project
+    write(lp.path(root, 'design_dir', 'profiles/web.json'), {'schema_version': 1, 'media': 'web', 'minimums': {},
+                                                             'comp': {'text_max_chars': 12, 'parts': 2}})
+    result = check(project)
+    assert result['exit_code'] < 2, result['errors']
+    comp = result['manifest']['web']['comp']
+    assert comp['text_max_chars'] == 12 and comp['parts'] == 2 and comp['width'] == 1280 and comp['source'] == 'profile'
+
+
+@pytest.mark.parametrize('comp', [{'width': 0}, {'width': '1280'}, {'width': True}, {'height': 900}, [], {'width': 1.5},
+                                  {'parts': 0}, {'text_max_chars': -1}])
 def test_an_invalid_comp_size_fails(project, comp):
     root, _ = project
     write(lp.path(root, 'design_dir', 'profiles/web.json'), {'schema_version': 1, 'media': 'web', 'minimums': {},

@@ -56,6 +56,10 @@ PLAN = {
     'comp': {'reviewed': False},
 }
 
+# The build brief (ux/build/<deliverable id>/brief.yaml): which of design's tokens the deliverable uses, its style
+# references and, per block, a visual requirement. The kit's design has one theme, so it takes every token.
+BRIEF = {'schema_version': 1, 'deliverable': 'lp-sample', 'script': 'lp-sample', 'tokens': {}, 'style_references': []}
+
 
 def write(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -104,6 +108,7 @@ class Repo:
             'font': {'$type': 'fontFamily', 'body': {'$value': ['Sample Sans', 'sans-serif'],
                                                      '$extensions': {'org.own.design': {'origin': 'proposal'}}}}})
         self.plan(PLAN)
+        self.brief(BRIEF)
 
     def design_config(self, **changes):
         path = lp.path(self.root, 'design_config')
@@ -126,6 +131,14 @@ class Repo:
         write(path, data)
         return path
 
+    def brief(self, data, deliverable=None):
+        path = lp.path(self.root, 'build', deliverable or data['deliverable'], 'brief.yaml')
+        write(path, data)
+        return path
+
+    def brief_path(self, deliverable='lp-sample'):
+        return lp.path(self.root, 'build', deliverable, 'brief.yaml')
+
     def plan_text(self, text, deliverable='lp-sample'):
         path = lp.path(self.root, 'build', deliverable, 'plan.yaml')
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -140,6 +153,12 @@ class Repo:
 
 def plan(**changes):
     data = copy.deepcopy(PLAN)
+    data.update(changes)
+    return data
+
+
+def brief(**changes):
+    data = copy.deepcopy(BRIEF)
     data.update(changes)
     return data
 

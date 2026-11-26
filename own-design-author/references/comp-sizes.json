@@ -1,7 +1,9 @@
 {
   "schema_version": 1,
-  "comment": "The size of the one image the comp step draws per media (SPEC-design-system-standardization requirement 16; SPEC-deliverable-production-layers requirement 23). The skill's default; a repository's profiles/<media>.json may override it with `comp`. L0 resolves it into the manifest (`comp`), so build reads one value. Not a brand value: it is not part of any approval hash. Print profiles (paper size, bleed, folds) are added with the first print deliverable.",
+  "comment": "The comp settings per media (SPEC-design-system-standardization requirement 16; SPEC-deliverable-production-layers requirement 23): width is the width in px of each comp image; text_max_chars is the longest copy (in characters, after dictionary values are filled in) the comp draws as real text, a longer copy is drawn as gray placeholder lines; parts is how many images the page is split into by default (1: the whole page in one image; comp_request.py --parts overrides it per request). The skill's default; a repository's profiles/<media>.json may override any of these keys with `comp`. L0 resolves them into the manifest (`comp`), so build reads one value. Not a brand value: it is not part of any approval hash. Print profiles (paper size, bleed, folds) are added with the first print deliverable.",
   "web": {
-    "width": 1280
+    "width": 1280,
+    "text_max_chars": 30,
+    "parts": 1
   }
 }

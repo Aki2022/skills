@@ -180,7 +180,7 @@ v5 の木（旧い名前 `info_arch.yaml` の版 3（今の置き場所は `ux/p
 
 - 解析と描画はブラウザ（Playwright の Chromium）が行う。成果物のソースを自前のパーサで読まない。
 - 工場はアンカーを埋める：まとまりは `data-ia-section`、文案は `data-ia-copy`、固定値と正式名称の表示は `data-dict="<辞書の id>"`（`value-` の id は固定値、`name-` の id は正式名称。`term-` の id は印にできない）、宣言した文言は `data-ia-text`。v4・v5 の `data-ia-problem`・`data-ia-msg`・`data-ia-pain`・`data-ia-frame` が残っていれば IA_DOM_LEGACY_ATTRIBUTE で失格（互換は持たない。v5 の描画物は `infoarch-author migrate-v6` が読み替える）。
-- **画面の適合（SPEC 要件 10）**：まとまりの印は台本の順序どおりにちょうど並ぶ（IA_DOM_ORDER）。文案の印は、台本で属するまとまりの印の中にあり（IA_DOM_COPY_SECTION）、まとまりの中で台本の順番どおりに並ぶ（IA_DOM_COPY_ORDER）。同じ文案の印は 1 つだけ（IA_DOM_COPY_REPEATED。繰り返したい行動喚起は、台本に別の文案として置く）。条件と赤のフィクスチャの対応表は `fixtures/screen-red-cases.json`（DOM の写しと実ブラウザの両方で確かめる）。
+- **画面の適合（SPEC 要件 10）**：まとまりの印は台本の順序どおりにちょうど並ぶ（IA_DOM_ORDER）。文案の印は、台本で属するまとまりの印の中にあり（IA_DOM_COPY_SECTION）、まとまりの中で台本の順番どおりに並ぶ（IA_DOM_COPY_ORDER）。順番は見えている印の **DOM の順**（文書の順。スクリーンリーダーとキーボードがたどる読む順）で比べ、描かれた位置（上・左）では比べない。だから、台本の順に書いたカードを横に並べてよい（数 px の上下のずれも順番を変えない）。代わりに、DOM の順は正しいのに CSS で見た目の順を入れ替えると IA_DOM_CSS_REORDER で失格：文案の印からそのまとまりの印まで（まとまりは、まとまりの印から body まで）の各要素について、flex・グリッドの項目の `order` が 0 でない、入れ物の `flex-direction` が `row-reverse`・`column-reverse`、`flex-wrap: wrap-reverse`、`grid-auto-flow` に `dense`、グリッドの明示の配置（`grid-row-start` などが `auto`・`span` でない。`grid-area` を含む）で DOM の前の項目より先（上、または同じ行の左。列で流れるグリッドは左、または同じ列の上）に描かれる。項目が 1 つだけの入れ物の向きは問わない。見た目の順を確かめられない動かし方（`position: absolute`・`fixed`、`float: right`、恒等でない `transform`・`translate`・`rotate`、`direction: rtl`、親の `display: contents`）は、合格と言わず IA_DOM_ORDER_UNVERIFIED（warn）にし、報告の `uncovered` に成果物と理由を出す。同じ文案の印は 1 つだけ（IA_DOM_COPY_REPEATED。繰り返したい行動喚起は、台本に別の文案として置く）。条件と赤のフィクスチャの対応表は `fixtures/screen-red-cases.json`（DOM の写しと実ブラウザの両方で確かめる）。
 - Playwright は own-design-author の `scripts/playwright_runtime.mjs` で解決する：`OWN_PLAYWRIGHT_DIR` → 対象 repo（`INFOARCH_PLAYWRIGHT_DIR`、無ければ実行ディレクトリとその祖先）→ 端末の共通置き場（対象 repo の `ux/design/render-environment.json` が固定する版）。`NODE_PATH` は見ない。自動では入れない。解決できなければ IA_DOM_PLAYWRIGHT で失格。
 - 読み取る前に、ページが落ち着くのを待つ：network idle の後に 1 秒（表示を始めるタイマーのため）、さらに実行中のアニメーションとトランジションが終わるまで最大 5 秒。終わらないアニメーションがあっても読み取り、2 回の描画の比較で揺れを報告する。
 - 同じ入力を 2 回描画し、結果が違えば IA_DOM_UNSTABLE（判定に使わない）。
@@ -202,8 +202,10 @@ v5 の木（旧い名前 `info_arch.yaml` の版 3（今の置き場所は `ux/p
 | IA_DOM_ANCHOR_UNKNOWN | 台本に無いまとまり・文案・宣言した文言の印・SSOT に無い固定値・正式名称の印 |
 | IA_DOM_ANCHOR_NESTED | 文案・宣言した文言・正式名称の印の中に、ほかの IA の印がある |
 | IA_DOM_ENTITY_NAME | 正式名称の印の表示の全文が、SSOT の名前と違う |
-| IA_DOM_ORDER | 見えているまとまりの印の描画順（上から）が、台本の順序とちょうど同じでない |
-| IA_DOM_COPY_ORDER / IA_DOM_COPY_SECTION / IA_DOM_COPY_REPEATED | まとまりの中の文案の順番が違う・文案が別のまとまりの中にある・同じ文案の印が 2 つ以上 |
+| IA_DOM_ORDER | 見えているまとまりの印の DOM の順（読む順）が、台本の順序とちょうど同じでない |
+| IA_DOM_CSS_REORDER | DOM の順は台本どおりだが、CSS（`order`・`*-reverse`・`wrap-reverse`・`dense`・グリッドの明示の配置）で、まとまりか文案の見た目の順を入れ替えている |
+| IA_DOM_ORDER_UNVERIFIED（warn） | 見た目の順を確かめられない動かし方（absolute・fixed・float: right・transform・rtl・display: contents）がある（未カバー。`uncovered` に出す） |
+| IA_DOM_COPY_ORDER / IA_DOM_COPY_SECTION / IA_DOM_COPY_REPEATED | まとまりの中の文案の DOM の順が違う・文案が別のまとまりの中にある・同じ文案の印が 2 つ以上 |
 | IA_DOM_LEGACY_ATTRIBUTE | v4・v5 の印（`data-ia-problem`・`data-ia-msg`・`data-ia-pain`・`data-ia-frame`）が残っている |
 | IA_DOM_FACT_MISSING / IA_DOM_FACT_VALUE | 文案が参照する固定値の表示が無い・固定値のアンカーの表示が SSOT の値と違う（空白は正規化して比べる。文案が参照しない固定値のアンカーも対象） |
 | IA_DOM_UNSTABLE | 2 回の描画で結果が違う |

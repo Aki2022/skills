@@ -169,6 +169,20 @@ def test_fact_whitespace_is_normalized_but_value_must_match():
     assert codes(run(snap)) == []
 
 
+def test_fact_split_into_child_elements_still_matches():
+    # A value may be split into child elements to style part of it (a larger price, a smaller unit). The snapshot joins
+    # the children's text with a space, so a value with no space at the split must still match (2026-11-26).
+    snap = green_snapshot()
+    snap['anchors'][5]['text'] = '100 社以上'
+    assert codes(run(snap)) == []
+
+
+def test_fact_split_does_not_hide_a_changed_value():
+    snap = green_snapshot()
+    snap['anchors'][5]['text'] = '120 社以上'
+    assert 'IA_DOM_FACT_VALUE' in codes(run(snap))
+
+
 def test_two_runs_must_be_identical():
     a, b = green_snapshot(), green_snapshot()
     b['anchors'][2]['top'] = 121

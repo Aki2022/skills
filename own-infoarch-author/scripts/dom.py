@@ -164,14 +164,16 @@ def compare(outline, ssot, snap, output=None):
             continue
         if a['id'] not in values:
             out.append(('IA_DOM_ANCHOR_UNKNOWN', 'fail', f'{vp}: 固定値のアンカー {a["id"]} は辞書に無い'))
-        elif _norm(a['text']) != _norm(values.get(a['id'])):
+        elif _copy_norm(a['text']) != _copy_norm(values.get(a['id'])):
             out.append(('IA_DOM_FACT_VALUE', 'fail', f'{vp}: 固定値 {a["id"]} の表示が SSOT の値「{values.get(a["id"])}」と違う'))
     for fid in facts:
         shown = [a for a in anchors if a['kind'] == 'fact' and a['id'] == fid]
         if not shown:
             out.append(('IA_DOM_FACT_MISSING', 'fail', f'{vp}: 固定値 {fid} の表示（data-dict）が無い'))
         for a in shown:
-            if _norm(a['text']) != _norm(values.get(fid)):
+            # Read like copy (whitespace removed): a value split into child elements to style part of it is read with a
+            # space at each split, and a space is layout, not a different value (2026-11-26).
+            if _copy_norm(a['text']) != _copy_norm(values.get(fid)):
                 out.append(('IA_DOM_FACT_VALUE', 'fail', f'{vp}: 固定値 {fid} の表示「{_norm(a["text"])}」が SSOT の値「{values.get(fid)}」と違う'))
     return out
 

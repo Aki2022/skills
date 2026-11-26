@@ -56,7 +56,21 @@
       "properties": {
         "pattern": {"type": "string", "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$", "description": "組み方の型の名前（design の語彙）"},
         "narrow": {"type": "string", "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$", "description": "狭い画面での型の名前。型の既定と違うときだけ書く"},
-        "details": {"type": "string", "minLength": 1, "description": "言葉で決めきれずカンプを見て決めた細部（重なり・はみ出し・接地・区切り方）"}
+        "details": {"type": "string", "minLength": 1, "description": "言葉で決めきれずカンプを見て決めた細部（重なり・はみ出し・接地・区切り方）"},
+        "emphasis": {
+          "type": "array", "minItems": 1,
+          "items": {"$ref": "#/$defs/emphasis"},
+          "description": "このまとまりの中で大きく描く文字。details の文ではなく、対象と文字で書き、描いた画面で確かめる（plan_check.py --html）"
+        }
+      }
+    },
+    "emphasis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target", "text"],
+      "properties": {
+        "target": {"type": "string", "pattern": "^(cpy|value)-[a-z0-9]+(-[a-z0-9]+)*$", "description": "このまとまりの文案の id か、このまとまりの文案が示す辞書の値の id"},
+        "text": {"type": "string", "minLength": 1, "description": "対象の文字のうち、残りより大きく描く部分（対象の文字にそのまま含まれ、残りがあること）"}
       }
     }
   }

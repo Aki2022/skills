@@ -27,19 +27,24 @@ blocks:                       # 台本のまとまりをちょうど 1 回ずつ
   blk-0002:
     pattern: split-2
     details: 絵は右の列から上の帯へ少しはみ出す。見出しの下に細い線
-  blk-0003: {pattern: stats-row, narrow: stack-1}
+  blk-0003:
+    pattern: stats-row
+    narrow: stack-1
+    emphasis:                 # 大きく描く文字（対象の id と、その中の文字）
+      - {target: value-customer-count, text: '100'}
 comp: {reviewed: false}       # カンプの門で見て、計画を直したら true
 ```
 
 - `pattern` と `narrow` は design の組み方の型の名前（own-design-author の `catalog/layout-patterns.json` を repo の `design.yaml` の `layout_patterns` で差し引きしたもの。L0 が解決済みマニフェストの `layout_patterns` に入れる）。語彙に無い名前は失格。
 - `narrow` は、型の既定の崩し方と違うときだけ書く。書かなければ型の既定で崩し、検査の報告がどの型になるかを出す。
 - `details` は、言葉で決めきれずカンプを見て決めた細部（絵と文字の重なり・はみ出し・接地・区切り方）。カンプの画像は残らないので、ここに写さなかった細部は失われる。
-- 台本の文言は書かない。
+- `emphasis` は、まとまりの中で残りより大きく描く文字。`target` はこのまとまりの文案の id か、このまとまりの文案が示す辞書の値の id、`text` はその中の文字（全部ではなく、残りがあること）。`details` の文は描いた画面と比べないが、`emphasis` は `plan_check.py --html` が測る。カンプで値段や数字を大きく描いたなら、ここに書く。
+- 台本の文言は書かない（`emphasis` の `text` は、対象の文字の一部を指すだけ）。
 - 変種は `variant_of`（基本の計画の成果物 id）と `overrides`（`blocks/<まとまりの id>`）を宣言する。宣言していない違いは警告（交絡あり）、宣言したのに違わない上書きも警告。`infoarch-author diff` は両方の成果物に計画が 1 つずつあれば計画も比べ、`differs_in` を `script`・`plan`・`both` で出す。
 
 ## 計画の検査（`scripts/plan_check.py`）
 
-`python3 <このskill>/scripts/plan_check.py --repo <repo> --deliverable <id>`。終了コードは 0 合格・1 警告・2 失格（確かめる対象が無いときも 2）。報告は 5 区分（実行・スキップ・欠落・未カバー・screened）と指摘（fail・warn・info）。
+`python3 <このskill>/scripts/plan_check.py --repo <repo> --deliverable <id> [--html <描いたページ>]`。`--html` を渡すと、計画の `emphasis` を 2 つの幅（375・1280）で描いて測る（`scripts/measure_emphasis.mjs`。Playwright は design の固定環境で版を決める）。文字は空白を除き幅をそろえて読み、対象のまとまりの中の印だけを見る。終了コードは 0 合格・1 警告・2 失格（確かめる対象が無いときも 2）。報告は 5 区分（実行・スキップ・欠落・未カバー・screened）と指摘（fail・warn・info）。
 
 | code | 段 | 意味 |
 | --- | --- | --- |
@@ -53,11 +58,17 @@ comp: {reviewed: false}       # カンプの門で見て、計画を直したら
 | PLAN_BLOCK_MISSING / PLAN_BLOCK_UNKNOWN | fail | 台本のまとまりが計画に無い／計画のまとまりが台本に無い |
 | PLAN_PATTERN_UNKNOWN / PLAN_NARROW_UNKNOWN | fail | 型の名前が語彙に無い |
 | PLAN_OVERRIDES_WITHOUT_BASE / PLAN_VARIANT_BASE_MISSING / PLAN_OVERRIDE_UNKNOWN | fail | 変種の宣言が壊れている |
+| PLAN_EMPHASIS_TARGET_UNKNOWN | fail | 強調の対象が、このまとまりの文案でも、その文案が示す辞書の値でもない |
+| PLAN_EMPHASIS_TEXT_ABSENT | fail | 強調の文字が対象に無いか、対象の全部（何より大きくするかが無い） |
+| PLAN_EMPHASIS_TARGET_NOT_DRAWN | fail | `--html`：対象がそのまとまりの中に描かれていない |
+| PLAN_EMPHASIS_NOT_RENDERED | fail | `--html`：強調の文字が、対象の残りの文字より大きく描かれていない（文字の大きさで比べる） |
+| PLAN_EMPHASIS_NOT_MEASURED | fail | `--html`：描けなかった（ブラウザが無いなど）。合格にしない |
 | PLAN_CHECK_FAILED | fail | 想定外の誤り（警告に見せないため 2） |
 | PLAN_PATTERN_UNSUITED | warn | 型がまとまりの働きに向く型として書かれていない |
 | PLAN_COMP_NOT_IGNORED | warn | カンプのディレクトリが git に入る |
 | PLAN_COMP_IGNORE_NOT_CHECKED | warn | git の作業ツリーでないので ignore を確かめていない（未カバーにも出す） |
 | PLAN_UNDECLARED_DIFFERENCE / PLAN_OVERRIDE_UNCHANGED | warn | 変種の比べ方（交絡あり／変わらない上書き） |
+| PLAN_EMPHASIS_NONE | info | 計画に強調が無い（描いた画面で確かめる文字が無い） |
 | PLAN_NARROW_DEFAULT / PLAN_COMP_NOT_REVIEWED | info | 既定で崩すまとまり／カンプの門をまだ通っていない |
 
 台本そのものの検査（引き先・提案の印など）は `infoarch-author check` が持ち、ここではスキップと報告する。

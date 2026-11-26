@@ -207,7 +207,7 @@ v5 の木（旧い名前 `info_arch.yaml` の版 3（今の置き場所は `ux/p
 | IA_DOM_ORDER_UNVERIFIED（warn） | 見た目の順を確かめられない動かし方（absolute・fixed・float: right・transform・rtl・display: contents）がある（未カバー。`uncovered` に出す） |
 | IA_DOM_COPY_ORDER / IA_DOM_COPY_SECTION / IA_DOM_COPY_REPEATED | まとまりの中の文案の DOM の順が違う・文案が別のまとまりの中にある・同じ文案の印が 2 つ以上 |
 | IA_DOM_LEGACY_ATTRIBUTE | v4・v5 の印（`data-ia-problem`・`data-ia-msg`・`data-ia-pain`・`data-ia-frame`）が残っている |
-| IA_DOM_FACT_MISSING / IA_DOM_FACT_VALUE | 文案が参照する固定値の表示が無い・固定値のアンカーの表示が SSOT の値と違う（空白は正規化して比べる。文案が参照しない固定値のアンカーも対象） |
+| IA_DOM_FACT_MISSING / IA_DOM_FACT_VALUE | 文案が参照する固定値の表示が無い・固定値のアンカーの表示が SSOT の値と違う（文案と同じく、空白を除き幅をそろえて比べる。値の一部を大きくするため子の要素で区切ってよい。文案が参照しない固定値のアンカーも対象） |
 | IA_DOM_UNSTABLE | 2 回の描画で結果が違う |
 | IA_DOM_COPY_DRIFT | 見えている文案の印の文言が、台本の文案と一字一句同じでない（工場が文言を変えた）。宣言した文言も、1 か所でも違えば失格 |
 | IA_DOM_UNANCHORED_TEXT | どの印にも属さない、見えている文言がある＝IA の誰も管理していない文言（文字数だけを報告する。主張なら 台本のメッセージと文案に、主張でなければ texts に宣言する） |

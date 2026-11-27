@@ -422,6 +422,35 @@ def _layout_overrides(root, approvals, counts, errors, warnings, ship):
     return state.targets, state.declared_keys | set(stale)
 
 
+def _prohibitions(config, rules):
+    """What the design does not allow, in a form code can read: each row pairs a statement with the page rule that
+    checks it (ux/design/checks). The prose in DESIGN.md stays as it is, so the approvals that bind it stay valid.
+    -> (rows for the manifest, {approval key suffix: hash}); a row with no rule is uncovered (SPEC-deliverable-production-layers 27)."""
+    rows = config.get('prohibitions', [])
+    if not isinstance(rows, list):
+        raise ValueError('prohibitions must be a list')
+    seen, out, hashes = set(), [], {}
+    for row in rows:
+        if not isinstance(row, dict) or set(row) - {'id', 'statement', 'rule'}:
+            raise ValueError('prohibition: unknown field (allowed: id, statement, rule)')
+        ident, statement, rule = row.get('id'), row.get('statement'), row.get('rule')
+        if not isinstance(ident, str) or not re.fullmatch(r'[a-z0-9][a-z0-9-]*', ident):
+            raise ValueError('prohibition: id must be lower-case kebab-case')
+        if ident in seen:
+            raise ValueError(f'prohibition: duplicate id {ident}')
+        seen.add(ident)
+        if not isinstance(statement, str) or not statement.strip():
+            raise ValueError(f'prohibition {ident}: statement is required')
+        if rule is not None:
+            if rule not in rules:
+                raise ValueError(f'prohibition {ident}: unknown rule {rule}')
+            if rules[rule]['kind'] not in item_checks.PAGE_KINDS - {'judgment'}:
+                raise ValueError(f'prohibition {ident}: rule {rule} must be a page rule (count, text or style) that code measures')
+        out.append({'id': ident, 'statement': statement, 'rule': rule})
+        hashes[ident] = value_hash({'id': ident, 'statement': statement, 'rule': rule, 'definition': rules[rule] if rule else None})
+    return out, hashes
+
+
 def _comp_size(medium, defaults, supplied):
     """The size of the comp image for `medium`: the skill's default, or the profile's override (not a brand value, so it
     is popped from the profile before any approval hash sees it)."""
@@ -460,7 +489,7 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
             raise ValueError(f"{design_rel()}/ missing or symlink; run own-design-author init at git toplevel")
         _clear_manifests(root)
         config = read_data(inside_layer(root, 'design_config'))
-        if not isinstance(config, dict) or set(config) - {'schema_version','skill_version','catalog_version','preset','media','items','retired_items','checks','modules','spec','maintenance','channels','integration_gate','layout_patterns'}:
+        if not isinstance(config, dict) or set(config) - {'schema_version','skill_version','catalog_version','preset','media','items','retired_items','checks','modules','spec','maintenance','channels','integration_gate','layout_patterns','prohibitions'}:
             raise ValueError('unknown design configuration fields')
         if config.get('schema_version') != 1:
             raise ValueError('unknown design schema version')
@@ -558,8 +587,23 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
         errors.extend(vocabulary['errors'])
         warnings.extend(vocabulary['warnings'])
         valid_targets.update(vocabulary['targets'])
+        prohibition_rows, prohibition_hashes = _prohibitions(config, _rules(root))
+        prohibition_keys = {f'ds:web:prohibition:{ident}': digest for ident, digest in prohibition_hashes.items()}
+        # the row is gone from the file: its approval reads nothing, but it is not left unsaid
+        stale_prohibitions = {k for k in approvals if k.startswith('ds:web:prohibition:')} - set(prohibition_keys)
+        valid_targets.update(prohibition_keys, stale_prohibitions)
         if set(approvals) - valid_targets:
             raise ValueError('approval target absent from catalog/tokens')
+        uncovered_prohibitions = sorted('prohibition:' + r['id'] for r in prohibition_rows if r['rule'] is None)
+        unapproved_prohibitions = sorted(k for k, digest in prohibition_keys.items() if approvals.get(k) != digest)
+        if stale_prohibitions:
+            warnings.append(f'approvals for prohibitions no longer in the file: {len(stale_prohibitions)}')
+        if unapproved_prohibitions and ship:
+            errors.append(f'ship gate: unapproved design prohibitions {len(unapproved_prohibitions)}')
+        elif unapproved_prohibitions:
+            warnings.append(f'design prohibitions awaiting owner approval: {len(unapproved_prohibitions)}')
+        if uncovered_prohibitions and ship:
+            errors.append(f'ship gate: prohibitions without a declared check {len(uncovered_prohibitions)}')
         for path, token in tokens.items():
             origin = token['origin']
             if origin not in ('owner','proposal') and not (isinstance(origin,str) and origin.startswith('reference:') and origin[10:] in sources):
@@ -764,12 +808,12 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
                 'comp':comps[medium],
                 'layout_patterns':{'catalog_version':vocabulary['catalog_version'],'patterns':vocabulary['patterns']},
                 'css_variables':{t['css_name']:t['css'] for t in tokens.values()},
-                'tailwind_templates':tailwind_templates, 'artifacts':artifacts, 'rules':list(rules.values()), 'coverage':{'uncovered':sorted(uncovered_rules | {row['id'] for row in judged['uncovered']}),
+                'prohibitions':prohibition_rows, 'prohibition_hashes':prohibition_hashes, 'tailwind_templates':tailwind_templates, 'artifacts':artifacts, 'rules':list(rules.values()), 'coverage':{'uncovered':sorted(uncovered_rules | set(uncovered_prohibitions) | {row['id'] for row in judged['uncovered']}),
                     'items':{way:sorted(i for i,r in item_routes.items() if r['route']==way) for way in ('machine','afm','uncovered')},
                     'decisions':sorted(i for i,r in item_routes.items() if r.get('decision')),
                     'item_routes':item_routes},
-                'item_checks':{'collect':sorted({c for r in item_routes.values() for c in r['checkers']+r.get('presence',[])}
-                    & (item_checks.COLLECTED | {'rule:'+i for i,r in rules.items() if r['kind'] in item_checks.PAGE_KINDS})),
+                'item_checks':{'collect':sorted(({c for r in item_routes.values() for c in r['checkers']+r.get('presence',[])}
+                    & (item_checks.COLLECTED | {'rule:'+i for i,r in rules.items() if r['kind'] in item_checks.PAGE_KINDS})) | {'rule:'+p['rule'] for p in prohibition_rows if p['rule']}),
                     'applicability':{d:check_map['applicability'][d] for d in sorted({r['document'] for r in item_routes.values()})
                                      if d in check_map['applicability']}},
                 'modules':({'ia':{'version':config['modules']['ia'],'implementation_sha256':ia['_implementation_sha256'],

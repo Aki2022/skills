@@ -141,7 +141,9 @@ def verify_items(root,l0,targets,report,final=True,mode=None,unrendered=()):
         return pages,afm_pairs,0
     machine={k:{e:v for e,v in pages_.items() if v} for k,pages_ in machine.items()}
     # A declared rule whose selectors match nothing on any page checked nothing: often a typo, never a pass.
-    for checker in sorted(c for c in spec['collect'] if c.startswith('rule:')) if final else ():
+    # A prohibition that finds nothing on every page is the good outcome, not a typo: only decision rules are warned about.
+    prohibited={'rule:'+p['rule'] for p in manifest.get('prohibitions',[]) if p.get('rule')}
+    for checker in sorted(c for c in spec['collect'] if c.startswith('rule:') and c not in prohibited) if final else ():
         if all(page['presence'][checker]==0 for page in pages):
             report.setdefault('warnings',[]).append(f"rule {checker[5:]} never applied on any rendered page; check its selectors")
     record=inside(layer_paths.path(root,'resolved'),'items.json')

@@ -169,6 +169,20 @@ def test_fact_whitespace_is_normalized_but_value_must_match():
     assert codes(run(snap)) == []
 
 
+def test_fact_split_into_child_elements_still_matches():
+    # A value may be split into child elements to style part of it (a larger price, a smaller unit). The snapshot joins
+    # the children's text with a space, so a value with no space at the split must still match (2026-11-26).
+    snap = green_snapshot()
+    snap['anchors'][5]['text'] = '100 社以上'
+    assert codes(run(snap)) == []
+
+
+def test_fact_split_does_not_hide_a_changed_value():
+    snap = green_snapshot()
+    snap['anchors'][5]['text'] = '120 社以上'
+    assert 'IA_DOM_FACT_VALUE' in codes(run(snap))
+
+
 def test_two_runs_must_be_identical():
     a, b = green_snapshot(), green_snapshot()
     b['anchors'][2]['top'] = 121
@@ -354,6 +368,44 @@ def test_real_browser_text_painted_from_a_zero_size_box_is_unanchored(tmp_path):
     report = json.loads(proc.stdout)
     assert 'IA_DOM_UNANCHORED_TEXT' in [f['code'] for f in report['findings']], report['findings']
     assert report['unanchored'] and all('業界No.1' in r['text'] for r in report['unanchored'])
+
+
+# --- text drawn by CSS (2026-11-27): a page built freely wrote numbering into `content`. Nothing read it, so a claim
+# written there would pass. Letters and digits drawn by `content` are text nobody manages; symbols and counters are not.
+
+def with_css(css, body=''):
+    return HTML.replace('</style>', css + '</style>').replace('</body>', body + '</body>')
+
+
+def dom_report(tmp_path, page):
+    from test_check import write_repo
+    write_repo(tmp_path)
+    (tmp_path / 'site').mkdir(exist_ok=True)
+    (tmp_path / 'site/index.html').write_text(page.format(hidden=''), encoding='utf-8')
+    env = dict(os.environ, INFOARCH_PLAYWRIGHT_DIR=PW_DIR)
+    proc = subprocess.run([sys.executable, str(SCRIPTS / 'infoarch_author.py'), 'dom', '--root', str(tmp_path),
+                           '--outline', 'lp-municipal'], capture_output=True, text=True, env=env, check=False)
+    return json.loads(proc.stdout)
+
+
+@pytest.mark.skipif(not PW_DIR, reason='INFOARCH_TEST_PLAYWRIGHT_DIR is not set: real-browser integration not run (reported as skipped, not passed)')
+@pytest.mark.parametrize('page', [
+    with_css('.badge::after{{content:"業界No.1 の実績"}}', '<p class="badge"></p>'),          # outside every mark
+    with_css('[data-ia-copy="cpy-0002"]::after{{content:"（業界No.1）"}}'),                   # appended to a copy
+    with_css('.n::before{{content:"0" counter(it) " 業界No.1"}}', '<p class="n"></p>'),      # a string beside a counter
+])
+def test_real_browser_letters_drawn_by_css_are_unanchored(tmp_path, page):
+    report = dom_report(tmp_path, page)
+    assert 'IA_DOM_UNANCHORED_TEXT' in [f['code'] for f in report['findings']], report['findings']
+    assert report['unanchored'] and all('業界No.1' in r['text'] for r in report['unanchored'])
+
+
+@pytest.mark.skipif(not PW_DIR, reason='INFOARCH_TEST_PLAYWRIGHT_DIR is not set: real-browser integration not run (reported as skipped, not passed)')
+def test_real_browser_symbols_and_counters_drawn_by_css_pass(tmp_path):
+    css = ('.d::before{{content:""}} .c::before{{content:"✓ "}} .a::after{{content:"→"}}'
+           ' ol{{counter-reset:it}} li{{counter-increment:it}} li::before{{content:counter(it, decimal-leading-zero) ". "}}')
+    report = dom_report(tmp_path, with_css(css, '<i class="d"></i><i class="c"></i><i class="a"></i><ol><li></li><li></li></ol>'))
+    assert 'IA_DOM_UNANCHORED_TEXT' not in [f['code'] for f in report['findings']], report['findings']
 
 
 # --- declared text and official names (the unanchored warning means "text nobody manages", 2026-11-15) ---

@@ -13,9 +13,14 @@ differs from the pattern's default, and the details the comp added. Checked:
 - the comp images stay out of git: an existing comp dir that git would commit warns; outside git it is reported as
   not checked (a warning, never a silent pass);
 - a variant (`variant_of`, `overrides`) is compared with its base plan: an undeclared difference warns (交絡あり), a
-  declared override that does not differ warns. `compare` is the one comparison the infoarch diff reads too.
+  declared override that does not differ warns. `compare` is the one comparison the infoarch diff reads too;
+- a block's emphasis (計画の強調: which characters of one copy or one dictionary value are drawn larger than the rest of it)
+  names a copy of the block or a value one of its copies shows, and its text is in that target with something left over;
+- with --html, the drawn page is measured at each width (measure_emphasis.mjs): an emphasized text drawn no larger than the
+  rest of its target, or a target the block does not draw, fails; a page that cannot be drawn is not measured and fails
+  (never a pass). Free-text details are not compared with the page; only the emphasis is.
 
-Usage: plan_check.py --repo <repo> --deliverable <id> [--media web]
+Usage: plan_check.py --repo <repo> --deliverable <id> [--media web] [--html <drawn page>]
 Exit: 0 pass, 1 warnings, 2 failing or nothing checked. The report has the five categories (実行・スキップ・欠落・
 未カバー・screened) and the findings (fail / warn / info).
 """
@@ -32,6 +37,7 @@ SKILL = Path(__file__).resolve().parents[1]
 SKILLS = SKILL.parent
 sys.path.insert(0, str(SKILLS / 'own-design-author/scripts'))
 import layer_paths  # noqa: E402  (the one rule for where a repository keeps its layers)
+import unicodedata  # noqa: E402
 from reporting import empty_report, skip, stage  # noqa: E402  (the five report categories)
 
 SCHEMA = SKILL / 'references/schema/plan.v1.schema.json'
@@ -39,6 +45,23 @@ FUNCTION_NAMES = {'identify': '名乗り', 'claim': '主張', 'fact': '事実', 
                   'action': '行動', 'source': '出典と運営者'}  # docs dictionary term-function-*
 CONFOUNDED_LABEL = '交絡あり'
 REEXEC_GUARD = 'PLAN_CHECK_REEXEC'
+MEASURE_EMPHASIS = Path(__file__).resolve().with_name('measure_emphasis.mjs')
+VIEWPORTS = [{'name': 'mobile', 'width': 375, 'height': 812}, {'name': 'desktop', 'width': 1280, 'height': 900}]
+
+
+def fold(text):
+    """Characters as compared: width-folded (NFKC), whitespace removed (the way copy and dictionary values are read)."""
+    return ''.join(unicodedata.normalize('NFKC', text or '').split())
+
+
+def measure_emphasis(html, emphasis, repo, viewports=VIEWPORTS):
+    """Draw the page at each width and measure each emphasis. -> rows; raises RuntimeError when it cannot be drawn."""
+    env = {**os.environ, 'SCREEN_PLAYWRIGHT_DIR': str(repo)}
+    proc = subprocess.run(['node', str(MEASURE_EMPHASIS), str(html), json.dumps(emphasis, ensure_ascii=False),
+                           json.dumps(viewports)], capture_output=True, text=True, timeout=180, env=env)
+    if proc.returncode != 0:
+        raise RuntimeError(f'exit {proc.returncode}: {proc.stderr.strip()[:300]}')
+    return json.loads(proc.stdout)
 
 
 def start_again_under_the_dependency_interpreter():
@@ -145,11 +168,11 @@ def comp_ignored(repo, deliverable):
 
 
 class Check:
-    def __init__(self, repo, deliverable, media):
-        self.repo, self.deliverable, self.media = Path(repo), deliverable, media
+    def __init__(self, repo, deliverable, media, html=None):
+        self.repo, self.deliverable, self.media, self.html = Path(repo), deliverable, media, html
         self.findings, self.report = [], empty_report()
         self.out = {'deliverable': deliverable, 'plan': layer_paths.rel('build', deliverable, 'plan.yaml'), 'media': media,
-                    'script': None, 'blocks': 0, 'narrow': {}, 'variant': None}
+                    'script': None, 'blocks': 0, 'narrow': {}, 'variant': None, 'emphasis': 0, 'emphasis_drawn': None}
 
     def add(self, level, code, message, path=None):
         self.findings.append({'level': level, 'code': code, 'message': message,
@@ -223,6 +246,9 @@ class Check:
             return self.done()
         vocabulary = self._vocabulary()
         self._coverage(plan, blocks, vocabulary, script_rel)
+        emphasis = self._emphasis(plan, script)
+        if self.html is not None:
+            self._drawn(emphasis)
         self._comp(plan)
         self._variant(plan)
         result = self.done()
@@ -283,6 +309,66 @@ class Check:
                      f'{rel} が git に入る（カンプの画像は git に入れない）。own-web-build/templates/build/.gitignore を '
                      f'{layer_paths.rel("build", ".gitignore")} に写す', rel)
 
+    def _emphasis(self, plan, script):
+        """The plan's emphasis, read against the script: -> [{block, target, text}] of the ones that can be drawn."""
+        rows = [(bid, e) for bid, row in sorted(plan['blocks'].items()) for e in row.get('emphasis', [])]
+        self.out['emphasis'] = len(rows)
+        if not rows:
+            self.add('info', 'PLAN_EMPHASIS_NONE', '計画に強調（emphasis）が無い：大きく描く文字を描いた画面で確かめる対象が無い')
+            skip(self.report, 'plan-emphasis', 'no emphasis in the plan')
+            return []
+        from comp_request import _ia_check, dictionary_values
+        values, _ = dictionary_values(self.repo)
+        placeholder = _ia_check().PLACEHOLDER
+        copies = script.get('copies') or {}
+        good = []
+        for bid, e in rows:
+            mine = {cid: c for cid, c in copies.items() if isinstance(c, dict) and c.get('block') == bid}
+            shown = {m.group(1) for c in mine.values() for m in placeholder.finditer(str(c.get('text', '')))}
+            if e['target'] in mine:
+                text = placeholder.sub(lambda m: values.get(m.group(1), m.group(0)), str(mine[e['target']].get('text', '')))
+            elif e['target'] in shown and e['target'] in values:
+                text = values[e['target']]
+            else:
+                self.add('fail', 'PLAN_EMPHASIS_TARGET_UNKNOWN',
+                         f'{bid}: 強調の対象 {e["target"]} は、このまとまりの文案でも、その文案が示す辞書の値でもない', self.out['plan'])
+                continue
+            want, have = fold(e['text']), fold(text)
+            if want not in have or want == have:
+                why = '対象の文字に無い' if want not in have else '対象の文字の全部で、残りが無い（何より大きくするかが無い）'
+                self.add('fail', 'PLAN_EMPHASIS_TEXT_ABSENT', f'{bid}: 強調の文字「{e["text"]}」が {e["target"]} の{why}', self.out['plan'])
+                continue
+            good.append({'block': bid, 'target': e['target'], 'text': e['text']})
+        stage(self.report, 'plan-emphasis', 2 if len(good) < len(rows) else 0, len(rows))
+        return good
+
+    def _drawn(self, emphasis):
+        """Measure the emphasis on the drawn page (--html)."""
+        if not emphasis:
+            skip(self.report, 'plan-emphasis-drawn', 'nothing to measure')
+            return
+        try:
+            rows = measure_emphasis(Path(self.html).resolve(), emphasis, self.repo.resolve())
+        except (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired) as exc:
+            self.add('fail', 'PLAN_EMPHASIS_NOT_MEASURED', f'描いた画面で強調を測れなかった（合格にしない）：{exc}')
+            self.report['missing'].append({'id': 'plan-emphasis-drawn', 'reason': 'the page could not be drawn'})
+            return
+        failed = 0
+        for r in rows:
+            where = f'{r["block"]} {r["target"]}「{r["text"]}」（{r["viewport"]}）'
+            if not r['drawn']:
+                failed += 1
+                self.add('fail', 'PLAN_EMPHASIS_TARGET_NOT_DRAWN', f'{where}: 対象がこのまとまりの中に描かれていない')
+                continue
+            bad = [x for x in r['elements'] if not x.get('larger')]
+            if bad:
+                failed += 1
+                sizes = '、'.join(f'強調 {x.get("emphasized_px")}px・残り {x.get("rest_px")}px' if x.get('found') else '強調の文字が無い'
+                                 for x in bad)
+                self.add('fail', 'PLAN_EMPHASIS_NOT_RENDERED', f'{where}: 強調の文字が残りより大きく描かれていない（{sizes}）')
+        self.out['emphasis_drawn'] = {'checked': len(rows), 'failed': failed}
+        stage(self.report, 'plan-emphasis-drawn', 2 if failed else 0, len(rows))
+
     def _variant(self, plan):
         base_id, declared = plan.get('variant_of'), plan.get('overrides')
         if base_id is None:
@@ -312,8 +398,8 @@ class Check:
         stage(self.report, 'plan-variant', 1 if compared['findings'] else 0, len(known))
 
 
-def check_plan(repo, deliverable, media='web'):
-    return Check(repo, deliverable, media).run()
+def check_plan(repo, deliverable, media='web', html=None):
+    return Check(repo, deliverable, media, html).run()
 
 
 def main(argv=None):
@@ -321,9 +407,10 @@ def main(argv=None):
     parser.add_argument('--repo', default='.')
     parser.add_argument('--deliverable', required=True)
     parser.add_argument('--media', default='web')
+    parser.add_argument('--html', help='the drawn page: measure the plan emphasis on it at each width')
     args = parser.parse_args(argv)
     try:
-        result = check_plan(Path(args.repo), args.deliverable, args.media)
+        result = check_plan(Path(args.repo), args.deliverable, args.media, args.html)
     except layer_paths.LayerLayoutError as exc:
         result = {'deliverable': args.deliverable, 'exit_code': 2, 'report': empty_report(),
                   'findings': [{'level': 'fail', 'code': layer_paths.FOREIGN_CODE, 'message': str(exc)}]}

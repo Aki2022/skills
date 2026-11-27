@@ -67,6 +67,46 @@ def key_hash(items):
     return pos.sha256([[i['id'], i['candidate']['judgment_hash']] for i in items])
 
 
+def _pair_hash(text, value):
+    """What makes two pairs the same question whatever their ids are: the copy text and the value (id and text)."""
+    return pos.sha256({'text': text, 'value': {'id': value['id'], 'text': value['text']}})
+
+
+def carry_over(old_key, old_labels, items):
+    """Carry the owner's labels of a v6 answer key over to the pairs of `items` (the current key).
+
+    A pair carries over when the copy text and the value are the same (the judgment id changed from `sec-` to `blk-`, so the
+    id cannot be the match). Conflicting labels for one question (the same text and value labelled both ways) are not carried,
+    nor is a label whose pair no longer exists: both are named. A current pair with no old label is written as unknown
+    (null, not counted) and named, never guessed. -> {'labels', 'carried', 'dropped', 'unmatched'}"""
+    if not isinstance(old_labels, dict) or old_labels.get('answer_key') != old_key.get('answer_key'):
+        raise ValueError('the old labels were made for another answer key (give the key they were made for)')
+    old_items = {i['id']: i for i in old_key.get('items') or []}
+    given = old_labels.get('labels') or {}
+    unknown = sorted(set(given) - set(old_items))
+    if unknown:
+        raise ValueError(f'the old labels name pairs the old answer key never had: {unknown[:5]}')
+    by_question = {}
+    for oid, label in given.items():
+        o = old_items[oid]
+        by_question.setdefault(_pair_hash(o['text'], o['value']), []).append((oid, label))
+    carried, labels, unmatched = 0, {}, []
+    used = set()
+    for item in items:
+        group = by_question.get(_pair_hash(item['text'], item['value']))
+        values = {v for _, v in group or []}
+        if group and len(values) == 1:
+            labels[item['id']] = values.pop()
+            used.update(oid for oid, _ in group)
+            carried += 1
+        else:
+            labels[item['id']] = None
+            unmatched.append(item['id'])
+    dropped = sorted(oid for oid in given if oid not in used)
+    return {'labels': {'answer_key': key_hash(items), 'labels': labels}, 'carried': carried, 'dropped': dropped,
+            'unmatched': sorted(unmatched)}
+
+
 def page(items):
     """A self-contained labeling page: one row per pair, conveys / does not convey / unknown, and a JSON download."""
     key = key_hash(items)

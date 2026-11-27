@@ -26,6 +26,7 @@ import dictionary
 import outline as ol
 import positioning as pos
 import positioning_model as pm
+import release
 from common import Report, YamlError, load_ref, load_yaml, validator_for
 from positioning_model import (  # noqa: F401  (the positioning layer's, re-exported for the rest of this skill)
     APPROVAL_PREFIX, BLOCKS, ID_RE, POSITIONING, PREFIX_BLOCK, SSOT_PATH, check_ssot, element, positioning_path,
@@ -201,6 +202,9 @@ def positioning_targets(m):
     if bp is not None and bp.present and bp.product:
         hashes = {**hashes, **blueprint.targets(bp)}
         must |= set(blueprint.required_keys(bp))
+    # The release approval of each shipped script (requirement 19). It is not a `must` key: the design layer resolves before the
+    # HTML exists, so the IA ship gate (ia_ship) is what refuses a shipped script whose release approval is not current.
+    hashes = {**hashes, **release.targets(m, read_approvals(m.root, Report('targets', '')))}
     return hashes, sorted(must)
 
 

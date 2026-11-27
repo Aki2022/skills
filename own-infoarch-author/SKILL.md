@@ -18,6 +18,7 @@ infoarch は 3 つの layer の真ん中で、成果物ごとに決める「何�
 - **固定値と正式名称は辞書の id で書く。** 台本の文案では、数値・連絡先・免責などは `{{value-<辞書の id>}}` で参照し、値を直接書かない。製品名などは辞書の `name` の表記で書く。声（repo 全体の話し方の正典）は無い。トーンは台本の `tone`。
 - **対象 0 件は失格。** チャネル 0 件・台本 0 件は終了コード 2。廃止した `ux/infoarch/outlines/` にファイルが残っていても失格（`IA_OUTLINE_RETIRED`）。outline は機械で写さず、positioning から台本を作り直す。
 - **引き先の無い文は提案の印を付けて残す。** 主張・事実・証拠と声の文案は、引き先（伝えるメッセージ・positioning の証拠 `refs`・辞書の値）か提案の印（`proposal: true`）を持つ。制作中は警告、出荷する台本に残っていれば `ship` が止める（`IA_SCRIPT_PROPOSAL_AT_SHIP`）。
+- **仕上がりの承認は台本・組み方の計画・成果物のファイルをハッシュで縛る。** 出荷する台本ごとに承認台帳の `ia:release:<台本 id>` の行が要り、承認の後に 1 字でも変われば外れる（カンプの画像は縛らない）。提案の印が残る台本は承認の対象を作らない。`infoarch-author release` が今のハッシュと状態を出す。承認を記録するのはオーナーの言葉があるときだけ（AI は台帳に推測で書かない）。
 
 ## プロダクト UI は blueprint で書く
 
@@ -70,6 +71,8 @@ infoarch-author diff --root . --a lp-a --b lp-b [--root-b DIR] [--dom-a A.json -
 infoarch-author answer-key --root . --out DIR      # 意味の判定（文案 × 提供価値）の正解表：組・swap の候補・オーナーが ○× を付けるページ
 infoarch-author answer-key --root . --record --key DIR/answer-key.json --limit 50 [--execute]  # swap の組の答えを上限つきで Jev に聞き、測定用の台帳（DIR/measurement-judgments.json。出荷は読まない）に記録する（--execute が無ければ見積もりだけ）
 infoarch-author answer-key --root . --measure labels.json --key DIR/answer-key.json  # 一致の割合・見逃し・誤検出（own は共有の台帳、swap は測定用の台帳から）。own か swap か、○ か × が 0 件なら「測れない」
+infoarch-author release --root .               # 仕上がりの承認：出荷する台本ごとのキー `ia:release:<台本 id>`・承認が持つべきハッシュ（台本・組み方の計画・成果物のファイルの中身）・状態。出荷する台本に承認が現在のものでないものがあれば終了コード 1。`ship` も同じ理由で止める（IA_RELEASE_UNAPPROVED）
+infoarch-author answer-key --root . --carry-over OLD_LABELS --from-key OLD_KEY --key DIR/answer-key.json --carry-out FILE  # v6 の正解表のラベルを、文案の本文と提供価値が同じ組へ移す（id は変わるので id では対応しない）。移さなかったものと、ラベルが付かない今の組を出す
 infoarch-author targets --root .               # 承認の対象（ia:path:<提供価値 id> と経路のハッシュ）と、出荷が要るキー（承認依頼のページは positioning-author request）
 infoarch-author migrate-dictionary --root . --map map.json [--write]  # スキーマ版 4 の木（固定値・正式名称・声を SSOT に持つ）を、辞書とスキーマ版 5 へ一度だけ移す。dry run は移した木の検査も走らせる
 infoarch-author migrate-v6 --root . [--write]  # v5 の木（SSOT・outline・描画物の印・modules.ia）を一括で移す（outline は台本に）。旧→新の id・移しそこね（1 件でも終了コード 2、何も書かない）・外れる承認と判定・戻す手順を出す

@@ -43,7 +43,7 @@ pptxは従属WS完了までux/design/を読まないため、その制約を報�
 
 | 観点                             | LP                                      | プロダクト UI                                                        | 資料                                                |
 | -------------------------------- | --------------------------------------- | -------------------------------------------------------------------- | --------------------------------------------------- |
-| 構造（優先度と描画後の位置） | LP は outline の順序と文言の一致（`infoarch-author dom`） | `own-web-build` の `audit_screen.py`（blueprint の優先度と、実ブラウザで測った位置。PC とスマホの 2 つの幅） | 対象外 |
+| 構造（優先度と描画後の位置） | LP は台本の順序と文言の一致（`infoarch-author dom`） | `own-web-build` の `audit_screen.py`（blueprint の優先度と、実ブラウザで測った位置。PC とスマホの 2 つの幅） | 対象外 |
 | 骨格（主操作・領域の印） | 対象外 | 同スクリプト（主操作が 1 つだけ塗られている・宣言した領域がすべて描かれている・印が 0 件なら「確かめていない」） | 対象外 |
 | 状態（loading・empty・error など） | 対象外 | 同スクリプト（宣言した状態が、宣言した文言でページにある） | 対象外 |
 | 審美・レイアウト実測（決定論）   | `own-web-build` の `measure_render.mjs`（`--profile lp`） | 同じ道具（`--profile product-ui`。`fold-cta` はプロファイルが当てない） | HTML資料はL0/L1/L2。pptxは `own-pptx-build` の既存決定論検査（ux/design/連携は未カバー）。印刷のプロファイルは無い（印刷の build を始めるとき） |
@@ -55,8 +55,8 @@ pptxは従属WS完了までux/design/を読まないため、その制約を報�
 | AI 生成様式の検出                | `baseline-ui`                           | `baseline-ui`                                                        | **欠落**                                            |
 | ブランド一貫性                   | `ux/design/` のL0と解決済みマニフェストによるL1/L2 | 同左 | HTML資料は同左、pptxのux/design/準拠は未カバー                                                |
 | 正式名称・固定値（辞書）         | `own-doc-update` の `dictionary.py check-html`（`docs/dictionary/` のゆれ・印の値・期限切れ） | 同左 | HTML資料は同左、pptxは未カバー |
-| 情報設計の整合（positioning・outline・blueprint） | `positioning-author check`（positioning の失格）と `infoarch-author check`（outline・チャネル・辞書の参照）。ともに `--root <git toplevel>` | 同左に加えて `infoarch-author blueprint --root <git toplevel>`（プロダクト UI の blueprint。positioning の失格も落とさない） | `positioning-author check` と `infoarch-author check`（LP と同じ。`blueprint` は対象外）。pptx など HTML でない成果物の描画との照合（`infoarch-author dom`）は未カバー |
-| 意味の判定（文案 × 提供価値）   | `infoarch-author judge --root <git toplevel>`（または `infoarch-author evaluate --outline <id>`）。判定は `ia-value-fit` の 1 種類だけで、**警告だけ**（未カバー・要確認）。合否も出荷も止めない | 同左（outline の文案が無ければ `IA_JUDGE_NO_TARGETS` の警告。判定していないので未カバーとして報告する） | 同左 |
+| 情報設計の整合（positioning・台本・blueprint） | `positioning-author check`（positioning の失格）と `infoarch-author check`（台本・チャネル・辞書の参照）。ともに `--root <git toplevel>` | 同左に加えて `infoarch-author blueprint --root <git toplevel>`（プロダクト UI の blueprint。positioning の失格も落とさない） | `positioning-author check` と `infoarch-author check`（LP と同じ。`blueprint` は対象外）。pptx など HTML でない成果物の描画との照合（`infoarch-author dom`）は未カバー |
+| 意味の判定（文案 × 提供価値）   | `infoarch-author judge --root <git toplevel>`（または `infoarch-author evaluate --script <id>`）。判定は `ia-value-fit` の 1 種類だけで、**警告だけ**（未カバー・要確認）。合否も出荷も止めない | 同左（台本の文案が無ければ `IA_JUDGE_NO_TARGETS` の警告。判定していないので未カバーとして報告する） | 同左 |
 
 補足:
 

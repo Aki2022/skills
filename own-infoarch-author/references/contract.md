@@ -40,7 +40,7 @@ v6 の outline を置き換えた。outline の target・トーン・取って�
 - `messages`（`msg-NNNN`）：`value`（提供価値ちょうど 1 つ）・`rank`（lead / support）・`type`（normal / cta）・`compares`（比べる代替）・`achieves`（CTA が指す目的変数）。`no_cta: true` で CTA を置かないことを宣言できる。
 - `blocks`（まとまり、`blk-NNNN`）：`order`・`function`（内容の働き。辞書 `term-function-*` の 7 つ：identify 名乗り・claim 主張・fact 事実・evidence 証拠と声・offer 提供条件・action 行動・source 出典と運営者）・`places`（任意）。メッセージを置けるのは主張（通常のメッセージをちょうど 1 つ）と行動（CTA を 0〜1 つ）だけ。数・順序は自由で、同じ働きを何回使ってもよい。
 - `copies`（文案、`cpy-NNNN`）：`block`・`order`（まとまりの中の順番）・`text`、任意で `message`（伝えるメッセージ。同じまとまりに置かれたものだけ。主張のまとまりの文案は必須、主張と行動以外では持たない）・`refs`（positioning の証拠 `prf-NNNN`。立っているセグメントのもの）・`proposal: true`（提案の印）。固定値は `{{value-<辞書の id>}}` で参照する（括弧の中に空白や改行を入れない。入れたものは形の崩れた参照として失格）。
-- 引き先：主張の文案はメッセージ、事実・証拠と声の文案は `refs` か辞書の値。引き先の無い主張・事実・証拠と声の文案は提案の印を持つ（無ければ失格）。引き先があるのに提案の印を持つものも失格。提案の印は制作中は警告（IA_SCRIPT_PROPOSAL）、出荷する台本に残れば `ship` が止める（IA_SCRIPT_PROPOSAL_AT_SHIP。`outline.proposals` が一覧を返す）。仕上がりの承認（台本・組み方の計画・HTML をハッシュで縛る）はこの skill にまだ無い。
+- 引き先：主張の文案はメッセージ、事実・証拠と声の文案は `refs` か辞書の値。引き先の無い主張・事実・証拠と声の文案は提案の印を持つ（無ければ失格）。引き先があるのに提案の印を持つものも失格。提案の印は制作中は警告（IA_SCRIPT_PROPOSAL）、出荷する台本に残れば `ship` が止める（IA_SCRIPT_PROPOSAL_AT_SHIP。`outline.proposals` が一覧を返す）。仕上がりの承認は下の「仕上がりの承認」。
 - `texts`（任意）：主張でない文言の宣言。key ごとに `kind`（navigation / label）・`text`・（label なら）`block`。
 - 並びは `order` で持ち、ファイルの中で書いた順番は意味を持たない。台本の原子の id は台本の中で一意で、台帳は持たない（別案は同じ id を引き継ぐ）。
 
@@ -146,6 +146,7 @@ v5 の木（旧い名前 `info_arch.yaml` の版 3（今の置き場所は `ux/p
 | IA_SCHEMA | 辞書の 7 つに無い働き・働きの無いまとまり・schema_version が 1 でない台本 |
 | IA_SCRIPT_COPY_UNREFERENCED / IA_SCRIPT_PROPOSAL_WITH_REFERENCE | 引き先も提案の印も無い主張・事実・証拠と声の文案・引き先があるのに提案の印を持つ文案 |
 | IA_SCRIPT_PROOF_OTHER_POSITIONING | 文案の `refs` が、target のセグメントでない証拠を引く |
+| IA_RELEASE_UNAPPROVED | 出荷する台本に、現在の仕上がりの承認が無い（承認が無い・承認の後に台本・計画・成果物が変わった・承認の対象を作れない（提案の印・計画が 1 つでない・成果物がファイルでない）） |
 | IA_SCRIPT_PROPOSAL（warn） | 提案の印が残る文案（制作中は警告。出荷では `ship` が IA_SCRIPT_PROPOSAL_AT_SHIP で止める） |
 | IA_OUTLINE_RETIRED | 廃止した `outlines/` にファイルが残っている |
 | IA_SCRIPT_VARIANT_BASE_MISSING / IA_SCRIPT_OVERRIDES_WITHOUT_BASE / IA_SCRIPT_OVERRIDE_UNKNOWN / IA_SCRIPT_VARIANT_OTHER_EXPERIMENT | 変種の基本が無いか自分自身・基本の無い上書き・どちらにも無い要素の上書き・定数か目的変数が基本と違う |
@@ -232,12 +233,20 @@ v5 の木（旧い名前 `info_arch.yaml` の版 3（今の置き場所は `ux/p
 
 v5 までの `ia-name-variant`・`ia-unregistered-claim`・`ia-audience-fit`・`ia-emphasis`・`ia-strategy-fit` の行が repo の台帳に残っていても、`judge`・`evaluate`・`ship` は**読まずに無視する**（候補にも報告にも出さず、台帳は書き換えない。台帳の検証は種類の名前を今も受け付けるので、残っていても壊れない）。
 
+### 仕上がりの承認（`infoarch-author release`。入口の spec の要件 17・19）
+
+- 承認台帳の行は出荷する台本ごとに 1 つ。キーは `ia:release:<台本 id>`、ハッシュは **台本のファイル・組み方の計画のファイル（`ux/build/<成果物 id>/plan.yaml`。`script` が台本 id のもの）・台本の `outputs` の各ファイル**の中身（バイト列）を束ねたもの（JCS のハッシュ）。1 字でも変われば外れる（空白・並べ替えも）。カンプの画像は git に入れず、縛らない。変えても外れない。
+- 承認の対象を作れない台本は、承認依頼の対象（`targets`）に入らず、`ship` は止まる：提案の印が残る文案がある・計画が台本にちょうど 1 つでない・`outputs` が無いかファイルでない。制作中は何も止めない（出荷する台本だけ）。
+- `release --root . [--date]`：台本ごとの `key`・今のハッシュ（承認が持つべき値）・`state`（`approved`・`unapproved`・`changed`・`blocked`・`not-shipped`）・`problems`。出荷する台本に `approved` でないものがあれば終了コード 1。`targets` は同じ行を `approval_hashes` に出す（`must_approval_keys` には入れない。design 層の解決は HTML の前なので、止めるのは IA の出荷の門）。承認台帳に既に行がある台本が束ねられなくなったときは、行が参照先を失って design 層が止まらないよう、どの中身にも当たらないハッシュでキーを残す（承認とは読まれない）。
+- 承認はオーナーの判断で、AI が記録するときはオーナー自身の言葉と日付が要る（own-design-author の `approve`。この skill は台帳に書かない）。
+
 ### 正解表（`infoarch-author answer-key`。v6 要件 12）
 
 - `answer-key --root . --out DIR`：承認済みの提供価値に立つ文案ごとに、自分の提供価値との組（own）と、同じ positioning のほかの承認済みの提供価値に付け替えた組（swap。提供価値が 1 つしか無い positioning では、別の positioning の提供価値と組む）を作る。`answer-key.json`（組と判定のハッシュ、正解表の id）・`candidates.json`（swap の組だけの `ia-value-fit` の候補。own の組は出荷の判定そのものなので入れない）・`answer-key-page.html`（オーナーが ○ 伝わる／× 伝わらない／？ 分からないを付けて labels.json を保存するページ。外部の読み込み無し）を書く。既にあるファイルは上書きしない。機械が作るのは外れの候補まで。正解はオーナーのラベルで決まる。
 - **Jev の答えの置き場所**（ADR-20261123）：own の組は、`judge` が聞くのと同じ候補（id が `<台本>/<まとまり>/<文案>`。`@提供価値` が付かない）なので、共有の判定台帳（`ux/judgments.json`）の答えをそのまま使う（測ったものと出荷で使うものが同じ）。swap の組（id が `<台本>/<まとまり>/<文案>@<提供価値>`）は測るためだけにあるので、答えを**測定用の台帳**（`DIR/measurement-judgments.json`。共有の台帳と同じ形。`answer-key.json` と同じ場所）に記録する。出荷（`ship`・`judge`・`evaluate`）は測定用の台帳を読まず、`answer-key --record` は共有の台帳を書かない。
 - `answer-key --root . --record --key DIR/answer-key.json --limit N [--execute]`：swap の組のうち測定用の台帳に答えが無いものを、上限つきで Jev に聞いて記録する。`--execute` が無ければ見積もりだけ（件数と要求数。キーを読まず、通信せず、何も書かない）。`--execute` があれば own-design-author の `judgment_run`（共有の使用量台帳。累計の上限を超えるなら 1 件も送らない）で取り、回答を `DIR/judgment-answers.json` に足して（次の実行で続きから取る）、測定用の台帳を更新する。own の組は聞かない（出荷の判定と同じ問いなので、`evaluate --acquire` で共有の台帳へ）。
 - `answer-key --root . --measure labels.json --key DIR/answer-key.json`：ラベルと答え（own は共有の台帳、swap は測定用の台帳。θ 以上＝伝わらない）を比べ、一致の割合・見逃し（オーナーが × で Jev が通した組）・誤検出（オーナーが ○ で Jev が止めた組）を出す。？ は数えない。答えが無い組（置き場所が違う答えも含む）は `uncovered` に並べて数えない。数えた組に own か swap のどちらかが 0 件、または ○ か × のどちらかが 0 件なら、数字を出さず `status: unmeasurable`（`reason` に足りない側）。ラベルが別の正解表のもの（正解表の id が違う）・知らない組を含む・台本や提供価値が作った後で変わった・測定用の台帳が読めない（symlink・今の policy と合わない）は失格（作り直す・記録し直す）。
+- `answer-key --root . --carry-over OLD_LABELS --from-key OLD_KEY --key NEW_KEY --carry-out FILE`：v6 の正解表のラベル（オーナーの ○× ？）を今の組へ移す。判定の id が `sec-` から `blk-` に変わったので id では対応せず、**文案の本文と提供価値（id と文面）が同じ組**に引き継ぐ。同じ問いに○と×の両方が付いていた・組が今は無い・文案か提供価値が変わったものは引き継がず、`dropped`（移さなかった古い id）と `unmatched`（ラベルが付かない今の組。？ として書く）に出す。ラベルが別の正解表のもの・古い正解表に無い組を含むものは失格。既にあるファイルは上書きしない。Jev の答えは移さない（判定のキーが id を含むので、新しい id は台帳に無い＝未カバーの警告。要るなら `evaluate --acquire` で取り直す）。
 - モデルを呼ぶのは `--record --execute` だけ。
 
 score は「問題がある確率」。θ 以上は IA_JUDGE_REVIEW（要確認）として人に回し、score だけで失格にしない。
@@ -296,7 +305,7 @@ holdout はそのまま引き継ぐ。回答の policy が今の共有 policy �
 
 出荷ゲートは、作業ツリーではなく、出荷されるコミット（clean な HEAD、push されるコミット、または予測マージ木）に対して走る。中身は、そのコミットを一時 worktree に取り出したもの（追跡されたファイルだけ）から読む。無視されたファイル・未コミットの変更・検査の後の書き換えは読まない。順番は次のとおりで、失格の段で止まる。
 1. `tree`：`ux/infoarch/` と `ux/positioning/` の下と `ux/judgments.json` にシンボリックリンクがあれば `IA_SHIP_SYMLINK`（失格。`check` の前に見る）。
-2. `check`（決定論）。出荷チャネル（`ship: true`）が 0 件、または出荷チャネルのどれか 1 つでも台本が 0 件なら失格（空のゲートを合格にしない。他のチャネルが出荷していても、空のチャネルは合格にしない）。出荷される台本に提案の印が 1 つでも残っていれば `IA_SCRIPT_PROPOSAL_AT_SHIP` で失格（`check` 単独では警告の IA_SCRIPT_PROPOSAL）。
+2. `check`（決定論）。仕上がりの承認：出荷される台本ごとに、承認台帳の `ia:release:<台本 id>` の行が今のハッシュと一致しなければ `IA_RELEASE_UNAPPROVED` で失格（check の後・描画の前）。出荷チャネル（`ship: true`）が 0 件、または出荷チャネルのどれか 1 つでも台本が 0 件なら失格（空のゲートを合格にしない。他のチャネルが出荷していても、空のチャネルは合格にしない）。出荷される台本に提案の印が 1 つでも残っていれば `IA_SCRIPT_PROPOSAL_AT_SHIP` で失格（`check` 単独では警告の IA_SCRIPT_PROPOSAL）。
 3. `tree`（続き）：出荷される台本の成果物は、HTML かどうかに関わらず、すべてコミットの中に通常ファイルとして無ければならない。無い・ディレクトリ等は `IA_SHIP_OUTPUT_MISSING`、成果物か親ディレクトリがシンボリックリンクなら `IA_SHIP_SYMLINK`（どちらも失格）。git のオブジェクトから判定するので、手元にある無視されたファイルは数えない。
 4. `dom`：出荷される台本のうち HTML の成果物を持つものを、実ブラウザで描画して確かめる。HTML が無い台本は `skipped` に記録する。
 5. `judge`：共有の判定台帳を読む。**どの判定も出荷を止めない**。台帳に無い判定は `IA_JUDGE_UNCOVERED`（警告）、θ 以上は `IA_JUDGE_REVIEW`（警告。人に回す）。台帳が読めない・symlink は `IA_JUDGE_LEDGER`（失格。判定ではなく入力の破損）。

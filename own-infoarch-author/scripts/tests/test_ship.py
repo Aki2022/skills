@@ -19,6 +19,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from test_check import DECK, OUTLINE, SSOT, confirm, dump, write_repo  # noqa: E402
+from release_fixtures import approve_release  # noqa: E402
 
 SCRIPTS = Path(__file__).resolve().parents[1]
 SKILL = SCRIPTS.parent
@@ -92,6 +93,7 @@ def repo(tmp_path):
     (root / 'decks/smb.pptx').write_bytes(b'fixture deck')
     (root / 'deploy.py').write_text(DEPLOY)
     (root / '.gitignore').write_text('.shipment.json\n')
+    approve_release(root)  # the owner's release approval of the shipped deck: its script, plan and file
     cover_ledger(root)
     commit(root, 'fixture base')
     run_git(root, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
@@ -223,6 +225,7 @@ def test_uncovered_judgment_stops_neither_a_shipped_outline_nor_a_draft(repo):
     changed = {**copy.deepcopy(DECK), 'channel': 'deck'}
     changed['copies']['cpy-0001']['text'] = '少人数でも回る仕組みです'
     dump(layer_paths.path(repo, 'infoarch', 'scripts', 'deck-smb.yaml'), changed)
+    approve_release(repo)  # the owner approves the changed script again
     commit(repo, 'shipped copy changed without a judgment')
     code, out, _ = ship(repo)
     assert code == 1, out  # uncovered, reported, never blocking (requirement 11)
@@ -637,6 +640,7 @@ def test_shipped_html_is_rendered_and_its_first_screens_are_judged(repo, tmp_pat
     assert code == 0, proc.stdout
     written = sorted((repo / 'site').rglob('*.html'))
     assert written, proc.stdout
+    approve_release(repo, 'lp-municipal', ['site/index.html'])
     commit(repo, 'ship the LP')
     code, out, _ = ship(repo, env=env)
     assert code == 1 and 'IA_SHIP_UNCOVERED' not in codes(out), out  # the LP's copy has no judgment yet: reported only
@@ -656,11 +660,13 @@ def test_shipped_html_is_rendered_and_its_first_screens_are_judged(repo, tmp_pat
     original = html.read_text()
     # Below the first screen, so only the text outside every mark changes (not the emphasis input).
     html.write_text(original.replace('</body>', '<div style="height:4000px"></div><footer><p>業界No.1 の実績</p></footer></body>'))
+    approve_release(repo, 'lp-municipal', ['site/index.html'])  # approved: the stop is the rendered check, not the approval
     commit(repo, 'a claim outside every mark')
     code, out, _ = ship(repo, env=env)
     assert code == 2 and 'IA_DOM_UNANCHORED_TEXT' in codes(out), out  # v6 requirement 10: it never ships
     assert [s['stage'] for s in out['stages']][-1] == 'dom', out
     html.write_text(original.replace('data-ia-copy', 'data-x'))
+    approve_release(repo, 'lp-municipal', ['site/index.html'])
     commit(repo, 'anchors lost')
     code, out, _ = ship(repo, env=env)
     assert code == 2 and [s['stage'] for s in out['stages']][-1] == 'dom', out

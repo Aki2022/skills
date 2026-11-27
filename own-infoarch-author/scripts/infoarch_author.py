@@ -308,6 +308,21 @@ def cmd_answer_key(args):
         return 2
     jl = judge._jl()
     policy = jl.load_policy()
+    if args.carry_over:
+        if not (args.from_key and args.key and args.carry_out):
+            _print({'exit_code': 2, 'error': '--carry-over には --from-key（v6 の answer-key.json）・--key（今の answer-key.json）・--carry-out が要る'})
+            return 2
+        target = Path(args.carry_out)
+        if target.exists() or target.is_symlink():
+            _print({'exit_code': 2, 'error': f'上書きしない: {target}'})
+            return 2
+        items = answer_key.load_items(m, approved, policy, jl, args.key)
+        old_key = json.loads(Path(args.from_key).read_text(encoding='utf-8'))
+        old_labels = json.loads(Path(args.carry_over).read_text(encoding='utf-8'))
+        out = answer_key.carry_over(old_key, old_labels, items)
+        target.write_text(json.dumps(out['labels'], ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+        _print({**{k: v for k, v in out.items() if k != 'labels'}, 'written': str(target), 'answer_key': out['labels']['answer_key']})
+        return 0
     if args.measure:
         if not args.key:
             _print({'exit_code': 2, 'error': '--measure には、作った時の --key（answer-key.json）が要る'})
@@ -377,6 +392,25 @@ def cmd_targets(args):
     hashes, must = check.positioning_targets(m)
     _print({'approval_hashes': hashes, 'must_approval_keys': must})
     return 0
+
+
+def cmd_release(args):
+    """The release approval of each script (requirement 19): its key, the hash the owner's approval must carry now, and
+    whether the ledger's row matches. Exit 1 when a shipped script has no current approval, 2 on a broken ledger."""
+    import release
+    report = check.Report('release', args.date or dt.date.today().isoformat())
+    m = check.load(args.root, report)
+    if m.ssot is None or report.exit_code == 2:
+        _print(report.to_dict())
+        return 2
+    rows = check.read_approvals(args.root, report)
+    if report.exit_code == 2:
+        _print(report.to_dict())
+        return 2
+    states = release.states(m, rows)
+    stopped = any(s['state'] not in ('approved', 'not-shipped') for s in states.values())
+    _print({'releases': list(states.values()), 'exit_code': 1 if stopped else 0})
+    return 1 if stopped else 0
 
 
 def main(argv=None):
@@ -465,6 +499,10 @@ def main(argv=None):
     t = sub.add_parser('targets', help='owner-approval targets (ia:path keys and path hashes) for own-design-author approvals')
     t.add_argument('--root', default='.')
     t.set_defaults(fn=cmd_targets)
+    rl = sub.add_parser('release', help='release approval per script: its key, the hash it must carry (script + layout plan + shipped files) and whether the ledger matches')
+    rl.add_argument('--root', default='.')
+    rl.add_argument('--date', help='evaluation date YYYY-MM-DD (default: today)')
+    rl.set_defaults(fn=cmd_release)
     m6 = sub.add_parser('migrate-v6', help='one batch v5 migration: SSOT, scripts (from v5 outlines), rendered marks, modules.ia pin')
     m6.add_argument('--root', default='.')
     m6.add_argument('--write', action='store_true', help='write the migrated files (without it: dry run)')
@@ -484,6 +522,9 @@ def main(argv=None):
     ak.add_argument('--record', action='store_true', help='ask Jev the swap pairs not yet answered and record them in the measurement ledger beside --key (a preview unless --execute)')
     ak.add_argument('--limit', type=int, help='most pairs to ask Jev in one --record run')
     ak.add_argument('--execute', action='store_true', help='with --record: really ask Jev (without it: the count only, no key read, no network, no writes)')
+    ak.add_argument('--carry-over', metavar='OLD_LABELS', help='carry the labels of a v6 answer key over to the current pairs (needs --from-key, --key and --carry-out)')
+    ak.add_argument('--from-key', help='with --carry-over: the v6 answer-key.json the old labels were made for')
+    ak.add_argument('--carry-out', help='with --carry-over: where to write the new labels.json (never overwritten)')
     ak.set_defaults(fn=cmd_answer_key)
     args = ap.parse_args(argv)
     try:

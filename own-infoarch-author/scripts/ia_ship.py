@@ -35,6 +35,7 @@ import dictionary
 import dom
 import judge
 import outline as ol
+import release
 from common import SKILL, YamlError, load_ref, load_yaml
 import layer_paths  # on sys.path through common
 
@@ -243,6 +244,14 @@ def _evaluate(root, commit, tree, date, source, predicted):
     files['targets'] = {'commit': commit, 'outputs': sum(len(m.outlines[oid][1]['outputs']) for oid in shipped)}
     if files['exit_code'] == 2:
         return finish('shipped IA outputs are not committed files')
+    # Production layers requirements 17 and 19: the owner's release approval binds each shipped script, its layout plan and
+    # its files; one character changed after the approval, or no approval, and the script does not ship.
+    ledger_report = check.Report('release', date)
+    rows = check.read_approvals(root, ledger_report)
+    _tree_stage(files, [(f.code, f.message, f.path) for f in ledger_report.findings if f.level == 'fail']
+                + release.findings(m, rows))
+    if files['exit_code'] == 2:
+        return finish('shipped IA scripts have no current release approval')
 
     rendered, skipped, findings, screens = [], [], [], 0
     worst = 0

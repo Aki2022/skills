@@ -53,6 +53,7 @@ COMMANDS = {
     'set': lambda repo, tmp: ['set', '--outline', 'x'],
     'diff': lambda repo, tmp: ['diff', '--a', 'x', '--b', 'y'],
     'targets': lambda repo, tmp: ['targets'],
+    'release': lambda repo, tmp: ['release'],
     'migrate-v6': lambda repo, tmp: ['migrate-v6'],
     'migrate-v6-write': lambda repo, tmp: ['migrate-v6', '--write'],
     'migrate-dictionary': lambda repo, tmp: ['migrate-dictionary', '--map', _file(tmp, 'm.json', '{}')],

@@ -44,6 +44,7 @@ EDGE_KINDS = {  # kind -> (allowed `from` prefixes, allowed `to` prefixes; 'edge
 }
 DEGREES = ('full', 'partial', 'none')
 PATH_PREFIX = 'ia:path:'             # one approval row per value: its key names the value, its hash binds the path
+RELEASE_PREFIX = 'ia:release:'      # one approval row per shipped script: the hash of its script, layout plan and shipped files (own-infoarch-author release.py)
 ITEM_PREFIX = 'ia:item:'              # one approval row per product item (own-infoarch-author's blueprint): the item's own hash
 LEGACY_PREFIX = 'ia:positioning:'    # the per-element rows before ADR-20261118-ia-approval-per-value-path
 APPROVAL_PREFIX = PATH_PREFIX
@@ -469,4 +470,4 @@ def read_approvals(root, report, load_yaml, yaml_error):
         report.add('warn', 'IA_APPROVALS_LEGACY',
                    f'{rel} に原子と矢印ごとの旧い行が {len(legacy)} 件ある（承認として数えない。positioning-author migrate-approvals で経路の行へ移す）',
                    rel, rows=len(legacy))
-    return {k: v for k, v in approved.items() if k.startswith((PATH_PREFIX, ITEM_PREFIX))}
+    return {k: v for k, v in approved.items() if k.startswith((PATH_PREFIX, ITEM_PREFIX, RELEASE_PREFIX))}

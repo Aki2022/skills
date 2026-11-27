@@ -233,3 +233,78 @@ def test_a_page_with_nothing_to_measure_is_not_a_pass(project):
     result, report = measure(root, empty, 'lp')
     assert result.returncode != 0, result.stdout + result.stderr
     assert report['measured']['targets'] == 0
+
+
+# ---- the floor under every composition: a text column that crowds characters is red (spec Requirements 15) ----
+
+CROWD = SKILL / 'fixtures/text-crowding'
+
+
+def crowd_page(name):
+    # the fixture's own spacing is on an 8px grid; the harness heading's default margin would be the off-grid one
+    return NORMAL.replace('<h1>', '<h1 style="margin:0 0 8px">').replace('CONTENT', (CROWD / name).read_text(encoding='utf-8'))
+
+
+def crowd_ids(report):
+    return [row['id'] for row in report['failures']]
+
+
+def test_the_crowding_fixtures_exist_and_carry_no_proper_name():
+    names = sorted(p.name for p in CROWD.glob('*.html'))
+    assert names == ['one-column.html', 'three-flex-columns-crowded.html', 'two-columns-crowded.html'], names
+
+
+def test_the_crowding_check_is_a_failing_check_that_both_profiles_apply_and_its_floor_is_a_registry_number():
+    data = registry()
+    assert data['checks']['text-crowding']['lane'] == 'fail'
+    assert type(data['thresholds']['crowdedMinChars']) in (int, float) and data['thresholds']['crowdedMinChars'] > 0
+    assert all('text-crowding' in p['applies'] for p in data['profiles'].values())
+
+
+@browser
+@pytest.mark.parametrize('profile', ['lp', 'product-ui'])
+def test_two_columns_that_squeeze_text_to_a_few_characters_are_red_and_one_column_is_green(project, profile):
+    root = prepare(project)
+    red, report = measure(root, crowd_page('two-columns-crowded.html'), profile)
+    assert red.returncode == 1, red.stdout + red.stderr
+    row = next(r for r in report['failures'] if r['id'] == 'text-crowding')
+    assert row['at'].endswith('/375px') and row['count'] >= 4 and row['min'] == registry()['thresholds']['crowdedMinChars']
+    assert row['sample'] and all(s['chars'] < row['min'] and s['lines'] >= 2 for s in row['sample']), row
+    green, clean = measure(root, crowd_page('one-column.html'), profile)
+    assert green.returncode == 0, green.stdout + green.stderr
+    assert 'text-crowding' not in crowd_ids(clean)
+
+
+@browser
+def test_the_floor_does_not_depend_on_how_the_columns_were_made(project):
+    root = prepare(project)
+    red, report = measure(root, crowd_page('three-flex-columns-crowded.html'), 'lp')
+    assert red.returncode == 1 and 'text-crowding' in crowd_ids(report), red.stdout + red.stderr
+
+
+@browser
+def test_short_labels_and_one_line_blocks_are_not_crowding(project):
+    """A narrow box that holds one short line (a number, a tag) is not a crowded column of text."""
+    root = prepare(project)
+    html = NORMAL.replace('<h1>', '<h1 style="margin:0 0 8px">').replace('CONTENT', '<ul style="display:flex;gap:8px;margin:0;padding:0 24px;list-style:none">'
+                          + ''.join(f'<li style="width:48px;border:1px solid black">{t}</li>' for t in ('01', '02', '03', '04'))
+                          + '</ul>' + BODY)
+    ok, report = measure(root, html, 'lp')
+    assert ok.returncode == 0 and 'text-crowding' not in crowd_ids(report), ok.stdout + ok.stderr
+
+
+@browser
+def test_the_floor_is_read_from_the_registry_not_from_the_tool(project, tmp_path):
+    """Lower the floor in a copy of the skills: the page that was red is green (and the reverse for one column)."""
+    root = prepare(project)
+    skills = copy_skills(tmp_path / 'skills', ('own-design-author', 'own-web-build'), lambda data: None)
+    file = skills / 'own-design-author/references/measurement-profiles.json'
+    data = json.loads(file.read_text())
+    data['thresholds']['crowdedMinChars'] = 1
+    file.write_text(json.dumps(data))
+    loose, report = measure(root, crowd_page('two-columns-crowded.html'), 'lp', tool=skills / TOOL_REL)
+    assert 'text-crowding' not in crowd_ids(report), 'the tool kept its own copy of the floor'
+    data['thresholds']['crowdedMinChars'] = 30
+    file.write_text(json.dumps(data))
+    strict, report = measure(root, crowd_page('one-column.html'), 'lp', tool=skills / TOOL_REL)
+    assert strict.returncode == 1 and 'text-crowding' in crowd_ids(report)

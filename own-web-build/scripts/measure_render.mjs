@@ -456,6 +456,27 @@ function collect(T) {
       return el.getBoundingClientRect().width / px(s.fontSize);
     });
 
+  // 詰まりすぎ（どの組み方にも当てる床）。文字を載せる最も内側の箱が、全角で T.crowdedMinChars 字に満たない幅のまま
+  // 2 行以上に折れていれば、列が文字を押し潰している。1 行で収まる短いラベルや数字は対象外。
+  const textBoxes = "p,li,dd,dt,h1,h2,h3,h4,h5,h6,blockquote,figcaption,td,th,summary";
+  const crowded = [];
+  for (const el of document.querySelectorAll(textBoxes)) {
+    if (!vis(el) || el.querySelector(textBoxes)) continue;
+    const s = getComputedStyle(el);
+    if (!s.writingMode.startsWith("horizontal")) continue;
+    const text = el.textContent.trim();
+    if (!text) continue;
+    const fs = px(s.fontSize);
+    const box = el.getBoundingClientRect();
+    const width = box.width - px(s.paddingLeft) - px(s.paddingRight);
+    const height = box.height - px(s.paddingTop) - px(s.paddingBottom);
+    const lineHeight = px(s.lineHeight) || fs * 1.2;
+    const lines = Math.round(height / lineHeight);
+    const chars = width / fs;
+    if (lines >= 2 && chars < T.crowdedMinChars)
+      crowded.push({ tag: el.tagName.toLowerCase(), text: text.slice(0, 20), chars: Number(chars.toFixed(1)), lines });
+  }
+
   const heads = [...document.querySelectorAll("h1,h2,h3,h4,h5,h6")]
     .filter(vis)
     .map((h) => Number(h.tagName[1]));
@@ -585,6 +606,7 @@ function collect(T) {
     horizontalScroll:
       document.documentElement.scrollWidth >
       document.documentElement.clientWidth,
+    crowded,
     measureMaxCh: measures.length
       ? Number(Math.max(...measures).toFixed(1))
       : null,
@@ -954,6 +976,8 @@ for (const r of report.runs) {
     fail("element-overflow", { at, sample: r.overflow.slice(0, 4) });
   if (r.measureMaxCh && r.measureMaxCh > T.measureMaxCh)
     fail("line-length", { at, got: r.measureMaxCh, max: T.measureMaxCh });
+  if (r.crowded.length)
+    fail("text-crowding", { at, count: r.crowded.length, min: T.crowdedMinChars, sample: r.crowded.slice(0, 4) });
   if (r.bodyFontSize !== null && r.bodyFontSize < T.bodyFontSizeMin)
     fail("body-font-size", { at, got: r.bodyFontSize, min: T.bodyFontSizeMin });
   if (r.bodyLineHeight !== null && r.bodyLineHeight < T.bodyLineHeightMin)

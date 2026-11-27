@@ -10,6 +10,7 @@
     "bodyFontSizeMin": 15,
     "textFontSizeFloor": 12,
     "measureMaxCh": 48,
+    "crowdedMinChars": 8,
     "orphanMinChars": 3,
     "imageStandoutArea": 200,
     "imageCropMax": 0.45
@@ -58,6 +59,9 @@
       "lane": "fail"
     },
     "line-length": {
+      "lane": "fail"
+    },
+    "text-crowding": {
       "lane": "fail"
     },
     "body-font-size": {
@@ -138,6 +142,7 @@
         "horizontal-scroll",
         "element-overflow",
         "line-length",
+        "text-crowding",
         "body-font-size",
         "body-line-height",
         "heading-jump",
@@ -183,6 +188,7 @@
         "horizontal-scroll",
         "element-overflow",
         "line-length",
+        "text-crowding",
         "body-font-size",
         "body-line-height",
         "heading-jump",

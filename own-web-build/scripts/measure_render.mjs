@@ -928,6 +928,7 @@ const warn = (id, detail) => { if (applies.has(id)) report.warnings.push({ id, .
 for (const r of report.runs) {
   const at = `${r.scheme}/${r.width}px`;
   if (!r.design.targetCount) fail('zero-targets', {at});
+  if (r.design.variantError) fail('design-palette', {at, variant_error:r.design.variantError});
   if (r.design.failures.length) fail('design-palette', {at, count:r.design.failures.length, sample:r.design.failures.slice(0, 8)});
   // 設計の禁止（design.yaml の prohibitions）は、対応する画面規則の数で見る。規則の無い禁止は coverage.uncovered に出る。
   // 測れていない禁止は合格にしない。

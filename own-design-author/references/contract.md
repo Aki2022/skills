@@ -46,6 +46,18 @@ Python 3.10以上と、既存環境に導入済みの PyYAML / jsonschema（refe
 {"$extensions": {"org.own.design": {"origin": "proposal"}}}
 ```
 
+### 変種（ブランド）ごとの palette
+
+1つのリポジトリが複数のブランド（変種）を持つ時は、ブランド専用のトークンに変種名を付ける。付けないトークンは全変種で共有する。
+
+```json
+{"$extensions": {"org.own.design": {"origin": "proposal", "variant": "b"}}}
+```
+
+変種名は小文字のkebab-case。L0は変種が2つ以上あると、manifestの`variants`に変種ごとのpalette（共有トークン＋その変種のトークン）を書く。
+`palette`（全トークンの和集合）は残るが、L2はこれで色を照合しない（下の `web-validation.md`）。変種が1つ以下なら`variants`は空で、従来どおり`palette`で照合する。
+変種名の書式が違えばL0が失格にする。
+
 色はDTCGのcolorSpace/componentsに加え6桁hexフォールバックを必須とする。現時点のweb変換はsrgb、componentsとhexが食い違えば失格。dimensionはpx/rem、durationはms/sの構造と単位を保ってCSSへ変換する。JSON pointerは同じトークンファイル内の値を参照する。aliasはファイルを跨いで解決する。
 
 group `$extends`、カスタムdash配列のstrokeStyle、srgb以外のCSS変換は未対応として明示的に失格にする。対応しない構文を黙って落とさない。印刷拡張は保持し、現段階で印刷変換を保証しない。

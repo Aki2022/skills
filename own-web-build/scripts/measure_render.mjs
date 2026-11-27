@@ -929,6 +929,14 @@ for (const r of report.runs) {
   const at = `${r.scheme}/${r.width}px`;
   if (!r.design.targetCount) fail('zero-targets', {at});
   if (r.design.failures.length) fail('design-palette', {at, count:r.design.failures.length, sample:r.design.failures.slice(0, 8)});
+  // 設計の禁止（design.yaml の prohibitions）は、対応する画面規則の数で見る。規則の無い禁止は coverage.uncovered に出る。
+  // 測れていない禁止は合格にしない。
+  for (const p of manifest.prohibitions || []) {
+    if (!p.rule) continue;
+    const row = r.item_checks?.results?.['rule:' + p.rule];
+    if (!row || row.checked !== true) fail('design-prohibition', {at, prohibition:p.id, note:'prohibition not measured; unverified'});
+    else if (row.count) fail('design-prohibition', {at, prohibition:p.id, statement:p.statement, count:row.count, sample:row.sample});
+  }
   if (r.axe.unavailable) fail('axe-unavailable', {at, note:'axe-core not available; unverified'});
   if (r.axe.violations.length) fail('axe-contrast', {at, violations:r.axe.violations});
   if (r.axe.incomplete.length) fail('axe-incomplete', {at, note:'unverified contrast', incomplete:r.axe.incomplete});

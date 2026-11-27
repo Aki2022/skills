@@ -22,6 +22,9 @@
     "design-palette": {
       "lane": "fail"
     },
+    "design-prohibition": {
+      "lane": "fail"
+    },
     "axe-unavailable": {
       "lane": "fail"
     },
@@ -129,6 +132,7 @@
       "applies": [
         "zero-targets",
         "design-palette",
+        "design-prohibition",
         "axe-unavailable",
         "axe-contrast",
         "axe-incomplete",
@@ -175,6 +179,7 @@
       "applies": [
         "zero-targets",
         "design-palette",
+        "design-prohibition",
         "axe-unavailable",
         "axe-contrast",
         "axe-incomplete",

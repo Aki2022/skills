@@ -156,6 +156,19 @@ def compare(outline, ssot, snap, output=None):
         out.append(('IA_DOM_UNANCHORED_TEXT', 'fail',
                     f'{vp}: どの印にも属さない文言が {len(unanchored)} 文字ある（主張なら outline のメッセージと文案に、主張でなければ'
                     ' texts に宣言する）'))
+    # A figure (data-ia-figure="<copy id>") repeats part of a copy outside it, in the copy's own block: the big number
+    # above its sentence. It is read against the script's copy (values filled in), so it adds no word (2026-11-27).
+    copies, owner_of = expected_copy(outline, ssot), {cid: c['block'] for cid, c in outline['copies'].items()}
+    for a in anchors:
+        if a['kind'] != 'figure':
+            continue
+        if a['id'] not in copies:
+            out.append(('IA_DOM_FIGURE_UNKNOWN', 'fail', f'{vp}: 抜き出しの印 {a["id"]} の文案がアウトラインに無い'))
+        elif a.get('section') != owner_of[a['id']]:
+            out.append(('IA_DOM_FIGURE_SECTION', 'fail',
+                        f'{vp}: 文案 {a["id"]} の抜き出しが {a.get("section")} の中にある（文案と同じ {owner_of[a["id"]]} の中に置く）'))
+        elif a['visible'] and (not _copy_norm(a['text']) or _copy_norm(a['text']) not in _copy_norm(copies[a['id']])):
+            out.append(('IA_DOM_FIGURE_TEXT', 'fail', f'{vp}: 文案 {a["id"]} の抜き出しが、その文案の一部でない（文案に無い文字は抜き出せない）'))
     values = {fid: f.get('value') for fid, f in ssot['facts'].items()}
     for a in anchors:
         # A fact anchor this page does not refer to may only show a registered value; otherwise it would wrap

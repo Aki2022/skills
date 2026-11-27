@@ -157,6 +157,31 @@ def test_text_outside_every_anchor_fails_without_echo():
     assert not any('業界' in f[2] for f in found)
 
 
+# --- a figure repeats part of a copy (2026-11-27): the "big number above its sentence" of a real LP repeats the number
+# outside the sentence. The copy keeps the sentence; a figure may show part of it once more, in the same block, and is
+# read against the script, so it cannot carry a word the copy does not have.
+
+def with_figure(cid, text, section):
+    snap = green_snapshot()
+    snap['anchors'].append(anchor('figure', cid, 895, text, section=section))
+    return snap
+
+
+@pytest.mark.parametrize('text', ['100社以上', '１００社', '100 社'])
+def test_a_figure_that_repeats_part_of_its_copy_passes(text):
+    assert codes(run(with_figure('cpy-0003', text, 'blk-0002'))) == []
+
+
+@pytest.mark.parametrize('cid,text,section,code', [
+    ('cpy-0003', '200社以上', 'blk-0002', 'IA_DOM_FIGURE_TEXT'),       # a word the copy does not have
+    ('cpy-0003', '', 'blk-0002', 'IA_DOM_FIGURE_TEXT'),                # nothing repeated
+    ('cpy-0003', '100社以上', 'blk-0003', 'IA_DOM_FIGURE_SECTION'),    # outside the copy's block
+    ('cpy-0099', '100社以上', 'blk-0002', 'IA_DOM_FIGURE_UNKNOWN'),    # no such copy
+])
+def test_a_figure_that_says_more_than_its_copy_fails(cid, text, section, code):
+    assert code in codes(run(with_figure(cid, text, section)))
+
+
 def test_no_unanchored_text_is_quiet():
     snap = green_snapshot()
     snap['unanchored'] = ''
@@ -398,6 +423,19 @@ def test_real_browser_letters_drawn_by_css_are_unanchored(tmp_path, page):
     report = dom_report(tmp_path, page)
     assert 'IA_DOM_UNANCHORED_TEXT' in [f['code'] for f in report['findings']], report['findings']
     assert report['unanchored'] and all('業界No.1' in r['text'] for r in report['unanchored'])
+
+
+@pytest.mark.skipif(not PW_DIR, reason='INFOARCH_TEST_PLAYWRIGHT_DIR is not set: real-browser integration not run (reported as skipped, not passed)')
+@pytest.mark.parametrize('figure,code', [
+    ('<p data-ia-figure="cpy-0003">100社以上</p>', None),                  # the number again, above nothing new
+    ('<p data-ia-figure="cpy-0003">業界No.1</p>', 'IA_DOM_FIGURE_TEXT'),    # a figure saying what the copy does not
+    ('<p>100社以上</p>', 'IA_DOM_UNANCHORED_TEXT'),                         # the same number without the mark
+])
+def test_real_browser_a_figure_repeats_its_copy(tmp_path, figure, code):
+    page = HTML.replace('<p data-ia-copy="cpy-0003">', figure + '<p data-ia-copy="cpy-0003">')
+    report = dom_report(tmp_path, page)
+    found = [f['code'] for f in report['findings'] if f['level'] == 'fail']
+    assert (code in found) if code else found == [], report['findings']
 
 
 @pytest.mark.skipif(not PW_DIR, reason='INFOARCH_TEST_PLAYWRIGHT_DIR is not set: real-browser integration not run (reported as skipped, not passed)')

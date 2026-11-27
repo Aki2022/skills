@@ -818,8 +818,7 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
                                      if d in check_map['applicability']}},
                 'modules':({'ia':{'version':config['modules']['ia'],'implementation_sha256':ia['_implementation_sha256'],
                     'resolved':ia['media'][medium]}} if ia else {}),
-                'palette':{kind: sorted({t['css'] for t in tokens.values() if t['type']==kind})
-                           for kind in ('color','fontFamily','dimension','fontWeight','shadow')}, 'assets':assets, 'asset_exports':asset_exports}
+                'palette':_palette(tokens), 'variants':_variant_palettes(tokens), 'assets':assets, 'asset_exports':asset_exports}
         for medium,manifest in result['manifest'].items():
             for kind,rows in [('item',manifest['items']),('token',manifest['tokens'])]:
                 for ident,row in rows.items():
@@ -862,6 +861,34 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
     stage(report,'L0',result['exit_code'],counts['items'])
     for manifest in result['manifest'].values():manifest['report']=copy.deepcopy(report)
     return result
+
+
+PALETTE_KINDS = ('color','fontFamily','dimension','fontWeight','shadow')
+VARIANT_NAME = re.compile(r'[a-z][a-z0-9-]*')
+
+
+def _palette(tokens):
+    return {kind: sorted({t['css'] for t in tokens.values() if t['type']==kind}) for kind in PALETTE_KINDS}
+
+
+def _variant_of(path, token):
+    """The variant a token belongs to (`$extensions['org.own.design'].variant`), or None when it is shared."""
+    name = token.get('extensions',{}).get('org.own.design',{}).get('variant')
+    if name is None:
+        return None
+    if not isinstance(name,str) or not VARIANT_NAME.fullmatch(name):
+        raise ValueError(f'invalid variant name on token {path}: lower-case kebab-case string required')
+    return name
+
+
+def _variant_palettes(tokens):
+    """One palette per variant: the shared tokens plus that variant's own. Empty below two variants, where the whole
+    palette is the only palette. L2 reads this with the variants the HTML declares, never the union of all of them."""
+    owner = {path:_variant_of(path,t) for path,t in tokens.items()}
+    names = sorted({v for v in owner.values() if v})
+    if len(names) < 2:
+        return {}
+    return {name:_palette({p:t for p,t in tokens.items() if owner[p] in (None,name)}) for name in names}
 
 
 def _deployment_path(root, target):

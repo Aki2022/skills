@@ -182,6 +182,11 @@ L2に渡す検査と部品のselectorは`item_checks`に入る。
 
 - L2で止まる検査: palette:color / fontFamily / radius、contrast、tap-target、heading-order、layout-overflow、body-line-height、line-length。
   これらが失格ならL2で止まるので、項目の検証まで来た時点で合格している。
+- 変種（ブランド）が2つ以上ある design では、palette:color / fontFamily / radius（と下のトークンの値の検査）を、HTMLが宣言した変種の palette で照合する。
+  宣言は `<html data-design-variant="b">`（複数は空白区切り。両方のブランドを載せるページだけが複数にする）。
+  宣言が無い・この design に無い変種名を書いた、のどちらでもL2は止まる（`design-palette`、詳細に`variant_error`）。
+  B と宣言したページにAの色を使うと、`design-palette`の失格になる。変種が1つ以下の design では宣言は要らない。
+  トークンに変種を付ける書き方は `contract.md`。
 - L2が測り、採用した項目にだけ効かせる検査（L2自体は止めない）:
   - トークンの値: palette:fontSize / fontWeight / shadow / spacing（padding・gap。marginは自動の中央寄せと区別できないので測らない）
   - コントラスト: contrast-nontext（入力欄・ボタン等の境界と背景が3:1以上）、contrast-icon（アイコンと背景が4.5:1以上）

@@ -134,11 +134,28 @@ export function collectDesign(manifest) {
     if (!probe.style[property]) throw new Error('invalid palette CSS value');
     return getComputedStyle(probe)[property];
   };
-  const colors = new Set((manifest.palette.color || []).map(v => normalize('color', v)));
-  const fonts = new Set((manifest.palette.fontFamily || []).map(v => normalize('fontFamily', v)));
+  // The palette to check against: with two or more variants, only the variants the page declares on
+  // <html data-design-variant="a b"> (shared tokens are in every variant). Without a usable declaration the union is
+  // kept so the rest still measures, and `variantError` makes the caller fail.
+  const variantNames = Object.keys(manifest.variants || {});
+  const declaredVariants = (document.documentElement.getAttribute('data-design-variant') || '').split(/\s+/).filter(Boolean);
+  let variantError = null;
+  let palette = manifest.palette || {};
+  if (variantNames.length >= 2) {
+    const unknown = declaredVariants.filter(name => !variantNames.includes(name));
+    if (!declaredVariants.length)
+      variantError = 'variant not declared: this design has variants [' + variantNames.join(', ') + ']; set data-design-variant on <html>';
+    else if (unknown.length)
+      variantError = 'unknown variant [' + unknown.join(', ') + ']; this design has [' + variantNames.join(', ') + ']';
+    else
+      palette = Object.fromEntries(['color','fontFamily','dimension','fontWeight','shadow'].map(kind =>
+        [kind, [...new Set(declaredVariants.flatMap(name => manifest.variants[name][kind] || []))]]));
+  }
+  const colors = new Set((palette.color || []).map(v => normalize('color', v)));
+  const fonts = new Set((palette.fontFamily || []).map(v => normalize('fontFamily', v)));
   // A DTCG dimension can be a signed transform/spacing value, not a radius.
   // Validate the length itself, then include only values CSS permits as radii.
-  const radii = new Set((manifest.palette.dimension || []).flatMap(value => {
+  const radii = new Set((palette.dimension || []).flatMap(value => {
     normalize('left', value);
     return CSS.supports('border-top-left-radius', value)
       ? [normalize('borderTopLeftRadius', value)] : [];
@@ -192,7 +209,7 @@ export function collectDesign(manifest) {
     for (const property of ['borderTopLeftRadius','borderTopRightRadius','borderBottomLeftRadius','borderBottomRightRadius'])
       check(property, radii);
   }
-  return {targetCount, failures,
+  return {targetCount, failures, variantError, declaredVariants,
     uncovered:[...(manifest.coverage?.uncovered || []), 'pseudo-elements', 'shadow-dom', 'iframe-documents']};
 }
 
@@ -410,11 +427,28 @@ export function collectItemChecks(manifest) {
   };
   const set = (property, values, extra = []) =>
     new Set([...extra, ...values.map(v => normalize(property, v)).filter(v => v !== null)]);
-  const dims = manifest.palette?.dimension || [];
+  // The palette to check against: with two or more variants, only the variants the page declares on
+  // <html data-design-variant="a b"> (shared tokens are in every variant). Without a usable declaration the union is
+  // kept so the rest still measures, and `variantError` makes the caller fail.
+  const variantNames = Object.keys(manifest.variants || {});
+  const declaredVariants = (document.documentElement.getAttribute('data-design-variant') || '').split(/\s+/).filter(Boolean);
+  let variantError = null; // reported by collectDesign
+  let palette = manifest.palette || {};
+  if (variantNames.length >= 2) {
+    const unknown = declaredVariants.filter(name => !variantNames.includes(name));
+    if (!declaredVariants.length)
+      variantError = 'variant not declared: this design has variants [' + variantNames.join(', ') + ']; set data-design-variant on <html>';
+    else if (unknown.length)
+      variantError = 'unknown variant [' + unknown.join(', ') + ']; this design has [' + variantNames.join(', ') + ']';
+    else
+      palette = Object.fromEntries(['color','fontFamily','dimension','fontWeight','shadow'].map(kind =>
+        [kind, [...new Set(declaredVariants.flatMap(name => manifest.variants[name][kind] || []))]]));
+  }
+  const dims = palette.dimension || [];
   const sizes = set('fontSize', dims);
   const spaces = set('paddingTop', dims.filter(v => !String(v).trim().startsWith('-')), ['0px']);
-  const weights = set('fontWeight', manifest.palette?.fontWeight || []);
-  const shadows = set('boxShadow', manifest.palette?.shadow || [], ['none']);
+  const weights = set('fontWeight', palette.fontWeight || []);
+  const shadows = set('boxShadow', palette.shadow || [], ['none']);
   probe.remove();
   // Split a computed box-shadow into its comma-separated layers, respecting parens in color functions.
   const shadowLayers = (value) => {

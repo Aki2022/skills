@@ -74,6 +74,16 @@ L0失格で生成を止め、L1/L2失格で非決定論レビューを止める�
 「コントラストは未カバー」と必ず書き、L1 の合格を文字の読みやすさの保証に読み替えない。`:root[data-theme=...]` による
 切替の各テーマは、そのテーマに切り替えて測る（`site-validation.md`）。
 
+### 文字の列の詰まりすぎ（`text-crowding`）
+
+どの組み方にも当てる床。HTML は自由に組むので、計画に書いた狭い画面の形とは照らさない。文字を載せる最も内側の箱
+（p・li・dd・dt・見出し・blockquote・figcaption・td・th・summary）が、内側の幅で全角 8 字（`crowdedMinChars`）に満たず、
+2 行以上に折れていれば失格にする。測るのは測った全部の幅（375 も 1280 も）。1 行で収まる短いラベルや数字（01・価格の札など）は
+対象外で、縦書きは数えない。報告は `text-crowding`（件数と、タグ・先頭 20 字・1 行の字数・行数の見本）。
+直し方は、列を減らす（2 列を 1 列に戻す）・絵や余白を動かして文字に幅を返す・字を小さくしすぎない、のどれか。
+閾値は `own-design-author/references/measurement-profiles.json` の `crowdedMinChars` が持ち、根拠と緩めた履歴は
+`own-design-author/references/measurement-thresholds.md`。赤と緑の fixture は `own-design-author/fixtures/text-crowding/`。
+
 独立レビュアーは、この実測が緑になってから `scripts/reviewer_gate.py` を通した時だけ起動できる（`own-deliverable-check`・
 `own-website-audit`）。測った件数 0・実行の失敗・プロファイルなしでは起動しない。
 

@@ -186,6 +186,7 @@ v5 の木（旧い名前 `info_arch.yaml` の版 3（今の置き場所は `ux/p
 - 同じ入力を 2 回描画し、結果が違えば IA_DOM_UNSTABLE（判定に使わない）。
 - 最初の画面の文言（各画面幅）を報告の `first_screens` に出す（描画の事実の記録。どの判定の入力にもしない）。
 - 各文案のアンカーの表示の文言（描かれている文字だけ。`unanchored` と同じ読み方で、opacity: 0 などの隠れた文字は入らない）を、台本の文案（固定値を SSOT の値に展開）と比べる。NFKC で幅をそろえ、空白と改行をすべて除いてから比べる（改行は見た目で、文言ではない）。見えている印はすべて一字一句一致すること（IA_DOM_COPY_DRIFT）。報告に表示の文言は出さない。
+- **文案の抜き出し**：実際の LP の「大きな数字と、その下の説明の文」のように、文案の一部（数字など）を文案の外にもう一度大きく置くときは、その要素に `data-ia-figure="<文案の id>"` を付ける。抜き出しは文案と同じまとまりの中に置き、文字は台本の文案（固定値を埋めたもの）の一部でなければならない（空白を除き幅をそろえて比べる）。文案に無い文字は抜き出せないので、新しい主張にならない。文案そのものは元の 1 文のまま置く。台本に無い文案の id は IA_DOM_FIGURE_UNKNOWN、別のまとまりに置くと IA_DOM_FIGURE_SECTION、文案の一部でなければ IA_DOM_FIGURE_TEXT。抜き出しは文案の順・繰り返しの検査に入れず、中にほかの印を持てない（IA_DOM_ANCHOR_NESTED）。
 - **主張でない文言の宣言**：ナビ・節のラベル・見出し・法務やフッターのように主張でない文言は、台本の `texts` に安定した key と文言そのもの（`text`）を書き、工場は `data-ia-text="<key>"` を付ける。主張になりうる文言（副の行動喚起など）は宣言ではなくメッセージにする。`dom` は、その key の見えている印の**すべて**が文言と一致することを確かめる（繰り返しの緩めは無い）。台本に無い key は IA_DOM_ANCHOR_UNKNOWN、key の印が無ければ IA_DOM_ANCHOR_MISSING。`navigation` は画面幅によって畳んでよい（見えていなくても IA_DOM_ANCHOR_HIDDEN にしない。印が無ければ失格、見えている所は文言と一致）。
 - **正式名称**：`data-ia-entity="ent-NNNN"` の見えている印は、すべて全文が SSOT の `name` と一致する（NFKC・空白を除いて比べる）。名前以外の文言を包めない。
 - 文案・宣言した文言・正式名称の印の中に、ほかの IA の印（まとまり・文案・宣言した文言。正式名称は固定値と正式名称も）を入れると IA_DOM_ANCHOR_NESTED。文案と宣言した文言は固定値と正式名称を中に持てる。
@@ -207,6 +208,7 @@ v5 の木（旧い名前 `info_arch.yaml` の版 3（今の置き場所は `ux/p
 | IA_DOM_ORDER_UNVERIFIED（warn） | 見た目の順を確かめられない動かし方（absolute・fixed・float: right・transform・rtl・display: contents）がある（未カバー。`uncovered` に出す） |
 | IA_DOM_COPY_ORDER / IA_DOM_COPY_SECTION / IA_DOM_COPY_REPEATED | まとまりの中の文案の DOM の順が違う・文案が別のまとまりの中にある・同じ文案の印が 2 つ以上 |
 | IA_DOM_LEGACY_ATTRIBUTE | v4・v5 の印（`data-ia-problem`・`data-ia-msg`・`data-ia-pain`・`data-ia-frame`）が残っている |
+| IA_DOM_FIGURE_UNKNOWN / IA_DOM_FIGURE_SECTION / IA_DOM_FIGURE_TEXT | 文案の抜き出し（`data-ia-figure`）が、台本に無い文案を指す・文案と別のまとまりにある・文案の一部でない |
 | IA_DOM_FACT_MISSING / IA_DOM_FACT_VALUE | 文案が参照する固定値の表示が無い・固定値のアンカーの表示が SSOT の値と違う（文案と同じく、空白を除き幅をそろえて比べる。値の一部を大きくするため子の要素で区切ってよい。文案が参照しない固定値のアンカーも対象） |
 | IA_DOM_UNSTABLE | 2 回の描画で結果が違う |
 | IA_DOM_COPY_DRIFT | 見えている文案の印の文言が、台本の文案と一字一句同じでない（工場が文言を変えた）。宣言した文言も、1 か所でも違えば失格 |

@@ -94,6 +94,7 @@ try {
         copy: "[data-ia-section],[data-ia-copy],[data-ia-text]",
         text: "[data-ia-section],[data-ia-copy],[data-ia-text]",
         entity: "[data-ia-section],[data-ia-copy],[data-ia-text],[data-dict]",
+        figure: "[data-ia-section],[data-ia-copy],[data-ia-text],[data-dict],[data-ia-figure]",
       };
       // Order (2026-11-26): the order of the blocks and the copy is the document order (what a screen reader and a
       // keyboard follow), not the drawn position, so a row of cards in the script's order passes. CSS that draws IA
@@ -150,7 +151,7 @@ try {
       };
       const anchors = [];
       const dictKind = (id) => ({ value: "fact", name: "entity" })[id.split("-")[0]] ?? "term";
-      for (const [attr, base] of [["data-ia-section", "section"], ["data-ia-copy", "copy"], ["data-dict", null], ["data-ia-text", "text"],
+      for (const [attr, base] of [["data-ia-section", "section"], ["data-ia-copy", "copy"], ["data-dict", null], ["data-ia-text", "text"], ["data-ia-figure", "figure"],
         ["data-ia-problem", "legacy-problem"], ["data-ia-msg", "legacy-msg"], ["data-ia-pain", "legacy-pain"], ["data-ia-frame", "legacy-frame"]]) {
         for (const el of document.querySelectorAll(`[${attr}]`)) {
           const r = el.getBoundingClientRect();
@@ -171,7 +172,7 @@ try {
       }
       const parts = [], loose = [];
       // A section is a container: its text belongs to the copy and the declared text inside it, not to the section.
-      const ANCHORED = "[data-ia-copy],[data-dict],[data-ia-text]";
+      const ANCHORED = "[data-ia-copy],[data-dict],[data-ia-text],[data-ia-figure]";
       const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
       for (let n = walker.nextNode(); n; n = walker.nextNode()) {
         const t = paintedText(n);

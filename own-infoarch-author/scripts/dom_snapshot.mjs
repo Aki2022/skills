@@ -182,6 +182,22 @@ try {
         const r = range.getBoundingClientRect();
         if (r.bottom > 0 && r.top < vh) parts.push(t);
       }
+      // Text drawn by CSS `content` is in no text node and belongs to no mark, even when the element is a mark: the
+      // quoted strings and attr() values are read, and any letter or digit in them is text nobody manages. Symbols
+      // ("✓", "→") and counters draw no words, so they pass.
+      for (const el of document.body.querySelectorAll("*")) {
+        if (!shown(el)) continue;
+        for (const pseudo of ["::before", "::after"]) {
+          const cs = getComputedStyle(el, pseudo);
+          if (cs.display === "none" || cs.content === "none" || cs.content === "normal") continue;
+          const drawn = [];
+          for (const m of cs.content.matchAll(/"((?:[^"\\]|\\.)*)"|attr\(\s*([\w-]+)/g)) {
+            drawn.push(m[1] !== undefined ? m[1].replace(/\\(.)/g, "$1") : el.getAttribute(m[2]) ?? "");
+          }
+          const t = drawn.join("").trim();
+          if (/[\p{L}\p{N}]/u.test(t)) loose.push(t);
+        }
+      }
       return { anchors, text_chars: document.body.innerText.trim().length, first_screen: parts.join(" "), unanchored: loose.join(" ") };
     }, vp.height);
     out.push({ viewport: vp, ...snap });

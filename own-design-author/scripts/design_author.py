@@ -829,6 +829,7 @@ def check_design(root, *, catalog_dir=CATALOG, ship=False):
         result['approval_targets'].update(page_keys)
         result['approval_targets'].update(override_keys)
         result['approval_targets'].update(vocabulary['targets'])  # an added layout pattern is approved one at a time  # not in approval_required: an exception is approved one row at a time, never with the must items
+        result['approval_targets'].update(prohibition_keys)  # each prohibition row is approved one at a time, never with the must items
         if ia:
             result['approval_targets'].update(ia['approval_hashes'])
             result['approval_required'].extend(ia['must_approval_keys'])

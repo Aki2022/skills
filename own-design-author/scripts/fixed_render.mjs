@@ -156,6 +156,29 @@ export async function verifyRuntime(environment,chromium,playwrightVersion,brows
     locale:environment.config.locale,timezone:environment.config.timezone,repeat_equal:null};
 }
 
+// Bytes of a pinned remote file that already matched its pin, per URL, for the whole process. Every render of one
+// measurement then draws the same verified file, and a CDN that drops one request no longer makes one of the two
+// fixed renders fall back to a system font (render-repeat-mismatch at random on pages using Google Fonts).
+const verifiedRemote=new Map();
+const REMOTE_ATTEMPTS=3;
+
+async function fetchPinned(route,pinned) {
+  const known=verifiedRemote.get(route.request().url());
+  if(known)return known;
+  for(let attempt=0;attempt<REMOTE_ATTEMPTS;attempt++){
+    let response,body;
+    try{response=await route.fetch();body=await response.body();}catch{response=null;}
+    if(response&&response.ok()){
+      // A served file that differs from its pin is a change, not a transient failure: never retried into a pass.
+      if(sha(body)!==pinned)return null;
+      const entry={status:response.status(),headers:response.headers(),body};
+      verifiedRemote.set(route.request().url(),entry);
+      return entry;
+    }
+  }
+  return null;
+}
+
 export async function configureFonts(context,environment,url) {
   const origin=new URL(url).origin;const rejected=[];const used=new Set();
   await context.route('**/*',async route=>{
@@ -165,9 +188,9 @@ export async function configureFonts(context,environment,url) {
     if(font) {used.add(font.url_path);await route.fulfill({status:200,body:font.bytes,contentType:'font/'+(font.path.endsWith('woff2')?'woff2':'woff')});}
     else if(remote&&remote.origins.includes(target.origin)){
       // Everything from a pinned font origin must match its pin; nothing from it reaches the page unverified.
-      const pinned=remote.files[request.url()];let response,body;
-      try{if(pinned){response=await route.fetch();body=await response.body();}}catch{response=null;}
-      if(pinned&&response&&response.ok()&&sha(body)===pinned){used.add(request.url());await route.fulfill({response,body});}
+      const pinned=remote.files[request.url()];
+      const verified=pinned?await fetchPinned(route,pinned):null;
+      if(verified){used.add(request.url());await route.fulfill(verified);}
       // A declared CDN origin serves public files, so its URL is kept to find what to re-pin; nothing else is.
       else{rejected.push({reason:pinned?'remote font changed or unavailable':'remote font not pinned',url:request.url()});await route.abort();}
     }

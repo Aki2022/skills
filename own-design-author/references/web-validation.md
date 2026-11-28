@@ -301,7 +301,7 @@ CDN（Google Fonts など）から読むフォントは、`remote_fonts` で URL
   一致しない・固定されていない・取れない要求は拒否し、`font-fallback` の失格になる（`rejected_requests` に数える）。
   拒否した要求は `render_evidence.rejected_fonts` と `font-fallback` の失格に理由つきで残る。宣言した CDN の origin の要求だけ URL も残すので、固定し直す対象がわかる。それ以外の origin の URL は、private な場所を含みうるので残さない。
 - `families` は、それらのファイルが描いてよい実フォントの family 名。字形の検査は、ここか `fonts` の family で、かつ固定したファイルに結び付いた字体だけを認める。
-- 描画のたびに CDN へ接続する。CDN が中身を変えたら失格になるので、固定を作り直す。CDN の CSS は UA で中身が変わるが、UA は固定したブラウザの版で決まる。
+- 1 回の測定の中で、固定の URL ごとに CDN へ接続する。取れなかった時（接続の失敗・成功以外の応答）は 3 回まで取り直し、固定と一致したバイトはその測定の残りの描画で使い回す。だから、CDN が要求を 1 つ落としても、2 回の描画の片方だけ代わりの書体になってrender-repeat-mismatch になることはない。3 回とも取れなければ拒否する。CDN が中身を変えたら取り直さずに失格になるので、固定を作り直す。CDN の CSS は UA で中身が変わるが、UA は固定したブラウザの版で決まる。
 - 日本語の字体は文字の範囲ごとの小さなファイル（subset）に分かれている。ページの文字が変わると新しい subset を要求し、固定し直すまで失格になる。
 - 固定は `node scripts/pin_remote_fonts.mjs <url>... --environment ux/design/render-environment.json --origins <origin,...>` で作る。
   固定環境と同じブラウザで各 viewport・scheme を描き、宣言した origin から読んだ全ファイルの URL と SHA-256、描いた family を表示する（ファイルは書かない）。

@@ -62,9 +62,22 @@ def test_environment_without_any_font_is_still_rejected(tmp_path):
 
 # --- real browser --------------------------------------------------------------------------------
 
+# A CDN that drops some requests: per path, how many to refuse with 503 and how many arrived.
+FLAKY = {'fail': {}, 'hits': {}}
+
+
 class Quiet(SimpleHTTPRequestHandler):
     def log_message(self, *args):
         pass
+
+    def do_GET(self):
+        path = self.path.split('?')[0]
+        FLAKY['hits'][path] = FLAKY['hits'].get(path, 0) + 1
+        if FLAKY['fail'].get(path, 0) > 0:
+            FLAKY['fail'][path] -= 1
+            self.send_error(503)
+            return
+        super().do_GET()
 
     def end_headers(self):
         self.send_header('Access-Control-Allow-Origin', '*')  # what a font CDN sends
@@ -105,6 +118,8 @@ def cdn_site(project, tmp_path):
         'body{font:16px/1.5 Inter,sans-serif;background:white;color:black}'
         '*{border-color:black;outline-color:black;text-decoration-color:black;border-radius:0}'
         '</style></head><body><main><h1>Fixture</h1><p>Stable text.</p></main></body></html>')
+    FLAKY['fail'].clear()
+    FLAKY['hits'].clear()
     site_server, site = serve(root)
     sha = lambda data: hashlib.sha256(data).hexdigest()  # noqa: E731
     remote = {'origins': [cdn_origin], 'families': ['Inter'],
@@ -212,3 +227,28 @@ def test_pin_tool_extends_the_pin_from_what_a_measurement_rejected(cdn_site):
     assert json.loads(extended.stdout) == remote
     run, data = measure(json.loads(extended.stdout))
     assert run.returncode == 0, run.stdout
+
+
+@BROWSER
+def test_pinned_cdn_font_survives_one_dropped_request_and_is_fetched_once(cdn_site):
+    # A pinned font the CDN fails to serve once must not turn one of the two fixed renders into a fallback
+    # font: that made the repeat comparison fail at random (render-repeat-mismatch) on pages using a CDN.
+    # Verified bytes are reused, so both renders draw the same file and the CDN is asked once after the retry.
+    measure, remote, *_ = cdn_site
+    FLAKY['fail']['/s/inter.woff2'] = 1
+    run, data = measure(remote)
+    assert run.returncode == 0, run.stdout + run.stderr
+    assert data['environment']['repeat_equal'] is True
+    assert all(r['render_evidence']['rejected_font_requests'] == 0 for r in data['runs'])
+    assert FLAKY['hits']['/s/inter.woff2'] == 2  # one refused, one served; the second render reuses it
+
+
+@BROWSER
+def test_pinned_cdn_font_that_never_arrives_is_still_rejected(cdn_site):
+    # Retrying must not turn an unavailable font into a pass: after the retries it is rejected as before.
+    measure, remote, *_ = cdn_site
+    FLAKY['fail']['/s/inter.woff2'] = 100
+    run, data = measure(remote)
+    assert run.returncode != 0 and font_failure(data), run.stdout
+    font_url = next(u for u in remote['files'] if u.endswith('.woff2'))
+    assert {'reason': 'remote font changed or unavailable', 'url': font_url} in data['runs'][0]['render_evidence']['rejected_fonts']

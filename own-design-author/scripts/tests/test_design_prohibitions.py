@@ -145,3 +145,17 @@ def test_an_uncovered_prohibition_is_reported_as_uncovered_on_a_green_page(proje
     assert check(project)['exit_code'] != 2
     ok, report = measure(root, NORMAL.replace('CONTENT', BODY), 'lp')
     assert 'prohibition:no-quote' in report['uncovered']
+
+
+def test_the_owner_can_prepare_and_record_a_prohibition_approval_through_the_approval_command(project):
+    # The approval path the owner uses (approve --prepare, then --request with the owner's words) must accept
+    # prohibition rows; recording them by writing the ledger directly is not a path the owner has.
+    import owner_approval
+    root, catalogs = project
+    declare(root, [ROW], NO_NAV)
+    request = owner_approval.prepare(root, catalogs, targets=[key(ROW)])
+    assert [r['key'] for r in request['rows']] == [key(ROW)]
+    assert request['rows'][0]['value_hash'] == manifest(project)['prohibition_hashes']['no-nav']
+    owner_approval.approve_request(root, catalogs, request, 'fixture-owner', owner_words='禁止を承認する',
+                                   approved_on=request['rows'][0]['date'])
+    assert not any('prohibitions' in e for e in check(project, ship=True)['errors'])
